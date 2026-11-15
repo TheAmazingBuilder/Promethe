@@ -60,7 +60,7 @@ export function AppShell({
         ? "mentor"
         : route.view;
   const navItem = findNavItem(activeNavView);
-  const pageTitle = navItem ? tRoot(navItem.labelKey) : "TradeJournal";
+  const pageTitle = navItem ? tRoot(navItem.labelKey) : "Promethe";
 
   // ⌘K / Ctrl+K toggles the command palette.
   React.useEffect(() => {
@@ -105,7 +105,7 @@ export function AppShell({
       <Sidebar collapsible="icon" aria-label={t("sidebarLabel")}>
         <SidebarHeader className="border-b border-sidebar-border">
           <div className="flex h-14 items-center px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
-            <a href="#/" aria-label="TradeJournal — Home" className="min-w-0">
+            <a href="#/" aria-label="Promethe — Home" className="min-w-0">
               <BrandMark />
             </a>
           </div>
@@ -202,7 +202,7 @@ export function AppShell({
         <footer className="mt-auto border-t bg-background">
           <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-1.5 px-4 py-3.5 text-xs text-muted-foreground sm:flex-row sm:px-6">
             <p>
-              <span className="font-medium text-foreground">TradeJournal</span>{" "}
+              <span className="font-medium text-foreground">Promethe</span>{" "}
               {t("footerLeft")}
             </p>
             <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">

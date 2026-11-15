@@ -1,4 +1,4 @@
-# TradeJournal — Journal de trading & analytique de stratégies
+# Promethe — Journal de trading & analytique de stratégies
 
 Application web multi-utilisateur de journal de trading, conçue pour un trader
 principal actif sur **XAUUSD (or)** et **Forex** : pips, points, lots, tailles de

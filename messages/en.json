@@ -1,7 +1,7 @@
 {
   "meta": {
-    "appName": "TradeJournal",
-    "tagline": "XAUUSD · Forex"
+    "appName": "Promethe",
+    "tagline": "Rise from every trade."
   },
   "common": {
     "loading": "Loading…",
@@ -1481,12 +1481,12 @@
     }
   },
   "publicShare": {
-    "metaTitle": "TradeJournal — Shared link",
+    "metaTitle": "Promethe — Shared link",
     "goneTitle": "Link expired or unavailable",
     "goneBody": "This share link no longer exists, has expired, reached its view limit, or was revoked by its owner.",
     "gonePrivacy": "For privacy, no details are shown.",
     "goneCta": "Create your own trading journal",
-    "sharedVia": "Shared via TradeJournal",
+    "sharedVia": "Shared via Promethe",
     "capturedAt": "Captured on {date}",
     "liveBadge": "Live",
     "liveHint": "This link reflects the journal's current data.",
@@ -1866,7 +1866,7 @@
     "tabCookies": "Cookies",
     "pagesAria": "Legal pages",
     "backToApp": "Back",
-    "footerNote": "TradeJournal — your data stays yours.",
+    "footerNote": "Promethe — your data stays yours.",
     "lastUpdated": "Last updated: November 2025.",
     "title": {
       "mentions": "Legal notice",

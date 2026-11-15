@@ -60,8 +60,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const result = await resolve(token);
   const title =
     result.ok && result.payload.title
-      ? `${result.payload.title} — TradeJournal`
-      : "TradeJournal — Shared link";
+      ? `${result.payload.title} — Promethe`
+      : "Promethe — Shared link";
   return {
     title,
     robots: { index: false, follow: false, nocache: true },
@@ -136,7 +136,7 @@ function GoneView({ m, locale }: { m: (typeof MESSAGES)["fr"]["publicShare"]; lo
       <footer className="mt-auto border-t bg-card/40">
         <div className="mx-auto max-w-md px-4 py-4 text-center">
           <p className="text-xs text-muted-foreground">
-            TradeJournal — {locale === "fr" ? "journal de trading" : "trading journal"}
+            Promethe — {locale === "fr" ? "journal de trading" : "trading journal"}
           </p>
         </div>
       </footer>

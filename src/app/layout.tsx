@@ -18,9 +18,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TradeJournal — Trading journal & analytics",
+  title: "Promethe — Journal de trading & analytique",
   description:
-    "Multi-user trading journal for XAUUSD and Forex: pips, lots, contract sizes, strategy statistics and insights.",
+    "Promethe, a multi-user trading journal for XAUUSD and Forex: pips, lots, contract sizes, strategy statistics and insights.",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/icon-180.png",
+  },
   keywords: [
     "trading journal",
     "XAUUSD",

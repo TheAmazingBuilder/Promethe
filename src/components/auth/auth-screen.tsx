@@ -78,7 +78,7 @@ export function AuthScreen() {
       <footer className="border-t">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-1.5 px-4 py-3.5 text-xs text-muted-foreground sm:flex-row sm:px-6">
           <p>
-            <span className="font-medium text-foreground">TradeJournal</span> —{" "}
+            <span className="font-medium text-foreground">Promethe</span> —{" "}
             {t("footerLeft")}
           </p>
           <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
@@ -129,6 +129,13 @@ function BrandPanel() {
       />
 
       <div className="relative max-w-lg space-y-8">
+        {/* Promethe — Phoenix 2, secondary logo, large use only (login screen). */}
+        <img
+          src="/brand/phoenix-2.png"
+          alt=""
+          aria-hidden="true"
+          className="h-28 w-auto"
+        />
         <div className="space-y-4">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
             <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />

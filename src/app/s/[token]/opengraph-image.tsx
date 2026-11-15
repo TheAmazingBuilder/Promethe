@@ -10,7 +10,7 @@ import { peekShareForOg } from "@/server/sharing";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
-export const alt = "TradeJournal — shared link";
+export const alt = "Promethe — shared link";
 
 export default async function OgImage({
   params,
@@ -34,8 +34,8 @@ export default async function OgImage({
             width: 56, height: 56, borderRadius: 14, background: accent,
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 30, color: "#04110b", fontWeight: 700,
-          }}>T</div>
-          <div style={{ fontSize: 44, fontWeight: 700, color: text }}>TradeJournal</div>
+          }}>P</div>
+          <div style={{ fontSize: 44, fontWeight: 700, color: text }}>Promethe</div>
         </div>
         <div style={{ fontSize: 26, color: muted }}>Journal de trading — trading journal</div>
       </div>
@@ -62,7 +62,7 @@ export default async function OgImage({
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 28, color: "#04110b", fontWeight: 700,
           }}>T</div>
-          <div style={{ fontSize: 30, fontWeight: 600, color: muted }}>TradeJournal</div>
+          <div style={{ fontSize: 30, fontWeight: 600, color: muted }}>Promethe</div>
         </div>
         <div style={{ fontSize: 64, fontWeight: 800, color: text }}>{symbol}</div>
         <div style={{ ...row, gap: 14 }}>
@@ -101,7 +101,7 @@ export default async function OgImage({
           display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: 28, color: "#04110b", fontWeight: 700,
         }}>T</div>
-        <div style={{ fontSize: 30, fontWeight: 600, color: muted }}>TradeJournal</div>
+        <div style={{ fontSize: 30, fontWeight: 600, color: muted }}>Promethe</div>
       </div>
       <div style={{ fontSize: 54, fontWeight: 800, color: text }}>{truncate(payload.title, 48)}</div>
       <div style={{ ...row, gap: 18 }}>

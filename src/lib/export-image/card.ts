@@ -119,8 +119,8 @@ export function renderTradeCardCanvas(
   roundRect(ctx, M, M, 46, 46, 12);
   ctx.fillStyle = C.accent;
   ctx.fill();
-  text(ctx, "T", M + 16, M + 34, { size: 26, color: "#04110b", weight: "700" });
-  text(ctx, "TradeJournal", M + 62, M + 33, { size: 26, color: C.muted, weight: "600" });
+  text(ctx, "P", M + 16, M + 34, { size: 26, color: "#04110b", weight: "700" });
+  text(ctx, "Promethe", M + 62, M + 33, { size: 26, color: C.muted, weight: "600" });
 
   // Symbol block
   let y = M + 130;
@@ -233,10 +233,10 @@ export function renderTradeCardCanvas(
   }
 
   // Footer — watermark
-  text(ctx, "TradeJournal", M, H - 34, { size: 18, color: C.muted, weight: "600" });
+  text(ctx, "Promethe", M, H - 34, { size: 18, color: C.muted, weight: "600" });
   const footerRight = anonymous
     ? "Montants masqués — pips & R seulement"
-    : "tradejournal.app";
+    : "promethe";
   text(ctx, footerRight, W - M, H - 34, { size: 16, color: C.muted, align: "right" });
 
   return canvas;

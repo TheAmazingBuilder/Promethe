@@ -172,7 +172,7 @@ export function ShareDialog({
       return;
     }
     const base = {
-      title: title.trim() || defaultTitle?.trim() || "TradeJournal",
+      title: title.trim() || defaultTitle?.trim() || "Promethe",
       mode,
       policy,
       expiresInDays: expiry,

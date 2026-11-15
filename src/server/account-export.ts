@@ -298,7 +298,7 @@ export async function buildUserExport(userId: string): Promise<{
   };
 
   const manifest = {
-    application: "TradeJournal",
+    application: "Promethe",
     schemaVersion: EXPORT_SCHEMA_VERSION,
     exportedAt: exportedAt.toISOString(),
     user: { email: user.email, createdAt: user.createdAt.toISOString() },
@@ -314,8 +314,8 @@ export async function buildUserExport(userId: string): Promise<{
   };
 
   const readme = [
-    "TradeJournal — Export complet de vos donnees (RGPD art. 20)",
-    "TradeJournal — Full export of your data (GDPR art. 20)",
+    "Promethe — Export complet de vos donnees (RGPD art. 20)",
+    "Promethe — Full export of your data (GDPR art. 20)",
     "",
     `Genere le / Generated: ${exportedAt.toISOString()}`,
     `Version du format / Schema version: ${EXPORT_SCHEMA_VERSION}`,
