@@ -1,0 +1,985 @@
+     1→"use client";
+     2→
+     3→/**
+     4→ * Analytics view (v2 Phase 4) — GET /api/analytics (useAnalytics).
+     5→ *
+     6→ * Layout: filters (period tabs + account select) → KPI grid → equity curve
+     7→ * with drawdown + R distribution → insights « ce qui marche / ce qui coûte »
+     8→ * → multi-dimension breakdowns. All money formatted in the profile currency,
+     9→ * weekday/hour dimensions in the user's timezone (computed server-side).
+    10→ */
+    11→import * as React from "react";
+    12→import {
+    13→  AlertTriangle,
+    14→  BarChart3,
+    15→  Brain,
+    16→  CalendarDays,
+    17→  Coins,
+    18→  Compass,
+    19→  DoorOpen,
+    20→  Gauge,
+    21→  Info,
+    22→  ListChecks,
+    23→  Plus,
+    24→  RotateCw,
+    25→  Scale,
+    26→  Target,
+    27→  Timer,
+    28→  TrendingDown,
+    29→  TrendingUp,
+    30→  Wallet,
+    31→  Zap,
+    32→} from "lucide-react";
+    33→import { useTranslations } from "next-intl";
+    34→import {
+    35→  Area,
+    36→  AreaChart,
+    37→  Bar,
+    38→  BarChart,
+    39→  CartesianGrid,
+    40→  Cell,
+    41→  ResponsiveContainer,
+    42→  Tooltip,
+    43→  XAxis,
+    44→  YAxis,
+    45→} from "recharts";
+    46→import { Button } from "@/components/ui/button";
+    47→import {
+    48→  Card,
+    49→  CardContent,
+    50→  CardDescription,
+    51→  CardHeader,
+    52→  CardTitle,
+    53→} from "@/components/ui/card";
+    54→import {
+    55→  Select,
+    56→  SelectContent,
+    57→  SelectItem,
+    58→  SelectTrigger,
+    59→  SelectValue,
+    60→} from "@/components/ui/select";
+    61→import { Skeleton } from "@/components/ui/skeleton";
+    62→import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+    63→import { useTradingLabels } from "@/components/trades/trade-bits";
+    64→import { useSession } from "@/components/app/session-context";
+    65→import { useI18n } from "@/i18n/i18n-provider";
+    66→import { useAccounts, useAnalytics } from "@/hooks/use-trading";
+    67→import type { AnalyticsPeriod } from "@/lib/validations/analytics";
+    68→import type { GroupStat } from "@/lib/analytics/engine";
+    69→import type { Insight } from "@/lib/analytics/insights";
+    70→import {
+    71→  fmtDateInTz,
+    72→  fmtMoney,
+    73→  fmtNum,
+    74→  fmtPct,
+    75→  fmtSigned,
+    76→  fmtSignedMoney,
+    77→  pnlClass,
+    78→} from "@/lib/format";
+    79→import { navigate } from "@/lib/router";
+    80→
+    81→const EMERALD = "text-gain";
+    82→const ROSE = "text-loss";
+    83→
+    84→const PERIODS: AnalyticsPeriod[] = ["30d", "90d", "ytd", "all"];
+    85→
+    86→// ── Small building blocks ────────────────────────────────────────────────────
+    87→
+    88→function KpiCard({
+    89→  label,
+    90→  value,
+    91→  valueClassName,
+    92→  sub,
+    93→  compact = false,
+    94→}: {
+    95→  label: string;
+    96→  value: React.ReactNode;
+    97→  valueClassName?: string;
+    98→  sub?: React.ReactNode;
+    99→  compact?: boolean;
+   100→}) {
+   101→  return (
+   102→    <div className="flex flex-col gap-2 rounded-lg border p-4">
+   103→      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+   104→      <p
+   105→        className={`tabular-nums ${
+   106→          compact ? "text-xl font-semibold" : "text-2xl font-bold"
+   107→        } ${valueClassName ?? ""}`}
+   108→      >
+   109→        {value}
+   110→      </p>
+   111→      {sub != null ? (
+   112→        <p className="text-xs tabular-nums text-muted-foreground">{sub}</p>
+   113→      ) : null}
+   114→    </div>
+   115→  );
+   116→}
+   117→
+   118→interface EquityDatum {
+   119→  i: number;
+   120→  date: string;
+   121→  equity: number;
+   122→  drawdown: number;
+   123→}
+   124→
+   125→function EquityTooltipContent({
+   126→  active,
+   127→  payload,
+   128→  currency,
+   129→  timezone,
+   130→}: {
+   131→  active?: boolean;
+   132→  payload?: Array<{ payload?: EquityDatum }>;
+   133→  currency: string;
+   134→  timezone: string;
+   135→}) {
+   136→  if (!active) return null;
+   137→  const point = payload?.[0]?.payload;
+   138→  if (!point) return null;
+   139→  return (
+   140→    <div className="rounded-lg border bg-background px-3 py-2 text-xs shadow-md">
+   141→      <p className="font-medium">#{point.i}</p>
+   142→      <p className="text-muted-foreground">
+   143→        {fmtDateInTz(point.date, timezone)}
+   144→      </p>
+   145→      <p className="mt-1 tabular-nums">{fmtMoney(point.equity, currency)}</p>
+   146→      {point.drawdown > 0 ? (
+   147→        <p className={`tabular-nums ${ROSE}`}>
+   148→          −{fmtMoney(point.drawdown, currency)}
+   149→        </p>
+   150→      ) : null}
+   151→    </div>
+   152→  );
+   153→}
+   154→
+   155→function RDistTooltipContent({
+   156→  active,
+   157→  payload,
+   158→}: {
+   159→  active?: boolean;
+   160→  payload?: Array<{ payload?: { label: string; count: number; totalR: number } }>;
+   161→}) {
+   162→  if (!active) return null;
+   163→  const point = payload?.[0]?.payload;
+   164→  if (!point) return null;
+   165→  return (
+   166→    <div className="rounded-lg border bg-background px-3 py-2 text-xs shadow-md">
+   167→      <p className="font-medium">{point.label}</p>
+   168→      <p className="tabular-nums">{point.count}</p>
+   169→      <p className="tabular-nums text-muted-foreground">
+   170→        Σ {fmtSigned(String(point.totalR))} R
+   171→      </p>
+   172→    </div>
+   173→  );
+   174→}
+   175→
+   176→/** One breakdown dimension — compact rows with a proportional net P&L bar. */
+   177→function BreakdownCard({
+   178→  title,
+   179→  description,
+   180→  icon: Icon,
+   181→  entries,
+   182→  currency,
+   183→  renderKey,
+   184→  max = 8,
+   185→}: {
+   186→  title: string;
+   187→  description?: string;
+   188→  icon: React.ComponentType<{ className?: string }>;
+   189→  entries: GroupStat[];
+   190→  currency: string;
+   191→  renderKey: (key: string) => string;
+   192→  max?: number;
+   193→}) {
+   194→  const t = useTranslations("analytics");
+   195→  const shown = entries.slice(0, max);
+   196→  const maxAbs = shown.reduce(
+   197→    (m, e) => Math.max(m, Math.abs(Number(e.stats.netPnl))),
+   198→    0
+   199→  );
+   200→  return (
+   201→    <Card>
+   202→      <CardHeader>
+   203→        <CardTitle className="flex items-center gap-2 text-base">
+   204→          <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+   205→          {title}
+   206→        </CardTitle>
+   207→        {description ? <CardDescription>{description}</CardDescription> : null}
+   208→      </CardHeader>
+   209→      <CardContent>
+   210→        {shown.length === 0 ? (
+   211→          <p className="text-sm text-muted-foreground">{t("noData")}</p>
+   212→        ) : (
+   213→          <ul className="space-y-1.5">
+   214→            {shown.map((e) => {
+   215→              const net = Number(e.stats.netPnl);
+   216→              const width =
+   217→                maxAbs > 0 ? Math.max(2, (Math.abs(net) / maxAbs) * 100) : 0;
+   218→              return (
+   219→                <li
+   220→                  key={e.key}
+   221→                  className="relative flex items-center justify-between gap-2 overflow-hidden rounded-md px-2 py-1.5 text-sm"
+   222→                >
+   223→                  <span
+   224→                    className={`absolute inset-y-0 left-0 ${
+   225→                      net >= 0 ? "bg-gain-subtle" : "bg-loss-subtle"
+   226→                    }`}
+   227→                    style={{ width: `${width}%` }}
+   228→                    aria-hidden="true"
+   229→                  />
+   230→                  <span className="relative z-10 min-w-0 truncate font-medium">
+   231→                    {renderKey(e.key)}
+   232→                  </span>
+   233→                  <span className="relative z-10 flex shrink-0 items-center gap-3 tabular-nums">
+   234→                    <span className="text-xs text-muted-foreground">
+   235→                      ×{e.stats.tradeCount}
+   236→                    </span>
+   237→                    <span className="hidden w-16 whitespace-nowrap text-right text-xs text-muted-foreground sm:inline">
+   238→                      {e.stats.winRate != null
+   239→                        ? fmtPct(e.stats.winRate)
+   240→                        : "—"}
+   241→                    </span>
+   242→                    <span
+   243→                      className={`w-24 text-right font-medium ${pnlClass(
+   244→                        e.stats.netPnl
+   245→                      )}`}
+   246→                    >
+   247→                      {fmtSignedMoney(e.stats.netPnl, currency)}
+   248→                    </span>
+   249→                  </span>
+   250→                </li>
+   251→              );
+   252→            })}
+   253→            {entries.length > shown.length ? (
+   254→              <li className="px-2 pt-1 text-xs text-muted-foreground">
+   255→                {t("more", { count: entries.length - shown.length })}
+   256→              </li>
+   257→            ) : null}
+   258→          </ul>
+   259→        )}
+   260→      </CardContent>
+   261→    </Card>
+   262→  );
+   263→}
+   264→
+   265→// ── View ─────────────────────────────────────────────────────────────────────
+   266→
+   267→export function AnalyticsView() {
+   268→  const { session } = useSession();
+   269→  const t = useTranslations("analytics");
+   270→  const tRoot = useTranslations();
+   271→  const labels = useTradingLabels();
+   272→  const { locale } = useI18n();
+   273→  const [period, setPeriod] = React.useState<AnalyticsPeriod>("30d");
+   274→  const [accountId, setAccountId] = React.useState<string>("all");
+   275→
+   276→  const { data: accountsData } = useAccounts();
+   277→  const accounts = accountsData ?? [];
+   278→
+   279→  const effectiveAccount = accountId === "all" ? undefined : accountId;
+   280→  const { data, isLoading, isError, refetch } = useAnalytics({
+   281→    period,
+   282→    account: effectiveAccount,
+   283→  });
+   284→
+   285→  const timezone = data?.timezone ?? session?.profile.timezone ?? "UTC";
+   286→  const currency = data?.currency ?? session?.profile.baseCurrency ?? "USD";
+   287→  const stats = data?.stats ?? null;
+   288→  const advanced = data?.advanced ?? null;
+   289→
+   290→  const equityData = React.useMemo<EquityDatum[]>(
+   291→    () =>
+   292→      (data?.equityCurve ?? []).map((p) => ({
+   293→        i: p.i,
+   294→        date: p.date,
+   295→        equity: Number(p.equity),
+   296→        drawdown: Number(p.drawdown),
+   297→      })),
+   298→    [data]
+   299→  );
+   300→
+   301→  const rDistData = React.useMemo(
+   302→    () =>
+   303→      (data?.rDistribution.buckets ?? []).map((b) => ({
+   304→        id: b.id,
+   305→        label: t(`rdist.${b.id}`),
+   306→        count: b.count,
+   307→        totalR: Number(b.totalR),
+   308→        negative: b.to != null ? b.to <= 0 : false,
+   309→      })),
+   310→    [data, t]
+   311→  );
+   312→
+   313→  const weekdayLabel = React.useCallback(
+   314→    (key: string) => {
+   315→      try {
+   316→        // ISO weekday 1-7 → localized name via a stable reference week
+   317→        // (2024-01-01 was a Monday).
+   318→        const ref = new Date(Date.UTC(2024, 0, Number(key)));
+   319→        return new Intl.DateTimeFormat(locale, {
+   320→          weekday: "long",
+   321→          timeZone: "UTC",
+   322→        }).format(ref);
+   323→      } catch {
+   324→        return key;
+   325→      }
+   326→    },
+   327→    [locale]
+   328→  );
+   329→
+   330→  const hourLabel = React.useCallback((key: string) => {
+   331→    const h = Number(key);
+   332→    if (!Number.isFinite(h)) return key;
+   333→    const two = (n: number) => String(n).padStart(2, "0");
+   334→    return `${two(h)}:00–${two(h + 1)}:59`;
+   335→  }, []);
+   336→
+   337→  /** Formats raw insight params for i18n interpolation (money, R, labels…). */
+   338→  const formatInsightParams = React.useCallback(
+   339→    (insight: Insight): Record<string, string> => {
+   340→      const money = new Set(["netPnl", "fees", "dd", "pnl"]);
+   341→      const pct = new Set(["winRate", "pct"]);
+   342→      const r = new Set([
+   343→        "avgR",
+   344→        "avgRPlan",
+   345→        "avgRNoPlan",
+   346→        "busyAvgR",
+   347→        "lightAvgR",
+   348→      ]);
+   349→      const num = new Set(["payoff", "rf"]);
+   350→      const out: Record<string, string> = {};
+   351→      for (const [k, v] of Object.entries(insight.params)) {
+   352→        if (money.has(k) && typeof v === "string") {
+   353→          out[k] = fmtSignedMoney(v, currency);
+   354→        } else if (pct.has(k) && typeof v === "string") {
+   355→          out[k] = fmtPct(v);
+   356→        } else if (r.has(k) && typeof v === "string") {
+   357→          out[k] = `${fmtSigned(v)} R`;
+   358→        } else if (num.has(k) && typeof v === "string") {
+   359→          out[k] = fmtNum(v);
+   360→        } else if (k === "weekday") {
+   361→          out[k] = weekdayLabel(String(v));
+   362→        } else if (k === "hour") {
+   363→          out[k] = hourLabel(String(v));
+   364→        } else if (k === "session") {
+   365→          out[k] = labels.session(String(v));
+   366→        } else if (k === "emotion") {
+   367→          out[k] = labels.emotion(String(v));
+   368→        } else {
+   369→          out[k] = String(v);
+   370→        }
+   371→      }
+   372→      return out;
+   373→    },
+   374→    [currency, weekdayLabel, hourLabel, labels]
+   375→  );
+   376→
+   377→  const renderInsight = (insight: Insight) =>
+   378→    tRoot(`analytics.insights.${insight.rule}` as Parameters<typeof tRoot>[0], {
+   379→      ...formatInsightParams(insight),
+   380→    });
+   381→
+   382→  const goodInsights = (data?.insights ?? []).filter((i) => i.tone === "good");
+   383→  const badInsights = (data?.insights ?? []).filter((i) => i.tone === "bad");
+   384→  const infoInsights = (data?.insights ?? []).filter((i) => i.tone === "info");
+   385→
+   386→  /** KPI display model. */
+   387→  const kpi = React.useMemo(() => {
+   388→    const s = stats;
+   389→    const pfNum = s?.profitFactor != null ? Number(s.profitFactor) : null;
+   390→    const streak = s?.currentStreak ?? 0;
+   391→    return {
+   392→      netPnl: s ? fmtSignedMoney(s.netPnl, currency) : "—",
+   393→      netPnlTone: s ? pnlClass(s.netPnl) : "text-muted-foreground",
+   394→      winRate: s?.winRate != null ? fmtPct(s.winRate) : "—",
+   395→      profitFactor:
+   396→        pfNum == null
+   397→          ? "—"
+   398→          : Number.isFinite(pfNum)
+   399→            ? fmtNum(pfNum)
+   400→            : "∞",
+   401→      profitFactorTone:
+   402→        pfNum == null
+   403→          ? ""
+   404→          : pfNum >= 2
+   405→            ? EMERALD
+   406→            : pfNum < 1
+   407→              ? ROSE
+   408→              : "",
+   409→      expectancy: s?.expectancyR != null ? `${fmtSigned(s.expectancyR)} R` : "—",
+   410→      expectancyTone:
+   411→        s?.expectancyR != null ? pnlClass(s.expectancyR) : "text-muted-foreground",
+   412→      totalR: s?.totalR != null ? `${fmtSigned(s.totalR)} R` : "—",
+   413→      maxDrawdown: s?.maxDrawdown != null ? fmtMoney(s.maxDrawdown, currency) : "—",
+   414→      maxDrawdownTone: s?.maxDrawdown != null ? ROSE : "",
+   415→      sqn: advanced?.sqn != null ? fmtNum(advanced.sqn) : "—",
+   416→      sqnTone:
+   417→        advanced?.sqn == null
+   418→          ? ""
+   419→          : Number(advanced.sqn) >= 2
+   420→            ? EMERALD
+   421→            : Number(advanced.sqn) < 1
+   422→              ? ROSE
+   423→              : "",
+   424→      tradeCount: s ? fmtNum(s.tradeCount, 0) : "—",
+   425→      winsLosses: s
+   426→        ? t("kpiWinsLosses", { wins: s.wins, losses: s.losses, be: s.breakevens })
+   427→        : null,
+   428→      sharpe: advanced?.sharpe != null ? fmtNum(advanced.sharpe) : "—",
+   429→      sortino: advanced?.sortino != null ? fmtNum(advanced.sortino) : "—",
+   430→      recovery:
+   431→        advanced?.recoveryFactor != null ? fmtNum(advanced.recoveryFactor) : "—",
+   432→      payoff: advanced?.payoffRatio != null ? fmtNum(advanced.payoffRatio) : "—",
+   433→      avgDuration:
+   434→        advanced?.avgDurationMin != null
+   435→          ? advanced.avgDurationMin >= 60
+   436→            ? t("durationHm", {
+   437→                h: Math.floor(advanced.avgDurationMin / 60),
+   438→                m: advanced.avgDurationMin % 60,
+   439→              })
+   440→            : t("durationM", { m: advanced.avgDurationMin })
+   441→          : "—",
+   442→      totalFees:
+   443→        advanced != null ? fmtMoney(advanced.totalFees, currency) : "—",
+   444→      rCoverage: advanced?.rCoverage != null ? fmtPct(advanced.rCoverage) : "—",
+   445→      maxWinStreak: s ? fmtNum(s.maxWinStreak, 0) : "—",
+   446→      maxLossStreak: s ? fmtNum(s.maxLossStreak, 0) : "—",
+   447→      streakText:
+   448→        streak > 0
+   449→          ? t("streakWin", { count: streak })
+   450→          : streak < 0
+   451→            ? t("streakLoss", { count: Math.abs(streak) })
+   452→            : "—",
+   453→      streakTone: streak > 0 ? EMERALD : streak < 0 ? ROSE : "",
+   454→    };
+   455→  }, [stats, advanced, currency, t]);
+   456→
+   457→  if (!session) return null;
+   458→
+   459→  const hasAnyTrade = stats != null;
+   460→  const showAllCta = !hasAnyTrade && period !== "all";
+   461→
+   462→  return (
+   463→    <div className="space-y-6">
+   464→      {/* ── Header + filters ── */}
+   465→      <div className="flex flex-col gap-3">
+   466→        <div className="flex flex-col gap-1">
+   467→          <h2 className="text-xl font-bold tracking-tight sm:text-2xl">
+   468→            {t("title")}
+   469→          </h2>
+   470→          <p className="text-sm text-muted-foreground">
+   471→            {hasAnyTrade
+   472→              ? t("subtitle", { count: stats.tradeCount })
+   473→              : t("subtitleEmpty")}
+   474→          </p>
+   475→        </div>
+   476→        <div className="flex flex-wrap items-center gap-2">
+   477→          <Tabs
+   478→            value={period}
+   479→            onValueChange={(v) => {
+   480→              if (PERIODS.includes(v as AnalyticsPeriod)) {
+   481→                setPeriod(v as AnalyticsPeriod);
+   482→              }
+   483→            }}
+   484→          >
+   485→            <TabsList>
+   486→              <TabsTrigger value="30d">{t("period30d")}</TabsTrigger>
+   487→              <TabsTrigger value="90d">{t("period90d")}</TabsTrigger>
+   488→              <TabsTrigger value="ytd">{t("periodYtd")}</TabsTrigger>
+   489→              <TabsTrigger value="all">{t("periodAll")}</TabsTrigger>
+   490→            </TabsList>
+   491→          </Tabs>
+   492→          <Select
+   493→            value={accountId}
+   494→            onValueChange={(v) => setAccountId(v === "all" ? "all" : v)}
+   495→          >
+   496→            <SelectTrigger className="w-[180px]" aria-label={t("accountFilter")}>
+   497→              <SelectValue />
+   498→            </SelectTrigger>
+   499→            <SelectContent>
+   500→              <SelectItem value="all">{t("allAccounts")}</SelectItem>
+   501→              {accounts.map((a) => (
+   502→                <SelectItem key={a.id} value={a.id}>
+   503→                  {a.name}
+   504→                </SelectItem>
+   505→              ))}
+   506→            </SelectContent>
+   507→          </Select>
+   508→        </div>
+   509→      </div>
+   510→
+   511→      {/* ── Loading ── */}
+   512→      {isLoading ? (
+   513→        <div className="space-y-6" role="status" aria-live="polite">
+   514→          <span className="sr-only">{t("loading")}</span>
+   515→          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+   516→            {Array.from({ length: 8 }, (_, i) => (
+   517→              <Skeleton key={i} className="h-24 w-full rounded-lg" />
+   518→            ))}
+   519→          </div>
+   520→          <Skeleton className="h-72 w-full rounded-xl" />
+   521→          <div className="grid gap-6 lg:grid-cols-2">
+   522→            <Skeleton className="h-64 w-full rounded-xl" />
+   523→            <Skeleton className="h-64 w-full rounded-xl" />
+   524→          </div>
+   525→        </div>
+   526→      ) : isError ? (
+   527→        /* ── Error ── */
+   528→        <Card>
+   529→          <CardContent className="flex flex-col items-start gap-3">
+   530→            <div className="flex items-center gap-2">
+   531→              <AlertTriangle className="h-5 w-5 text-destructive" aria-hidden="true" />
+   532→              <p className="text-sm font-medium">{t("errorTitle")}</p>
+   533→            </div>
+   534→            <Button variant="outline" size="sm" onClick={() => void refetch()}>
+   535→              <RotateCw className="h-4 w-4" aria-hidden="true" />
+   536→              {t("errorRetry")}
+   537→            </Button>
+   538→          </CardContent>
+   539→        </Card>
+   540→      ) : !hasAnyTrade || !data ? (
+   541→        /* ── Empty state ── */
+   542→        <Card>
+   543→          <CardHeader>
+   544→            <CardTitle className="text-lg">{t("emptyTitle")}</CardTitle>
+   545→            <CardDescription>{t("emptyDesc")}</CardDescription>
+   546→          </CardHeader>
+   547→          <CardContent className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+   548→            {showAllCta ? (
+   549→              <Button onClick={() => setPeriod("all")}>
+   550→                <BarChart3 className="h-4 w-4" aria-hidden="true" />
+   551→                {t("emptyCtaAll")}
+   552→              </Button>
+   553→            ) : (
+   554→              <Button onClick={() => navigate("#/trades/quick")}>
+   555→                <Zap className="h-4 w-4" aria-hidden="true" />
+   556→                {t("emptyCtaQuick")}
+   557→              </Button>
+   558→            )}
+   559→            <Button variant="outline" onClick={() => navigate("#/trades/new")}>
+   560→              <Plus className="h-4 w-4" aria-hidden="true" />
+   561→              {t("emptyCtaForm")}
+   562→            </Button>
+   563→          </CardContent>
+   564→        </Card>
+   565→      ) : (
+   566→        /* ── Data state ── */
+   567→        <div className="space-y-6">
+   568→          {/* KPIs */}
+   569→          <section aria-label={t("kpisAria")} className="space-y-3">
+   570→            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+   571→              <KpiCard
+   572→                label={t("kpiNetPnl")}
+   573→                value={kpi.netPnl}
+   574→                valueClassName={kpi.netPnlTone}
+   575→                sub={kpi.winsLosses ?? undefined}
+   576→              />
+   577→              <KpiCard
+   578→                label={t("kpiWinRate")}
+   579→                value={kpi.winRate}
+   580→                sub={t("kpiTrades", { count: stats.tradeCount })}
+   581→              />
+   582→              <KpiCard
+   583→                label={t("kpiProfitFactor")}
+   584→                value={kpi.profitFactor}
+   585→                valueClassName={kpi.profitFactorTone}
+   586→              />
+   587→              <KpiCard
+   588→                label={t("kpiExpectancy")}
+   589→                value={kpi.expectancy}
+   590→                valueClassName={kpi.expectancyTone}
+   591→                sub={t("kpiTotalR", { value: kpi.totalR })}
+   592→              />
+   593→            </div>
+   594→            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+   595→              <KpiCard
+   596→                compact
+   597→                label={t("kpiMaxDrawdown")}
+   598→                value={kpi.maxDrawdown}
+   599→                valueClassName={kpi.maxDrawdownTone}
+   600→                sub={t("kpiRecovery", { value: kpi.recovery })}
+   601→              />
+   602→              <KpiCard
+   603→                compact
+   604→                label={t("kpiSqn")}
+   605→                value={kpi.sqn}
+   606→                valueClassName={kpi.sqnTone}
+   607→                sub={t("sqnHint")}
+   608→              />
+   609→              <KpiCard
+   610→                compact
+   611→                label={t("kpiSharpe")}
+   612→                value={kpi.sharpe}
+   613→                sub={t("kpiSortino", { value: kpi.sortino })}
+   614→              />
+   615→              <KpiCard
+   616→                compact
+   617→                label={t("kpiStreaks")}
+   618→                value={kpi.streakText || "—"}
+   619→                valueClassName={kpi.streakTone}
+   620→                sub={t("streaksMax", {
+   621→                  wins: kpi.maxWinStreak,
+   622→                  losses: kpi.maxLossStreak,
+   623→                })}
+   624→              />
+   625→            </div>
+   626→            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+   627→              <KpiCard compact label={t("kpiPayoff")} value={kpi.payoff} />
+   628→              <KpiCard compact label={t("kpiAvgDuration")} value={kpi.avgDuration} />
+   629→              <KpiCard compact label={t("kpiTotalFees")} value={kpi.totalFees} />
+   630→              <KpiCard compact label={t("kpiRCoverage")} value={kpi.rCoverage} />
+   631→            </div>
+   632→          </section>
+   633→
+   634→          {/* Equity + drawdown (2/3) | R distribution (1/3) */}
+   635→          <div className="grid gap-6 xl:grid-cols-3">
+   636→            <Card className="xl:col-span-2">
+   637→              <CardHeader>
+   638→                <CardTitle className="text-base">{t("equityTitle")}</CardTitle>
+   639→                <CardDescription>
+   640→                  {t("equityDesc", {
+   641→                    amount: fmtMoney(data.equityInitialBalance, currency),
+   642→                  })}
+   643→                </CardDescription>
+   644→              </CardHeader>
+   645→              <CardContent className="space-y-4">
+   646→                <div
+   647→                  className="h-[220px] w-full"
+   648→                  role="img"
+   649→                  aria-label={t("equityTitle")}
+   650→                >
+   651→                  <ResponsiveContainer width="100%" height="100%">
+   652→                    <AreaChart
+   653→                      data={equityData}
+   654→                      margin={{ top: 8, right: 12, bottom: 0, left: 0 }}
+   655→                    >
+   656→                      <CartesianGrid
+   657→                        strokeDasharray="3 3"
+   658→                        strokeOpacity={0.3}
+   659→                        vertical={false}
+   660→                      />
+   661→                      <XAxis
+   662→                        dataKey="i"
+   663→                        tickFormatter={(value: number) => `#${value}`}
+   664→                        tick={{ fontSize: 11 }}
+   665→                        tickLine={false}
+   666→                        axisLine={false}
+   667→                        minTickGap={32}
+   668→                      />
+   669→                      <YAxis
+   670→                        domain={["auto", "auto"]}
+   671→                        tickFormatter={(value: number) => fmtNum(value, 0)}
+   672→                        tick={{ fontSize: 11 }}
+   673→                        tickLine={false}
+   674→                        axisLine={false}
+   675→                        width={60}
+   676→                      />
+   677→                      <Tooltip
+   678→                        cursor={{ strokeOpacity: 0.4 }}
+   679→                        content={
+   680→                          <EquityTooltipContent
+   681→                            currency={currency}
+   682→                            timezone={timezone}
+   683→                          />
+   684→                        }
+   685→                      />
+   686→                      <Area
+   687→                        type="monotone"
+   688→                        dataKey="equity"
+   689→                        stroke="#10b981"
+   690→                        strokeWidth={2}
+   691→                        fill="#10b981"
+   692→                        fillOpacity={0.15}
+   693→                        dot={false}
+   694→                        activeDot={{ r: 4 }}
+   695→                      />
+   696→                    </AreaChart>
+   697→                  </ResponsiveContainer>
+   698→                </div>
+   699→                <div>
+   700→                  <p className="mb-1 text-xs font-medium text-muted-foreground">
+   701→                    {t("drawdownTitle")}
+   702→                  </p>
+   703→                  <div
+   704→                    className="h-[80px] w-full"
+   705→                    role="img"
+   706→                    aria-label={t("drawdownTitle")}
+   707→                  >
+   708→                    <ResponsiveContainer width="100%" height="100%">
+   709→                      <AreaChart
+   710→                        data={equityData}
+   711→                        margin={{ top: 4, right: 12, bottom: 0, left: 0 }}
+   712→                      >
+   713→                        <XAxis dataKey="i" hide />
+   714→                        <YAxis
+   715→                          domain={[0, "auto"]}
+   716→                          tickFormatter={(value: number) => fmtNum(value, 0)}
+   717→                          tick={{ fontSize: 10 }}
+   718→                          tickLine={false}
+   719→                          axisLine={false}
+   720→                          width={60}
+   721→                        />
+   722→                        <Tooltip
+   723→                          cursor={{ strokeOpacity: 0.4 }}
+   724→                          content={
+   725→                            <EquityTooltipContent
+   726→                              currency={currency}
+   727→                              timezone={timezone}
+   728→                            />
+   729→                          }
+   730→                        />
+   731→                        <Area
+   732→                          type="monotone"
+   733→                          dataKey="drawdown"
+   734→                          stroke="#f43f5e"
+   735→                          strokeWidth={1.5}
+   736→                          fill="#f43f5e"
+   737→                          fillOpacity={0.15}
+   738→                          dot={false}
+   739→                        />
+   740→                      </AreaChart>
+   741→                    </ResponsiveContainer>
+   742→                  </div>
+   743→                </div>
+   744→              </CardContent>
+   745→            </Card>
+   746→
+   747→            <Card>
+   748→              <CardHeader>
+   749→                <CardTitle className="text-base">{t("rdistTitle")}</CardTitle>
+   750→                <CardDescription>
+   751→                  {data.rDistribution.withoutR > 0
+   752→                    ? t("rdistDescMissing", {
+   753→                        count: data.rDistribution.withoutR,
+   754→                      })
+   755→                    : t("rdistDesc")}
+   756→                </CardDescription>
+   757→              </CardHeader>
+   758→              <CardContent>
+   759→                <div
+   760→                  className="h-[320px] w-full"
+   761→                  role="img"
+   762→                  aria-label={t("rdistTitle")}
+   763→                >
+   764→                  <ResponsiveContainer width="100%" height="100%">
+   765→                    <BarChart
+   766→                      data={rDistData}
+   767→                      margin={{ top: 8, right: 4, bottom: 0, left: 0 }}
+   768→                    >
+   769→                      <CartesianGrid
+   770→                        strokeDasharray="3 3"
+   771→                        strokeOpacity={0.3}
+   772→                        vertical={false}
+   773→                      />
+   774→                      <XAxis
+   775→                        dataKey="label"
+   776→                        tick={{ fontSize: 10 }}
+   777→                        tickLine={false}
+   778→                        axisLine={false}
+   779→                        interval={0}
+   780→                        angle={-35}
+   781→                        textAnchor="end"
+   782→                        height={44}
+   783→                      />
+   784→                      <YAxis
+   785→                        allowDecimals={false}
+   786→                        tick={{ fontSize: 11 }}
+   787→                        tickLine={false}
+   788→                        axisLine={false}
+   789→                        width={32}
+   790→                      />
+   791→                      <Tooltip
+   792→                        cursor={{ fillOpacity: 0.08 }}
+   793→                        content={<RDistTooltipContent />}
+   794→                      />
+   795→                      <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={36}>
+   796→                        {rDistData.map((b) => (
+   797→                          <Cell
+   798→                            key={b.id}
+   799→                            fill={b.negative ? "var(--loss)" : "var(--gain)"}
+   800→                            fillOpacity={0.8}
+   801→                          />
+   802→                        ))}
+   803→                      </Bar>
+   804→                    </BarChart>
+   805→                  </ResponsiveContainer>
+   806→                </div>
+   807→              </CardContent>
+   808→            </Card>
+   809→          </div>
+   810→
+   811→          {/* Insights — ce qui marche / ce qui coûte / à noter */}
+   812→          <section aria-label={t("insightsAria")}>
+   813→            <h3 className="mb-3 text-base font-semibold">{t("insightsTitle")}</h3>
+   814→            <div className="grid gap-4 xl:grid-cols-3">
+   815→              {(
+   816→                [
+   817→                  {
+   818→                    key: "works",
+   819→                    icon: TrendingUp,
+   820→                    tone: EMERALD,
+   821→                    bg: "bg-gain-subtle",
+   822→                    items: goodInsights,
+   823→                  },
+   824→                  {
+   825→                    key: "costs",
+   826→                    icon: TrendingDown,
+   827→                    tone: ROSE,
+   828→                    bg: "bg-loss-subtle",
+   829→                    items: badInsights,
+   830→                  },
+   831→                  {
+   832→                    key: "notes",
+   833→                    icon: Info,
+   834→                    tone: "text-muted-foreground",
+   835→                    bg: "bg-muted",
+   836→                    items: infoInsights,
+   837→                  },
+   838→                ] as const
+   839→              ).map((col) => (
+   840→                <Card key={col.key}>
+   841→                  <CardHeader>
+   842→                    <CardTitle className="flex items-center gap-2 text-base">
+   843→                      <span
+   844→                        className={`flex h-8 w-8 items-center justify-center rounded-lg ${col.bg} ${col.tone}`}
+   845→                        aria-hidden="true"
+   846→                      >
+   847→                        <col.icon className="h-4 w-4" />
+   848→                      </span>
+   849→                      {t(`insights.${col.key}`)}
+   850→                      <span className="ml-auto text-xs font-normal text-muted-foreground">
+   851→                        {col.items.length}
+   852→                      </span>
+   853→                    </CardTitle>
+   854→                  </CardHeader>
+   855→                  <CardContent>
+   856→                    {col.items.length === 0 ? (
+   857→                      <p className="text-sm text-muted-foreground">
+   858→                        {t("insightsEmpty")}
+   859→                      </p>
+   860→                    ) : (
+   861→                      <ul className="max-h-96 space-y-2.5 overflow-y-auto pr-1">
+   862→                        {col.items.slice(0, 6).map((insight, idx) => (
+   863→                          <li
+   864→                            key={`${insight.rule}-${idx}`}
+   865→                            className={`rounded-md border-l-2 py-1 pl-3 text-sm ${
+   866→                              col.key === "works"
+   867→                                ? "border-gain-subtle"
+   868→                                : col.key === "costs"
+   869→                                  ? "border-loss-subtle"
+   870→                                  : "border-muted-foreground/40"
+   871→                            }`}
+   872→                          >
+   873→                            {renderInsight(insight)}
+   874→                          </li>
+   875→                        ))}
+   876→                      </ul>
+   877→                    )}
+   878→                  </CardContent>
+   879→                </Card>
+   880→              ))}
+   881→            </div>
+   882→          </section>
+   883→
+   884→          {/* Breakdowns */}
+   885→          <section aria-label={t("breakdownsAria")}>
+   886→            <h3 className="mb-3 text-base font-semibold">
+   887→              {t("breakdownsTitle")}
+   888→            </h3>
+   889→            <div className="grid gap-4 md:grid-cols-2">
+   890→              <BreakdownCard
+   891→                title={t("bdStrategy")}
+   892→                icon={Target}
+   893→                entries={data.breakdowns.strategy}
+   894→                currency={currency}
+   895→                renderKey={(k) => k}
+   896→              />
+   897→              <BreakdownCard
+   898→                title={t("bdSymbol")}
+   899→                icon={Coins}
+   900→                entries={data.breakdowns.symbol}
+   901→                currency={currency}
+   902→                renderKey={(k) => k}
+   903→              />
+   904→              <BreakdownCard
+   905→                title={t("bdSession")}
+   906→                icon={Gauge}
+   907→                entries={data.breakdowns.session}
+   908→                currency={currency}
+   909→                renderKey={(k) => labels.session(k)}
+   910→              />
+   911→              <BreakdownCard
+   912→                title={t("bdWeekday")}
+   913→                description={t("bdWeekdayDesc")}
+   914→                icon={CalendarDays}
+   915→                entries={data.breakdowns.weekday}
+   916→                currency={currency}
+   917→                renderKey={weekdayLabel}
+   918→              />
+   919→              <BreakdownCard
+   920→                title={t("bdHour")}
+   921→                description={t("bdHourDesc")}
+   922→                icon={Timer}
+   923→                entries={data.breakdowns.hour}
+   924→                currency={currency}
+   925→                renderKey={hourLabel}
+   926→              />
+   927→              <BreakdownCard
+   928→                title={t("bdSetup")}
+   929→                icon={Compass}
+   930→                entries={data.breakdowns.setup}
+   931→                currency={currency}
+   932→                renderKey={(k) => k}
+   933→              />
+   934→              <BreakdownCard
+   935→                title={t("bdExit")}
+   936→                icon={DoorOpen}
+   937→                entries={data.breakdowns.exit}
+   938→                currency={currency}
+   939→                renderKey={(k) => labels.exitReason(k)}
+   940→              />
+   941→              <BreakdownCard
+   942→                title={t("bdEmotion")}
+   943→                icon={Brain}
+   944→                entries={data.breakdowns.emotion}
+   945→                currency={currency}
+   946→                renderKey={(k) => labels.emotion(k)}
+   947→              />
+   948→              <BreakdownCard
+   949→                title={t("bdDirection")}
+   950→                icon={Scale}
+   951→                entries={data.breakdowns.direction}
+   952→                currency={currency}
+   953→                renderKey={(k) => labels.direction(k)}
+   954→              />
+   955→              <BreakdownCard
+   956→                title={t("bdPlan")}
+   957→                description={t("bdPlanDesc")}
+   958→                icon={ListChecks}
+   959→                entries={data.breakdowns.plan}
+   960→                currency={currency}
+   961→                renderKey={(k) =>
+   962→                  k === "yes" ? t("planYes") : t("planNo")
+   963→                }
+   964→              />
+   965→            </div>
+   966→          </section>
+   967→
+   968→          {/* Footer note */}
+   969→          <p className="flex flex-wrap items-start gap-2 text-xs text-muted-foreground">
+   970→            <Wallet className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+   971→            <span>{t("currencyNote", { currency })}</span>
+   972→            <button
+   973→              type="button"
+   974→              className="underline underline-offset-2 hover:text-foreground"
+   975→              onClick={() => navigate("#/reglages")}
+   976→            >
+   977→              {t("currencyNoteLink")}
+   978→            </button>
+   979→          </p>
+   980→        </div>
+   981→      )}
+   982→    </div>
+   983→  );
+   984→}
+   985→

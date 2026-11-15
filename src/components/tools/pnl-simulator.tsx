@@ -1,0 +1,352 @@
+"use client";
+
+import * as React from "react";
+import { useTranslations } from "next-intl";
+import { Info } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Badge } from "@/components/ui/badge";
+import { Money } from "@/components/privacy/money";
+import { previewTrade } from "@/lib/trading/calculate";
+import { findPreset, PRESET_INSTRUMENTS } from "@/lib/trading/instruments";
+import { toD } from "@/lib/trading/dec";
+import type { AssetClass, Direction } from "@/lib/trading/types";
+import { fmtNum, fmtPrice, pnlClass } from "@/lib/format";
+
+const GROUP_ORDER: AssetClass[] = ["METAL", "FOREX", "INDEX", "CRYPTO", "COMMODITY"];
+
+interface Level {
+  key: string;
+  label: string;
+  price: number | null;
+  color: string;
+}
+
+export function PnlSimulator() {
+  const t = useTranslations("tools");
+  const tRoot = useTranslations();
+
+  const [symbol, setSymbol] = React.useState("XAUUSD");
+  const [direction, setDirection] = React.useState<Direction>("LONG");
+  const [lots, setLots] = React.useState("0.50");
+  const [entry, setEntry] = React.useState("2345.00");
+  const [exit, setExit] = React.useState("2351.80");
+  const [stopLoss, setStopLoss] = React.useState("2340.00");
+  const [takeProfit, setTakeProfit] = React.useState("2358.00");
+  const [commission, setCommission] = React.useState("7");
+  const [swap, setSwap] = React.useState("0");
+
+  const instrument = React.useMemo(
+    () => findPreset(symbol) ?? PRESET_INSTRUMENTS[0],
+    [symbol]
+  );
+
+  const preview = React.useMemo(
+    () =>
+      previewTrade({
+        instrument,
+        direction,
+        lots,
+        entry,
+        exit,
+        stopLoss: stopLoss || null,
+        takeProfit: takeProfit || null,
+        commission,
+        swap,
+        accountCurrency: "USD",
+      }),
+    [instrument, direction, lots, entry, exit, stopLoss, takeProfit, commission, swap]
+  );
+
+  const levels: Level[] = [
+    { key: "sl", label: "SL", price: stopLoss ? toD(stopLoss).toNumber() : null, color: "bg-red-500" },
+    { key: "entry", label: t("entryShort"), price: entry ? toD(entry).toNumber() : null, color: "bg-foreground" },
+    { key: "exit", label: t("exitShort"), price: exit ? toD(exit).toNumber() : null, color: "bg-amber-500" },
+    { key: "tp", label: "TP", price: takeProfit ? toD(takeProfit).toNumber() : null, color: "bg-emerald-500" },
+  ];
+  const validLevels = levels.filter((l): l is Level & { price: number } => l.price !== null);
+  const min = validLevels.length ? Math.min(...validLevels.map((l) => l.price)) : 0;
+  const max = validLevels.length ? Math.max(...validLevels.map((l) => l.price)) : 0;
+  const span = max - min || 1;
+  const pos = (p: number) => ((p - min) / span) * 80 + 10; // 10–90 % padding
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      {/* ── Form ── */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2 sm:col-span-2">
+          <Label htmlFor="sim-instrument">{t("instrument")}</Label>
+          <Select value={symbol} onValueChange={setSymbol}>
+            <SelectTrigger id="sim-instrument" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="max-h-72">
+              {GROUP_ORDER.map((group) => {
+                const items = PRESET_INSTRUMENTS.filter((i) => i.assetClass === group);
+                if (!items.length) return null;
+                return (
+                  <SelectGroup key={group}>
+                    <SelectLabel>{tRoot(`trading.assetClass.${group}`)}</SelectLabel>
+                    {items.map((i) => (
+                      <SelectItem key={i.symbol} value={i.symbol}>
+                        <span className="font-medium tabular-nums">{i.symbol}</span>
+                        <span className="ml-2 text-muted-foreground">{i.name}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2 sm:col-span-2">
+          <Label>{t("direction")}</Label>
+          <ToggleGroup
+            type="single"
+            value={direction}
+            onValueChange={(v) => v && setDirection(v as Direction)}
+            className="w-full"
+          >
+            <ToggleGroupItem value="LONG" className="flex-1" aria-label={t("longAria")}>
+              {t("long")}
+            </ToggleGroupItem>
+            <ToggleGroupItem value="SHORT" className="flex-1" aria-label={t("shortAria")}>
+              {t("short")}
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="sim-lots">{t("lots")}</Label>
+          <Input
+            id="sim-lots"
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="0.01"
+            value={lots}
+            onChange={(e) => setLots(e.target.value)}
+            className="tabular-nums"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="sim-entry">{t("entryShort")}</Label>
+          <Input
+            id="sim-entry"
+            type="number"
+            inputMode="decimal"
+            step="any"
+            value={entry}
+            onChange={(e) => setEntry(e.target.value)}
+            className="tabular-nums"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="sim-exit">{t("exitShort")}</Label>
+          <Input
+            id="sim-exit"
+            type="number"
+            inputMode="decimal"
+            step="any"
+            value={exit}
+            onChange={(e) => setExit(e.target.value)}
+            className="tabular-nums"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="sim-sl">{t("stopLoss")}</Label>
+          <Input
+            id="sim-sl"
+            type="number"
+            inputMode="decimal"
+            step="any"
+            value={stopLoss}
+            onChange={(e) => setStopLoss(e.target.value)}
+            className="tabular-nums"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="sim-tp">{t("takeProfit")}</Label>
+          <Input
+            id="sim-tp"
+            type="number"
+            inputMode="decimal"
+            step="any"
+            value={takeProfit}
+            onChange={(e) => setTakeProfit(e.target.value)}
+            className="tabular-nums"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="sim-commission">{t("commission")}</Label>
+          <Input
+            id="sim-commission"
+            type="number"
+            inputMode="decimal"
+            step="any"
+            value={commission}
+            onChange={(e) => setCommission(e.target.value)}
+            className="tabular-nums"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="sim-swap">{t("swap")}</Label>
+          <Input
+            id="sim-swap"
+            type="number"
+            inputMode="decimal"
+            step="any"
+            value={swap}
+            onChange={(e) => setSwap(e.target.value)}
+            className="tabular-nums"
+          />
+        </div>
+      </div>
+
+      {/* ── Results ── */}
+      <div className="space-y-4">
+        <div className="rounded-xl border bg-muted/40 p-6">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              {t("netPnlEstimate")}
+            </p>
+            <Badge
+              variant={preview.resultType === "WIN" ? "default" : preview.resultType === "LOSS" ? "destructive" : "secondary"}
+              className={
+                preview.resultType === "WIN"
+                  ? "bg-emerald-600 hover:bg-emerald-600"
+                  : undefined
+              }
+            >
+              {tRoot(`trading.result.${preview.resultType}`)}
+            </Badge>
+          </div>
+          <p className="mt-2 text-4xl font-bold tabular-nums tracking-tight">
+            <Money
+              signed
+              value={preview.netPnl}
+              currency="USD"
+              className={pnlClass(preview.netPnl)}
+            />
+          </p>
+          <p className={`mt-1 text-2xl font-semibold tabular-nums ${pnlClass(preview.pips)}`}>
+            {preview.pips.gt(0) ? "+" : preview.pips.lt(0) ? "−" : ""}
+            {fmtNum(preview.pips.abs(), 1)} {t("pips")}
+            <span className="ml-2 text-sm font-normal text-muted-foreground">
+              {fmtNum(preview.points.abs(), 1)} {t("points")}
+            </span>
+          </p>
+        </div>
+
+        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <MiniStat
+            label={t("grossPnl")}
+            value={<Money signed value={preview.grossPnl} currency="USD" />}
+          />
+          <MiniStat
+            label={t("totalCosts")}
+            value={<Money value={preview.totalCosts} currency="USD" />}
+          />
+          <MiniStat
+            label={t("rMultiple")}
+            value={preview.rMultiple ? `${fmtNum(preview.rMultiple, 2)} R` : "—"}
+            valueClass={pnlClass(preview.rMultiple)}
+          />
+          <MiniStat
+            label={t("plannedRR")}
+            value={preview.plannedRR ? `1 : ${fmtNum(preview.plannedRR, 2)}` : "—"}
+          />
+          <MiniStat
+            label={t("realizedRR")}
+            value={preview.realizedRR ? `${fmtNum(preview.realizedRR, 2)} R` : "—"}
+            valueClass={pnlClass(preview.realizedRR)}
+          />
+          <MiniStat
+            label={t("pnlPerPip")}
+            value={
+              preview.pips.isZero() ? (
+                "—"
+              ) : (
+                <Money
+                  value={preview.grossPnl.div(preview.pips)}
+                  currency="USD"
+                />
+              )
+            }
+          />
+        </dl>
+
+        {/* Levels visualization */}
+        <div className="rounded-xl border p-4" aria-hidden="true">
+          <p className="mb-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {t("levels")}
+          </p>
+          <div className="relative h-1.5 rounded-full bg-muted">
+            {validLevels.map((l) => (
+              <div
+                key={l.key}
+                className="absolute -top-[5px] h-4 w-1 rounded-full"
+                style={{ left: `${pos(l.price)}%`, transform: "translateX(-50%)" }}
+              >
+                <div className={`h-full w-full rounded-full ${l.color}`} />
+              </div>
+            ))}
+          </div>
+          <div className="relative mt-3 h-10">
+            {validLevels.map((l) => (
+              <div
+                key={l.key}
+                className="absolute flex flex-col items-center"
+                style={{ left: `${pos(l.price)}%`, transform: "translateX(-50%)" }}
+              >
+                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {l.label}
+                </span>
+                <span className="text-xs tabular-nums">
+                  {fmtPrice(l.price, instrument.digits)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {preview.isEstimate && (
+          <p className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            {t("quoteDiffersNote", { quote: instrument.quoteCurrency })}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({
+  label,
+  value,
+  valueClass,
+}: {
+  label: string;
+  value: React.ReactNode;
+  valueClass?: string;
+}) {
+  return (
+    <div className="rounded-lg border p-3">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className={`mt-0.5 text-base font-semibold tabular-nums ${valueClass ?? ""}`}>
+        {value}
+      </dd>
+    </div>
+  );
+}

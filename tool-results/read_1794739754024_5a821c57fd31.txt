@@ -1,0 +1,1018 @@
+     1→"use client";
+     2→
+     3→/**
+     4→ * Analytics view (v2 Phase 4) — GET /api/analytics (useAnalytics).
+     5→ *
+     6→ * Layout: filters (period tabs + account select) → KPI grid → equity curve
+     7→ * with drawdown + R distribution → insights « ce qui marche / ce qui coûte »
+     8→ * → multi-dimension breakdowns. All money formatted in the profile currency,
+     9→ * weekday/hour dimensions in the user's timezone (computed server-side).
+    10→ */
+    11→import * as React from "react";
+    12→import {
+    13→  AlertTriangle,
+    14→  BarChart3,
+    15→  Brain,
+    16→  CalendarDays,
+    17→  Coins,
+    18→  Compass,
+    19→  DoorOpen,
+    20→  Gauge,
+    21→  Info,
+    22→  LineChart,
+    23→  ListChecks,
+    24→  Plus,
+    25→  RotateCw,
+    26→  Scale,
+    27→  Target,
+    28→  Timer,
+    29→  TrendingDown,
+    30→  TrendingUp,
+    31→  Wallet,
+    32→  Zap,
+    33→} from "lucide-react";
+    34→import { useTranslations } from "next-intl";
+    35→import {
+    36→  Area,
+    37→  AreaChart,
+    38→  Bar,
+    39→  BarChart,
+    40→  CartesianGrid,
+    41→  Cell,
+    42→  ResponsiveContainer,
+    43→  Tooltip,
+    44→  XAxis,
+    45→  YAxis,
+    46→} from "recharts";
+    47→import { Button } from "@/components/ui/button";
+    48→import {
+    49→  Card,
+    50→  CardContent,
+    51→  CardDescription,
+    52→  CardHeader,
+    53→  CardTitle,
+    54→} from "@/components/ui/card";
+    55→import {
+    56→  Select,
+    57→  SelectContent,
+    58→  SelectItem,
+    59→  SelectTrigger,
+    60→  SelectValue,
+    61→} from "@/components/ui/select";
+    62→import { Skeleton } from "@/components/ui/skeleton";
+    63→import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+    64→import { Money, Sensitive } from "@/components/privacy/money";
+    65→import { useTradingLabels } from "@/components/trades/trade-bits";
+    66→import { useSession } from "@/components/app/session-context";
+    67→import { useI18n } from "@/i18n/i18n-provider";
+    68→import { useAccounts, useAnalytics } from "@/hooks/use-trading";
+    69→import type { AnalyticsPeriod } from "@/lib/validations/analytics";
+    70→import type { GroupStat } from "@/lib/analytics/engine";
+    71→import type { Insight } from "@/lib/analytics/insights";
+    72→import {
+    73→  fmtDateInTz,
+    74→  fmtNum,
+    75→  fmtSigned,
+    76→  pnlClass,
+    77→} from "@/lib/format";
+    78→import { useFormat } from "@/lib/format/use-format";
+    79→import { navigate } from "@/lib/router";
+    80→
+    81→const EMERALD = "text-gain";
+    82→const ROSE = "text-loss";
+    83→
+    84→const PERIODS: AnalyticsPeriod[] = ["30d", "90d", "ytd", "all"];
+    85→
+    86→// ── Small building blocks ────────────────────────────────────────────────────
+    87→
+    88→function KpiCard({
+    89→  label,
+    90→  value,
+    91→  valueClassName,
+    92→  sub,
+    93→  compact = false,
+    94→}: {
+    95→  label: string;
+    96→  value: React.ReactNode;
+    97→  valueClassName?: string;
+    98→  sub?: React.ReactNode;
+    99→  compact?: boolean;
+   100→}) {
+   101→  return (
+   102→    <div className="flex flex-col gap-2 rounded-lg border p-4">
+   103→      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+   104→      <p
+   105→        className={`tabular-nums ${
+   106→          compact ? "text-xl font-semibold" : "text-2xl font-bold"
+   107→        } ${valueClassName ?? ""}`}
+   108→      >
+   109→        {value}
+   110→      </p>
+   111→      {sub != null ? (
+   112→        <p className="text-xs tabular-nums text-muted-foreground">{sub}</p>
+   113→      ) : null}
+   114→    </div>
+   115→  );
+   116→}
+   117→
+   118→interface EquityDatum {
+   119→  i: number;
+   120→  date: string;
+   121→  equity: number;
+   122→  drawdown: number;
+   123→}
+   124→
+   125→function EquityTooltipContent({
+   126→  active,
+   127→  payload,
+   128→  currency,
+   129→  timezone,
+   130→}: {
+   131→  active?: boolean;
+   132→  payload?: Array<{ payload?: EquityDatum }>;
+   133→  currency: string;
+   134→  timezone: string;
+   135→}) {
+   136→  if (!active) return null;
+   137→  const point = payload?.[0]?.payload;
+   138→  if (!point) return null;
+   139→  return (
+   140→    <div className="rounded-lg border bg-background px-3 py-2 text-xs shadow-md">
+   141→      <p className="font-medium">#{point.i}</p>
+   142→      <p className="text-muted-foreground">
+   143→        {fmtDateInTz(point.date, timezone)}
+   144→      </p>
+   145→      <p className="mt-1 tabular-nums">
+   146→        <Money value={point.equity} currency={currency} kind="balance" />
+   147→      </p>
+   148→      {point.drawdown > 0 ? (
+   149→        <p className={`tabular-nums ${ROSE}`}>
+   150→          −<Money value={point.drawdown} currency={currency} />
+   151→        </p>
+   152→      ) : null}
+   153→    </div>
+   154→  );
+   155→}
+   156→
+   157→function RDistTooltipContent({
+   158→  active,
+   159→  payload,
+   160→}: {
+   161→  active?: boolean;
+   162→  payload?: Array<{ payload?: { label: string; count: number; totalR: number } }>;
+   163→}) {
+   164→  if (!active) return null;
+   165→  const point = payload?.[0]?.payload;
+   166→  if (!point) return null;
+   167→  return (
+   168→    <div className="rounded-lg border bg-background px-3 py-2 text-xs shadow-md">
+   169→      <p className="font-medium">{point.label}</p>
+   170→      <p className="tabular-nums">{point.count}</p>
+   171→      <p className="tabular-nums text-muted-foreground">
+   172→        Σ {fmtSigned(String(point.totalR))} R
+   173→      </p>
+   174→    </div>
+   175→  );
+   176→}
+   177→
+   178→/** One breakdown dimension — compact rows with a proportional net P&L bar. */
+   179→function BreakdownCard({
+   180→  title,
+   181→  description,
+   182→  icon: Icon,
+   183→  entries,
+   184→  currency,
+   185→  renderKey,
+   186→  max = 8,
+   187→}: {
+   188→  title: string;
+   189→  description?: string;
+   190→  icon: React.ComponentType<{ className?: string }>;
+   191→  entries: GroupStat[];
+   192→  currency: string;
+   193→  renderKey: (key: string) => string;
+   194→  max?: number;
+   195→}) {
+   196→  const t = useTranslations("analytics");
+   197→  const fmt = useFormat();
+   198→  const shown = entries.slice(0, max);
+   199→  const maxAbs = shown.reduce(
+   200→    (m, e) => Math.max(m, Math.abs(Number(e.stats.netPnl))),
+   201→    0
+   202→  );
+   203→  return (
+   204→    <Card>
+   205→      <CardHeader>
+   206→        <CardTitle className="flex items-center gap-2 text-base">
+   207→          <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+   208→          {title}
+   209→        </CardTitle>
+   210→        {description ? <CardDescription>{description}</CardDescription> : null}
+   211→      </CardHeader>
+   212→      <CardContent>
+   213→        {shown.length === 0 ? (
+   214→          <p className="text-sm text-muted-foreground">{t("noData")}</p>
+   215→        ) : (
+   216→          <ul className="space-y-1.5">
+   217→            {shown.map((e) => {
+   218→              const net = Number(e.stats.netPnl);
+   219→              const width =
+   220→                maxAbs > 0 ? Math.max(2, (Math.abs(net) / maxAbs) * 100) : 0;
+   221→              return (
+   222→                <li
+   223→                  key={e.key}
+   224→                  className="relative flex items-center justify-between gap-2 overflow-hidden rounded-md px-2 py-1.5 text-sm"
+   225→                >
+   226→                  <span
+   227→                    className={`absolute inset-y-0 left-0 ${
+   228→                      net >= 0 ? "bg-gain-subtle" : "bg-loss-subtle"
+   229→                    }`}
+   230→                    style={{ width: `${width}%` }}
+   231→                    aria-hidden="true"
+   232→                  />
+   233→                  <span className="relative z-10 min-w-0 truncate font-medium">
+   234→                    {renderKey(e.key)}
+   235→                  </span>
+   236→                  <span className="relative z-10 flex shrink-0 items-center gap-3 tabular-nums">
+   237→                    <span className="text-xs text-muted-foreground">
+   238→                      ×{e.stats.tradeCount}
+   239→                    </span>
+   240→                    <span className="hidden w-16 whitespace-nowrap text-right text-xs text-muted-foreground sm:inline">
+   241→                      {e.stats.winRate != null
+   242→                        ? fmt.pct(e.stats.winRate)
+   243→                        : "—"}
+   244→                    </span>
+   245→                    <Money
+   246→                      signed
+   247→                      value={e.stats.netPnl}
+   248→                      currency={currency}
+   249→                      className={`w-24 text-right font-medium ${pnlClass(
+   250→                        e.stats.netPnl
+   251→                      )}`}
+   252→                    />
+   253→                  </span>
+   254→                </li>
+   255→              );
+   256→            })}
+   257→            {entries.length > shown.length ? (
+   258→              <li className="px-2 pt-1 text-xs text-muted-foreground">
+   259→                {t("more", { count: entries.length - shown.length })}
+   260→              </li>
+   261→            ) : null}
+   262→          </ul>
+   263→        )}
+   264→      </CardContent>
+   265→    </Card>
+   266→  );
+   267→}
+   268→
+   269→// ── View ─────────────────────────────────────────────────────────────────────
+   270→
+   271→export function AnalyticsView() {
+   272→  const { session } = useSession();
+   273→  const t = useTranslations("analytics");
+   274→  const tRoot = useTranslations();
+   275→  const labels = useTradingLabels();
+   276→  const { locale } = useI18n();
+   277→  const fmt = useFormat();
+   278→  const [period, setPeriod] = React.useState<AnalyticsPeriod>("30d");
+   279→  const [accountId, setAccountId] = React.useState<string>("all");
+   280→
+   281→  const { data: accountsData } = useAccounts();
+   282→  const accounts = accountsData ?? [];
+   283→
+   284→  const effectiveAccount = accountId === "all" ? undefined : accountId;
+   285→  const { data, isLoading, isError, refetch } = useAnalytics({
+   286→    period,
+   287→    account: effectiveAccount,
+   288→  });
+   289→
+   290→  const timezone = data?.timezone ?? session?.profile.timezone ?? "UTC";
+   291→  const currency = data?.currency ?? session?.profile.baseCurrency ?? "USD";
+   292→  const stats = data?.stats ?? null;
+   293→  const advanced = data?.advanced ?? null;
+   294→
+   295→  const equityData = React.useMemo<EquityDatum[]>(
+   296→    () =>
+   297→      (data?.equityCurve ?? []).map((p) => ({
+   298→        i: p.i,
+   299→        date: p.date,
+   300→        equity: Number(p.equity),
+   301→        drawdown: Number(p.drawdown),
+   302→      })),
+   303→    [data]
+   304→  );
+   305→
+   306→  const rDistData = React.useMemo(
+   307→    () =>
+   308→      (data?.rDistribution.buckets ?? []).map((b) => ({
+   309→        id: b.id,
+   310→        label: t(`rdist.${b.id}`),
+   311→        count: b.count,
+   312→        totalR: Number(b.totalR),
+   313→        negative: b.to != null ? b.to <= 0 : false,
+   314→      })),
+   315→    [data, t]
+   316→  );
+   317→
+   318→  const weekdayLabel = React.useCallback(
+   319→    (key: string) => {
+   320→      try {
+   321→        // ISO weekday 1-7 → localized name via a stable reference week
+   322→        // (2024-01-01 was a Monday).
+   323→        const ref = new Date(Date.UTC(2024, 0, Number(key)));
+   324→        return new Intl.DateTimeFormat(locale, {
+   325→          weekday: "long",
+   326→          timeZone: "UTC",
+   327→        }).format(ref);
+   328→      } catch {
+   329→        return key;
+   330→      }
+   331→    },
+   332→    [locale]
+   333→  );
+   334→
+   335→  const hourLabel = React.useCallback((key: string) => {
+   336→    const h = Number(key);
+   337→    if (!Number.isFinite(h)) return key;
+   338→    const two = (n: number) => String(n).padStart(2, "0");
+   339→    return `${two(h)}:00–${two(h + 1)}:59`;
+   340→  }, []);
+   341→
+   342→  /** Formats raw insight params for i18n interpolation (money, R, labels…). */
+   343→  const formatInsightParams = React.useCallback(
+   344→    (insight: Insight): Record<string, string> => {
+   345→      const money = new Set(["netPnl", "fees", "dd", "pnl"]);
+   346→      const pct = new Set(["winRate", "pct"]);
+   347→      const r = new Set([
+   348→        "avgR",
+   349→        "avgRPlan",
+   350→        "avgRNoPlan",
+   351→        "busyAvgR",
+   352→        "lightAvgR",
+   353→      ]);
+   354→      const num = new Set(["payoff", "rf"]);
+   355→      const out: Record<string, string> = {};
+   356→      for (const [k, v] of Object.entries(insight.params)) {
+   357→        if (money.has(k) && typeof v === "string") {
+   358→          out[k] = fmt.signedMoney(v, currency);
+   359→        } else if (pct.has(k) && typeof v === "string") {
+   360→          out[k] = fmt.pct(v);
+   361→        } else if (r.has(k) && typeof v === "string") {
+   362→          out[k] = `${fmtSigned(v)} R`;
+   363→        } else if (num.has(k) && typeof v === "string") {
+   364→          out[k] = fmtNum(v);
+   365→        } else if (k === "weekday") {
+   366→          out[k] = weekdayLabel(String(v));
+   367→        } else if (k === "hour") {
+   368→          out[k] = hourLabel(String(v));
+   369→        } else if (k === "session") {
+   370→          out[k] = labels.session(String(v));
+   371→        } else if (k === "emotion") {
+   372→          out[k] = labels.emotion(String(v));
+   373→        } else {
+   374→          out[k] = String(v);
+   375→        }
+   376→      }
+   377→      return out;
+   378→    },
+   379→    [currency, weekdayLabel, hourLabel, labels, fmt]
+   380→  );
+   381→
+   382→  const renderInsight = (insight: Insight) =>
+   383→    tRoot(`analytics.insights.${insight.rule}` as Parameters<typeof tRoot>[0], {
+   384→      ...formatInsightParams(insight),
+   385→    });
+   386→
+   387→  const goodInsights = (data?.insights ?? []).filter((i) => i.tone === "good");
+   388→  const badInsights = (data?.insights ?? []).filter((i) => i.tone === "bad");
+   389→  const infoInsights = (data?.insights ?? []).filter((i) => i.tone === "info");
+   390→
+   391→  /** KPI display model. */
+   392→  const kpi = React.useMemo(() => {
+   393→    const s = stats;
+   394→    const pfNum = s?.profitFactor != null ? Number(s.profitFactor) : null;
+   395→    const streak = s?.currentStreak ?? 0;
+   396→    return {
+   397→      netPnlTone: s ? pnlClass(s.netPnl) : "text-muted-foreground",
+   398→      winRate: s?.winRate != null ? fmt.pct(s.winRate) : "—",
+   399→      profitFactor:
+   400→        pfNum == null
+   401→          ? "—"
+   402→          : Number.isFinite(pfNum)
+   403→            ? fmtNum(pfNum)
+   404→            : "∞",
+   405→      profitFactorTone:
+   406→        pfNum == null
+   407→          ? ""
+   408→          : pfNum >= 2
+   409→            ? EMERALD
+   410→            : pfNum < 1
+   411→              ? ROSE
+   412→              : "",
+   413→      expectancy: s?.expectancyR != null ? `${fmtSigned(s.expectancyR)} R` : "—",
+   414→      expectancyTone:
+   415→        s?.expectancyR != null ? pnlClass(s.expectancyR) : "text-muted-foreground",
+   416→      totalR: s?.totalR != null ? `${fmtSigned(s.totalR)} R` : "—",
+   417→      maxDrawdownTone: s?.maxDrawdown != null ? ROSE : "",
+   418→      sqn: advanced?.sqn != null ? fmtNum(advanced.sqn) : "—",
+   419→      sqnTone:
+   420→        advanced?.sqn == null
+   421→          ? ""
+   422→          : Number(advanced.sqn) >= 2
+   423→            ? EMERALD
+   424→            : Number(advanced.sqn) < 1
+   425→              ? ROSE
+   426→              : "",
+   427→      tradeCount: s ? fmtNum(s.tradeCount, 0) : "—",
+   428→      winsLosses: s
+   429→        ? t("kpiWinsLosses", { wins: s.wins, losses: s.losses, be: s.breakevens })
+   430→        : null,
+   431→      sharpe: advanced?.sharpe != null ? fmtNum(advanced.sharpe) : "—",
+   432→      sortino: advanced?.sortino != null ? fmtNum(advanced.sortino) : "—",
+   433→      recovery:
+   434→        advanced?.recoveryFactor != null ? fmtNum(advanced.recoveryFactor) : "—",
+   435→      payoff: advanced?.payoffRatio != null ? fmtNum(advanced.payoffRatio) : "—",
+   436→      avgDuration:
+   437→        advanced?.avgDurationMin != null
+   438→          ? advanced.avgDurationMin >= 60
+   439→            ? t("durationHm", {
+   440→                h: Math.floor(advanced.avgDurationMin / 60),
+   441→                m: advanced.avgDurationMin % 60,
+   442→              })
+   443→            : t("durationM", { m: advanced.avgDurationMin })
+   444→          : "—",
+   445→      rCoverage: advanced?.rCoverage != null ? fmt.pct(advanced.rCoverage) : "—",
+   446→      maxWinStreak: s ? fmtNum(s.maxWinStreak, 0) : "—",
+   447→      maxLossStreak: s ? fmtNum(s.maxLossStreak, 0) : "—",
+   448→      streakText:
+   449→        streak > 0
+   450→          ? t("streakWin", { count: streak })
+   451→          : streak < 0
+   452→            ? t("streakLoss", { count: Math.abs(streak) })
+   453→            : "—",
+   454→      streakTone: streak > 0 ? EMERALD : streak < 0 ? ROSE : "",
+   455→    };
+   456→  }, [stats, advanced, currency, t, fmt]);
+   457→
+   458→  if (!session) return null;
+   459→
+   460→  const hasAnyTrade = stats != null;
+   461→  const showAllCta = !hasAnyTrade && period !== "all";
+   462→
+   463→  return (
+   464→    <div className="space-y-6">
+   465→      {/* ── Header + filters ── */}
+   466→      <div className="flex flex-col gap-3">
+   467→        <div className="flex flex-col gap-1">
+   468→          <h2 className="text-xl font-bold tracking-tight sm:text-2xl">
+   469→            {t("title")}
+   470→          </h2>
+   471→          <p className="text-sm text-muted-foreground">
+   472→            {hasAnyTrade
+   473→              ? t("subtitle", { count: stats.tradeCount })
+   474→              : t("subtitleEmpty")}
+   475→          </p>
+   476→        </div>
+   477→        <div className="flex flex-wrap items-center gap-2">
+   478→          <Tabs
+   479→            value={period}
+   480→            onValueChange={(v) => {
+   481→              if (PERIODS.includes(v as AnalyticsPeriod)) {
+   482→                setPeriod(v as AnalyticsPeriod);
+   483→              }
+   484→            }}
+   485→          >
+   486→            <TabsList>
+   487→              <TabsTrigger value="30d">{t("period30d")}</TabsTrigger>
+   488→              <TabsTrigger value="90d">{t("period90d")}</TabsTrigger>
+   489→              <TabsTrigger value="ytd">{t("periodYtd")}</TabsTrigger>
+   490→              <TabsTrigger value="all">{t("periodAll")}</TabsTrigger>
+   491→            </TabsList>
+   492→          </Tabs>
+   493→          <Select
+   494→            value={accountId}
+   495→            onValueChange={(v) => setAccountId(v === "all" ? "all" : v)}
+   496→          >
+   497→            <SelectTrigger className="w-[180px]" aria-label={t("accountFilter")}>
+   498→              <SelectValue />
+   499→            </SelectTrigger>
+   500→            <SelectContent>
+   501→              <SelectItem value="all">{t("allAccounts")}</SelectItem>
+   502→              {accounts.map((a) => (
+   503→                <SelectItem key={a.id} value={a.id}>
+   504→                  <Sensitive kind="account">{a.name}</Sensitive>
+   505→                </SelectItem>
+   506→              ))}
+   507→            </SelectContent>
+   508→          </Select>
+   509→          {/* v2.5 M2 — chart builder deep link */}
+   510→          <Button
+   511→            variant="outline"
+   512→            size="sm"
+   513→            className="ml-auto"
+   514→            onClick={() => navigate("#/analytics/charts")}
+   515→          >
+   516→            <LineChart className="h-4 w-4" aria-hidden="true" />
+   517→            {t("openChartBuilder")}
+   518→          </Button>
+   519→        </div>
+   520→      </div>
+   521→
+   522→      {/* ── Loading ── */}
+   523→      {isLoading ? (
+   524→        <div className="space-y-6" role="status" aria-live="polite">
+   525→          <span className="sr-only">{t("loading")}</span>
+   526→          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+   527→            {Array.from({ length: 8 }, (_, i) => (
+   528→              <Skeleton key={i} className="h-24 w-full rounded-lg" />
+   529→            ))}
+   530→          </div>
+   531→          <Skeleton className="h-72 w-full rounded-xl" />
+   532→          <div className="grid gap-6 lg:grid-cols-2">
+   533→            <Skeleton className="h-64 w-full rounded-xl" />
+   534→            <Skeleton className="h-64 w-full rounded-xl" />
+   535→          </div>
+   536→        </div>
+   537→      ) : isError ? (
+   538→        /* ── Error ── */
+   539→        <Card>
+   540→          <CardContent className="flex flex-col items-start gap-3">
+   541→            <div className="flex items-center gap-2">
+   542→              <AlertTriangle className="h-5 w-5 text-destructive" aria-hidden="true" />
+   543→              <p className="text-sm font-medium">{t("errorTitle")}</p>
+   544→            </div>
+   545→            <Button variant="outline" size="sm" onClick={() => void refetch()}>
+   546→              <RotateCw className="h-4 w-4" aria-hidden="true" />
+   547→              {t("errorRetry")}
+   548→            </Button>
+   549→          </CardContent>
+   550→        </Card>
+   551→      ) : !hasAnyTrade || !data ? (
+   552→        /* ── Empty state ── */
+   553→        <Card>
+   554→          <CardHeader>
+   555→            <CardTitle className="text-lg">{t("emptyTitle")}</CardTitle>
+   556→            <CardDescription>{t("emptyDesc")}</CardDescription>
+   557→          </CardHeader>
+   558→          <CardContent className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+   559→            {showAllCta ? (
+   560→              <Button onClick={() => setPeriod("all")}>
+   561→                <BarChart3 className="h-4 w-4" aria-hidden="true" />
+   562→                {t("emptyCtaAll")}
+   563→              </Button>
+   564→            ) : (
+   565→              <Button onClick={() => navigate("#/trades/quick")}>
+   566→                <Zap className="h-4 w-4" aria-hidden="true" />
+   567→                {t("emptyCtaQuick")}
+   568→              </Button>
+   569→            )}
+   570→            <Button variant="outline" onClick={() => navigate("#/trades/new")}>
+   571→              <Plus className="h-4 w-4" aria-hidden="true" />
+   572→              {t("emptyCtaForm")}
+   573→            </Button>
+   574→          </CardContent>
+   575→        </Card>
+   576→      ) : (
+   577→        /* ── Data state ── */
+   578→        <div className="space-y-6">
+   579→          {/* KPIs */}
+   580→          <section aria-label={t("kpisAria")} className="space-y-3">
+   581→            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+   582→              <KpiCard
+   583→                label={t("kpiNetPnl")}
+   584→                value={
+   585→                  stats ? (
+   586→                    <Money signed value={stats.netPnl} currency={currency} />
+   587→                  ) : (
+   588→                    "—"
+   589→                  )
+   590→                }
+   591→                valueClassName={kpi.netPnlTone}
+   592→                sub={kpi.winsLosses ?? undefined}
+   593→              />
+   594→              <KpiCard
+   595→                label={t("kpiWinRate")}
+   596→                value={kpi.winRate}
+   597→                sub={t("kpiTrades", { count: stats.tradeCount })}
+   598→              />
+   599→              <KpiCard
+   600→                label={t("kpiProfitFactor")}
+   601→                value={kpi.profitFactor}
+   602→                valueClassName={kpi.profitFactorTone}
+   603→              />
+   604→              <KpiCard
+   605→                label={t("kpiExpectancy")}
+   606→                value={kpi.expectancy}
+   607→                valueClassName={kpi.expectancyTone}
+   608→                sub={t("kpiTotalR", { value: kpi.totalR })}
+   609→              />
+   610→            </div>
+   611→            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+   612→              <KpiCard
+   613→                compact
+   614→                label={t("kpiMaxDrawdown")}
+   615→                value={
+   616→                  stats?.maxDrawdown != null ? (
+   617→                    <Money value={stats.maxDrawdown} currency={currency} />
+   618→                  ) : (
+   619→                    "—"
+   620→                  )
+   621→                }
+   622→                valueClassName={kpi.maxDrawdownTone}
+   623→                sub={t("kpiRecovery", { value: kpi.recovery })}
+   624→              />
+   625→              <KpiCard
+   626→                compact
+   627→                label={t("kpiSqn")}
+   628→                value={kpi.sqn}
+   629→                valueClassName={kpi.sqnTone}
+   630→                sub={t("sqnHint")}
+   631→              />
+   632→              <KpiCard
+   633→                compact
+   634→                label={t("kpiSharpe")}
+   635→                value={kpi.sharpe}
+   636→                sub={t("kpiSortino", { value: kpi.sortino })}
+   637→              />
+   638→              <KpiCard
+   639→                compact
+   640→                label={t("kpiStreaks")}
+   641→                value={kpi.streakText || "—"}
+   642→                valueClassName={kpi.streakTone}
+   643→                sub={t("streaksMax", {
+   644→                  wins: kpi.maxWinStreak,
+   645→                  losses: kpi.maxLossStreak,
+   646→                })}
+   647→              />
+   648→            </div>
+   649→            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+   650→              <KpiCard compact label={t("kpiPayoff")} value={kpi.payoff} />
+   651→              <KpiCard compact label={t("kpiAvgDuration")} value={kpi.avgDuration} />
+   652→              <KpiCard
+   653→                compact
+   654→                label={t("kpiTotalFees")}
+   655→                value={
+   656→                  advanced != null ? (
+   657→                    <Money value={advanced.totalFees} currency={currency} />
+   658→                  ) : (
+   659→                    "—"
+   660→                  )
+   661→                }
+   662→              />
+   663→              <KpiCard compact label={t("kpiRCoverage")} value={kpi.rCoverage} />
+   664→            </div>
+   665→          </section>
+   666→
+   667→          {/* Equity + drawdown (2/3) | R distribution (1/3) */}
+   668→          <div className="grid gap-6 xl:grid-cols-3">
+   669→            <Card className="xl:col-span-2">
+   670→              <CardHeader>
+   671→                <CardTitle className="text-base">{t("equityTitle")}</CardTitle>
+   672→                <CardDescription>
+   673→                  {t("equityDesc", {
+   674→                    amount: fmt.money(data.equityInitialBalance, currency),
+   675→                  })}
+   676→                </CardDescription>
+   677→              </CardHeader>
+   678→              <CardContent className="space-y-4">
+   679→                <div
+   680→                  className="h-[220px] w-full"
+   681→                  role="img"
+   682→                  aria-label={t("equityTitle")}
+   683→                >
+   684→                  <ResponsiveContainer width="100%" height="100%">
+   685→                    <AreaChart
+   686→                      data={equityData}
+   687→                      margin={{ top: 8, right: 12, bottom: 0, left: 0 }}
+   688→                    >
+   689→                      <CartesianGrid
+   690→                        strokeDasharray="3 3"
+   691→                        strokeOpacity={0.3}
+   692→                        vertical={false}
+   693→                      />
+   694→                      <XAxis
+   695→                        dataKey="i"
+   696→                        tickFormatter={(value: number) => `#${value}`}
+   697→                        tick={{ fontSize: 11 }}
+   698→                        tickLine={false}
+   699→                        axisLine={false}
+   700→                        minTickGap={32}
+   701→                      />
+   702→                      <YAxis
+   703→                        domain={["auto", "auto"]}
+   704→                        tickFormatter={(value: number) => fmt.money(value, currency, 0)}
+   705→                        tick={{ fontSize: 11 }}
+   706→                        tickLine={false}
+   707→                        axisLine={false}
+   708→                        width={60}
+   709→                      />
+   710→                      <Tooltip
+   711→                        cursor={{ strokeOpacity: 0.4 }}
+   712→                        content={
+   713→                          <EquityTooltipContent
+   714→                            currency={currency}
+   715→                            timezone={timezone}
+   716→                          />
+   717→                        }
+   718→                      />
+   719→                      <Area
+   720→                        type="monotone"
+   721→                        dataKey="equity"
+   722→                        stroke="#10b981"
+   723→                        strokeWidth={2}
+   724→                        fill="#10b981"
+   725→                        fillOpacity={0.15}
+   726→                        dot={false}
+   727→                        activeDot={{ r: 4 }}
+   728→                      />
+   729→                    </AreaChart>
+   730→                  </ResponsiveContainer>
+   731→                </div>
+   732→                <div>
+   733→                  <p className="mb-1 text-xs font-medium text-muted-foreground">
+   734→                    {t("drawdownTitle")}
+   735→                  </p>
+   736→                  <div
+   737→                    className="h-[80px] w-full"
+   738→                    role="img"
+   739→                    aria-label={t("drawdownTitle")}
+   740→                  >
+   741→                    <ResponsiveContainer width="100%" height="100%">
+   742→                      <AreaChart
+   743→                        data={equityData}
+   744→                        margin={{ top: 4, right: 12, bottom: 0, left: 0 }}
+   745→                      >
+   746→                        <XAxis dataKey="i" hide />
+   747→                        <YAxis
+   748→                          domain={[0, "auto"]}
+   749→                          tickFormatter={(value: number) => fmt.money(value, currency, 0)}
+   750→                          tick={{ fontSize: 10 }}
+   751→                          tickLine={false}
+   752→                          axisLine={false}
+   753→                          width={60}
+   754→                        />
+   755→                        <Tooltip
+   756→                          cursor={{ strokeOpacity: 0.4 }}
+   757→                          content={
+   758→                            <EquityTooltipContent
+   759→                              currency={currency}
+   760→                              timezone={timezone}
+   761→                            />
+   762→                          }
+   763→                        />
+   764→                        <Area
+   765→                          type="monotone"
+   766→                          dataKey="drawdown"
+   767→                          stroke="#f43f5e"
+   768→                          strokeWidth={1.5}
+   769→                          fill="#f43f5e"
+   770→                          fillOpacity={0.15}
+   771→                          dot={false}
+   772→                        />
+   773→                      </AreaChart>
+   774→                    </ResponsiveContainer>
+   775→                  </div>
+   776→                </div>
+   777→              </CardContent>
+   778→            </Card>
+   779→
+   780→            <Card>
+   781→              <CardHeader>
+   782→                <CardTitle className="text-base">{t("rdistTitle")}</CardTitle>
+   783→                <CardDescription>
+   784→                  {data.rDistribution.withoutR > 0
+   785→                    ? t("rdistDescMissing", {
+   786→                        count: data.rDistribution.withoutR,
+   787→                      })
+   788→                    : t("rdistDesc")}
+   789→                </CardDescription>
+   790→              </CardHeader>
+   791→              <CardContent>
+   792→                <div
+   793→                  className="h-[320px] w-full"
+   794→                  role="img"
+   795→                  aria-label={t("rdistTitle")}
+   796→                >
+   797→                  <ResponsiveContainer width="100%" height="100%">
+   798→                    <BarChart
+   799→                      data={rDistData}
+   800→                      margin={{ top: 8, right: 4, bottom: 0, left: 0 }}
+   801→                    >
+   802→                      <CartesianGrid
+   803→                        strokeDasharray="3 3"
+   804→                        strokeOpacity={0.3}
+   805→                        vertical={false}
+   806→                      />
+   807→                      <XAxis
+   808→                        dataKey="label"
+   809→                        tick={{ fontSize: 10 }}
+   810→                        tickLine={false}
+   811→                        axisLine={false}
+   812→                        interval={0}
+   813→                        angle={-35}
+   814→                        textAnchor="end"
+   815→                        height={44}
+   816→                      />
+   817→                      <YAxis
+   818→                        allowDecimals={false}
+   819→                        tick={{ fontSize: 11 }}
+   820→                        tickLine={false}
+   821→                        axisLine={false}
+   822→                        width={32}
+   823→                      />
+   824→                      <Tooltip
+   825→                        cursor={{ fillOpacity: 0.08 }}
+   826→                        content={<RDistTooltipContent />}
+   827→                      />
+   828→                      <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={36}>
+   829→                        {rDistData.map((b) => (
+   830→                          <Cell
+   831→                            key={b.id}
+   832→                            fill={b.negative ? "var(--loss)" : "var(--gain)"}
+   833→                            fillOpacity={0.8}
+   834→                          />
+   835→                        ))}
+   836→                      </Bar>
+   837→                    </BarChart>
+   838→                  </ResponsiveContainer>
+   839→                </div>
+   840→              </CardContent>
+   841→            </Card>
+   842→          </div>
+   843→
+   844→          {/* Insights — ce qui marche / ce qui coûte / à noter */}
+   845→          <section aria-label={t("insightsAria")}>
+   846→            <h3 className="mb-3 text-base font-semibold">{t("insightsTitle")}</h3>
+   847→            <div className="grid gap-4 xl:grid-cols-3">
+   848→              {(
+   849→                [
+   850→                  {
+   851→                    key: "works",
+   852→                    icon: TrendingUp,
+   853→                    tone: EMERALD,
+   854→                    bg: "bg-gain-subtle",
+   855→                    items: goodInsights,
+   856→                  },
+   857→                  {
+   858→                    key: "costs",
+   859→                    icon: TrendingDown,
+   860→                    tone: ROSE,
+   861→                    bg: "bg-loss-subtle",
+   862→                    items: badInsights,
+   863→                  },
+   864→                  {
+   865→                    key: "notes",
+   866→                    icon: Info,
+   867→                    tone: "text-muted-foreground",
+   868→                    bg: "bg-muted",
+   869→                    items: infoInsights,
+   870→                  },
+   871→                ] as const
+   872→              ).map((col) => (
+   873→                <Card key={col.key}>
+   874→                  <CardHeader>
+   875→                    <CardTitle className="flex items-center gap-2 text-base">
+   876→                      <span
+   877→                        className={`flex h-8 w-8 items-center justify-center rounded-lg ${col.bg} ${col.tone}`}
+   878→                        aria-hidden="true"
+   879→                      >
+   880→                        <col.icon className="h-4 w-4" />
+   881→                      </span>
+   882→                      {t(`insights.${col.key}`)}
+   883→                      <span className="ml-auto text-xs font-normal text-muted-foreground">
+   884→                        {col.items.length}
+   885→                      </span>
+   886→                    </CardTitle>
+   887→                  </CardHeader>
+   888→                  <CardContent>
+   889→                    {col.items.length === 0 ? (
+   890→                      <p className="text-sm text-muted-foreground">
+   891→                        {t("insightsEmpty")}
+   892→                      </p>
+   893→                    ) : (
+   894→                      <ul className="max-h-96 space-y-2.5 overflow-y-auto pr-1">
+   895→                        {col.items.slice(0, 6).map((insight, idx) => (
+   896→                          <li
+   897→                            key={`${insight.rule}-${idx}`}
+   898→                            className={`rounded-md border-l-2 py-1 pl-3 text-sm ${
+   899→                              col.key === "works"
+   900→                                ? "border-gain-subtle"
+   901→                                : col.key === "costs"
+   902→                                  ? "border-loss-subtle"
+   903→                                  : "border-muted-foreground/40"
+   904→                            }`}
+   905→                          >
+   906→                            {renderInsight(insight)}
+   907→                          </li>
+   908→                        ))}
+   909→                      </ul>
+   910→                    )}
+   911→                  </CardContent>
+   912→                </Card>
+   913→              ))}
+   914→            </div>
+   915→          </section>
+   916→
+   917→          {/* Breakdowns */}
+   918→          <section aria-label={t("breakdownsAria")}>
+   919→            <h3 className="mb-3 text-base font-semibold">
+   920→              {t("breakdownsTitle")}
+   921→            </h3>
+   922→            <div className="grid gap-4 md:grid-cols-2">
+   923→              <BreakdownCard
+   924→                title={t("bdStrategy")}
+   925→                icon={Target}
+   926→                entries={data.breakdowns.strategy}
+   927→                currency={currency}
+   928→                renderKey={(k) => k}
+   929→              />
+   930→              <BreakdownCard
+   931→                title={t("bdSymbol")}
+   932→                icon={Coins}
+   933→                entries={data.breakdowns.symbol}
+   934→                currency={currency}
+   935→                renderKey={(k) => k}
+   936→              />
+   937→              <BreakdownCard
+   938→                title={t("bdSession")}
+   939→                icon={Gauge}
+   940→                entries={data.breakdowns.session}
+   941→                currency={currency}
+   942→                renderKey={(k) => labels.session(k)}
+   943→              />
+   944→              <BreakdownCard
+   945→                title={t("bdWeekday")}
+   946→                description={t("bdWeekdayDesc")}
+   947→                icon={CalendarDays}
+   948→                entries={data.breakdowns.weekday}
+   949→                currency={currency}
+   950→                renderKey={weekdayLabel}
+   951→              />
+   952→              <BreakdownCard
+   953→                title={t("bdHour")}
+   954→                description={t("bdHourDesc")}
+   955→                icon={Timer}
+   956→                entries={data.breakdowns.hour}
+   957→                currency={currency}
+   958→                renderKey={hourLabel}
+   959→              />
+   960→              <BreakdownCard
+   961→                title={t("bdSetup")}
+   962→                icon={Compass}
+   963→                entries={data.breakdowns.setup}
+   964→                currency={currency}
+   965→                renderKey={(k) => k}
+   966→              />
+   967→              <BreakdownCard
+   968→                title={t("bdExit")}
+   969→                icon={DoorOpen}
+   970→                entries={data.breakdowns.exit}
+   971→                currency={currency}
+   972→                renderKey={(k) => labels.exitReason(k)}
+   973→              />
+   974→              <BreakdownCard
+   975→                title={t("bdEmotion")}
+   976→                icon={Brain}
+   977→                entries={data.breakdowns.emotion}
+   978→                currency={currency}
+   979→                renderKey={(k) => labels.emotion(k)}
+   980→              />
+   981→              <BreakdownCard
+   982→                title={t("bdDirection")}
+   983→                icon={Scale}
+   984→                entries={data.breakdowns.direction}
+   985→                currency={currency}
+   986→                renderKey={(k) => labels.direction(k)}
+   987→              />
+   988→              <BreakdownCard
+   989→                title={t("bdPlan")}
+   990→                description={t("bdPlanDesc")}
+   991→                icon={ListChecks}
+   992→                entries={data.breakdowns.plan}
+   993→                currency={currency}
+   994→                renderKey={(k) =>
+   995→                  k === "yes" ? t("planYes") : t("planNo")
+   996→                }
+   997→              />
+   998→            </div>
+   999→          </section>
+  1000→
+  1001→          {/* Footer note */}
+  1002→          <p className="flex flex-wrap items-start gap-2 text-xs text-muted-foreground">
+  1003→            <Wallet className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+  1004→            <span>{t("currencyNote", { currency })}</span>
+  1005→            <button
+  1006→              type="button"
+  1007→              className="underline underline-offset-2 hover:text-foreground"
+  1008→              onClick={() => navigate("#/reglages")}
+  1009→            >
+  1010→              {t("currencyNoteLink")}
+  1011→            </button>
+  1012→          </p>
+  1013→        </div>
+  1014→      )}
+  1015→    </div>
+  1016→  );
+  1017→}
+  1018→

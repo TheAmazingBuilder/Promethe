@@ -1,0 +1,1214 @@
+     1→"use client";
+     2→
+     3→import * as React from "react";
+     4→import { useTranslations } from "next-intl";
+     5→import {
+     6→  AlertCircle,
+     7→  ArrowLeft,
+     8→  Check,
+     9→  CheckCircle2,
+    10→  ExternalLink,
+    11→  Flag,
+    12→  ImageDown,
+    13→  Loader2,
+    14→  Pencil,
+    15→  Plus,
+    16→  Share2,
+    17→  Trash2,
+    18→  X,
+    19→  XCircle,
+    20→} from "lucide-react";
+    21→import {
+    22→  AlertDialog,
+    23→  AlertDialogAction,
+    24→  AlertDialogCancel,
+    25→  AlertDialogContent,
+    26→  AlertDialogDescription,
+    27→  AlertDialogFooter,
+    28→  AlertDialogHeader,
+    29→  AlertDialogTitle,
+    30→} from "@/components/ui/alert-dialog";
+    31→import { Badge } from "@/components/ui/badge";
+    32→import { Button } from "@/components/ui/button";
+    33→import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+    34→import {
+    35→  Dialog,
+    36→  DialogContent,
+    37→  DialogDescription,
+    38→  DialogFooter,
+    39→  DialogHeader,
+    40→  DialogTitle,
+    41→} from "@/components/ui/dialog";
+    42→import { Input } from "@/components/ui/input";
+    43→import { Label } from "@/components/ui/label";
+    44→import {
+    45→  Select,
+    46→  SelectContent,
+    47→  SelectItem,
+    48→  SelectTrigger,
+    49→  SelectValue,
+    50→} from "@/components/ui/select";
+    51→import { Skeleton } from "@/components/ui/skeleton";
+    52→import { Switch } from "@/components/ui/switch";
+    53→import {
+    54→  Table,
+    55→  TableBody,
+    56→  TableCell,
+    57→  TableHead,
+    58→  TableHeader,
+    59→  TableRow,
+    60→} from "@/components/ui/table";
+    61→import {
+    62→  Tooltip,
+    63→  TooltipContent,
+    64→  TooltipTrigger,
+    65→} from "@/components/ui/tooltip";
+    66→import { useSession } from "@/components/app/session-context";
+    67→import { ShareDialog } from "@/components/sharing/share-dialog";
+    68→import { CommentThread } from "@/components/comments/comment-thread";
+    69→import { ExportCardDialog } from "@/components/sharing/export-card-dialog";
+    70→import dynamic from "next/dynamic";
+    71→import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+    72→
+    73→/** v2.5 M2 — lightweight-charts bundle loads only when the tab is opened. */
+    74→const LazyPriceChart = dynamic(
+    75→  () =>
+    76→    import("@/components/charts/price-chart").then(
+    77→      (m) => m.PriceChartSection
+    78→    ),
+    79→  { ssr: false, loading: () => <Skeleton className="h-[520px] w-full" /> }
+    80→);
+    81→
+    82→/** v2.5 M2 Phase 4 — replay player (lazy). */
+    83→const LazyReplayPlayer = dynamic(
+    84→  () =>
+    85→    import("@/components/charts/replay-player").then(
+    86→      (m) => m.ReplayPlayerSection
+    87→    ),
+    88→  { ssr: false, loading: () => <Skeleton className="h-[640px] w-full" /> }
+    89→);
+    90→import { TradeViolationsSection } from "@/components/rules/trade-violations-section";
+    91→import {
+    92→  DirectionBadge,
+    93→  DraftBadge,
+    94→  Field,
+    95→  ResultBadge,
+    96→  StatusBadge,
+    97→  toSpec,
+    98→  useTradingLabels,
+    99→} from "@/components/trades/trade-bits";
+   100→import { useToast } from "@/hooks/use-toast";
+   101→import {
+   102→  useCloseTrade,
+   103→  useDeleteScreenshot,
+   104→  useDeleteTrade,
+   105→  useInstruments,
+   106→  useTrade,
+   107→  useUpdateTrade,
+   108→  useUploadScreenshot,
+   109→} from "@/hooks/use-trading";
+   110→import { ApiClientError } from "@/lib/api-client";
+   111→import { toD } from "@/lib/trading/dec";
+   112→import {
+   113→  fmtDateTimeInTz,
+   114→  fmtMoney,
+   115→  fmtNum,
+   116→  fmtPct,
+   117→  fmtPrice,
+   118→  fmtSigned,
+   119→  fmtSignedMoney,
+   120→  isoToLocalInput,
+   121→  localInputToIso,
+   122→  pnlClass,
+   123→} from "@/lib/format";
+   124→import { apiErrorMessage } from "@/lib/i18n-errors";
+   125→import {
+   126→  compressImage,
+   127→  looksLikeImage,
+   128→  MAX_UPLOAD_BYTES,
+   129→  readClipboardImage,
+   130→} from "@/lib/media/compress";
+   131→import { navigate } from "@/lib/router";
+   132→import { EXIT_REASONS } from "@/lib/trading/types";
+   133→import type { CloseTradeInput } from "@/lib/validations/trade";
+   134→
+   135→/** Trade detail sheet — read-only fiche with close dialog and screenshot flow. */
+   136→export function TradeDetailView({ tradeId }: { tradeId: string }) {
+   137→  // v2.5 M2 — overview / price chart / replay tabs
+   138→  const [detailTab, setDetailTab] = React.useState<
+   139→    "overview" | "chart" | "replay"
+   140→  >("overview");
+   141→  const t = useTranslations("trades.detail");
+   142→  const tForm = useTranslations("trades.form");
+   143→  const tCommon = useTranslations("common");
+   144→  const tRoot = useTranslations();
+   145→  const labels = useTradingLabels();
+   146→  const { session } = useSession();
+   147→  const timezone = session?.profile.timezone ?? "UTC";
+   148→  const { toast } = useToast();
+   149→
+   150→  const tradeQuery = useTrade(tradeId || null);
+   151→  const instruments = useInstruments();
+   152→  const updateTrade = useUpdateTrade();
+   153→  const deleteTrade = useDeleteTrade();
+   154→  const closeTrade = useCloseTrade();
+   155→  const uploadScreenshot = useUploadScreenshot();
+   156→  const deleteScreenshot = useDeleteScreenshot();
+   157→
+   158→  const [deleteOpen, setDeleteOpen] = React.useState(false);
+   159→  const [closeOpen, setCloseOpen] = React.useState(false);
+   160→  const [shareOpen, setShareOpen] = React.useState(false);
+   161→  const [exportOpen, setExportOpen] = React.useState(false);
+   162→  const [exitPrice, setExitPrice] = React.useState("");
+   163→  const [exitTime, setExitTime] = React.useState("");
+   164→  const [exitReason, setExitReason] = React.useState("none");
+   165→  const [commission, setCommission] = React.useState("");
+   166→  const [swap, setSwap] = React.useState("");
+   167→  const [fees, setFees] = React.useState("");
+   168→  const [rate, setRate] = React.useState("");
+   169→  const [useManual, setUseManual] = React.useState(false);
+   170→  const [manualPnl, setManualPnl] = React.useState("");
+   171→  const [uploading, setUploading] = React.useState(0);
+   172→
+   173→  const fileInputRef = React.useRef<HTMLInputElement>(null);
+   174→
+   175→  const trade = tradeQuery.data;
+   176→  const spec = React.useMemo(() => {
+   177→    if (!trade || !instruments.data) return null;
+   178→    const found = instruments.data.find((i) => i.id === trade.instrumentId);
+   179→    return found ? toSpec(found) : null;
+   180→  }, [trade, instruments.data]);
+   181→  const isEstimate =
+   182→    trade != null && spec != null && spec.quoteCurrency !== trade.accountCurrency;
+   183→
+   184→  // Reset the close form each time the dialog opens.
+   185→  React.useEffect(() => {
+   186→    if (!closeOpen || !trade) return;
+   187→    setExitPrice("");
+   188→    setExitTime(isoToLocalInput(new Date().toISOString()));
+   189→    setExitReason(trade.exitReason ?? "none");
+   190→    setCommission(trade.commission);
+   191→    setSwap(trade.swap);
+   192→    setFees(trade.fees);
+   193→    setRate("");
+   194→    setUseManual(trade.pnlSource === "MANUAL");
+   195→    setManualPnl("");
+   196→  }, [closeOpen, trade]);
+   197→
+   198→  const mutationErrorToast = (err: unknown) => {
+   199→    const e = err as ApiClientError;
+   200→    toast({
+   201→      title: apiErrorMessage(
+   202→        tRoot,
+   203→        e?.code,
+   204→        err instanceof Error ? err.message : ""
+   205→      ),
+   206→      variant: "destructive",
+   207→    });
+   208→  };
+   209→
+   210→  const uploadBlobs = async (blobs: Blob[]) => {
+   211→    if (!trade) return;
+   212→    for (const blob of blobs) {
+   213→      if (!looksLikeImage(blob) || blob.size > MAX_UPLOAD_BYTES) {
+   214→        toast({ title: t("screensUploadError"), variant: "destructive" });
+   215→        continue;
+   216→      }
+   217→      toast({ title: t("screensCompressing") });
+   218→      const compressed = await compressImage(blob);
+   219→      setUploading((n) => n + 1);
+   220→      await new Promise<void>((resolve) => {
+   221→        uploadScreenshot.mutate(
+   222→          { tradeId: trade.id, blob: compressed, label: null, caption: null },
+   223→          {
+   224→            onSuccess: () => {
+   225→              toast({ title: t("screensUploaded") });
+   226→              resolve();
+   227→            },
+   228→            onError: (err) => {
+   229→              mutationErrorToast(err);
+   230→              resolve();
+   231→            },
+   232→          }
+   233→        );
+   234→      });
+   235→      setUploading((n) => Math.max(0, n - 1));
+   236→    }
+   237→  };
+   238→
+   239→  const onFiles = (files: FileList | null) => {
+   240→    if (!files || files.length === 0) return;
+   241→    void uploadBlobs(Array.from(files));
+   242→  };
+   243→
+   244→  const onPasteScreens = (e: React.ClipboardEvent<HTMLElement>) => {
+   245→    const image = Array.from(e.clipboardData.files).find((f) =>
+   246→      f.type.startsWith("image/")
+   247→    );
+   248→    if (image) {
+   249→      e.preventDefault();
+   250→      void uploadBlobs([image]);
+   251→      return;
+   252→    }
+   253→    void (async () => {
+   254→      const blob = await readClipboardImage();
+   255→      if (blob) void uploadBlobs([blob]);
+   256→    })();
+   257→  };
+   258→
+   259→  const toggleReview = () => {
+   260→    if (!trade) return;
+   261→    updateTrade.mutate(
+   262→      {
+   263→        id: trade.id,
+   264→        patch: {
+   265→          reviewStatus:
+   266→            trade.reviewStatus === "REVIEWED" ? "NOT_REVIEWED" : "REVIEWED",
+   267→        },
+   268→      },
+   269→      {
+   270→        onSuccess: () => toast({ title: t("reviewToast") }),
+   271→        onError: mutationErrorToast,
+   272→      }
+   273→    );
+   274→  };
+   275→
+   276→  const confirmDelete = () => {
+   277→    if (!trade) return;
+   278→    deleteTrade.mutate(trade.id, {
+   279→      onSuccess: () => {
+   280→        toast({ title: t("deletedToast") });
+   281→        navigate("#/trades");
+   282→      },
+   283→      onError: mutationErrorToast,
+   284→    });
+   285→  };
+   286→
+   287→  const submitClose = () => {
+   288→    if (!trade) return;
+   289→    const price = exitPrice.trim();
+   290→    if (!price) return;
+   291→    closeTrade.mutate(
+   292→      {
+   293→        id: trade.id,
+   294→        input: {
+   295→          exitPrice: price,
+   296→          exitTime: localInputToIso(exitTime),
+   297→          exitReason:
+   298→            exitReason === "none"
+   299→              ? null
+   300→              : (exitReason as CloseTradeInput["exitReason"]),
+   301→          commission: commission.trim() || null,
+   302→          swap: swap.trim() || null,
+   303→          fees: fees.trim() || null,
+   304→          quoteToAccountRate: isEstimate ? rate.trim() || null : null,
+   305→          pnlSource: useManual ? "MANUAL" : null,
+   306→          manualNetPnl: useManual && manualPnl.trim() ? manualPnl.trim() : null,
+   307→        },
+   308→      },
+   309→      {
+   310→        onSuccess: () => {
+   311→          toast({ title: t("closedToast") });
+   312→          setCloseOpen(false);
+   313→        },
+   314→        onError: mutationErrorToast,
+   315→      }
+   316→    );
+   317→  };
+   318→
+   319→  // ── Load states ──
+   320→  if (tradeQuery.isLoading) {
+   321→    return (
+   322→      <div className="space-y-4">
+   323→        <Skeleton className="h-8 w-24" />
+   324→        <Skeleton className="h-10 w-2/3" />
+   325→        <Skeleton className="h-4 w-1/2" />
+   326→        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+   327→          {Array.from({ length: 4 }).map((_, i) => (
+   328→            <Skeleton key={i} className="h-24 w-full" />
+   329→          ))}
+   330→        </div>
+   331→        <Skeleton className="h-40 w-full" />
+   332→      </div>
+   333→    );
+   334→  }
+   335→
+   336→  if (tradeQuery.isError) {
+   337→    const err = tradeQuery.error as ApiClientError | null;
+   338→    const notFound = err?.status === 404;
+   339→    return (
+   340→      <div className="space-y-4">
+   341→        <Button
+   342→          variant="ghost"
+   343→          size="sm"
+   344→          className="-ml-2 text-muted-foreground"
+   345→          onClick={() => navigate("#/trades")}
+   346→        >
+   347→          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+   348→          {tCommon("back")}
+   349→        </Button>
+   350→        <Card className="gap-0 py-4">
+   351→          <CardContent className="px-4">
+   352→            <div className="flex flex-col items-center gap-3 py-10 text-center">
+   353→              <AlertCircle
+   354→                className="h-8 w-8 text-muted-foreground"
+   355→                aria-hidden="true"
+   356→              />
+   357→              <p className="text-sm text-muted-foreground">
+   358→                {notFound ? t("notFound") : t("loadError")}
+   359→              </p>
+   360→              {notFound ? (
+   361→                <Button
+   362→                  variant="outline"
+   363→                  size="sm"
+   364→                  onClick={() => navigate("#/trades")}
+   365→                >
+   366→                  {tCommon("back")}
+   367→                </Button>
+   368→              ) : (
+   369→                <Button
+   370→                  variant="outline"
+   371→                  size="sm"
+   372→                  onClick={() => void tradeQuery.refetch()}
+   373→                >
+   374→                  {tCommon("retry")}
+   375→                </Button>
+   376→              )}
+   377→            </div>
+   378→          </CardContent>
+   379→        </Card>
+   380→      </div>
+   381→    );
+   382→  }
+   383→
+   384→  if (!trade) {
+   385→    return (
+   386→      <div className="space-y-4">
+   387→        <Button
+   388→          variant="ghost"
+   389→          size="sm"
+   390→          className="-ml-2 text-muted-foreground"
+   391→          onClick={() => navigate("#/trades")}
+   392→        >
+   393→          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+   394→          {tCommon("back")}
+   395→        </Button>
+   396→        <Card className="gap-0 py-4">
+   397→          <CardContent className="px-4">
+   398→            <div className="flex flex-col items-center gap-3 py-10 text-center">
+   399→              <AlertCircle
+   400→                className="h-8 w-8 text-muted-foreground"
+   401→                aria-hidden="true"
+   402→              />
+   403→              <p className="text-sm text-muted-foreground">{t("notFound")}</p>
+   404→              <Button
+   405→                variant="outline"
+   406→                size="sm"
+   407→                onClick={() => navigate("#/trades")}
+   408→              >
+   409→                {tCommon("back")}
+   410→              </Button>
+   411→            </div>
+   412→          </CardContent>
+   413→        </Card>
+   414→      </div>
+   415→    );
+   416→  }
+   417→
+   418→  // ── Derived data ──
+   419→  const digits = trade.digits;
+   420→  const costs = toD(trade.commission)
+   421→    .plus(toD(trade.swap))
+   422→    .plus(toD(trade.fees));
+   423→  const subtitle = [
+   424→    trade.accountName,
+   425→    trade.strategyName ?? null,
+   426→    trade.session ? labels.session(trade.session) : null,
+   427→    trade.timeframe ?? null,
+   428→    labels.orderType(trade.orderType),
+   429→    trade.setupType ?? null,
+   430→    trade.marketCondition ? labels.marketCondition(trade.marketCondition) : null,
+   431→  ]
+   432→    .filter((v): v is string => v !== null)
+   433→    .join(" · ");
+   434→
+   435→  const levels: Array<[string, string]> = [
+   436→    [tForm("entryPrice"), fmtPrice(trade.entryPrice, digits)],
+   437→    [tForm("exitPrice"), fmtPrice(trade.exitPrice, digits)],
+   438→    [tForm("stopLoss"), fmtPrice(trade.stopLoss, digits)],
+   439→    [tForm("takeProfit"), fmtPrice(trade.takeProfit, digits)],
+   440→    [t("initialStop"), fmtPrice(trade.initialStopLoss, digits)],
+   441→    [t("initialTp"), fmtPrice(trade.initialTakeProfit, digits)],
+   442→    [t("mfe"), fmtPrice(trade.mfePrice, digits)],
+   443→    [t("mae"), fmtPrice(trade.maePrice, digits)],
+   444→  ];
+   445→
+   446→  const context: Array<[string, string]> = [
+   447→    [t("account"), trade.accountName],
+   448→    [t("strategy"), trade.strategyName ?? "—"],
+   449→    [t("sessionLabel"), labels.session(trade.session)],
+   450→    [t("timeframe"), trade.timeframe ?? "—"],
+   451→    [t("orderType"), labels.orderType(trade.orderType)],
+   452→    [t("setupType"), trade.setupType ?? "—"],
+   453→    [t("marketCondition"), labels.marketCondition(trade.marketCondition)],
+   454→    ...(trade.exitReason
+   455→      ? ([[tForm("exitReason"), labels.exitReason(trade.exitReason)]] as Array<
+   456→          [string, string]
+   457→        >)
+   458→      : []),
+   459→  ];
+   460→
+   461→  const checklistEntries = Object.entries(trade.checklistResults ?? {});
+   462→
+   463→  return (
+   464→    <div className="space-y-4">
+   465→      {/* ── Header ── */}
+   466→      <Button
+   467→        variant="ghost"
+   468→        size="sm"
+   469→        className="-ml-2 text-muted-foreground"
+   470→        onClick={() => navigate("#/trades")}
+   471→      >
+   472→        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+   473→        {tCommon("back")}
+   474→      </Button>
+   475→
+   476→      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+   477→        <div className="min-w-0 space-y-1.5">
+   478→          <div className="flex flex-wrap items-center gap-2">
+   479→            <h2 className="text-2xl font-bold tabular-nums">{trade.symbol}</h2>
+   480→            <DirectionBadge direction={trade.direction} />
+   481→            <StatusBadge status={trade.status} />
+   482→            <ResultBadge result={trade.resultType} />
+   483→            {trade.isDraft && <DraftBadge />}
+   484→          </div>
+   485→          <p className="text-sm text-muted-foreground">{subtitle}</p>
+   486→          <p className="text-xs text-muted-foreground">
+   487→            {t("headerEntry")} :{" "}
+   488→            <span className="tabular-nums">
+   489→              {fmtDateTimeInTz(trade.entryTime, timezone)} ·{" "}
+   490→              {fmtPrice(trade.entryPrice, digits)}
+   491→            </span>
+   492→            <span aria-hidden="true"> · </span>
+   493→            {t("headerExit")} :{" "}
+   494→            <span className="tabular-nums">
+   495→              {trade.exitTime
+   496→                ? `${fmtDateTimeInTz(trade.exitTime, timezone)} · ${fmtPrice(trade.exitPrice, digits)}`
+   497→                : "—"}
+   498→            </span>
+   499→          </p>
+   500→        </div>
+   501→        <div className="flex flex-wrap items-center gap-2">
+   502→          {trade.status === "OPEN" && (
+   503→            <Button onClick={() => setCloseOpen(true)}>
+   504→              <Flag className="h-4 w-4" aria-hidden="true" />
+   505→              {t("closeSubmit")}
+   506→            </Button>
+   507→          )}
+   508→          <Button variant="outline" onClick={() => setShareOpen(true)}>
+   509→            <Share2 className="h-4 w-4" aria-hidden="true" />
+   510→            {tRoot("shareDialog.trigger")}
+   511→          </Button>
+   512→          <Button variant="outline" onClick={() => setExportOpen(true)}>
+   513→            <ImageDown className="h-4 w-4" aria-hidden="true" />
+   514→            {tRoot("exportCard.trigger")}
+   515→          </Button>
+   516→          <Button
+   517→            variant="outline"
+   518→            onClick={toggleReview}
+   519→            disabled={updateTrade.isPending}
+   520→          >
+   521→            {updateTrade.isPending ? (
+   522→              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+   523→            ) : (
+   524→              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+   525→            )}
+   526→            {trade.reviewStatus === "REVIEWED"
+   527→              ? t("reviewUnmark")
+   528→              : t("reviewMark")}
+   529→          </Button>
+   530→          <Button
+   531→            variant="outline"
+   532→            onClick={() => navigate(`#/trades/${trade.id}/edit`)}
+   533→          >
+   534→            <Pencil className="h-4 w-4" aria-hidden="true" />
+   535→            {t("edit")}
+   536→          </Button>
+   537→          <Button
+   538→            variant="outline"
+   539→            className="text-destructive hover:text-destructive"
+   540→            onClick={() => setDeleteOpen(true)}
+   541→          >
+   542→            <Trash2 className="h-4 w-4" aria-hidden="true" />
+   543→            {t("delete")}
+   544→          </Button>
+   545→        </div>
+   546→      </div>
+   547→
+   548→      {/* ── v2.5 M2 — overview / price chart / replay tabs ── */}
+   549→      <Tabs value={detailTab} onValueChange={(v) => setDetailTab(v as typeof detailTab)}>
+   550→        <TabsList>
+   551→          <TabsTrigger value="overview">{t("tabOverview")}</TabsTrigger>
+   552→          <TabsTrigger value="chart">{t("tabChart")}</TabsTrigger>
+   553→          <TabsTrigger value="replay">{t("tabReplay")}</TabsTrigger>
+   554→        </TabsList>
+   555→      </Tabs>
+   556→
+   557→      {detailTab === "chart" ? (
+   558→        <LazyPriceChart trade={trade} />
+   559→      ) : detailTab === "replay" ? (
+   560→        <LazyReplayPlayer trade={trade} />
+   561→      ) : (
+   562→        <>
+   563→
+   564→      {/* ── KPI grid ── */}
+   565→      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+   566→        <KpiCell
+   567→          label={t("netPnl")}
+   568→          value={fmtSignedMoney(trade.netPnl, trade.pnlCurrency)}
+   569→          valueClassName={`text-2xl ${pnlClass(trade.netPnl)}`}
+   570→          hint={
+   571→            isEstimate || trade.pnlSource === "MANUAL" ? (
+   572→              <div className="flex flex-wrap items-center gap-1.5">
+   573→                {isEstimate && (
+   574→                  <Tooltip>
+   575→                    <TooltipTrigger asChild>
+   576→                      <Badge
+   577→                        variant="outline"
+   578→                        className="cursor-help border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-700 dark:text-amber-400"
+   579→                      >
+   580→                        {t("estimate")}
+   581→                      </Badge>
+   582→                    </TooltipTrigger>
+   583→                    <TooltipContent>
+   584→                      {t("estimateHint", {
+   585→                        quote: spec?.quoteCurrency ?? "?",
+   586→                        currency: trade.accountCurrency,
+   587→                      })}
+   588→                    </TooltipContent>
+   589→                  </Tooltip>
+   590→                )}
+   591→                {trade.pnlSource === "MANUAL" && (
+   592→                  <p className="text-[10px] text-muted-foreground">
+   593→                    {t("manualPnlNote")}
+   594→                  </p>
+   595→                )}
+   596→              </div>
+   597→            ) : undefined
+   598→          }
+   599→        />
+   600→        <KpiCell
+   601→          label={t("pips")}
+   602→          value={fmtSigned(trade.pips)}
+   603→          valueClassName={`text-2xl ${pnlClass(trade.pips)}`}
+   604→        />
+   605→        <KpiCell
+   606→          label={t("rMultiple")}
+   607→          value={fmtSigned(trade.rMultiple, 2, 2)}
+   608→          valueClassName={`text-2xl ${pnlClass(trade.rMultiple)}`}
+   609→        />
+   610→        <KpiCell
+   611→          label={t("realizedRR")}
+   612→          value={fmtSigned(trade.realizedRR, 2, 2)}
+   613→          valueClassName={`text-2xl ${pnlClass(trade.realizedRR)}`}
+   614→        />
+   615→      </section>
+   616→      <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+   617→        <KpiCell
+   618→          label={t("plannedRR")}
+   619→          value={fmtSigned(trade.plannedRR, 2, 2)}
+   620→          valueClassName="text-base"
+   621→        />
+   622→        <KpiCell
+   623→          label={t("points")}
+   624→          value={fmtSigned(trade.points)}
+   625→          valueClassName="text-base"
+   626→        />
+   627→        <KpiCell
+   628→          label={t("riskAmount")}
+   629→          value={
+   630→            <>
+   631→              {fmtMoney(trade.riskAmount, trade.accountCurrency)}
+   632→              {trade.riskPercent ? (
+   633→                <span className="ml-1 text-xs font-normal text-muted-foreground">
+   634→                  ({fmtPct(trade.riskPercent)})
+   635→                </span>
+   636→              ) : null}
+   637→            </>
+   638→          }
+   639→          valueClassName="text-base"
+   640→        />
+   641→        <KpiCell
+   642→          label={t("grossPnl")}
+   643→          value={fmtSignedMoney(trade.grossPnl, trade.pnlCurrency)}
+   644→          valueClassName={`text-base ${pnlClass(trade.grossPnl)}`}
+   645→        />
+   646→        <KpiCell
+   647→          label={t("costs")}
+   648→          value={fmtMoney(costs, trade.accountCurrency)}
+   649→          valueClassName="text-base"
+   650→        />
+   651→      </section>
+   652→
+   653→      {/* ── Levels ── */}
+   654→      <Card>
+   655→        <CardHeader>
+   656→          <CardTitle className="text-base">{t("levelsTitle")}</CardTitle>
+   657→        </CardHeader>
+   658→        <CardContent>
+   659→          <dl className="grid gap-2 sm:grid-cols-2">
+   660→            {levels.map(([label, value]) => (
+   661→              <InfoRow key={label} label={label} value={value} />
+   662→            ))}
+   663→          </dl>
+   664→        </CardContent>
+   665→      </Card>
+   666→
+   667→      {/* ── Rule violations (phase 6, hidden when clean) ── */}
+   668→      <TradeViolationsSection tradeId={tradeId} />
+   669→
+   670→      {/* ── Context ── */}
+   671→      <Card>
+   672→        <CardHeader>
+   673→          <CardTitle className="text-base">{t("contextTitle")}</CardTitle>
+   674→        </CardHeader>
+   675→        <CardContent>
+   676→          <dl className="grid gap-2 sm:grid-cols-2">
+   677→            {context.map(([label, value]) => (
+   678→              <InfoRow key={label} label={label} value={value} />
+   679→            ))}
+   680→          </dl>
+   681→        </CardContent>
+   682→      </Card>
+   683→
+   684→      {/* ── Executions ── */}
+   685→      <Card>
+   686→        <CardHeader>
+   687→          <CardTitle className="text-base">{t("executionsTitle")}</CardTitle>
+   688→        </CardHeader>
+   689→        <CardContent>
+   690→          {trade.executions.length <= 1 ? (
+   691→            <div className="space-y-1">
+   692→              <p className="text-sm text-muted-foreground">
+   693→                {t("executionsEmpty")}
+   694→              </p>
+   695→              <p className="text-xs text-muted-foreground">
+   696→                {t("executionsHint")}
+   697→              </p>
+   698→            </div>
+   699→          ) : (
+   700→            <div className="max-h-96 overflow-auto rounded-lg border">
+   701→              <Table>
+   702→                <TableHeader className="sticky top-0 z-10 bg-muted/50">
+   703→                  <TableRow>
+   704→                    <TableHead>{t("execColTime")}</TableHead>
+   705→                    <TableHead>{t("execColType")}</TableHead>
+   706→                    <TableHead className="text-right">
+   707→                      {t("execColPrice")}
+   708→                    </TableHead>
+   709→                    <TableHead className="text-right">
+   710→                      {t("execColLots")}
+   711→                    </TableHead>
+   712→                    <TableHead className="text-right">
+   713→                      {t("execColCommission")}
+   714→                    </TableHead>
+   715→                    <TableHead className="text-right">
+   716→                      {t("execColPnl")}
+   717→                    </TableHead>
+   718→                  </TableRow>
+   719→                </TableHeader>
+   720→                <TableBody>
+   721→                  {trade.executions.map((exec) => (
+   722→                    <TableRow key={exec.id}>
+   723→                      <TableCell className="whitespace-nowrap text-muted-foreground">
+   724→                        {fmtDateTimeInTz(exec.time, timezone)}
+   725→                      </TableCell>
+   726→                      <TableCell>{labels.executionType(exec.type)}</TableCell>
+   727→                      <TableCell className="text-right tabular-nums">
+   728→                        {fmtPrice(exec.price, digits)}
+   729→                      </TableCell>
+   730→                      <TableCell className="text-right tabular-nums">
+   731→                        {fmtNum(exec.lots)}
+   732→                      </TableCell>
+   733→                      <TableCell className="text-right tabular-nums">
+   734→                        {fmtMoney(exec.commission, trade.accountCurrency)}
+   735→                      </TableCell>
+   736→                      <TableCell
+   737→                        className={`text-right font-medium tabular-nums ${pnlClass(exec.pnl)}`}
+   738→                      >
+   739→                        {fmtSignedMoney(exec.pnl, trade.pnlCurrency)}
+   740→                      </TableCell>
+   741→                    </TableRow>
+   742→                  ))}
+   743→                </TableBody>
+   744→              </Table>
+   745→            </div>
+   746→          )}
+   747→        </CardContent>
+   748→      </Card>
+   749→
+   750→      {/* ── Screenshots ── */}
+   751→      <Card onPaste={onPasteScreens}>
+   752→        <CardHeader>
+   753→          <CardTitle className="text-base">{t("screensTitle")}</CardTitle>
+   754→        </CardHeader>
+   755→        <CardContent className="space-y-3">
+   756→          {trade.screenshots.length === 0 && (
+   757→            <p className="text-sm text-muted-foreground">{t("screensEmpty")}</p>
+   758→          )}
+   759→          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+   760→            {trade.screenshots.map((shot) => (
+   761→              <figure
+   762→                key={shot.id}
+   763→                className="relative overflow-hidden rounded-lg border"
+   764→              >
+   765→                <img
+   766→                  src={shot.url}
+   767→                  alt={shot.caption ?? shot.label ?? trade.symbol}
+   768→                  className="h-40 w-full bg-muted object-cover object-top"
+   769→                />
+   770→                <Button
+   771→                  variant="ghost"
+   772→                  size="icon"
+   773→                  className="absolute right-1.5 top-1.5 h-7 w-7 bg-background/80 text-destructive hover:bg-background"
+   774→                  aria-label={tCommon("delete")}
+   775→                  disabled={deleteScreenshot.isPending}
+   776→                  onClick={() =>
+   777→                    deleteScreenshot.mutate(shot.id, {
+   778→                      onSuccess: () =>
+   779→                        toast({ title: t("screensDeleted") }),
+   780→                      onError: mutationErrorToast,
+   781→                    })
+   782→                  }
+   783→                >
+   784→                  <X className="h-4 w-4" aria-hidden="true" />
+   785→                </Button>
+   786→                {(shot.label || shot.caption) && (
+   787→                  <figcaption className="space-y-0.5 p-2">
+   788→                    {shot.label && (
+   789→                      <Badge variant="outline" className="text-[10px]">
+   790→                        {labels.screenshotLabel(shot.label)}
+   791→                      </Badge>
+   792→                    )}
+   793→                    {shot.caption && (
+   794→                      <p className="text-xs text-muted-foreground">
+   795→                        {shot.caption}
+   796→                      </p>
+   797→                    )}
+   798→                  </figcaption>
+   799→                )}
+   800→              </figure>
+   801→            ))}
+   802→            <button
+   803→              type="button"
+   804→              onClick={() => fileInputRef.current?.click()}
+   805→              className="flex h-40 flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-muted-foreground transition-colors hover:bg-muted/50"
+   806→            >
+   807→              {uploading > 0 ? (
+   808→                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+   809→              ) : (
+   810→                <Plus className="h-5 w-5" aria-hidden="true" />
+   811→              )}
+   812→              <span className="text-xs font-medium">{t("screensAdd")}</span>
+   813→            </button>
+   814→          </div>
+   815→          <input
+   816→            ref={fileInputRef}
+   817→            type="file"
+   818→            accept="image/*"
+   819→            multiple
+   820→            className="hidden"
+   821→            onChange={(e) => {
+   822→              onFiles(e.target.files);
+   823→              e.target.value = "";
+   824→            }}
+   825→          />
+   826→          <p className="text-xs text-muted-foreground">{t("screensFileHint")}</p>
+   827→        </CardContent>
+   828→      </Card>
+   829→
+   830→      {/* ── Psychology & notes ── */}
+   831→      <Card>
+   832→        <CardHeader>
+   833→          <CardTitle className="text-base">{t("psychologyTitle")}</CardTitle>
+   834→        </CardHeader>
+   835→        <CardContent className="space-y-4">
+   836→          <dl className="grid gap-2 sm:grid-cols-2">
+   837→            <InfoRow
+   838→              label={t("emotionBefore")}
+   839→              value={labels.emotion(trade.emotionBefore)}
+   840→            />
+   841→            <InfoRow
+   842→              label={t("emotionDuring")}
+   843→              value={labels.emotion(trade.emotionDuring)}
+   844→            />
+   845→            <InfoRow
+   846→              label={t("emotionAfter")}
+   847→              value={labels.emotion(trade.emotionAfter)}
+   848→            />
+   849→            <InfoRow
+   850→              label={t("confidence")}
+   851→              value={
+   852→                trade.confidence != null ? `${trade.confidence} / 5` : "—"
+   853→              }
+   854→            />
+   855→            <InfoRow
+   856→              label={t("setupQuality")}
+   857→              value={
+   858→                trade.setupQualityRating != null
+   859→                  ? `${trade.setupQualityRating} / 5`
+   860→                  : "—"
+   861→              }
+   862→            />
+   863→            <InfoRow
+   864→              label={t("executionRating")}
+   865→              value={
+   866→                trade.executionRating != null
+   867→                  ? `${trade.executionRating} / 5`
+   868→                  : "—"
+   869→              }
+   870→            />
+   871→            <InfoRow
+   872→              label={t("followedPlan")}
+   873→              value={
+   874→                trade.followedPlan === true ? (
+   875→                  <span className="inline-flex items-center gap-1.5 text-gain">
+   876→                    <CheckCircle2
+   877→                      className="h-4 w-4"
+   878→                      aria-hidden="true"
+   879→                    />
+   880→                    <span className="sr-only">{tCommon("yes")}</span>
+   881→                  </span>
+   882→                ) : trade.followedPlan === false ? (
+   883→                  <span className="inline-flex items-center gap-1.5 text-loss">
+   884→                    <XCircle className="h-4 w-4" aria-hidden="true" />
+   885→                    <span className="sr-only">{tCommon("no")}</span>
+   886→                  </span>
+   887→                ) : (
+   888→                  "—"
+   889→                )
+   890→              }
+   891→            />
+   892→          </dl>
+   893→
+   894→          {trade.preTradeAnalysis && (
+   895→            <TextBlock label={t("preTrade")} text={trade.preTradeAnalysis} />
+   896→          )}
+   897→          {trade.postTradeReview && (
+   898→            <TextBlock label={t("postTrade")} text={trade.postTradeReview} />
+   899→          )}
+   900→          {trade.notes && <TextBlock label={t("notes")} text={trade.notes} />}
+   901→
+   902→          {checklistEntries.length > 0 && (
+   903→            <div className="space-y-1.5">
+   904→              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+   905→                {t("checklistTitle")}
+   906→              </h4>
+   907→              {checklistEntries.some(([, checked]) => checked) ? (
+   908→                <ul className="max-h-48 space-y-1 overflow-y-auto">
+   909→                  {checklistEntries.map(([id, checked]) => (
+   910→                    <li key={id} className="flex items-center gap-2 text-xs">
+   911→                      {checked ? (
+   912→                        <Check
+   913→                          className="h-3.5 w-3.5 shrink-0 text-gain"
+   914→                          aria-hidden="true"
+   915→                        />
+   916→                      ) : (
+   917→                        <X
+   918→                          className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50"
+   919→                          aria-hidden="true"
+   920→                        />
+   921→                      )}
+   922→                      <span className="font-mono text-muted-foreground">
+   923→                        {id}
+   924→                      </span>
+   925→                    </li>
+   926→                  ))}
+   927→                </ul>
+   928→              ) : (
+   929→                <p className="text-sm text-muted-foreground">
+   930→                  {t("checklistEmpty")}
+   931→                </p>
+   932→              )}
+   933→            </div>
+   934→          )}
+   935→
+   936→          {trade.tradingViewUrl && (
+   937→            <Button variant="outline" size="sm" asChild>
+   938→              <a href={trade.tradingViewUrl} target="_blank" rel="noreferrer">
+   939→                {t("tradingView")}
+   940→                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+   941→              </a>
+   942→            </Button>
+   943→          )}
+   944→        </CardContent>
+   945→      </Card>
+   946→
+   947→      {/* ── v3 Phase 5 — comment thread (owner + scoped mentors) ── */}
+   948→      {session && (
+   949→        <CommentThread
+   950→          tradeId={trade.id}
+   951→          viewerId={session.user.id}
+   952→          ownerView
+   953→        />
+   954→      )}
+   955→
+   956→      {/* ── Meta ── */}
+   957→      <p className="text-xs text-muted-foreground">
+   958→        {t("metaCreated")} {fmtDateTimeInTz(trade.createdAt, timezone)}
+   959→        <span aria-hidden="true"> · </span>
+   960→        {t("metaUpdated")} {fmtDateTimeInTz(trade.updatedAt, timezone)}
+   961→      </p>
+   962→        </>
+   963→      )}
+   964→
+   965→      {/* ── Close dialog ── */}
+   966→      <Dialog open={closeOpen} onOpenChange={setCloseOpen}>
+   967→        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+   968→          <DialogHeader>
+   969→            <DialogTitle>{t("closeTitle")}</DialogTitle>
+   970→            <DialogDescription>{t("closeDesc")}</DialogDescription>
+   971→          </DialogHeader>
+   972→          <div className="grid gap-3 sm:grid-cols-2">
+   973→            <Field
+   974→              label={t("closeExitPrice")}
+   975→              htmlFor="close-exit-price"
+   976→              className="sm:col-span-1"
+   977→            >
+   978→              <Input
+   979→                id="close-exit-price"
+   980→                inputMode="decimal"
+   981→                required
+   982→                autoComplete="off"
+   983→                value={exitPrice}
+   984→                onChange={(e) => setExitPrice(e.target.value)}
+   985→              />
+   986→            </Field>
+   987→            <Field
+   988→              label={t("closeExitTime")}
+   989→              htmlFor="close-exit-time"
+   990→              className="sm:col-span-1"
+   991→            >
+   992→              <Input
+   993→                id="close-exit-time"
+   994→                type="datetime-local"
+   995→                value={exitTime}
+   996→                onChange={(e) => setExitTime(e.target.value)}
+   997→              />
+   998→            </Field>
+   999→            <Field
+  1000→              label={t("closeExitReason")}
+  1001→              htmlFor="close-exit-reason"
+  1002→              className="sm:col-span-2"
+  1003→            >
+  1004→              <Select value={exitReason} onValueChange={setExitReason}>
+  1005→                <SelectTrigger id="close-exit-reason" className="w-full">
+  1006→                  <SelectValue />
+  1007→                </SelectTrigger>
+  1008→                <SelectContent>
+  1009→                  <SelectItem value="none">{tCommon("none")}</SelectItem>
+  1010→                  {EXIT_REASONS.map((reason) => (
+  1011→                    <SelectItem key={reason} value={reason}>
+  1012→                      {labels.exitReason(reason)}
+  1013→                    </SelectItem>
+  1014→                  ))}
+  1015→                </SelectContent>
+  1016→              </Select>
+  1017→            </Field>
+  1018→            <div className="space-y-2 sm:col-span-2">
+  1019→              <p className="text-xs font-medium text-muted-foreground">
+  1020→                {t("closeCosts")}
+  1021→              </p>
+  1022→              <div className="grid grid-cols-3 gap-2">
+  1023→                <Input
+  1024→                  aria-label={tForm("commission")}
+  1025→                  inputMode="decimal"
+  1026→                  autoComplete="off"
+  1027→                  value={commission}
+  1028→                  onChange={(e) => setCommission(e.target.value)}
+  1029→                />
+  1030→                <Input
+  1031→                  aria-label={tForm("swap")}
+  1032→                  inputMode="decimal"
+  1033→                  autoComplete="off"
+  1034→                  value={swap}
+  1035→                  onChange={(e) => setSwap(e.target.value)}
+  1036→                />
+  1037→                <Input
+  1038→                  aria-label={tForm("fees")}
+  1039→                  inputMode="decimal"
+  1040→                  autoComplete="off"
+  1041→                  value={fees}
+  1042→                  onChange={(e) => setFees(e.target.value)}
+  1043→                />
+  1044→              </div>
+  1045→              <p className="text-[10px] text-muted-foreground">
+  1046→                {tForm("costsHint")}
+  1047→              </p>
+  1048→            </div>
+  1049→            {isEstimate && (
+  1050→              <Field
+  1051→                label={t("closeRate", {
+  1052→                  quote: spec?.quoteCurrency ?? "?",
+  1053→                  currency: trade.accountCurrency,
+  1054→                })}
+  1055→                htmlFor="close-rate"
+  1056→                className="sm:col-span-2"
+  1057→              >
+  1058→                <Input
+  1059→                  id="close-rate"
+  1060→                  inputMode="decimal"
+  1061→                  autoComplete="off"
+  1062→                  value={rate}
+  1063→                  onChange={(e) => setRate(e.target.value)}
+  1064→                />
+  1065→              </Field>
+  1066→            )}
+  1067→            <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 sm:col-span-2">
+  1068→              <Label
+  1069→                htmlFor="close-manual"
+  1070→                className="cursor-pointer font-normal"
+  1071→              >
+  1072→                {tForm("pnlManual")}
+  1073→              </Label>
+  1074→              <Switch
+  1075→                id="close-manual"
+  1076→                checked={useManual}
+  1077→                onCheckedChange={setUseManual}
+  1078→              />
+  1079→            </div>
+  1080→            {useManual && (
+  1081→              <Field
+  1082→                label={tForm("manualNetPnl")}
+  1083→                htmlFor="close-manual-pnl"
+  1084→                hint={t("closeManual")}
+  1085→                className="sm:col-span-2"
+  1086→              >
+  1087→                <Input
+  1088→                  id="close-manual-pnl"
+  1089→                  inputMode="decimal"
+  1090→                  autoComplete="off"
+  1091→                  value={manualPnl}
+  1092→                  onChange={(e) => setManualPnl(e.target.value)}
+  1093→                />
+  1094→              </Field>
+  1095→            )}
+  1096→          </div>
+  1097→          <DialogFooter>
+  1098→            <Button
+  1099→              variant="outline"
+  1100→              disabled={closeTrade.isPending}
+  1101→              onClick={() => setCloseOpen(false)}
+  1102→            >
+  1103→              {tCommon("cancel")}
+  1104→            </Button>
+  1105→            <Button
+  1106→              disabled={closeTrade.isPending || !exitPrice.trim()}
+  1107→              onClick={submitClose}
+  1108→            >
+  1109→              {closeTrade.isPending && (
+  1110→                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+  1111→              )}
+  1112→              {closeTrade.isPending ? t("closing") : t("closeSubmit")}
+  1113→            </Button>
+  1114→          </DialogFooter>
+  1115→        </DialogContent>
+  1116→      </Dialog>
+  1117→
+  1118→      {/* ── Delete confirmation ── */}
+  1119→      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+  1120→        <AlertDialogContent>
+  1121→          <AlertDialogHeader>
+  1122→            <AlertDialogTitle>{t("confirmDeleteTitle")}</AlertDialogTitle>
+  1123→            <AlertDialogDescription>
+  1124→              {t("confirmDeleteDesc")}
+  1125→            </AlertDialogDescription>
+  1126→          </AlertDialogHeader>
+  1127→          <AlertDialogFooter>
+  1128→            <AlertDialogCancel disabled={deleteTrade.isPending}>
+  1129→              {tCommon("cancel")}
+  1130→            </AlertDialogCancel>
+  1131→            <AlertDialogAction
+  1132→              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+  1133→              disabled={deleteTrade.isPending}
+  1134→              onClick={(e) => {
+  1135→                e.preventDefault();
+  1136→                confirmDelete();
+  1137→              }}
+  1138→            >
+  1139→              {deleteTrade.isPending && (
+  1140→                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+  1141→              )}
+  1142→              {tCommon("delete")}
+  1143→            </AlertDialogAction>
+  1144→          </AlertDialogFooter>
+  1145→        </AlertDialogContent>
+  1146→      </AlertDialog>
+  1147→
+  1148→      {/* ── v3: share link + PNG card export ── */}
+  1149→      <ShareDialog
+  1150→        open={shareOpen}
+  1151→        onOpenChange={setShareOpen}
+  1152→        tradeId={trade.id}
+  1153→        defaultTitle={`${trade.symbol} — ${labels.direction(trade.direction)}`}
+  1154→      />
+  1155→      <ExportCardDialog
+  1156→        open={exportOpen}
+  1157→        onOpenChange={setExportOpen}
+  1158→        trade={trade}
+  1159→      />
+  1160→    </div>
+  1161→  );
+  1162→}
+  1163→
+  1164→// ── Local helpers ────────────────────────────────────────────────────────────
+  1165→
+  1166→/** KPI tile (dashboard-style bordered card, big tabular number). */
+  1167→function KpiCell({
+  1168→  label,
+  1169→  value,
+  1170→  valueClassName = "",
+  1171→  hint,
+  1172→}: {
+  1173→  label: string;
+  1174→  value: React.ReactNode;
+  1175→  valueClassName?: string;
+  1176→  hint?: React.ReactNode;
+  1177→}) {
+  1178→  return (
+  1179→    <div className="flex flex-col gap-1 rounded-lg border p-4">
+  1180→      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+  1181→      <p className={`font-bold tabular-nums ${valueClassName}`}>{value}</p>
+  1182→      {hint}
+  1183→    </div>
+  1184→  );
+  1185→}
+  1186→
+  1187→/** Label / value row used inside the levels, context and psychology grids. */
+  1188→function InfoRow({
+  1189→  label,
+  1190→  value,
+  1191→}: {
+  1192→  label: string;
+  1193→  value: React.ReactNode;
+  1194→}) {
+  1195→  return (
+  1196→    <div className="flex items-baseline justify-between gap-3 rounded-lg bg-muted/40 px-3 py-2">
+  1197→      <dt className="shrink-0 text-xs text-muted-foreground">{label}</dt>
+  1198→      <dd className="text-right text-sm font-medium tabular-nums">{value}</dd>
+  1199→    </div>
+  1200→  );
+  1201→}
+  1202→
+  1203→/** Small heading + pre-wrapped text block (analyses, notes). */
+  1204→function TextBlock({ label, text }: { label: string; text: string }) {
+  1205→  return (
+  1206→    <div className="space-y-1">
+  1207→      <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+  1208→        {label}
+  1209→      </h4>
+  1210→      <p className="whitespace-pre-wrap text-sm">{text}</p>
+  1211→    </div>
+  1212→  );
+  1213→}
+  1214→

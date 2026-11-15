@@ -1,0 +1,4 @@
+symbol,side,type,qty,limit_price,stop_price,avg_filled_price,status,filled,closed,closed_price,pnl,commission,swap
+XAUUSD,buy,market,0.5,,3242.00,3250.60,Filled,2025-06-01T09:45:30Z,2025-06-01T15:10:12Z,3257.40,335.00,-4.70,0.00
+EURUSD,sell,market,10000,,1.09500,1.09250,Filled,2025-06-02T08:20:00Z,2025-06-02T11:05:44Z,1.09010,239.40,-2.36,-0.30
+NAS100,buy,market,1,,18000.00,18125.40,Filled,2025-06-03T14:00:00Z,2025-06-03T16:30:00Z,17980.00,-145.40,-1.00,0.00

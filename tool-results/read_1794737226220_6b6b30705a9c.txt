@@ -1,0 +1,947 @@
+     1→     1→"use client";
+     2→     2→
+     3→     3→/**
+     4→     4→ * Rules & goals view (v1 phase 6) — three tabs: measurable goals with live
+     5→     5→ * progress, trading rules CRUD (auto re-evaluation on edit), recent
+     6→     6→ * violations. Data: /api/goals · /api/rules · /api/rules/violations.
+     7→     7→ */
+     8→     8→import * as React from "react";
+     9→     9→import {
+    10→    10→  AlertTriangle,
+    11→    11→  CheckCircle2,
+    12→    12→  ListChecks,
+    13→    13→  Pause,
+    14→    14→  Pencil,
+    15→    15→  Play,
+    16→    16→  Plus,
+    17→    17→  Target,
+    18→    18→  Trash2,
+    19→    19→} from "lucide-react";
+    20→    20→import { useTranslations } from "next-intl";
+    21→    21→import { Badge } from "@/components/ui/badge";
+    22→    22→import { Button } from "@/components/ui/button";
+    23→    23→import {
+    24→    24→  Card,
+    25→    25→  CardAction,
+    26→    26→  CardContent,
+    27→    27→  CardDescription,
+    28→    28→  CardHeader,
+    29→    29→  CardTitle,
+    30→    30→} from "@/components/ui/card";
+    31→    31→import { Checkbox } from "@/components/ui/checkbox";
+    32→    32→import {
+    33→    33→  Dialog,
+    34→    34→  DialogContent,
+    35→    35→  DialogDescription,
+    36→    36→  DialogFooter,
+    37→    37→  DialogHeader,
+    38→    38→  DialogTitle,
+    39→    39→} from "@/components/ui/dialog";
+    40→    40→import { Input } from "@/components/ui/input";
+    41→    41→import { Progress } from "@/components/ui/progress";
+    42→    42→import {
+    43→    43→  Select,
+    44→    44→  SelectContent,
+    45→    45→  SelectItem,
+    46→    46→  SelectTrigger,
+    47→    47→  SelectValue,
+    48→    48→} from "@/components/ui/select";
+    49→    49→import { Skeleton } from "@/components/ui/skeleton";
+    50→    50→import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+    51→    51→import { useToast } from "@/hooks/use-toast";
+    52→    52→import { useSession } from "@/components/app/session-context";
+    53→    53→import {
+    54→    54→  useCreateGoal,
+    55→    55→  useCreateRule,
+    56→    56→  useDeleteGoal,
+    57→    57→  useDeleteRule,
+    58→    58→  useGoals,
+    59→    59→  useRules,
+    60→    60→  useUpdateGoal,
+    61→    61→  useUpdateRule,
+    62→    62→  useViolations,
+    63→    63→} from "@/hooks/use-goals";
+    64→    64→import { ApiClientError } from "@/lib/api-client";
+    65→    65→import { apiErrorMessage } from "@/lib/i18n-errors";
+    66→    66→import { fmtDateInTz, fmtSignedMoney, pnlClass } from "@/lib/format";
+    67→    67→import { navigate } from "@/lib/router";
+    68→    68→import {
+    69→    69→  formatGoalValue,
+    70→    70→  formatMeasuredValue,
+    71→    71→  formatRuleValue,
+    72→    72→  goalBarTone,
+    73→    73→  METRICS,
+    74→    74→  PERIODS,
+    75→    75→  RULE_KIND_LIST,
+    76→    76→} from "@/components/rules/goal-format";
+    77→    77→import type { GoalDTO, GoalWithProgressDTO, RuleDTO } from "@/lib/trading/dto";
+    78→    78→import type { GoalInput, RuleInput } from "@/lib/validations/goals";
+    79→    79→
+    80→    80→// ── Goal editor dialog ──────────────────────────────────────────────────────
+    81→    81→
+    82→    82→type GoalForm = {
+    83→    83→  name: string;
+    84→    84→  description: string;
+    85→    85→  metric: (typeof METRICS)[number];
+    86→    86→  targetValue: string;
+    87→    87→  period: (typeof PERIODS)[number];
+    88→    88→  startDate: string;
+    89→    89→  endDate: string;
+    90→    90→  status: "ACTIVE" | "PAUSED";
+    91→    91→};
+    92→    92→
+    93→    93→const EMPTY_GOAL: GoalForm = {
+    94→    94→  name: "",
+    95→    95→  description: "",
+    96→    96→  metric: "NET_PNL",
+    97→    97→  targetValue: "",
+    98→    98→  period: "MONTHLY",
+    99→    99→  startDate: "",
+   100→   100→  endDate: "",
+   101→   101→  status: "ACTIVE",
+   102→   102→};
+   103→   103→
+   104→   104→/** Local calendar day YYYY-MM-DD (client-side default, effect-only). */
+   105→   105→function todayLocalDay(): string {
+   106→   106→  const d = new Date();
+   107→   107→  const pad = (n: number) => String(n).padStart(2, "0");
+   108→   108→  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+   109→   109→}
+   110→   110→
+   111→   111→function GoalEditor({
+   112→   112→  open,
+   113→   113→  onOpenChange,
+   114→   114→  editing,
+   115→   115→  currency,
+   116→   116→}: {
+   117→   117→  open: boolean;
+   118→   118→  onOpenChange: (open: boolean) => void;
+   119→   119→  editing: GoalDTO | null;
+   120→   120→  currency: string;
+   121→   121→}) {
+   122→   122→  const t = useTranslations("goalsView.form");
+   123→   123→  const tGoals = useTranslations("goalsView");
+   124→   124→  const tRoot = useTranslations();
+   125→   125→  const { toast } = useToast();
+   126→   126→  const create = useCreateGoal();
+   127→   127→  const update = useUpdateGoal();
+   128→   128→  const [form, setForm] = React.useState<GoalForm>(EMPTY_GOAL);
+   129→   129→  const [saving, setSaving] = React.useState(false);
+   130→   130→
+   131→   131→  React.useEffect(() => {
+   132→   132→    if (!open) return;
+   133→   133→    setForm(
+   134→   134→      editing
+   135→   135→        ? {
+   136→   136→            name: editing.name,
+   137→   137→            description: editing.description ?? "",
+   138→   138→            metric: (METRICS as string[]).includes(editing.metric)
+   139→   139→              ? (editing.metric as GoalForm["metric"])
+   140→   140→              : "NET_PNL",
+   141→   141→            targetValue: editing.targetValue,
+   142→   142→            period: (PERIODS as readonly string[]).includes(editing.period)
+   143→   143→              ? (editing.period as GoalForm["period"])
+   144→   144→              : "MONTHLY",
+   145→   145→            startDate: editing.startDate,
+   146→   146→            endDate: editing.endDate ?? "",
+   147→   147→            status: editing.status === "PAUSED" ? "PAUSED" : "ACTIVE",
+   148→   148→          }
+   149→   149→        : {
+   150→   150→            ...EMPTY_GOAL,
+   151→   151→            startDate: todayLocalDay(),
+   152→   152→          },
+   153→   153→    );
+   154→   154→  }, [open, editing]);
+   155→   155→
+   156→   156→  const set = <K extends keyof GoalForm>(key: K, value: GoalForm[K]) =>
+   157→   157→    setForm((f) => ({ ...f, [key]: value }));
+   158→   158→
+   159→   159→  const onSave = async () => {
+   160→   160→    if (!form.name.trim() || !form.targetValue.trim()) return;
+   161→   161→    setSaving(true);
+   162→   162→    try {
+   163→   163→      const payload: GoalInput = {
+   164→   164→        name: form.name.trim(),
+   165→   165→        description: form.description.trim() === "" ? null : form.description.trim(),
+   166→   166→        metric: form.metric,
+   167→   167→        targetValue: form.targetValue.trim(),
+   168→   168→        period: form.period,
+   169→   169→        startDate: form.startDate,
+   170→   170→        endDate: form.endDate.trim() === "" ? null : form.endDate.trim(),
+   171→   171→        status: form.status,
+   172→   172→      };
+   173→   173→      if (editing) {
+   174→   174→        await update.mutateAsync({ id: editing.id, patch: payload });
+   175→   175→        toast({ title: t("updated") });
+   176→   176→      } else {
+   177→   177→        await create.mutateAsync(payload);
+   178→   178→        toast({ title: t("created") });
+   179→   179→      }
+   180→   180→      onOpenChange(false);
+   181→   181→    } catch (error) {
+   182→   182→      const err = error instanceof ApiClientError ? error : null;
+   183→   183→      toast({
+   184→   184→        title: apiErrorMessage(tRoot, err?.code, error instanceof Error ? error.message : ""),
+   185→   185→        variant: "destructive",
+   186→   186→      });
+   187→   187→    } finally {
+   188→   188→      setSaving(false);
+   189→   189→    }
+   190→   190→  };
+   191→   191→
+   192→   192→  const targetHint =
+   193→   193→    form.metric === "WIN_RATE" || form.metric === "DISCIPLINE_SCORE" ? t("targetHintPct") : t("targetHintAmount");
+   194→   194→
+   195→   195→  return (
+   196→   196→    <Dialog open={open} onOpenChange={onOpenChange}>
+   197→   197→      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+   198→   198→        <DialogHeader>
+   199→   199→          <DialogTitle>{editing ? t("editTitle") : t("createTitle")}</DialogTitle>
+   200→   200→          <DialogDescription className="sr-only">
+   201→   201→            {editing ? t("editTitle") : t("createTitle")}
+   202→   202→          </DialogDescription>
+   203→   203→        </DialogHeader>
+   204→   204→        <div className="flex flex-col gap-4">
+   205→   205→          <div className="space-y-1.5">
+   206→   206→            <label className="text-xs font-medium text-muted-foreground" htmlFor="goal-name">
+   207→   207→              {t("name")}
+   208→   208→            </label>
+   209→   209→            <Input
+   210→   210→              id="goal-name"
+   211→   211→              value={form.name}
+   212→   212→              onChange={(e) => set("name", e.target.value)}
+   213→   213→              placeholder={t("namePlaceholder")}
+   214→   214→              maxLength={80}
+   215→   215→            />
+   216→   216→          </div>
+   217→   217→          <div className="space-y-1.5">
+   218→   218→            <label className="text-xs font-medium text-muted-foreground" htmlFor="goal-desc">
+   219→   219→              {t("description")}
+   220→   220→            </label>
+   221→   221→            <Input
+   222→   222→              id="goal-desc"
+   223→   223→              value={form.description}
+   224→   224→              onChange={(e) => set("description", e.target.value)}
+   225→   225→              placeholder={t("descriptionPlaceholder")}
+   226→   226→              maxLength={2000}
+   227→   227→            />
+   228→   228→          </div>
+   229→   229→          <div className="grid gap-3 sm:grid-cols-2">
+   230→   230→            <div className="space-y-1.5">
+   231→   231→              <label className="text-xs font-medium text-muted-foreground" htmlFor="goal-metric">
+   232→   232→                {t("metric")}
+   233→   233→              </label>
+   234→   234→              <Select
+   235→   235→                value={form.metric}
+   236→   236→                onValueChange={(v) => set("metric", v as GoalForm["metric"])}
+   237→   237→              >
+   238→   238→                <SelectTrigger id="goal-metric">
+   239→   239→                  <SelectValue />
+   240→   240→                </SelectTrigger>
+   241→   241→                <SelectContent>
+   242→   242→                  {METRICS.map((m) => (
+   243→   243→                    <SelectItem key={m} value={m}>
+   244→   244→                      {tGoals(`metric.${m}`)}
+   245→   245→                    </SelectItem>
+   246→   246→                  ))}
+   247→   247→                </SelectContent>
+   248→   248→              </Select>
+   249→   249→            </div>
+   250→   250→            <div className="space-y-1.5">
+   251→   251→              <label className="text-xs font-medium text-muted-foreground" htmlFor="goal-target">
+   252→   252→                {t("target")}
+   253→   253→              </label>
+   254→   254→              <Input
+   255→   255→                id="goal-target"
+   256→   256→                inputMode="decimal"
+   257→   257→                value={form.targetValue}
+   258→   258→                onChange={(e) => set("targetValue", e.target.value)}
+   259→   259→                placeholder={
+   260→   260→                  form.metric === "WIN_RATE"
+   261→   261→                    ? "55"
+   262→   262→                    : form.metric === "NET_PNL"
+   263→   263→                      ? `1000 ${currency}`
+   264→   264→                      : "1"
+   265→   265→                }
+   266→   266→              />
+   267→   267→              <p className="text-[11px] text-muted-foreground">{targetHint}</p>
+   268→   268→            </div>
+   269→   269→          </div>
+   270→   270→          <div className="grid gap-3 sm:grid-cols-3">
+   271→   271→            <div className="space-y-1.5">
+   272→   272→              <label className="text-xs font-medium text-muted-foreground" htmlFor="goal-period">
+   273→   273→                {t("period")}
+   274→   274→              </label>
+   275→   275→              <Select
+   276→   276→                value={form.period}
+   277→   277→                onValueChange={(v) => set("period", v as GoalForm["period"])}
+   278→   278→              >
+   279→   279→                <SelectTrigger id="goal-period">
+   280→   280→                  <SelectValue />
+   281→   281→                </SelectTrigger>
+   282→   282→                <SelectContent>
+   283→   283→                  {PERIODS.map((p) => (
+   284→   284→                    <SelectItem key={p} value={p}>
+   285→   285→                      {tGoals(`period.${p}`)}
+   286→   286→                    </SelectItem>
+   287→   287→                  ))}
+   288→   288→                </SelectContent>
+   289→   289→              </Select>
+   290→   290→            </div>
+   291→   291→            <div className="space-y-1.5">
+   292→   292→              <label className="text-xs font-medium text-muted-foreground" htmlFor="goal-start">
+   293→   293→                {t("startDate")}
+   294→   294→              </label>
+   295→   295→              <Input
+   296→   296→                id="goal-start"
+   297→   297→                type="date"
+   298→   298→                value={form.startDate}
+   299→   299→                onChange={(e) => set("startDate", e.target.value)}
+   300→   300→              />
+   301→   301→            </div>
+   302→   302→            <div className="space-y-1.5">
+   303→   303→              <label className="text-xs font-medium text-muted-foreground" htmlFor="goal-end">
+   304→   304→                {t("endDate")}
+   305→   305→              </label>
+   306→   306→              <Input
+   307→   307→                id="goal-end"
+   308→   308→                type="date"
+   309→   309→                value={form.endDate}
+   310→   310→                onChange={(e) => set("endDate", e.target.value)}
+   311→   311→              />
+   312→   312→            </div>
+   313→   313→          </div>
+   314→   314→        </div>
+   315→   315→        <DialogFooter>
+   316→   316→          <Button variant="outline" onClick={() => onOpenChange(false)}>
+   317→   317→            {t("cancel")}
+   318→   318→          </Button>
+   319→   319→          <Button
+   320→   320→            onClick={() => void onSave()}
+   321→   321→            disabled={saving || !form.name.trim() || !form.targetValue.trim()}
+   322→   322→          >
+   323→   323→            {saving ? t("saving") : t("save")}
+   324→   324→          </Button>
+   325→   325→        </DialogFooter>
+   326→   326→      </DialogContent>
+   327→   327→    </Dialog>
+   328→   328→  );
+   329→   329→}
+   330→   330→
+   331→   331→// ── Goal card ───────────────────────────────────────────────────────────────
+   332→   332→
+   333→   333→function GoalCard({
+   334→   334→  goal,
+   335→   335→  currency,
+   336→   336→  onEdit,
+   337→   337→}: {
+   338→   338→  goal: GoalWithProgressDTO;
+   339→   339→  currency: string;
+   340→   340→  onEdit: () => void;
+   341→   341→}) {
+   342→   342→  const t = useTranslations("goalsView");
+   343→   343→  const { toast } = useToast();
+   344→   344→  const update = useUpdateGoal();
+   345→   345→  const del = useDeleteGoal();
+   346→   346→  const [confirmOpen, setConfirmOpen] = React.useState(false);
+   347→   347→
+   348→   348→  const paused = goal.status === "PAUSED";
+   349→   349→  const { progress } = goal;
+   350→   350→
+   351→   351→  const onToggle = async () => {
+   352→   352→    try {
+   353→   353→      await update.mutateAsync({
+   354→   354→        id: goal.id,
+   355→   355→        patch: { status: paused ? "ACTIVE" : "PAUSED" },
+   356→   356→      });
+   357→   357→      toast({ title: paused ? t("resumedToast") : t("pausedToast") });
+   358→   358→    } catch {
+   359→   359→      toast({ title: t("errorToast"), variant: "destructive" });
+   360→   360→    }
+   361→   361→  };
+   362→   362→
+   363→   363→  const onDelete = async () => {
+   364→   364→    try {
+   365→   365→      await del.mutateAsync(goal.id);
+   366→   366→      toast({ title: t("deletedToast") });
+   367→   367→      setConfirmOpen(false);
+   368→   368→    } catch {
+   369→   369→      toast({ title: t("errorToast"), variant: "destructive" });
+   370→   370→    }
+   371→   371→  };
+   372→   372→
+   373→   373→  return (
+   374→   374→    <Card className={paused ? "opacity-60" : undefined}>
+   375→   375→      <CardHeader>
+   376→   376→        <CardTitle className="flex items-center gap-2 text-base">
+   377→   377→          {progress.isAchieved ? (
+   378→   378→            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" aria-hidden="true" />
+   379→   379→          ) : (
+   380→   380→            <Target className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+   381→   381→          )}
+   382→   382→          <span className="truncate">{goal.name}</span>
+   383→   383→          {paused && <Badge variant="secondary">{t("status.PAUSED")}</Badge>}
+   384→   384→          {progress.isExpired && !progress.isAchieved && (
+   385→   385→            <Badge className="bg-rose-500/15 text-rose-700 dark:text-rose-400">
+   386→   386→              {t("status.EXPIRED")}
+   387→   387→            </Badge>
+   388→   388→          )}
+   389→   389→        </CardTitle>
+   390→   390→        <CardDescription>
+   391→   391→          {t(`metric.${goal.metric}`)} · {t(`period.${goal.period}`)}
+   392→   392→          {goal.endDate ? ` · ${t("until")} ${fmtDateInTz(goal.endDate, "UTC")}` : ""}
+   393→   393→        </CardDescription>
+   394→   394→        <CardAction>
+   395→   395→          <div className="flex items-center gap-1">
+   396→   396→            <Button variant="ghost" size="icon" aria-label={t("pauseResume")} onClick={() => void onToggle()}>
+   397→   397→              {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+   398→   398→            </Button>
+   399→   399→            <Button variant="ghost" size="icon" aria-label={t("edit")} onClick={onEdit}>
+   400→   400→              <Pencil className="h-4 w-4" />
+   401→   401→            </Button>
+   402→   402→            <Button
+   403→   403→              variant="ghost"
+   404→   404→              size="icon"
+   405→   405→              aria-label={t("delete")}
+   406→   406→              onClick={() => setConfirmOpen(true)}
+   407→   407→            >
+   408→   408→              <Trash2 className="h-4 w-4" />
+   409→   409→            </Button>
+   410→   410→          </div>
+   411→   411→        </CardAction>
+   412→   412→      </CardHeader>
+   413→   413→      <CardContent className="space-y-3">
+   414→   414→        <div className="flex items-baseline justify-between gap-2">
+   415→   415→          <p className="text-2xl font-bold tabular-nums">
+   416→   416→            {formatGoalValue(goal.metric, progress.currentValue, currency)}
+   417→   417→          </p>
+   418→   418→          <p className="text-xs text-muted-foreground">
+   419→   419→            {t("targetLabel")} {formatGoalValue(goal.metric, progress.targetValue, currency)}
+   420→   420→          </p>
+   421→   421→        </div>
+   422→   422→        <div className="flex items-center gap-2">
+   423→   423→          <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
+   424→   424→            <div
+   425→   425→              className={`h-full rounded-full transition-all ${goalBarTone(
+   426→   426→                progress.progressPercent,
+   427→   427→                progress.isAchieved
+   428→   428→              )}`}
+   429→   429→              style={{ width: `${Math.max(2, progress.progressPercent)}%` }}
+   430→   430→              role="progressbar"
+   431→   431→              aria-valuenow={progress.progressPercent}
+   432→   432→              aria-valuemin={0}
+   433→   433→              aria-valuemax={100}
+   434→   434→              aria-label={goal.name}
+   435→   435→            />
+   436→   436→          </div>
+   437→   437→          <span className="w-12 shrink-0 text-right text-sm font-semibold tabular-nums">
+   438→   438→            {Math.round(progress.progressPercent)}%
+   439→   439→          </span>
+   440→   440→        </div>
+   441→   441→        <p className="text-xs text-muted-foreground">
+   442→   442→          {t("window", {
+   443→   443→            from: fmtDateInTz(progress.windowStartDay, "UTC"),
+   444→   444→            to: fmtDateInTz(
+   445→   445→              progress.windowEndDay === "9999-12-31"
+   446→   446→                ? new Date().toISOString()
+   447→   447→                : progress.windowEndDay,
+   448→   448→              "UTC"
+   449→   449→            ),
+   450→   450→          })}
+   451→   451→        </p>
+   452→   452→        {goal.description ? (
+   453→   453→          <p className="text-sm text-muted-foreground">{goal.description}</p>
+   454→   454→        ) : null}
+   455→   455→
+   456→   456→        <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+   457→   457→          <DialogContent className="sm:max-w-sm">
+   458→   458→            <DialogHeader>
+   459→   459→              <DialogTitle>{t("confirmDeleteTitle")}</DialogTitle>
+   460→   460→              <DialogDescription>{t("confirmDeleteDesc")}</DialogDescription>
+   461→   461→            </DialogHeader>
+   462→   462→            <DialogFooter>
+   463→   463→              <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+   464→   464→                {t("cancel")}
+   465→   465→              </Button>
+   466→   466→              <Button variant="destructive" onClick={() => void onDelete()}>
+   467→   467→                {t("delete")}
+   468→   468→              </Button>
+   469→   469→            </DialogFooter>
+   470→   470→          </DialogContent>
+   471→   471→        </Dialog>
+   472→   472→      </CardContent>
+   473→   473→    </Card>
+   474→   474→  );
+   475→   475→}
+   476→   476→
+   477→   477→// ── Rule editor dialog ──────────────────────────────────────────────────────
+   478→   478→
+   479→   479→type RuleForm = {
+   480→   480→  kind: (typeof RULE_KIND_LIST)[number];
+   481→   481→  value: string;
+   482→   482→  description: string;
+   483→   483→  isActive: boolean;
+   484→   484→};
+   485→   485→
+   486→   486→const EMPTY_RULE: RuleForm = {
+   487→   487→  kind: "MAX_TRADES_PER_DAY",
+   488→   488→  value: "",
+   489→   489→  description: "",
+   490→   490→  isActive: true,
+   491→   491→};
+   492→   492→
+   493→   493→function RuleEditor({
+   494→   494→  open,
+   495→   495→  onOpenChange,
+   496→   496→  editing,
+   497→   497→  currency,
+   498→   498→}: {
+   499→   499→  open: boolean;
+   500→   500→  onOpenChange: (open: boolean) => void;
+   501→   501→  editing: RuleDTO | null;
+   502→   502→  currency: string;
+   503→   503→}) {
+   504→   504→  const t = useTranslations("goalsView.rules.form");
+   505→   505→  const tRules = useTranslations("goalsView.rules");
+   506→   506→  const tRoot = useTranslations();
+   507→   507→  const { toast } = useToast();
+   508→   508→  const create = useCreateRule();
+   509→   509→  const update = useUpdateRule();
+   510→   510→  const [form, setForm] = React.useState<RuleForm>(EMPTY_RULE);
+   511→   511→  const [saving, setSaving] = React.useState(false);
+   512→   512→
+   513→   513→  React.useEffect(() => {
+   514→   514→    if (!open) return;
+   515→   515→    setForm(
+   516→   516→      editing
+   517→   517→        ? {
+   518→   518→            kind: (RULE_KIND_LIST as readonly string[]).includes(editing.kind)
+   519→   519→              ? (editing.kind as RuleForm["kind"])
+   520→   520→              : "MAX_TRADES_PER_DAY",
+   521→   521→            value: editing.value,
+   522→   522→            description: editing.description ?? "",
+   523→   523→            isActive: editing.isActive,
+   524→   524→          }
+   525→   525→        : EMPTY_RULE,
+   526→   526→    );
+   527→   527→  }, [open, editing]);
+   528→   528→
+   529→   529→  const isCount = form.kind === "MAX_TRADES_PER_DAY";
+   530→   530→  const isCustom = form.kind === "CUSTOM";
+   531→   531→
+   532→   532→  const set = <K extends keyof RuleForm>(key: K, value: RuleForm[K]) =>
+   533→   533→    setForm((f) => ({ ...f, [key]: value }));
+   534→   534→
+   535→   535→  const onSave = async () => {
+   536→   536→    if (isCustom ? !form.description.trim() : !form.value.trim()) return;
+   537→   537→    setSaving(true);
+   538→   538→    try {
+   539→   539→      const payload: RuleInput = {
+   540→   540→        kind: form.kind,
+   541→   541→        value: isCustom ? "1" : form.value.trim(),
+   542→   542→        description: form.description.trim() === "" ? null : form.description.trim(),
+   543→   543→        isActive: form.isActive,
+   544→   544→      };
+   545→   545→      if (editing) {
+   546→   546→        await update.mutateAsync({ id: editing.id, patch: payload });
+   547→   547→        toast({ title: t("updated") });
+   548→   548→      } else {
+   549→   549→        await create.mutateAsync(payload);
+   550→   550→        toast({ title: t("created") });
+   551→   551→      }
+   552→   552→      onOpenChange(false);
+   553→   553→    } catch (error) {
+   554→   554→      const err = error instanceof ApiClientError ? error : null;
+   555→   555→      toast({
+   556→   556→        title: apiErrorMessage(tRoot, err?.code, error instanceof Error ? error.message : ""),
+   557→   557→        variant: "destructive",
+   558→   558→      });
+   559→   559→    } finally {
+   560→   560→      setSaving(false);
+   561→   561→    }
+   562→   562→  };
+   563→   563→
+   564→   564→  return (
+   565→   565→    <Dialog open={open} onOpenChange={onOpenChange}>
+   566→   566→      <DialogContent className="sm:max-w-md">
+   567→   567→        <DialogHeader>
+   568→   568→          <DialogTitle>{editing ? t("editTitle") : t("createTitle")}</DialogTitle>
+   569→   569→          <DialogDescription className="sr-only">
+   570→   570→            {editing ? t("editTitle") : t("createTitle")}
+   571→   571→          </DialogDescription>
+   572→   572→        </DialogHeader>
+   573→   573→        <div className="flex flex-col gap-4">
+   574→   574→          <div className="space-y-1.5">
+   575→   575→            <label className="text-xs font-medium text-muted-foreground" htmlFor="rule-kind">
+   576→   576→              {t("kind")}
+   577→   577→            </label>
+   578→   578→            <Select
+   579→   579→              value={form.kind}
+   580→   580→              onValueChange={(v) => set("kind", v as RuleForm["kind"])}
+   581→   581→            >
+   582→   582→              <SelectTrigger id="rule-kind">
+   583→   583→                <SelectValue />
+   584→   584→              </SelectTrigger>
+   585→   585→              <SelectContent>
+   586→   586→                {RULE_KIND_LIST.map((k) => (
+   587→   587→                  <SelectItem key={k} value={k}>
+   588→   588→                    {tRules(`kind.${k}`)}
+   589→   589→                  </SelectItem>
+   590→   590→                ))}
+   591→   591→              </SelectContent>
+   592→   592→            </Select>
+   593→   593→            <p className="text-[11px] text-muted-foreground">{t(`hint.${form.kind}`)}</p>
+   594→   594→          </div>
+   595→   595→          {!isCustom && (
+   596→   596→            <div className="space-y-1.5">
+   597→   597→              <label className="text-xs font-medium text-muted-foreground" htmlFor="rule-value">
+   598→   598→                {isCount ? t("valueCount") : t("valueAmount", { currency })}
+   599→   599→              </label>
+   600→   600→              <Input
+   601→   601→                id="rule-value"
+   602→   602→                inputMode="decimal"
+   603→   603→                value={form.value}
+   604→   604→                onChange={(e) => set("value", e.target.value)}
+   605→   605→                placeholder={isCount ? "3" : "500"}
+   606→   606→              />
+   607→   607→            </div>
+   608→   608→          )}
+   609→   609→          <div className="space-y-1.5">
+   610→   610→            <label className="text-xs font-medium text-muted-foreground" htmlFor="rule-desc">
+   611→   611→              {t("description")}
+   612→   612→            </label>
+   613→   613→            <Input
+   614→   614→              id="rule-desc"
+   615→   615→              value={form.description}
+   616→   616→              onChange={(e) => set("description", e.target.value)}
+   617→   617→              placeholder={t("descriptionPlaceholder")}
+   618→   618→              maxLength={500}
+   619→   619→            />
+   620→   620→          </div>
+   621→   621→          <label className="flex items-center gap-2 text-sm">
+   622→   622→            <Checkbox
+   623→   623→              id="rule-active"
+   624→   624→              checked={form.isActive}
+   625→   625→              onCheckedChange={(v) => set("isActive", v === true)}
+   626→   626→            />
+   627→   627→            {t("active")}
+   628→   628→          </label>
+   629→   629→          <p className="rounded-md border border-dashed p-2 text-[11px] text-muted-foreground">
+   630→   630→            {t("reEvalNote")}
+   631→   631→          </p>
+   632→   632→        </div>
+   633→   633→        <DialogFooter>
+   634→   634→          <Button variant="outline" onClick={() => onOpenChange(false)}>
+   635→   635→            {t("cancel")}
+   636→   636→          </Button>
+   637→   637→          <Button
+   638→   638→            onClick={() => void onSave()}
+   639→   639→            disabled={
+   640→   640→              saving || (isCustom ? !form.description.trim() : !form.value.trim())
+   641→   641→            }
+   642→   642→          >
+   643→   643→            {saving ? t("saving") : t("save")}
+   644→   644→          </Button>
+   645→   645→        </DialogFooter>
+   646→   646→      </DialogContent>
+   647→   647→    </Dialog>
+   648→   648→  );
+   649→   649→}
+   650→   650→
+   651→   651→// ── Main view ───────────────────────────────────────────────────────────────
+   652→   652→
+   653→   653→export function RulesView() {
+   654→   654→  const t = useTranslations("goalsView");
+   655→   655→  const { toast } = useToast();
+   656→   656→  const { session } = useSession();
+   657→   657→  const goals = useGoals();
+   658→   658→  const rules = useRules();
+   659→   659→  const violations = useViolations(30);
+   660→   660→  const delRule = useDeleteRule();
+   661→   661→
+   662→   662→  const displayCurrency = session?.profile.baseCurrency ?? "USD";
+   663→   663→  const timezone = session?.profile.timezone ?? "UTC";
+   664→   664→
+   665→   665→  const [goalEditorOpen, setGoalEditorOpen] = React.useState(false);
+   666→   666→  const [editingGoal, setEditingGoal] = React.useState<GoalDTO | null>(null);
+   667→   667→  const [ruleEditorOpen, setRuleEditorOpen] = React.useState(false);
+   668→   668→  const [editingRule, setEditingRule] = React.useState<RuleDTO | null>(null);
+   669→   669→
+   670→   670→  const goalList = goals.data?.goals ?? [];
+   671→   671→  const activeGoals = goalList.filter((g) => g.status === "ACTIVE");
+   672→   672→  const pausedGoals = goalList.filter((g) => g.status === "PAUSED");
+   673→   673→  const ruleList = rules.data ?? [];
+   674→   674→  const violationList = violations.data ?? [];
+   675→   675→
+   676→   676→  const openGoalEditor = (goal: GoalDTO | null) => {
+   677→   677→    setEditingGoal(goal);
+   678→   678→    setGoalEditorOpen(true);
+   679→   679→  };
+   680→   680→
+   681→   681→  const openRuleEditor = (rule: RuleDTO | null) => {
+   682→   682→    setEditingRule(rule);
+   683→   683→    setRuleEditorOpen(true);
+   684→   684→  };
+   685→   685→
+   686→   686→  const onDeleteRule = async (rule: RuleDTO) => {
+   687→   687→    try {
+   688→   688→      await delRule.mutateAsync(rule.id);
+   689→   689→      toast({ title: t("rules.deletedToast") });
+   690→   690→    } catch {
+   691→   691→      toast({ title: t("errorToast"), variant: "destructive" });
+   692→   692→    }
+   693→   693→  };
+   694→   694→
+   695→   695→  return (
+   696→   696→    <div className="space-y-6">
+   697→   697→      {/* Header */}
+   698→   698→      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+   699→   699→        <div>
+   700→   700→          <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
+   701→   701→          <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
+   702→   702→        </div>
+   703→   703→        <div className="flex shrink-0 items-center gap-2">
+   704→   704→          <Button variant="outline" onClick={() => openRuleEditor(null)}>
+   705→   705→            <ListChecks className="h-4 w-4" aria-hidden="true" />
+   706→   706→            <span className="hidden sm:inline">{t("rules.add")}</span>
+   707→   707→          </Button>
+   708→   708→          <Button onClick={() => openGoalEditor(null)}>
+   709→   709→            <Plus className="h-4 w-4" aria-hidden="true" />
+   710→   710→            {t("addGoal")}
+   711→   711→          </Button>
+   712→   712→        </div>
+   713→   713→      </div>
+   714→   714→
+   715→   715→      <Tabs defaultValue="goals" className="gap-4">
+   716→   716→        <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
+   717→   717→          <TabsTrigger value="goals">
+   718→   718→            {t("tabGoals")}
+   719→   719→            <Badge variant="secondary" className="ml-1.5 tabular-nums">
+   720→   720→              {activeGoals.length}
+   721→   721→            </Badge>
+   722→   722→          </TabsTrigger>
+   723→   723→          <TabsTrigger value="rules">
+   724→   724→            {t("tabRules")}
+   725→   725→            <Badge variant="secondary" className="ml-1.5 tabular-nums">
+   726→   726→              {ruleList.length}
+   727→   727→            </Badge>
+   728→   728→          </TabsTrigger>
+   729→   729→          <TabsTrigger value="violations">
+   730→   730→            {t("tabViolations")}
+   731→   731→            {violationList.length > 0 && (
+   732→   732→              <Badge className="ml-1.5 bg-rose-500/15 text-rose-700 tabular-nums dark:text-rose-400">
+   733→   733→                {violationList.length}
+   734→   734→              </Badge>
+   735→   735→            )}
+   736→   736→          </TabsTrigger>
+   737→   737→        </TabsList>
+   738→   738→
+   739→   739→        {/* ── Goals tab ── */}
+   740→   740→        <TabsContent value="goals" className="space-y-4">
+   741→   741→          {goals.isLoading ? (
+   742→   742→            <div className="grid gap-4 md:grid-cols-2">
+   743→   743→              {Array.from({ length: 2 }, (_, i) => (
+   744→   744→                <Skeleton key={i} className="h-56 w-full rounded-xl" />
+   745→   745→              ))}
+   746→   746→            </div>
+   747→   747→          ) : goalList.length === 0 ? (
+   748→   748→            <Card>
+   749→   749→              <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
+   750→   750→                <Target className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
+   751→   751→                <p className="text-sm text-muted-foreground">{t("emptyGoals")}</p>
+   752→   752→                <Button size="sm" onClick={() => openGoalEditor(null)}>
+   753→   753→                  <Plus className="h-4 w-4" aria-hidden="true" />
+   754→   754→                  {t("addGoal")}
+   755→   755→                </Button>
+   756→   756→              </CardContent>
+   757→   757→            </Card>
+   758→   758→          ) : (
+   759→   759→            <>
+   760→   760→              <div className="grid gap-4 md:grid-cols-2">
+   761→   761→                {activeGoals.map((g) => (
+   762→   762→                  <GoalCard
+   763→   763→                    key={g.id}
+   764→   764→                    goal={g}
+   765→   765→                    currency={displayCurrency}
+   766→   766→                    onEdit={() => openGoalEditor(g)}
+   767→   767→                  />
+   768→   768→                ))}
+   769→   769→              </div>
+   770→   770→              {pausedGoals.length > 0 && (
+   771→   771→                <>
+   772→   772→                  <h3 className="text-sm font-semibold text-muted-foreground">
+   773→   773→                    {t("pausedGoals")}
+   774→   774→                  </h3>
+   775→   775→                  <div className="grid gap-4 md:grid-cols-2">
+   776→   776→                    {pausedGoals.map((g) => (
+   777→   777→                      <GoalCard
+   778→   778→                        key={g.id}
+   779→   779→                        goal={g}
+   780→   780→                        currency={displayCurrency}
+   781→   781→                        onEdit={() => openGoalEditor(g)}
+   782→   782→                      />
+   783→   783→                    ))}
+   784→   784→                  </div>
+   785→   785→                </>
+   786→   786→              )}
+   787→   787→            </>
+   788→   788→          )}
+   789→   789→        </TabsContent>
+   790→   790→
+   791→   791→        {/* ── Rules tab ── */}
+   792→   792→        <TabsContent value="rules" className="space-y-4">
+   793→   793→          {rules.isLoading ? (
+   794→   794→            <Skeleton className="h-40 w-full rounded-xl" />
+   795→   795→          ) : ruleList.length === 0 ? (
+   796→   796→            <Card>
+   797→   797→              <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
+   798→   798→                <ListChecks className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
+   799→   799→                <p className="text-sm text-muted-foreground">{t("rules.empty")}</p>
+   800→   800→                <Button size="sm" onClick={() => openRuleEditor(null)}>
+   801→   801→                  <Plus className="h-4 w-4" aria-hidden="true" />
+   802→   802→                  {t("rules.add")}
+   803→   803→                </Button>
+   804→   804→              </CardContent>
+   805→   805→            </Card>
+   806→   806→          ) : (
+   807→   807→            <div className="space-y-2">
+   808→   808→              {ruleList.map((r) => (
+   809→   809→                <Card key={r.id} className="py-4">
+   810→   810→                  <CardContent className="flex flex-wrap items-center justify-between gap-3 px-4">
+   811→   811→                    <div className="min-w-0 flex-1">
+   812→   812→                      <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
+   813→   813→                        {t(`rules.kind.${r.kind}`)}
+   814→   814→                        <Badge
+   815→   815→                          variant="secondary"
+   816→   816→                          className={
+   817→   817→                            r.isActive
+   818→   818→                              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+   819→   819→                              : undefined
+   820→   820→                          }
+   821→   821→                        >
+   822→   822→                          {r.isActive ? t("rules.activeBadge") : t("rules.inactiveBadge")}
+   823→   823→                        </Badge>
+   824→   824→                        <span className="font-semibold tabular-nums">
+   825→   825→                          {r.kind === "CUSTOM"
+   826→   826→                            ? r.description
+   827→   827→                            : formatRuleValue(r.kind, r.value, displayCurrency)}
+   828→   828→                        </span>
+   829→   829→                      </p>
+   830→   830→                      {r.description && r.kind !== "CUSTOM" ? (
+   831→   831→                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+   832→   832→                          {r.description}
+   833→   833→                        </p>
+   834→   834→                      ) : null}
+   835→   835→                    </div>
+   836→   836→                    <div className="flex shrink-0 items-center gap-1">
+   837→   837→                      <Button
+   838→   838→                        variant="ghost"
+   839→   839→                        size="icon"
+   840→   840→                        aria-label={t("rules.edit")}
+   841→   841→                        onClick={() => openRuleEditor(r)}
+   842→   842→                      >
+   843→   843→                        <Pencil className="h-4 w-4" />
+   844→   844→                      </Button>
+   845→   845→                      <Button
+   846→   846→                        variant="ghost"
+   847→   847→                        size="icon"
+   848→   848→                        aria-label={t("rules.delete")}
+   849→   849→                        onClick={() => void onDeleteRule(r)}
+   850→   850→                      >
+   851→   851→                        <Trash2 className="h-4 w-4" />
+   852→   852→                      </Button>
+   853→   853→                    </div>
+   854→   854→                  </CardContent>
+   855→   855→                </Card>
+   856→   856→              ))}
+   857→   857→            </div>
+   858→   858→          )}
+   859→   859→        </TabsContent>
+   860→   860→
+   861→   861→        {/* ── Violations tab ── */}
+   862→   862→        <TabsContent value="violations" className="space-y-4">
+   863→   863→          {violations.isLoading ? (
+   864→   864→            <Skeleton className="h-40 w-full rounded-xl" />
+   865→   865→          ) : violationList.length === 0 ? (
+   866→   866→            <Card>
+   867→   867→              <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
+   868→   868→                <CheckCircle2 className="h-8 w-8 text-emerald-500" aria-hidden="true" />
+   869→   869→                <p className="text-sm text-muted-foreground">{t("violations.empty")}</p>
+   870→   870→              </CardContent>
+   871→   871→            </Card>
+   872→   872→          ) : (
+   873→   873→            <Card className="py-4">
+   874→   874→              <CardContent className="px-4">
+   875→   875→                <ul className="divide-y">
+   876→   876→                  {violationList.map((v, i) => (
+   877→   877→                    <li
+   878→   878→                      key={`${v.tradeId}-${v.ruleId}-${i}`}
+   879→   879→                      className="flex flex-wrap items-center justify-between gap-3 py-3"
+   880→   880→                    >
+   881→   881→                      <div className="min-w-0">
+   882→   882→                        <p className="flex items-center gap-2 text-sm font-medium">
+   883→   883→                          <AlertTriangle
+   884→   884→                            className="h-4 w-4 shrink-0 text-rose-500"
+   885→   885→                            aria-hidden="true"
+   886→   886→                          />
+   887→   887→                          {t(`rules.kind.${v.kind}`)}
+   888→   888→                        </p>
+   889→   889→                        {v.trade ? (
+   890→   890→                          <p className="mt-0.5 text-xs text-muted-foreground">
+   891→   891→                            {v.trade.symbol} · {v.trade.direction} ·{" "}
+   892→   892→                            {fmtDateInTz(v.trade.entryTime, timezone)}
+   893→   893→                          </p>
+   894→   894→                        ) : null}
+   895→   895→                      </div>
+   896→   896→                      <div className="flex shrink-0 items-center gap-3 text-xs tabular-nums">
+   897→   897→                        <span>
+   898→   898→                          <span className="text-muted-foreground">
+   899→   899→                            {t("violations.measured")}
+   900→   900→                          </span>{" "}
+   901→   901→                          <span className={pnlClass(v.measured)}>
+   902→   902→                            {formatMeasuredValue(v.kind, v.measured, displayCurrency)}
+   903→   903→                          </span>
+   904→   904→                          {" / "}
+   905→   905→                          <span className="text-muted-foreground">
+   906→   906→                            {t("violations.limit")}
+   907→   907→                          </span>{" "}
+   908→   908→                          {formatRuleValue(v.kind, v.limit, displayCurrency)}
+   909→   909→                        </span>
+   910→   910→                        {v.trade?.netPnl != null && (
+   911→   911→                          <span className={pnlClass(v.trade.netPnl)}>
+   912→   912→                            {fmtSignedMoney(v.trade.netPnl, displayCurrency)}
+   913→   913→                          </span>
+   914→   914→                        )}
+   915→   915→                        <Button
+   916→   916→                          variant="outline"
+   917→   917→                          size="sm"
+   918→   918→                          onClick={() => navigate(`#/trades/${v.tradeId}`)}
+   919→   919→                        >
+   920→   920→                          {t("violations.viewTrade")}
+   921→   921→                        </Button>
+   922→   922→                      </div>
+   923→   923→                    </li>
+   924→   924→                  ))}
+   925→   925→                </ul>
+   926→   926→              </CardContent>
+   927→   927→            </Card>
+   928→   928→          )}
+   929→   929→        </TabsContent>
+   930→   930→      </Tabs>
+   931→   931→
+   932→   932→      <GoalEditor
+   933→   933→        open={goalEditorOpen}
+   934→   934→        onOpenChange={setGoalEditorOpen}
+   935→   935→        editing={editingGoal}
+   936→   936→        currency={displayCurrency}
+   937→   937→      />
+   938→   938→      <RuleEditor
+   939→   939→        open={ruleEditorOpen}
+   940→   940→        onOpenChange={setRuleEditorOpen}
+   941→   941→        editing={editingRule}
+   942→   942→        currency={displayCurrency}
+   943→   943→      />
+   944→   944→    </div>
+   945→   945→  );
+   946→   946→}
+   947→   947→

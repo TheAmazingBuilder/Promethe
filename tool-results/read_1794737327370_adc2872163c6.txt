@@ -1,0 +1,1169 @@
+     1→"use client";
+     2→
+     3→import * as React from "react";
+     4→import { useTranslations } from "next-intl";
+     5→import {
+     6→  AlertCircle,
+     7→  ArrowDown,
+     8→  ArrowUp,
+     9→  ArrowUpDown,
+    10→  Bookmark,
+    11→  BookmarkPlus,
+    12→  CandlestickChart,
+    13→  CheckCircle2,
+    14→  ChevronDown,
+    15→  ChevronLeft,
+    16→  ChevronRight,
+    17→  ChevronUp,
+    18→  Circle,
+    19→  Eye,
+    20→  Loader2,
+    21→  MoreHorizontal,
+    22→  Pencil,
+    23→  Plus,
+    24→  RotateCcw,
+    25→  Search,
+    26→  Trash2,
+    27→  X,
+    28→  Zap,
+    29→} from "lucide-react";
+    30→import { Download } from "lucide-react";
+    31→import {
+    32→  AlertDialog,
+    33→  AlertDialogAction,
+    34→  AlertDialogCancel,
+    35→  AlertDialogContent,
+    36→  AlertDialogDescription,
+    37→  AlertDialogFooter,
+    38→  AlertDialogHeader,
+    39→  AlertDialogTitle,
+    40→} from "@/components/ui/alert-dialog";
+    41→import { Badge } from "@/components/ui/badge";
+    42→import { Button } from "@/components/ui/button";
+    43→import { Card, CardContent } from "@/components/ui/card";
+    44→import {
+    45→  Dialog,
+    46→  DialogContent,
+    47→  DialogDescription,
+    48→  DialogFooter,
+    49→  DialogHeader,
+    50→  DialogTitle,
+    51→} from "@/components/ui/dialog";
+    52→import {
+    53→  DropdownMenu,
+    54→  DropdownMenuContent,
+    55→  DropdownMenuItem,
+    56→  DropdownMenuSeparator,
+    57→  DropdownMenuTrigger,
+    58→} from "@/components/ui/dropdown-menu";
+    59→import { Input } from "@/components/ui/input";
+    60→import { Label } from "@/components/ui/label";
+    61→import {
+    62→  Select,
+    63→  SelectContent,
+    64→  SelectItem,
+    65→  SelectTrigger,
+    66→  SelectValue,
+    67→} from "@/components/ui/select";
+    68→import { Skeleton } from "@/components/ui/skeleton";
+    69→import { Switch } from "@/components/ui/switch";
+    70→import {
+    71→  Table,
+    72→  TableBody,
+    73→  TableCell,
+    74→  TableHead,
+    75→  TableHeader,
+    76→  TableRow,
+    77→} from "@/components/ui/table";
+    78→import { useSession } from "@/components/app/session-context";
+    79→import { useI18n } from "@/i18n/i18n-provider";
+    80→import {
+    81→  DirectionBadge,
+    82→  DraftBadge,
+    83→  ResultBadge,
+    84→  StatusBadge,
+    85→  TagsBadges,
+    86→  useTradingLabels,
+    87→} from "@/components/trades/trade-bits";
+    88→import { useToast } from "@/hooks/use-toast";
+    89→import {
+    90→  useAccounts,
+    91→  useCreateSavedView,
+    92→  useDeleteSavedView,
+    93→  useDeleteTrade,
+    94→  useSavedViews,
+    95→  useStrategies,
+    96→  useTradesList,
+    97→} from "@/hooks/use-trading";
+    98→import { ApiClientError } from "@/lib/api-client";
+    99→import {
+   100→  fmtDateTimeInTz,
+   101→  fmtNum,
+   102→  fmtPrice,
+   103→  fmtSigned,
+   104→  fmtSignedMoney,
+   105→  pnlClass,
+   106→} from "@/lib/format";
+   107→import { apiErrorMessage } from "@/lib/i18n-errors";
+   108→import { navigate, parseHash } from "@/lib/router";
+   109→import type { SavedViewDTO, TradeListItemDTO } from "@/lib/trading/dto";
+   110→import {
+   111→  DIRECTIONS,
+   112→  RESULT_TYPES,
+   113→  TRADE_STATUSES,
+   114→  TRADING_SESSIONS,
+   115→} from "@/lib/trading/types";
+   116→import type { TradeListQuery } from "@/lib/validations/trade";
+   117→
+   118→const DEFAULT_QUERY: TradeListQuery = {
+   119→  page: 1,
+   120→  pageSize: 25,
+   121→  sort: "entryTime",
+   122→  order: "desc",
+   123→  includeDrafts: false,
+   124→};
+   125→
+   126→type SortKey = "entryTime" | "exitTime" | "netPnl" | "rMultiple";
+   127→
+   128→/** v2.5 M2 — chart drill-down: apply #/trades?… filters once on mount. */
+   129→function drillFiltersFromHash(): Partial<TradeListQuery> | null {
+   130→  if (typeof window === "undefined") return null;
+   131→  const route = parseHash(window.location.hash);
+   132→  if (route.view !== "trades") return null;
+   133→  const q = route.query ?? {};
+   134→  const patch: Partial<TradeListQuery> = {};
+   135→  let any = false;
+   136→  const set = <K extends keyof TradeListQuery>(key: K, value: TradeListQuery[K]) => {
+   137→    patch[key] = value;
+   138→    any = true;
+   139→  };
+   140→  if (q.symbol) set("symbol", q.symbol);
+   141→  if (q.direction === "LONG" || q.direction === "SHORT") {
+   142→    set("direction", q.direction);
+   143→  }
+   144→  if (q.session) set("session", q.session as TradeListQuery["session"]);
+   145→  if (q.timeframe) set("timeframe", q.timeframe as TradeListQuery["timeframe"]);
+   146→  if (q.emotion) set("emotion", q.emotion as TradeListQuery["emotion"]);
+   147→  if (q.search) set("search", q.search);
+   148→  if (q.resultType) {
+   149→    set("resultType", q.resultType as TradeListQuery["resultType"]);
+   150→  }
+   151→  if (q.dateFrom) set("dateFrom", q.dateFrom);
+   152→  if (q.dateTo) set("dateTo", q.dateTo);
+   153→  if (q.entryHour != null && /^\d{1,2}$/.test(q.entryHour)) {
+   154→    set("entryHour", Number(q.entryHour));
+   155→  }
+   156→  if (q.entryWeekday != null && /^[1-7]$/.test(q.entryWeekday)) {
+   157→    set("entryWeekday", Number(q.entryWeekday));
+   158→  }
+   159→  return any ? patch : null;
+   160→}
+   161→
+   162→/** Trades journal — server-side filters, saved views, sortable paginated table. */
+   163→export function TradesView() {
+   164→  const t = useTranslations("trades.list");
+   165→  const tCommon = useTranslations("common");
+   166→  const tRoot = useTranslations();
+   167→  const { locale } = useI18n();
+   168→  const labels = useTradingLabels();
+   169→  const { session } = useSession();
+   170→  const timezone = session?.profile.timezone ?? "UTC";
+   171→  const { toast } = useToast();
+   172→
+   173→  const [query, setQuery] = React.useState<TradeListQuery>(DEFAULT_QUERY);
+   174→  const [searchInput, setSearchInput] = React.useState("");
+   175→  const [showMore, setShowMore] = React.useState(false);
+   176→  const [saveOpen, setSaveOpen] = React.useState(false);
+   177→  const [viewName, setViewName] = React.useState("");
+   178→  const [activeViewId, setActiveViewId] = React.useState<string | null>(null);
+   179→  const [deleteTarget, setDeleteTarget] = React.useState<TradeListItemDTO | null>(null);
+   180→  // v2.5 M2 — chart drill-down filters arrive as #/trades?… query params.
+   181→  const [drillApplied, setDrillApplied] = React.useState(false);
+   182→
+   183→  React.useEffect(() => {
+   184→    if (drillApplied) return;
+   185→    const drill = drillFiltersFromHash();
+   186→    if (drill) {
+   187→      setQuery((q) => ({ ...q, ...drill, page: 1 }));
+   188→      if (drill.search) setSearchInput(drill.search);
+   189→    }
+   190→    setDrillApplied(true);
+   191→  }, [drillApplied]);
+   192→
+   193→  const trades = useTradesList(query);
+   194→  const accounts = useAccounts();
+   195→  const strategies = useStrategies();
+   196→  const savedViews = useSavedViews("trades");
+   197→  const createView = useCreateSavedView();
+   198→  const deleteView = useDeleteSavedView();
+   199→  const deleteTrade = useDeleteTrade();
+   200→
+   201→  const data = trades.data;
+   202→  const rows = data?.data ?? [];
+   203→  const total = data?.total ?? 0;
+   204→  const totalPages = data?.totalPages ?? 1;
+   205→  const currentPage = data?.page ?? query.page;
+   206→
+   207→  // Debounced search (~300 ms) — resets to page 1 when the term changes.
+   208→  React.useEffect(() => {
+   209→    const handle = setTimeout(() => {
+   210→      const next = searchInput.trim() || undefined;
+   211→      setQuery((q) => (q.search === next ? q : { ...q, search: next, page: 1 }));
+   212→    }, 300);
+   213→    return () => clearTimeout(handle);
+   214→  }, [searchInput]);
+   215→
+   216→  // Keep the page in range when the result set shrinks.
+   217→  React.useEffect(() => {
+   218→    if (data && data.totalPages > 0 && query.page > data.totalPages) {
+   219→      setQuery((q) => ({ ...q, page: 1 }));
+   220→    }
+   221→  }, [data, query.page]);
+   222→
+   223→  const hasActiveFilters = React.useMemo(
+   224→    () =>
+   225→      Boolean(
+   226→        query.search ||
+   227→          query.status ||
+   228→          query.direction ||
+   229→          query.resultType ||
+   230→          query.reviewStatus ||
+   231→          query.session ||
+   232→          query.accountId ||
+   233→          query.strategyId ||
+   234→          query.instrumentId ||
+   235→          query.symbol ||
+   236→          query.tagId ||
+   237→          query.emotion ||
+   238→          query.dateFrom ||
+   239→          query.dateTo ||
+   240→          query.includeDrafts ||
+   241→          query.entryHour != null ||
+   242→          query.entryWeekday != null
+   243→      ),
+   244→    [query]
+   245→  );
+   246→
+   247→  const setFilter = (patch: Partial<TradeListQuery>) => {
+   248→    setActiveViewId(null);
+   249→    setQuery((q) => ({ ...q, ...patch, page: 1 }));
+   250→  };
+   251→
+   252→  const resetFilters = () => {
+   253→    setActiveViewId(null);
+   254→    setSearchInput("");
+   255→    setQuery({ ...DEFAULT_QUERY });
+   256→  };
+   257→
+   258→  const onSort = (key: SortKey) => {
+   259→    setQuery((q) =>
+   260→      q.sort === key
+   261→        ? { ...q, order: q.order === "asc" ? "desc" : "asc" }
+   262→        : { ...q, sort: key, order: "desc", page: 1 }
+   263→    );
+   264→  };
+   265→
+   266→  const mutationErrorToast = (err: unknown) => {
+   267→    const e = err as ApiClientError;
+   268→    toast({
+   269→      title: apiErrorMessage(
+   270→        tRoot,
+   271→        e?.code,
+   272→        err instanceof Error ? err.message : ""
+   273→      ),
+   274→      variant: "destructive",
+   275→    });
+   276→  };
+   277→
+   278→  const applyView = (view: SavedViewDTO) => {
+   279→    setActiveViewId(view.id);
+   280→    const filters = view.filters as Partial<TradeListQuery>;
+   281→    setSearchInput(typeof filters.search === "string" ? filters.search : "");
+   282→    setQuery({ ...DEFAULT_QUERY, ...filters, page: 1 });
+   283→  };
+   284→
+   285→  const saveCurrentView = () => {
+   286→    const name = viewName.trim();
+   287→    if (!name) return;
+   288→    const filters: Record<string, unknown> = {};
+   289→    for (const [key, value] of Object.entries(query)) {
+   290→      if (["page", "pageSize", "sort", "order"].includes(key)) continue;
+   291→      if (value !== undefined && value !== null && value !== "") {
+   292→        filters[key] = value;
+   293→      }
+   294→    }
+   295→    createView.mutate(
+   296→      { page: "trades", name, filters },
+   297→      {
+   298→        onSuccess: () => {
+   299→          toast({ title: t("viewSaved") });
+   300→          setSaveOpen(false);
+   301→          setViewName("");
+   302→        },
+   303→        onError: mutationErrorToast,
+   304→      }
+   305→    );
+   306→  };
+   307→
+   308→  const removeView = (view: SavedViewDTO) => {
+   309→    deleteView.mutate(view, {
+   310→      onSuccess: () => {
+   311→        if (activeViewId === view.id) setActiveViewId(null);
+   312→        toast({ title: t("viewDeleted") });
+   313→      },
+   314→      onError: mutationErrorToast,
+   315→    });
+   316→  };
+   317→
+   318→  const confirmDelete = () => {
+   319→    if (!deleteTarget) return;
+   320→    deleteTrade.mutate(deleteTarget.id, {
+   321→      onSuccess: () => {
+   322→        toast({ title: t("deletedToast") });
+   323→        setDeleteTarget(null);
+   324→      },
+   325→      onError: mutationErrorToast,
+   326→    });
+   327→  };
+   328→
+   329→  const views = savedViews.data ?? [];
+   330→  const loading = trades.isLoading;
+   331→
+   332→  /** CSV export of the CURRENT filters (phase 6) — same where-clause server-side. */
+   333→  const [exporting, setExporting] = React.useState(false);
+   334→  const onExportCsv = async () => {
+   335→    setExporting(true);
+   336→    try {
+   337→      const params = new URLSearchParams({ lang: locale });
+   338→      for (const [key, value] of Object.entries(query)) {
+   339→        if (value === undefined || value === "" || key === "page") continue;
+   340→        // includeDrafts/sort/order already match the query param contract.
+   341→        params.set(key, String(value));
+   342→      }
+   343→      const res = await fetch(`/api/trades/export?${params.toString()}`, {
+   344→        credentials: "same-origin",
+   345→      });
+   346→      if (!res.ok) {
+   347→        throw new Error(`export ${res.status}`);
+   348→      }
+   349→      const count = res.headers.get("X-Trades-Count");
+   350→      const blob = await res.blob();
+   351→      const url = URL.createObjectURL(blob);
+   352→      const a = document.createElement("a");
+   353→      a.href = url;
+   354→      a.download =
+   355→        res.headers
+   356→          .get("Content-Disposition")
+   357→          ?.match(/filename="([^"]+)"/)?.[1] ?? "trades.csv";
+   358→      document.body.appendChild(a);
+   359→      a.click();
+   360→      a.remove();
+   361→      URL.revokeObjectURL(url);
+   362→      toast({
+   363→        title: t("exportedToast", { count: count ?? "?" }),
+   364→      });
+   365→    } catch {
+   366→      toast({ title: t("exportFailedToast"), variant: "destructive" });
+   367→    } finally {
+   368→      setExporting(false);
+   369→    }
+   370→  };
+   371→
+   372→  return (
+   373→    <div className="space-y-4">
+   374→      {/* ── Header ── */}
+   375→      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+   376→        <div>
+   377→          <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
+   378→          <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
+   379→        </div>
+   380→        <div className="flex shrink-0 items-center gap-2">
+   381→          <Button
+   382→            variant="outline"
+   383→            aria-label={t("exportCsv")}
+   384→            onClick={() => void onExportCsv()}
+   385→            disabled={exporting}
+   386→          >
+   387→            {exporting ? (
+   388→              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+   389→            ) : (
+   390→              <Download className="h-4 w-4" aria-hidden="true" />
+   391→            )}
+   392→            <span className="hidden sm:inline">{t("exportCsv")}</span>
+   393→          </Button>
+   394→          <Button
+   395→            variant="outline"
+   396→            aria-label={t("quick")}
+   397→            onClick={() => navigate("#/trades/quick")}
+   398→          >
+   399→            <Zap className="h-4 w-4" aria-hidden="true" />
+   400→            <span className="hidden sm:inline">{t("quick")}</span>
+   401→          </Button>
+   402→          <Button onClick={() => navigate("#/trades/new")}>
+   403→            <Plus className="h-4 w-4" aria-hidden="true" />
+   404→            {t("new")}
+   405→          </Button>
+   406→        </div>
+   407→      </div>
+   408→
+   409→      {/* ── Filters ── */}
+   410→      <Card className="gap-0 py-4">
+   411→        <CardContent className="px-4">
+   412→          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+   413→            <div className="space-y-2 sm:col-span-2">
+   414→              <Label htmlFor="trades-search">{tCommon("search")}</Label>
+   415→              <div className="relative">
+   416→                <Search
+   417→                  className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground"
+   418→                  aria-hidden="true"
+   419→                />
+   420→                <Input
+   421→                  id="trades-search"
+   422→                  placeholder={t("searchPlaceholder")}
+   423→                  className="pl-8"
+   424→                  value={searchInput}
+   425→                  onChange={(e) => setSearchInput(e.target.value)}
+   426→                />
+   427→              </div>
+   428→            </div>
+   429→
+   430→            <FilterSelect
+   431→              id="filter-status"
+   432→              label={t("status")}
+   433→              value={query.status}
+   434→              options={TRADE_STATUSES.map((s) => ({
+   435→                value: s,
+   436→                label: labels.status(s),
+   437→              }))}
+   438→              onChange={(v) => setFilter({ status: v })}
+   439→            />
+   440→            <FilterSelect
+   441→              id="filter-direction"
+   442→              label={t("direction")}
+   443→              value={query.direction}
+   444→              options={DIRECTIONS.map((d) => ({
+   445→                value: d,
+   446→                label: labels.direction(d),
+   447→              }))}
+   448→              onChange={(v) => setFilter({ direction: v })}
+   449→            />
+   450→            <FilterSelect
+   451→              id="filter-result"
+   452→              label={t("result")}
+   453→              value={query.resultType}
+   454→              options={RESULT_TYPES.map((r) => ({
+   455→                value: r,
+   456→                label: labels.result(r),
+   457→              }))}
+   458→              onChange={(v) => setFilter({ resultType: v })}
+   459→            />
+   460→            <FilterSelect
+   461→              id="filter-session"
+   462→              label={t("session")}
+   463→              value={query.session}
+   464→              options={TRADING_SESSIONS.map((s) => ({
+   465→                value: s,
+   466→                label: labels.session(s),
+   467→              }))}
+   468→              onChange={(v) => setFilter({ session: v })}
+   469→            />
+   470→
+   471→            {showMore && (
+   472→              <>
+   473→                <FilterSelect
+   474→                  id="filter-account"
+   475→                  label={t("account")}
+   476→                  value={query.accountId}
+   477→                  options={(accounts.data ?? []).map((a) => ({
+   478→                    value: a.id,
+   479→                    label: a.name,
+   480→                  }))}
+   481→                  onChange={(v) => setFilter({ accountId: v })}
+   482→                />
+   483→                <FilterSelect
+   484→                  id="filter-strategy"
+   485→                  label={t("strategy")}
+   486→                  value={query.strategyId}
+   487→                  options={(strategies.data ?? []).map((s) => ({
+   488→                    value: s.id,
+   489→                    label: s.name,
+   490→                  }))}
+   491→                  onChange={(v) => setFilter({ strategyId: v })}
+   492→                />
+   493→                <FilterSelect
+   494→                  id="filter-review"
+   495→                  label={t("reviewStatus")}
+   496→                  value={query.reviewStatus}
+   497→                  options={[
+   498→                    { value: "REVIEWED", label: labels.reviewStatus("REVIEWED") },
+   499→                    {
+   500→                      value: "NOT_REVIEWED",
+   501→                      label: labels.reviewStatus("NOT_REVIEWED"),
+   502→                    },
+   503→                  ]}
+   504→                  onChange={(v) => setFilter({ reviewStatus: v })}
+   505→                />
+   506→                <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 sm:col-span-2">
+   507→                  <Label
+   508→                    htmlFor="filter-drafts"
+   509→                    className="cursor-pointer font-normal"
+   510→                  >
+   511→                    {t("includeDrafts")}
+   512→                  </Label>
+   513→                  <Switch
+   514→                    id="filter-drafts"
+   515→                    checked={query.includeDrafts}
+   516→                    onCheckedChange={(v) => setFilter({ includeDrafts: v })}
+   517→                  />
+   518→                </div>
+   519→                <div className="space-y-2">
+   520→                  <Label htmlFor="filter-from">{t("from")}</Label>
+   521→                  <Input
+   522→                    id="filter-from"
+   523→                    type="date"
+   524→                    value={query.dateFrom ?? ""}
+   525→                    onChange={(e) =>
+   526→                      setFilter({ dateFrom: e.target.value || undefined })
+   527→                    }
+   528→                  />
+   529→                </div>
+   530→                <div className="space-y-2">
+   531→                  <Label htmlFor="filter-to">{t("to")}</Label>
+   532→                  <Input
+   533→                    id="filter-to"
+   534→                    type="date"
+   535→                    value={query.dateTo ?? ""}
+   536→                    onChange={(e) =>
+   537→                      setFilter({ dateTo: e.target.value || undefined })
+   538→                    }
+   539→                  />
+   540→                </div>
+   541→              </>
+   542→            )}
+   543→          </div>
+   544→
+   545→          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+   546→            <Button
+   547→              variant="ghost"
+   548→              size="sm"
+   549→              className="text-muted-foreground"
+   550→              aria-expanded={showMore}
+   551→              onClick={() => setShowMore((v) => !v)}
+   552→            >
+   553→              {showMore ? (
+   554→                <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
+   555→              ) : (
+   556→                <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+   557→              )}
+   558→              {showMore ? tCommon("fewer") : tCommon("more")}
+   559→            </Button>
+   560→            <Button
+   561→              variant="ghost"
+   562→              size="sm"
+   563→              className="text-muted-foreground"
+   564→              onClick={resetFilters}
+   565→            >
+   566→              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+   567→              {t("reset")}
+   568→            </Button>
+   569→          </div>
+   570→        </CardContent>
+   571→      </Card>
+   572→
+   573→      {/* ── Saved views ── */}
+   574→      {(views.length > 0 || hasActiveFilters) && (
+   575→        <div className="flex flex-wrap items-center gap-2">
+   576→          <span
+   577→            className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+   578→            title={views.length === 0 ? t("noViews") : undefined}
+   579→          >
+   580→            {t("views")}
+   581→          </span>
+   582→          {views.map((view) => (
+   583→            <span
+   584→              key={view.id}
+   585→              className="inline-flex overflow-hidden rounded-md border"
+   586→            >
+   587→              <Button
+   588→                variant="outline"
+   589→                size="sm"
+   590→                className="h-7 gap-1.5 rounded-none border-0 px-2 text-xs font-normal"
+   591→                title={t("applyView")}
+   592→                onClick={() => applyView(view)}
+   593→              >
+   594→                <Bookmark
+   595→                  className={`h-3.5 w-3.5 ${
+   596→                    activeViewId === view.id ? "text-gain" : "text-muted-foreground"
+   597→                  }`}
+   598→                  aria-hidden="true"
+   599→                />
+   600→                {view.name}
+   601→              </Button>
+   602→              <Button
+   603→                variant="outline"
+   604→                size="sm"
+   605→                className="h-7 w-7 rounded-none border-0 border-l px-0 text-muted-foreground hover:text-destructive"
+   606→                aria-label={t("deleteView")}
+   607→                disabled={deleteView.isPending}
+   608→                onClick={() => removeView(view)}
+   609→              >
+   610→                <X className="h-3.5 w-3.5" aria-hidden="true" />
+   611→              </Button>
+   612→            </span>
+   613→          ))}
+   614→          {hasActiveFilters && (
+   615→            <Button
+   616→              variant="outline"
+   617→              size="sm"
+   618→              className="h-7 gap-1.5 px-2 text-xs"
+   619→              onClick={() => {
+   620→                setViewName("");
+   621→                setSaveOpen(true);
+   622→              }}
+   623→            >
+   624→              <BookmarkPlus className="h-3.5 w-3.5" aria-hidden="true" />
+   625→              {t("saveView")}
+   626→            </Button>
+   627→          )}
+   628→        </div>
+   629→      )}
+   630→
+   631→      {/* ── Count ── */}
+   632→      {!loading && !trades.isError && (
+   633→        <div className="flex flex-wrap items-center gap-2">
+   634→          <p className="text-sm text-muted-foreground">
+   635→            {t("count", { count: total })}
+   636→          </p>
+   637→          {query.includeDrafts && (
+   638→            <Badge
+   639→              variant="outline"
+   640→              className="text-[10px] text-muted-foreground"
+   641→            >
+   642→              {t("draftsShown")}
+   643→            </Badge>
+   644→          )}
+   645→          {/* v2.5 M2 — chart drill-down chips (TZ-aware local filters) */}
+   646→          {query.timeframe != null && (
+   647→            <Badge variant="secondary" className="gap-1 text-[10px]">
+   648→              {t("drillTimeframe", { tf: query.timeframe })}
+   649→              <button
+   650→                type="button"
+   651→                aria-label={t("removeFilter")}
+   652→                className="rounded-full outline-none focus-visible:outline-2 focus-visible:outline-ring"
+   653→                onClick={() =>
+   654→                  setQuery((q) => ({ ...q, timeframe: undefined, page: 1 }))
+   655→                }
+   656→              >
+   657→                <X className="h-3 w-3" aria-hidden="true" />
+   658→              </button>
+   659→            </Badge>
+   660→          )}
+   661→          {query.entryHour != null && (
+   662→            <Badge variant="secondary" className="gap-1 text-[10px]">
+   663→              {t("drillHour", { hour: query.entryHour })}
+   664→              <button
+   665→                type="button"
+   666→                aria-label={t("removeFilter")}
+   667→                className="rounded-full outline-none focus-visible:outline-2 focus-visible:outline-ring"
+   668→                onClick={() =>
+   669→                  setQuery((q) => ({ ...q, entryHour: undefined, page: 1 }))
+   670→                }
+   671→              >
+   672→                <X className="h-3 w-3" aria-hidden="true" />
+   673→              </button>
+   674→            </Badge>
+   675→          )}
+   676→          {query.entryWeekday != null && (
+   677→            <Badge variant="secondary" className="gap-1 text-[10px]">
+   678→              {t("drillWeekday", {
+   679→                day: new Intl.DateTimeFormat(locale, { weekday: "long" }).format(
+   680→                  new Date(2024, 0, 7 + query.entryWeekday) // 2024-01-08 = Monday
+   681→                ),
+   682→              })}
+   683→              <button
+   684→                type="button"
+   685→                aria-label={t("removeFilter")}
+   686→                className="rounded-full outline-none focus-visible:outline-2 focus-visible:outline-ring"
+   687→                onClick={() =>
+   688→                  setQuery((q) => ({ ...q, entryWeekday: undefined, page: 1 }))
+   689→                }
+   690→              >
+   691→                <X className="h-3 w-3" aria-hidden="true" />
+   692→              </button>
+   693→            </Badge>
+   694→          )}
+   695→        </div>
+   696→      )}
+   697→
+   698→      {/* ── Body ── */}
+   699→      {loading ? (
+   700→        <div className="space-y-2 rounded-lg border p-4">
+   701→          {Array.from({ length: 6 }).map((_, i) => (
+   702→            <Skeleton key={i} className="h-12 w-full" />
+   703→          ))}
+   704→        </div>
+   705→      ) : trades.isError ? (
+   706→        <Card className="gap-0 py-4">
+   707→          <CardContent className="px-4">
+   708→            <div className="flex flex-col items-center gap-3 py-10 text-center">
+   709→              <AlertCircle
+   710→                className="h-8 w-8 text-destructive"
+   711→                aria-hidden="true"
+   712→              />
+   713→              <p className="text-sm text-muted-foreground">{t("loadError")}</p>
+   714→              <Button
+   715→                variant="outline"
+   716→                size="sm"
+   717→                onClick={() => void trades.refetch()}
+   718→              >
+   719→                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+   720→                {tCommon("retry")}
+   721→              </Button>
+   722→            </div>
+   723→          </CardContent>
+   724→        </Card>
+   725→      ) : rows.length === 0 ? (
+   726→        hasActiveFilters ? (
+   727→          <Card className="gap-0 py-4">
+   728→            <CardContent className="px-4">
+   729→              <div className="flex flex-col items-center gap-3 py-10 text-center">
+   730→                <Search
+   731→                  className="h-8 w-8 text-muted-foreground/60"
+   732→                  aria-hidden="true"
+   733→                />
+   734→                <div className="space-y-1">
+   735→                  <p className="font-medium">{t("noResultsTitle")}</p>
+   736→                  <p className="text-sm text-muted-foreground">
+   737→                    {t("noResultsDesc")}
+   738→                  </p>
+   739→                </div>
+   740→                <Button variant="outline" size="sm" onClick={resetFilters}>
+   741→                  <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+   742→                  {t("reset")}
+   743→                </Button>
+   744→              </div>
+   745→            </CardContent>
+   746→          </Card>
+   747→        ) : (
+   748→          <Card className="gap-0 py-4">
+   749→            <CardContent className="px-4">
+   750→              <div className="flex flex-col items-center gap-3 py-12 text-center">
+   751→                <div className="rounded-full bg-muted p-3">
+   752→                  <CandlestickChart
+   753→                    className="h-6 w-6 text-muted-foreground"
+   754→                    aria-hidden="true"
+   755→                  />
+   756→                </div>
+   757→                <div className="space-y-1">
+   758→                  <p className="font-medium">{t("emptyTitle")}</p>
+   759→                  <p className="mx-auto max-w-sm text-sm text-muted-foreground">
+   760→                    {t("emptyDesc")}
+   761→                  </p>
+   762→                </div>
+   763→                <Button onClick={() => navigate("#/trades/quick")}>
+   764→                  <Zap className="h-4 w-4" aria-hidden="true" />
+   765→                  {t("emptyCta")}
+   766→                </Button>
+   767→              </div>
+   768→            </CardContent>
+   769→          </Card>
+   770→        )
+   771→      ) : (
+   772→        <div className="overflow-x-auto rounded-lg border">
+   773→          <Table>
+   774→            <TableHeader className="bg-muted/50">
+   775→              <TableRow>
+   776→                <TableHead className="whitespace-nowrap">
+   777→                  <SortButton
+   778→                    label={t("colDate")}
+   779→                    active={query.sort === "entryTime"}
+   780→                    order={query.order}
+   781→                    ariaLabel={t("sortAria", { column: t("colDate") })}
+   782→                    onClick={() => onSort("entryTime")}
+   783→                  />
+   784→                </TableHead>
+   785→                <TableHead>{t("colSymbol")}</TableHead>
+   786→                <TableHead>{t("colDirection")}</TableHead>
+   787→                <TableHead className="text-right">{t("colLots")}</TableHead>
+   788→                <TableHead className="hidden text-right lg:table-cell">
+   789→                  {t("colEntry")}
+   790→                </TableHead>
+   791→                <TableHead className="hidden text-right lg:table-cell">
+   792→                  <SortButton
+   793→                    label={t("colExit")}
+   794→                    active={query.sort === "exitTime"}
+   795→                    order={query.order}
+   796→                    ariaLabel={t("sortAria", { column: t("colExit") })}
+   797→                    onClick={() => onSort("exitTime")}
+   798→                  />
+   799→                </TableHead>
+   800→                <TableHead className="text-right">{t("colPips")}</TableHead>
+   801→                <TableHead className="hidden text-right md:table-cell">
+   802→                  <SortButton
+   803→                    label={t("colR")}
+   804→                    active={query.sort === "rMultiple"}
+   805→                    order={query.order}
+   806→                    ariaLabel={t("sortAria", { column: t("colR") })}
+   807→                    onClick={() => onSort("rMultiple")}
+   808→                  />
+   809→                </TableHead>
+   810→                <TableHead className="text-right">
+   811→                  <SortButton
+   812→                    label={t("colPnl")}
+   813→                    active={query.sort === "netPnl"}
+   814→                    order={query.order}
+   815→                    ariaLabel={t("sortAria", { column: t("colPnl") })}
+   816→                    onClick={() => onSort("netPnl")}
+   817→                  />
+   818→                </TableHead>
+   819→                <TableHead>{t("colResult")}</TableHead>
+   820→                <TableHead>{t("colStatus")}</TableHead>
+   821→                <TableHead className="hidden lg:table-cell">
+   822→                  {t("colAccount")}
+   823→                </TableHead>
+   824→                <TableHead className="hidden lg:table-cell">
+   825→                  {t("colStrategy")}
+   826→                </TableHead>
+   827→                <TableHead className="hidden xl:table-cell">
+   828→                  {t("colSession")}
+   829→                </TableHead>
+   830→                <TableHead className="hidden xl:table-cell">
+   831→                  {t("colTimeframe")}
+   832→                </TableHead>
+   833→                <TableHead className="hidden lg:table-cell">
+   834→                  {t("colReview")}
+   835→                </TableHead>
+   836→                <TableHead className="w-10" />
+   837→              </TableRow>
+   838→            </TableHeader>
+   839→            <TableBody>
+   840→              {rows.map((trade) => (
+   841→                <TableRow
+   842→                  key={trade.id}
+   843→                  className="cursor-pointer hover:bg-muted/50"
+   844→                  onClick={() => navigate(`#/trades/${trade.id}`)}
+   845→                >
+   846→                  <TableCell className="whitespace-nowrap text-muted-foreground">
+   847→                    {fmtDateTimeInTz(trade.entryTime, timezone)}
+   848→                  </TableCell>
+   849→                  <TableCell className="max-w-[12rem]">
+   850→                    <div className="flex flex-col gap-1">
+   851→                      <span className="font-medium tabular-nums">
+   852→                        {trade.symbol}
+   853→                      </span>
+   854→                      <TagsBadges tags={trade.tags} />
+   855→                    </div>
+   856→                  </TableCell>
+   857→                  <TableCell>
+   858→                    <DirectionBadge direction={trade.direction} />
+   859→                  </TableCell>
+   860→                  <TableCell className="text-right tabular-nums">
+   861→                    {fmtNum(trade.lots)}
+   862→                  </TableCell>
+   863→                  <TableCell className="hidden text-right tabular-nums lg:table-cell">
+   864→                    {fmtPrice(trade.entryPrice, trade.digits)}
+   865→                  </TableCell>
+   866→                  <TableCell className="hidden text-right tabular-nums lg:table-cell">
+   867→                    {fmtPrice(trade.exitPrice, trade.digits)}
+   868→                  </TableCell>
+   869→                  <TableCell
+   870→                    className={`text-right tabular-nums ${pnlClass(trade.pips)}`}
+   871→                  >
+   872→                    {fmtSigned(trade.pips)}
+   873→                  </TableCell>
+   874→                  <TableCell
+   875→                    className={`hidden text-right tabular-nums md:table-cell ${pnlClass(trade.rMultiple)}`}
+   876→                  >
+   877→                    {fmtSigned(trade.rMultiple, 2, 2)}
+   878→                  </TableCell>
+   879→                  <TableCell
+   880→                    className={`text-right font-medium tabular-nums ${pnlClass(trade.netPnl)}`}
+   881→                  >
+   882→                    {fmtSignedMoney(trade.netPnl, trade.pnlCurrency)}
+   883→                  </TableCell>
+   884→                  <TableCell>
+   885→                    {trade.resultType ? (
+   886→                      <ResultBadge result={trade.resultType} />
+   887→                    ) : (
+   888→                      "—"
+   889→                    )}
+   890→                  </TableCell>
+   891→                  <TableCell>
+   892→                    <div className="flex flex-col items-start gap-1">
+   893→                      <StatusBadge status={trade.status} />
+   894→                      {trade.isDraft && <DraftBadge />}
+   895→                    </div>
+   896→                  </TableCell>
+   897→                  <TableCell className="hidden text-muted-foreground lg:table-cell">
+   898→                    {trade.accountName}
+   899→                  </TableCell>
+   900→                  <TableCell className="hidden text-muted-foreground lg:table-cell">
+   901→                    {trade.strategyName ?? "—"}
+   902→                  </TableCell>
+   903→                  <TableCell className="hidden text-muted-foreground xl:table-cell">
+   904→                    {labels.session(trade.session)}
+   905→                  </TableCell>
+   906→                  <TableCell className="hidden tabular-nums xl:table-cell">
+   907→                    {trade.timeframe ?? "—"}
+   908→                  </TableCell>
+   909→                  <TableCell className="hidden lg:table-cell">
+   910→                    <span
+   911→                      className="inline-flex"
+   912→                      title={labels.reviewStatus(trade.reviewStatus)}
+   913→                    >
+   914→                      {trade.reviewStatus === "REVIEWED" ? (
+   915→                        <CheckCircle2
+   916→                          className="h-4 w-4 text-gain"
+   917→                          aria-hidden="true"
+   918→                        />
+   919→                      ) : (
+   920→                        <Circle
+   921→                          className="h-4 w-4 text-muted-foreground/50"
+   922→                          aria-hidden="true"
+   923→                        />
+   924→                      )}
+   925→                      <span className="sr-only">
+   926→                        {labels.reviewStatus(trade.reviewStatus)}
+   927→                      </span>
+   928→                    </span>
+   929→                  </TableCell>
+   930→                  <TableCell
+   931→                    className="w-10 text-right"
+   932→                    onClick={(e) => e.stopPropagation()}
+   933→                  >
+   934→                    <DropdownMenu>
+   935→                      <DropdownMenuTrigger asChild>
+   936→                        <Button
+   937→                          variant="ghost"
+   938→                          size="icon"
+   939→                          className="h-8 w-8"
+   940→                          aria-label={t("rowMenu")}
+   941→                          onClick={(e) => e.stopPropagation()}
+   942→                        >
+   943→                          <MoreHorizontal
+   944→                            className="h-4 w-4"
+   945→                            aria-hidden="true"
+   946→                          />
+   947→                        </Button>
+   948→                      </DropdownMenuTrigger>
+   949→                      <DropdownMenuContent align="end">
+   950→                        <DropdownMenuItem
+   951→                          onClick={() => navigate(`#/trades/${trade.id}`)}
+   952→                        >
+   953→                          <Eye className="h-4 w-4" aria-hidden="true" />
+   954→                          {t("view")}
+   955→                        </DropdownMenuItem>
+   956→                        <DropdownMenuItem
+   957→                          onClick={() =>
+   958→                            navigate(`#/trades/${trade.id}/edit`)
+   959→                          }
+   960→                        >
+   961→                          <Pencil className="h-4 w-4" aria-hidden="true" />
+   962→                          {t("edit")}
+   963→                        </DropdownMenuItem>
+   964→                        <DropdownMenuSeparator />
+   965→                        <DropdownMenuItem
+   966→                          className="text-red-600 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400"
+   967→                          onClick={() => setDeleteTarget(trade)}
+   968→                        >
+   969→                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+   970→                          {t("delete")}
+   971→                        </DropdownMenuItem>
+   972→                      </DropdownMenuContent>
+   973→                    </DropdownMenu>
+   974→                  </TableCell>
+   975→                </TableRow>
+   976→              ))}
+   977→            </TableBody>
+   978→          </Table>
+   979→        </div>
+   980→      )}
+   981→
+   982→      {/* ── Pagination ── */}
+   983→      {!loading && !trades.isError && totalPages > 1 && (
+   984→        <div className="flex items-center justify-between gap-2">
+   985→          <p className="text-sm text-muted-foreground">
+   986→            {t("page", { page: currentPage, totalPages })}
+   987→          </p>
+   988→          <div className="flex items-center gap-2">
+   989→            <Button
+   990→              variant="outline"
+   991→              size="sm"
+   992→              disabled={currentPage <= 1}
+   993→              onClick={() =>
+   994→                setQuery((q) => ({ ...q, page: Math.max(1, q.page - 1) }))
+   995→              }
+   996→            >
+   997→              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+   998→              <span className="sr-only">{t("prev")}</span>
+   999→            </Button>
+  1000→            <Button
+  1001→              variant="outline"
+  1002→              size="sm"
+  1003→              disabled={currentPage >= totalPages}
+  1004→              onClick={() => setQuery((q) => ({ ...q, page: q.page + 1 }))}
+  1005→            >
+  1006→              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+  1007→              <span className="sr-only">{t("next")}</span>
+  1008→            </Button>
+  1009→          </div>
+  1010→        </div>
+  1011→      )}
+  1012→
+  1013→      {/* ── Save-view dialog ── */}
+  1014→      <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
+  1015→        <DialogContent className="sm:max-w-sm">
+  1016→          <DialogHeader>
+  1017→            <DialogTitle>{t("saveView")}</DialogTitle>
+  1018→            <DialogDescription className="sr-only">
+  1019→              {t("viewName")}
+  1020→            </DialogDescription>
+  1021→          </DialogHeader>
+  1022→          <div className="space-y-2">
+  1023→            <Label htmlFor="view-name">{t("viewName")}</Label>
+  1024→            <Input
+  1025→              id="view-name"
+  1026→              placeholder={t("viewNamePlaceholder")}
+  1027→              value={viewName}
+  1028→              maxLength={60}
+  1029→              onChange={(e) => setViewName(e.target.value)}
+  1030→            />
+  1031→          </div>
+  1032→          <DialogFooter>
+  1033→            <Button
+  1034→              variant="outline"
+  1035→              disabled={createView.isPending}
+  1036→              onClick={() => setSaveOpen(false)}
+  1037→            >
+  1038→              {tCommon("cancel")}
+  1039→            </Button>
+  1040→            <Button
+  1041→              disabled={!viewName.trim() || createView.isPending}
+  1042→              onClick={saveCurrentView}
+  1043→            >
+  1044→              {createView.isPending && (
+  1045→                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+  1046→              )}
+  1047→              {tCommon("save")}
+  1048→            </Button>
+  1049→          </DialogFooter>
+  1050→        </DialogContent>
+  1051→      </Dialog>
+  1052→
+  1053→      {/* ── Delete confirmation ── */}
+  1054→      <AlertDialog
+  1055→        open={deleteTarget !== null}
+  1056→        onOpenChange={(open) => {
+  1057→          if (!open) setDeleteTarget(null);
+  1058→        }}
+  1059→      >
+  1060→        <AlertDialogContent>
+  1061→          <AlertDialogHeader>
+  1062→            <AlertDialogTitle>{t("confirmDeleteTitle")}</AlertDialogTitle>
+  1063→            <AlertDialogDescription>
+  1064→              {t("confirmDeleteDesc")}
+  1065→            </AlertDialogDescription>
+  1066→          </AlertDialogHeader>
+  1067→          <AlertDialogFooter>
+  1068→            <AlertDialogCancel disabled={deleteTrade.isPending}>
+  1069→              {tCommon("cancel")}
+  1070→            </AlertDialogCancel>
+  1071→            <AlertDialogAction
+  1072→              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+  1073→              disabled={deleteTrade.isPending}
+  1074→              onClick={(e) => {
+  1075→                e.preventDefault();
+  1076→                confirmDelete();
+  1077→              }}
+  1078→            >
+  1079→              {deleteTrade.isPending && (
+  1080→                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+  1081→              )}
+  1082→              {tCommon("delete")}
+  1083→            </AlertDialogAction>
+  1084→          </AlertDialogFooter>
+  1085→        </AlertDialogContent>
+  1086→      </AlertDialog>
+  1087→    </div>
+  1088→  );
+  1089→}
+  1090→
+  1091→// ── Local helpers ────────────────────────────────────────────────────────────
+  1092→
+  1093→/** Enum-like filter select with an implicit "all" (undefined) option. */
+  1094→function FilterSelect<T extends string>({
+  1095→  id,
+  1096→  label,
+  1097→  value,
+  1098→  options,
+  1099→  onChange,
+  1100→}: {
+  1101→  id: string;
+  1102→  label: string;
+  1103→  value: T | undefined;
+  1104→  options: Array<{ value: T; label: string }>;
+  1105→  onChange: (value: T | undefined) => void;
+  1106→}) {
+  1107→  const tCommon = useTranslations("common");
+  1108→  return (
+  1109→    <div className="space-y-2">
+  1110→      <Label htmlFor={id}>{label}</Label>
+  1111→      <Select
+  1112→        value={value ?? "all"}
+  1113→        onValueChange={(v) => onChange(v === "all" ? undefined : (v as T))}
+  1114→      >
+  1115→        <SelectTrigger id={id} className="w-full">
+  1116→          <SelectValue />
+  1117→        </SelectTrigger>
+  1118→        <SelectContent className="max-h-72">
+  1119→          <SelectItem value="all">{tCommon("all")}</SelectItem>
+  1120→          {options.map((o) => (
+  1121→            <SelectItem key={o.value} value={o.value}>
+  1122→              {o.label}
+  1123→            </SelectItem>
+  1124→          ))}
+  1125→        </SelectContent>
+  1126→      </Select>
+  1127→    </div>
+  1128→  );
+  1129→}
+  1130→
+  1131→/** Sortable table-header button (server-side sort + order toggle). */
+  1132→function SortButton({
+  1133→  label,
+  1134→  active,
+  1135→  order,
+  1136→  onClick,
+  1137→  ariaLabel,
+  1138→}: {
+  1139→  label: string;
+  1140→  active: boolean;
+  1141→  order: "asc" | "desc";
+  1142→  onClick: () => void;
+  1143→  ariaLabel: string;
+  1144→}) {
+  1145→  return (
+  1146→    <Button
+  1147→      type="button"
+  1148→      variant="ghost"
+  1149→      size="sm"
+  1150→      className={`-ml-2 h-7 gap-1 px-2 text-xs font-medium ${
+  1151→        active ? "text-foreground" : "text-muted-foreground"
+  1152→      }`}
+  1153→      onClick={onClick}
+  1154→      aria-label={ariaLabel}
+  1155→    >
+  1156→      {label}
+  1157→      {active ? (
+  1158→        order === "asc" ? (
+  1159→          <ArrowUp className="h-3 w-3" aria-hidden="true" />
+  1160→        ) : (
+  1161→          <ArrowDown className="h-3 w-3" aria-hidden="true" />
+  1162→        )
+  1163→      ) : (
+  1164→        <ArrowUpDown className="h-3 w-3 opacity-60" aria-hidden="true" />
+  1165→      )}
+  1166→    </Button>
+  1167→  );
+  1168→}
+  1169→

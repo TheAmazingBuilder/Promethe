@@ -1,0 +1,754 @@
+     1→"use client";
+     2→
+     3→/**
+     4→ * Strategies view (v1 phase 5) — list with per-strategy stats, full editor
+     5→ * (definition + replace-all checklist) and immutable version snapshots.
+     6→ * Data: GET /api/strategies?withStats=1 · CRUD /api/strategies[/id] ·
+     7→ * POST/GET/DELETE /api/strategies/[id]/versions.
+     8→ */
+     9→import * as React from "react";
+    10→import {
+    11→  Camera,
+    12→  History,
+    13→  Pencil,
+    14→  Plus,
+    15→  Trash2,
+    16→  X,
+    17→} from "lucide-react";
+    18→import { useTranslations } from "next-intl";
+    19→import { Badge } from "@/components/ui/badge";
+    20→import { Button } from "@/components/ui/button";
+    21→import {
+    22→  Card,
+    23→  CardAction,
+    24→  CardContent,
+    25→  CardDescription,
+    26→  CardHeader,
+    27→  CardTitle,
+    28→} from "@/components/ui/card";
+    29→import { Checkbox } from "@/components/ui/checkbox";
+    30→import {
+    31→  Dialog,
+    32→  DialogContent,
+    33→  DialogDescription,
+    34→  DialogFooter,
+    35→  DialogHeader,
+    36→  DialogTitle,
+    37→} from "@/components/ui/dialog";
+    38→import { Input } from "@/components/ui/input";
+    39→import { Progress } from "@/components/ui/progress";
+    40→import {
+    41→  Select,
+    42→  SelectContent,
+    43→  SelectItem,
+    44→  SelectTrigger,
+    45→  SelectValue,
+    46→} from "@/components/ui/select";
+    47→import { Skeleton } from "@/components/ui/skeleton";
+    48→import { Textarea } from "@/components/ui/textarea";
+    49→import { useToast } from "@/hooks/use-toast";
+    50→import {
+    51→  useCreateStrategy,
+    52→  useCreateStrategyVersion,
+    53→  useDeleteStrategy,
+    54→  useDeleteStrategyVersion,
+    55→  useStrategiesWithStats,
+    56→  useStrategyVersions,
+    57→  useUpdateStrategy,
+    58→  type StrategyInputBody,
+    59→} from "@/hooks/use-journal";
+    60→import { useStrategies } from "@/hooks/use-trading";
+    61→import { ApiClientError } from "@/lib/api-client";
+    62→import { apiErrorMessage } from "@/lib/i18n-errors";
+    63→import { fmtSignedMoney, pnlClass } from "@/lib/format";
+    64→import { TIMEFRAMES } from "@/lib/trading/types";
+    65→import type { StrategyDTO, StrategyStatsDTO } from "@/lib/trading/dto";
+    66→
+    67→type ChecklistItem = NonNullable<StrategyInputBody["checklistItems"]>[number];
+    68→type ChecklistCategory = ChecklistItem["category"];
+    69→
+    70→const CATEGORIES: ChecklistCategory[] = ["ENTRY", "EXIT", "RISK", "CONTEXT"];
+    71→
+    72→const EMPTY_FORM: StrategyInputBody = {
+    73→  name: "",
+    74→  description: "",
+    75→  color: "#10b981",
+    76→  status: "ACTIVE",
+    77→  timeframes: [],
+    78→  defaultRiskPercent: null,
+    79→  targetRR: null,
+    80→  entryRules: "",
+    81→  exitRules: "",
+    82→  riskRules: "",
+    83→  checklistItems: [],
+    84→};
+    85→
+    86→function statusBadgeClass(status: string): string {
+    87→  switch (status) {
+    88→    case "ACTIVE":
+    89→      return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400";
+    90→    case "TESTING":
+    91→      return "bg-amber-500/15 text-amber-700 dark:text-amber-400";
+    92→    default:
+    93→      return "bg-muted text-muted-foreground";
+    94→  }
+    95→}
+    96→
+    97→// ── Editor dialog ────────────────────────────────────────────────────────────
+    98→
+    99→function StrategyEditor({
+   100→  open,
+   101→  onOpenChange,
+   102→  editing,
+   103→}: {
+   104→  open: boolean;
+   105→  onOpenChange: (open: boolean) => void;
+   106→  editing: StrategyDTO | null;
+   107→}) {
+   108→  const t = useTranslations("strategiesView.form");
+   109→  const tRoot = useTranslations();
+   110→  const { toast } = useToast();
+   111→  const create = useCreateStrategy();
+   112→  const update = useUpdateStrategy();
+   113→
+   114→  const [form, setForm] = React.useState<StrategyInputBody>(EMPTY_FORM);
+   115→  const [saving, setSaving] = React.useState(false);
+   116→
+   117→  React.useEffect(() => {
+   118→    if (!open) return;
+   119→    setForm(
+   120→      editing
+   121→        ? {
+   122→            name: editing.name,
+   123→            description: editing.description ?? "",
+   124→            color: editing.color,
+   125→            status:
+   126→              editing.status === "TESTING" || editing.status === "ARCHIVED"
+   127→                ? editing.status
+   128→                : "ACTIVE",
+   129→            timeframes: editing.timeframes,
+   130→            defaultRiskPercent: editing.defaultRiskPercent,
+   131→            targetRR: editing.targetRR,
+   132→            entryRules: editing.entryRules ?? "",
+   133→            exitRules: editing.exitRules ?? "",
+   134→            riskRules: editing.riskRules ?? "",
+   135→            checklistItems: editing.checklistItems.map((c) => ({
+   136→              label: c.label,
+   137→              category:
+   138→                (CATEGORIES as string[]).includes(c.category)
+   139→                  ? (c.category as ChecklistCategory)
+   140→                  : "ENTRY",
+   141→              order: c.order,
+   142→              isRequired: c.isRequired,
+   143→            })),
+   144→          }
+   145→        : EMPTY_FORM,
+   146→    );
+   147→  }, [open, editing]);
+   148→
+   149→  const set = <K extends keyof StrategyInputBody>(
+   150→    key: K,
+   151→    value: StrategyInputBody[K],
+   152→  ) => setForm((f) => ({ ...f, [key]: value }));
+   153→
+   154→  const toggleTimeframe = (tf: string) =>
+   155→    setForm((f) => ({
+   156→      ...f,
+   157→      timeframes: f.timeframes?.includes(tf)
+   158→        ? f.timeframes.filter((v) => v !== tf)
+   159→        : [...(f.timeframes ?? []), tf],
+   160→    }));
+   161→
+   162→  const addChecklistItem = () =>
+   163→    setForm((f) => ({
+   164→      ...f,
+   165→      checklistItems: [
+   166→        ...(f.checklistItems ?? []),
+   167→        { label: "", category: "ENTRY", order: (f.checklistItems?.length ?? 0), isRequired: true },
+   168→      ],
+   169→    }));
+   170→
+   171→  const setChecklistItem = (index: number, patch: Partial<ChecklistItem>) =>
+   172→    setForm((f) => ({
+   173→      ...f,
+   174→      checklistItems: (f.checklistItems ?? []).map((c, i) =>
+   175→        i === index ? { ...c, ...patch } : c,
+   176→      ),
+   177→    }));
+   178→
+   179→  const removeChecklistItem = (index: number) =>
+   180→    setForm((f) => ({
+   181→      ...f,
+   182→      checklistItems: (f.checklistItems ?? []).filter((_, i) => i !== index),
+   183→    }));
+   184→
+   185→  const onSave = async () => {
+   186→    if (!form.name.trim()) return;
+   187→    setSaving(true);
+   188→    try {
+   189→      const payload: StrategyInputBody = {
+   190→        ...form,
+   191→        checklistItems: (form.checklistItems ?? [])
+   192→          .filter((c) => c.label.trim().length > 0)
+   193→          .map((c, i) => ({ ...c, order: i })),
+   194→      };
+   195→      if (editing) {
+   196→        await update.mutateAsync({ id: editing.id, patch: payload });
+   197→        toast({ title: t("updated") });
+   198→      } else {
+   199→        await create.mutateAsync(payload);
+   200→        toast({ title: t("created") });
+   201→      }
+   202→      onOpenChange(false);
+   203→    } catch (error) {
+   204→      const err = error instanceof ApiClientError ? error : null;
+   205→      toast({
+   206→        title: apiErrorMessage(tRoot, err?.code, error instanceof Error ? error.message : ""),
+   207→        variant: "destructive",
+   208→      });
+   209→    } finally {
+   210→      setSaving(false);
+   211→    }
+   212→  };
+   213→
+   214→  return (
+   215→    <Dialog open={open} onOpenChange={onOpenChange}>
+   216→      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+   217→        <DialogHeader>
+   218→          <DialogTitle>{editing ? t("editTitle") : t("createTitle")}</DialogTitle>
+   219→          <DialogDescription className="sr-only">
+   220→            {editing ? t("editTitle") : t("createTitle")}
+   221→          </DialogDescription>
+   222→        </DialogHeader>
+   223→        <div className="flex flex-col gap-4">
+   224→          {/* Identity */}
+   225→          <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+   226→            <div className="space-y-1.5">
+   227→              <label className="text-xs font-medium text-muted-foreground" htmlFor="strategy-name">
+   228→                {t("name")}
+   229→              </label>
+   230→              <Input
+   231→                id="strategy-name"
+   232→                value={form.name}
+   233→                onChange={(e) => set("name", e.target.value)}
+   234→                placeholder={t("namePlaceholder")}
+   235→                maxLength={80}
+   236→              />
+   237→            </div>
+   238→            <div className="space-y-1.5">
+   239→              <label className="text-xs font-medium text-muted-foreground" htmlFor="strategy-color">
+   240→                {t("color")}
+   241→              </label>
+   242→              <Input
+   243→                id="strategy-color"
+   244→                type="color"
+   245→                value={form.color}
+   246→                onChange={(e) => set("color", e.target.value)}
+   247→                className="h-9 w-16 cursor-pointer p-1"
+   248→              />
+   249→            </div>
+   250→          </div>
+   251→          <div className="space-y-1.5">
+   252→            <label className="text-xs font-medium text-muted-foreground" htmlFor="strategy-desc">
+   253→              {t("description")}
+   254→            </label>
+   255→            <Input
+   256→              id="strategy-desc"
+   257→              value={form.description ?? ""}
+   258→              onChange={(e) => set("description", e.target.value || null)}
+   259→              placeholder={t("descriptionPlaceholder")}
+   260→              maxLength={5000}
+   261→            />
+   262→          </div>
+   263→          <div className="grid gap-3 sm:grid-cols-3">
+   264→            <div className="space-y-1.5">
+   265→              <label className="text-xs font-medium text-muted-foreground" htmlFor="strategy-status">
+   266→                {t("status")}
+   267→              </label>
+   268→              <Select
+   269→                value={form.status}
+   270→                onValueChange={(v) => set("status", v as StrategyInputBody["status"])}
+   271→              >
+   272→                <SelectTrigger id="strategy-status">
+   273→                  <SelectValue />
+   274→                </SelectTrigger>
+   275→                <SelectContent>
+   276→                  <SelectItem value="ACTIVE">{t("statusActive")}</SelectItem>
+   277→                  <SelectItem value="TESTING">{t("statusTesting")}</SelectItem>
+   278→                  <SelectItem value="ARCHIVED">{t("statusArchived")}</SelectItem>
+   279→                </SelectContent>
+   280→              </Select>
+   281→            </div>
+   282→            <div className="space-y-1.5">
+   283→              <label className="text-xs font-medium text-muted-foreground" htmlFor="strategy-risk">
+   284→                {t("riskPercent")}
+   285→              </label>
+   286→              <Input
+   287→                id="strategy-risk"
+   288→                inputMode="decimal"
+   289→                value={form.defaultRiskPercent ?? ""}
+   290→                onChange={(e) =>
+   291→                  set("defaultRiskPercent", e.target.value.trim() === "" ? null : e.target.value.trim())
+   292→                }
+   293→                placeholder="0.5"
+   294→              />
+   295→            </div>
+   296→            <div className="space-y-1.5">
+   297→              <label className="text-xs font-medium text-muted-foreground" htmlFor="strategy-rr">
+   298→                {t("targetRR")}
+   299→              </label>
+   300→              <Input
+   301→                id="strategy-rr"
+   302→                inputMode="decimal"
+   303→                value={form.targetRR ?? ""}
+   304→                onChange={(e) =>
+   305→                  set("targetRR", e.target.value.trim() === "" ? null : e.target.value.trim())
+   306→                }
+   307→                placeholder="2"
+   308→              />
+   309→            </div>
+   310→          </div>
+   311→
+   312→          {/* Timeframes */}
+   313→          <div className="space-y-1.5">
+   314→            <p className="text-xs font-medium text-muted-foreground">{t("timeframes")}</p>
+   315→            <div className="flex flex-wrap gap-1.5">
+   316→              {TIMEFRAMES.map((tf) => {
+   317→                const active = form.timeframes?.includes(tf) ?? false;
+   318→                return (
+   319→                  <button
+   320→                    key={tf}
+   321→                    type="button"
+   322→                    aria-pressed={active}
+   323→                    onClick={() => toggleTimeframe(tf)}
+   324→                    className={[
+   325→                      "rounded-md border px-2 py-1 text-xs font-medium tabular-nums transition-colors",
+   326→                      active
+   327→                        ? "border-primary bg-primary text-primary-foreground"
+   328→                        : "text-muted-foreground hover:bg-muted",
+   329→                    ].join(" ")}
+   330→                  >
+   331→                    {tf}
+   332→                  </button>
+   333→                );
+   334→              })}
+   335→            </div>
+   336→          </div>
+   337→
+   338→          {/* Rules */}
+   339→          <div className="space-y-1.5">
+   340→            <p className="text-xs font-medium text-muted-foreground">{t("rules.title")}</p>
+   341→            <div className="grid gap-3 md:grid-cols-3">
+   342→              {(["entryRules", "exitRules", "riskRules"] as const).map((key) => (
+   343→                <div key={key} className="space-y-1">
+   344→                  <label className="text-[11px] text-muted-foreground" htmlFor={`rules-${key}`}>
+   345→                    {t(`rules.${key === "entryRules" ? "entry" : key === "exitRules" ? "exit" : "risk"}`)}
+   346→                  </label>
+   347→                  <Textarea
+   348→                    id={`rules-${key}`}
+   349→                    value={form[key] ?? ""}
+   350→                    onChange={(e) => set(key, e.target.value || null)}
+   351→                    rows={4}
+   352→                    className="resize-y text-xs"
+   353→                  />
+   354→                </div>
+   355→              ))}
+   356→            </div>
+   357→          </div>
+   358→
+   359→          {/* Checklist */}
+   360→          <div className="space-y-2">
+   361→            <p className="text-xs font-medium text-muted-foreground">{t("checklist.title")}</p>
+   362→            {(form.checklistItems ?? []).length === 0 ? (
+   363→              <p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+   364→                {t("checklist.empty")}
+   365→              </p>
+   366→            ) : (
+   367→              <div className="flex flex-col gap-2">
+   368→                {(form.checklistItems ?? []).map((item, index) => (
+   369→                  <div
+   370→                    key={index}
+   371→                    className="flex flex-wrap items-center gap-2 rounded-md border p-2"
+   372→                  >
+   373→                    <Input
+   374→                      value={item.label}
+   375→                      onChange={(e) => setChecklistItem(index, { label: e.target.value })}
+   376→                      placeholder={t("checklist.labelPlaceholder")}
+   377→                      maxLength={200}
+   378→                      className="min-w-[140px] flex-1"
+   379→                    />
+   380→                    <Select
+   381→                      value={item.category}
+   382→                      onValueChange={(v) =>
+   383→                        setChecklistItem(index, { category: v as ChecklistCategory })
+   384→                      }
+   385→                    >
+   386→                      <SelectTrigger className="w-[120px]" aria-label={t("checklist.category")}>
+   387→                        <SelectValue />
+   388→                      </SelectTrigger>
+   389→                      <SelectContent>
+   390→                        {CATEGORIES.map((c) => (
+   391→                          <SelectItem key={c} value={c}>
+   392→                            {c}
+   393→                          </SelectItem>
+   394→                        ))}
+   395→                      </SelectContent>
+   396→                    </Select>
+   397→                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+   398→                      <Checkbox
+   399→                        checked={item.isRequired}
+   400→                        onCheckedChange={(v) =>
+   401→                          setChecklistItem(index, { isRequired: v === true })
+   402→                        }
+   403→                        aria-label={t("checklist.required")}
+   404→                      />
+   405→                      {t("checklist.required")}
+   406→                    </label>
+   407→                    <Button
+   408→                      type="button"
+   409→                      variant="ghost"
+   410→                      size="icon"
+   411→                      onClick={() => removeChecklistItem(index)}
+   412→                      aria-label={t("checklist.remove")}
+   413→                    >
+   414→                      <X className="h-4 w-4" aria-hidden="true" />
+   415→                    </Button>
+   416→                  </div>
+   417→                ))}
+   418→              </div>
+   419→            )}
+   420→            <Button type="button" variant="outline" size="sm" onClick={addChecklistItem}>
+   421→              <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
+   422→              {t("checklist.add")}
+   423→            </Button>
+   424→          </div>
+   425→        </div>
+   426→        <DialogFooter>
+   427→          <Button variant="outline" onClick={() => onOpenChange(false)}>
+   428→            {t("cancel")}
+   429→          </Button>
+   430→          <Button onClick={() => void onSave()} disabled={saving || !form.name.trim()}>
+   431→            {saving ? t("saving") : t("save")}
+   432→          </Button>
+   433→        </DialogFooter>
+   434→      </DialogContent>
+   435→    </Dialog>
+   436→  );
+   437→}
+   438→
+   439→// ── Versions dialog ──────────────────────────────────────────────────────────
+   440→
+   441→function VersionsDialog({
+   442→  strategy,
+   443→  open,
+   444→  onOpenChange,
+   445→}: {
+   446→  strategy: StrategyDTO | null;
+   447→  open: boolean;
+   448→  onOpenChange: (open: boolean) => void;
+   449→}) {
+   450→  const t = useTranslations("strategiesView.versions");
+   451→  const tRoot = useTranslations();
+   452→  const { toast } = useToast();
+   453→  const { data: versions, isLoading } = useStrategyVersions(
+   454→    open ? strategy?.id ?? null : null,
+   455→  );
+   456→  const createVersion = useCreateStrategyVersion();
+   457→  const deleteVersion = useDeleteStrategyVersion();
+   458→  const [note, setNote] = React.useState("");
+   459→
+   460→  const onSnapshot = async () => {
+   461→    if (!strategy) return;
+   462→    try {
+   463→      const v = await createVersion.mutateAsync({
+   464→        strategyId: strategy.id,
+   465→        note: note.trim() || null,
+   466→      });
+   467→      toast({ title: t("createdToast", { version: v.version }) });
+   468→      setNote("");
+   469→    } catch (error) {
+   470→      const err = error instanceof ApiClientError ? error : null;
+   471→      toast({
+   472→        title: apiErrorMessage(tRoot, err?.code, error instanceof Error ? error.message : ""),
+   473→        variant: "destructive",
+   474→      });
+   475→    }
+   476→  };
+   477→
+   478→  const onDelete = async (versionId: string, version: number) => {
+   479→    if (!strategy) return;
+   480→    if (!window.confirm(t("deleteConfirm", { version }))) return;
+   481→    try {
+   482→      await deleteVersion.mutateAsync({ strategyId: strategy.id, versionId });
+   483→      toast({ title: t("deletedToast") });
+   484→    } catch (error) {
+   485→      const err = error instanceof ApiClientError ? error : null;
+   486→      toast({
+   487→        title: apiErrorMessage(tRoot, err?.code, error instanceof Error ? error.message : ""),
+   488→        variant: "destructive",
+   489→      });
+   490→    }
+   491→  };
+   492→
+   493→  return (
+   494→    <Dialog open={open} onOpenChange={onOpenChange}>
+   495→      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+   496→        <DialogHeader>
+   497→          <DialogTitle>{t("title")}</DialogTitle>
+   498→          <DialogDescription>{t("subtitle")}</DialogDescription>
+   499→        </DialogHeader>
+   500→        <div className="flex flex-col gap-3">
+   501→          <div className="flex gap-2">
+   502→            <Input
+   503→              value={note}
+   504→              onChange={(e) => setNote(e.target.value)}
+   505→              placeholder={t("notePlaceholder")}
+   506→              maxLength={500}
+   507→            />
+   508→            <Button
+   509→              size="sm"
+   510→              onClick={() => void onSnapshot()}
+   511→              disabled={createVersion.isPending || !strategy}
+   512→            >
+   513→              <Camera className="mr-1 h-4 w-4" aria-hidden="true" />
+   514→              {t("snapshot")}
+   515→            </Button>
+   516→          </div>
+   517→          {isLoading ? (
+   518→            <div className="space-y-2">
+   519→              {Array.from({ length: 2 }).map((_, i) => (
+   520→                <Skeleton key={i} className="h-16 w-full" />
+   521→              ))}
+   522→            </div>
+   523→          ) : (versions ?? []).length === 0 ? (
+   524→            <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+   525→              {t("empty")}
+   526→            </p>
+   527→          ) : (
+   528→            <ul className="flex flex-col gap-2">
+   529→              {(versions ?? []).map((v) => (
+   530→                <li key={v.id} className="rounded-lg border p-3">
+   531→                  <div className="flex items-start justify-between gap-2">
+   532→                    <div className="min-w-0">
+   533→                      <p className="flex items-center gap-2 text-sm font-semibold">
+   534→                        <Badge variant="secondary" className="tabular-nums">
+   535→                          {t("versionLabel", { version: v.version })}
+   536→                        </Badge>
+   537→                        <span className="truncate">{v.snapshot.name}</span>
+   538→                      </p>
+   539→                      {v.note ? (
+   540→                        <p className="mt-1 text-xs text-muted-foreground">{v.note}</p>
+   541→                      ) : null}
+   542→                      <p className="mt-1 text-[11px] tabular-nums text-muted-foreground">
+   543→                        {new Date(v.createdAt).toLocaleString()} ·{" "}
+   544→                        {t("checklistCount", { count: v.snapshot.checklistItems.length })}
+   545→                      </p>
+   546→                    </div>
+   547→                    <Button
+   548→                      variant="ghost"
+   549→                      size="icon"
+   550→                      onClick={() => void onDelete(v.id, v.version)}
+   551→                      aria-label={t("delete")}
+   552→                    >
+   553→                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+   554→                    </Button>
+   555→                  </div>
+   556→                </li>
+   557→              ))}
+   558→            </ul>
+   559→          )}
+   560→        </div>
+   561→      </DialogContent>
+   562→    </Dialog>
+   563→  );
+   564→}
+   565→
+   566→// ── View ─────────────────────────────────────────────────────────────────────
+   567→
+   568→export function StrategiesView() {
+   569→  const t = useTranslations("strategiesView");
+   570→  const tRoot = useTranslations();
+   571→  const { toast } = useToast();
+   572→
+   573→  const { data, isLoading } = useStrategies();
+   574→  // Stats ride on a separate cached query so the selector reuse stays intact.
+   575→  const { data: statsData } = useStrategiesWithStats();
+   576→  const statsById = React.useMemo(() => {
+   577→    const map = new Map<string, StrategyStatsDTO>();
+   578→    for (const s of statsData ?? []) map.set(s.key, s);
+   579→    return map;
+   580→  }, [statsData]);
+   581→
+   582→  const del = useDeleteStrategy();
+   583→
+   584→  const [editorOpen, setEditorOpen] = React.useState(false);
+   585→  const [editing, setEditing] = React.useState<StrategyDTO | null>(null);
+   586→  const [versionsOf, setVersionsOf] = React.useState<StrategyDTO | null>(null);
+   587→  const strategies = data ?? [];
+   588→
+   589→  const onEdit = (s: StrategyDTO) => {
+   590→    setEditing(s);
+   591→    setEditorOpen(true);
+   592→  };
+   593→  const onNew = () => {
+   594→    setEditing(null);
+   595→    setEditorOpen(true);
+   596→  };
+   597→  const onDelete = async (s: StrategyDTO) => {
+   598→    if (!window.confirm(t("deleteConfirm", { name: s.name }))) return;
+   599→    try {
+   600→      await del.mutateAsync(s.id);
+   601→      toast({ title: t("deleted") });
+   602→    } catch (error) {
+   603→      const err = error instanceof ApiClientError ? error : null;
+   604→      toast({
+   605→        title: apiErrorMessage(tRoot, err?.code, error instanceof Error ? error.message : ""),
+   606→        variant: "destructive",
+   607→      });
+   608→    }
+   609→  };
+   610→
+   611→  return (
+   612→    <section aria-labelledby="strategies-title" className="mx-auto flex max-w-5xl flex-col gap-6">
+   613→      <div className="flex flex-wrap items-end justify-between gap-3">
+   614→        <div>
+   615→          <h1 id="strategies-title" className="text-2xl font-bold tracking-tight">
+   616→            {t("title")}
+   617→          </h1>
+   618→          <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
+   619→        </div>
+   620→        <Button size="sm" onClick={onNew}>
+   621→          <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
+   622→          {t("newStrategy")}
+   623→        </Button>
+   624→      </div>
+   625→
+   626→      {isLoading ? (
+   627→        <div className="grid gap-4 md:grid-cols-2">
+   628→          {Array.from({ length: 2 }).map((_, i) => (
+   629→            <Skeleton key={i} className="h-44 w-full" />
+   630→          ))}
+   631→        </div>
+   632→      ) : strategies.length === 0 ? (
+   633→        <Card>
+   634→          <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
+   635→            <p className="font-semibold">{t("emptyTitle")}</p>
+   636→            <p className="max-w-md text-sm text-muted-foreground">{t("emptyDesc")}</p>
+   637→            <Button size="sm" onClick={onNew}>
+   638→              <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
+   639→              {t("newStrategy")}
+   640→            </Button>
+   641→          </CardContent>
+   642→        </Card>
+   643→      ) : (
+   644→        <div className="grid gap-4 md:grid-cols-2">
+   645→          {strategies.map((s) => {
+   646→            const stats = statsById.get(s.id);
+   647→            const st = stats?.stats;
+   648→            return (
+   649→              <Card key={s.id}>
+   650→                <CardHeader className="pb-3">
+   651→                  <CardTitle className="flex items-center gap-2 text-base">
+   652→                    <span
+   653→                      className="inline-block h-3 w-3 rounded-full"
+   654→                      style={{ backgroundColor: s.color }}
+   655→                      aria-hidden="true"
+   656→                    />
+   657→                    <span className="truncate">{s.name}</span>
+   658→                    <Badge className={`ml-auto ${statusBadgeClass(s.status)}`}>
+   659→                      {s.status === "ACTIVE"
+   660→                        ? t("form.statusActive")
+   661→                        : s.status === "TESTING"
+   662→                          ? t("form.statusTesting")
+   663→                          : t("form.statusArchived")}
+   664→                    </Badge>
+   665→                  </CardTitle>
+   666→                  {s.description ? (
+   667→                    <CardDescription className="line-clamp-2">{s.description}</CardDescription>
+   668→                  ) : null}
+   669→                  <CardAction className="flex gap-1">
+   670→                    <Button variant="ghost" size="icon" onClick={() => onEdit(s)} aria-label={t("edit")}>
+   671→                      <Pencil className="h-4 w-4" aria-hidden="true" />
+   672→                    </Button>
+   673→                    <Button
+   674→                      variant="ghost"
+   675→                      size="icon"
+   676→                      onClick={() => setVersionsOf(s)}
+   677→                      aria-label={t("versions.title")}
+   678→                    >
+   679→                      <History className="h-4 w-4" aria-hidden="true" />
+   680→                    </Button>
+   681→                    <Button
+   682→                      variant="ghost"
+   683→                      size="icon"
+   684→                      onClick={() => void onDelete(s)}
+   685→                      aria-label={t("delete")}
+   686→                    >
+   687→                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+   688→                    </Button>
+   689→                  </CardAction>
+   690→                </CardHeader>
+   691→                <CardContent className="flex flex-col gap-3">
+   692→                  {s.checklistItems.length > 0 ? (
+   693→                    <ul className="flex flex-wrap gap-1">
+   694→                      {s.checklistItems.slice(0, 6).map((c) => (
+   695→                        <li key={c.id}>
+   696→                          <Badge variant="outline" className="max-w-[220px] truncate font-normal">
+   697→                            {c.label}
+   698→                          </Badge>
+   699→                        </li>
+   700→                      ))}
+   701→                      {s.checklistItems.length > 6 ? (
+   702→                        <li>
+   703→                          <Badge variant="outline" className="tabular-nums">
+   704→                            +{s.checklistItems.length - 6}
+   705→                          </Badge>
+   706→                        </li>
+   707→                      ) : null}
+   708→                    </ul>
+   709→                  ) : null}
+   710→                  {st && st.tradeCount > 0 ? (
+   711→                    <div className="grid grid-cols-3 gap-2 text-sm">
+   712→                      <div>
+   713→                        <p className="text-[11px] text-muted-foreground">{t("stats.trades")}</p>
+   714→                        <p className="font-semibold tabular-nums">{st.tradeCount}</p>
+   715→                      </div>
+   716→                      <div>
+   717→                        <p className="text-[11px] text-muted-foreground">{t("stats.netPnl")}</p>
+   718→                        <p className={`font-semibold tabular-nums ${pnlClass(st.netPnl)}`}>
+   719→                          {fmtSignedMoney(st.netPnl, "USD")}
+   720→                        </p>
+   721→                      </div>
+   722→                      <div>
+   723→                        <p className="text-[11px] text-muted-foreground">{t("stats.winRate")}</p>
+   724→                        <p className="font-semibold tabular-nums">
+   725→                          {st.winRate != null ? `${Number(st.winRate).toFixed(0)} %` : "—"}
+   726→                        </p>
+   727→                      </div>
+   728→                    </div>
+   729→                  ) : (
+   730→                    <p className="text-xs text-muted-foreground">{t("stats.noTrades")}</p>
+   731→                  )}
+   732→                </CardContent>
+   733→              </Card>
+   734→            );
+   735→          })}
+   736→        </div>
+   737→      )}
+   738→
+   739→      <StrategyEditor
+   740→        open={editorOpen}
+   741→        onOpenChange={setEditorOpen}
+   742→        editing={editing}
+   743→      />
+   744→      <VersionsDialog
+   745→        strategy={versionsOf}
+   746→        open={versionsOf != null}
+   747→        onOpenChange={(open) => {
+   748→          if (!open) setVersionsOf(null);
+   749→        }}
+   750→      />
+   751→    </section>
+   752→  );
+   753→}
+   754→

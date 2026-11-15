@@ -1,0 +1,904 @@
+     1→"use client";
+     2→
+     3→/**
+     4→ * Quick trade (~20 s) — v2 §4.1.
+     5→ *
+     6→ * One compact card: account / instrument / direction / timeframe remembered
+     7→ * from Profile.preferences, SL/TP entered in PIPS (prices derived live),
+     8→ * position size computed from risk % / risk amount via calcPositionSize.
+     9→ * After saving, the preferences are patched (fire-and-forget) and the form
+    10→ * resets for the next trade ("Enregistrer un autre").
+    11→ */
+    12→import * as React from "react";
+    13→import { useTranslations } from "next-intl";
+    14→import {
+    15→  ArrowDownRight,
+    16→  ArrowUpRight,
+    17→  CheckCircle2,
+    18→  Loader2,
+    19→  Save,
+    20→} from "lucide-react";
+    21→import { Button } from "@/components/ui/button";
+    22→import {
+    23→  Card,
+    24→  CardContent,
+    25→  CardDescription,
+    26→  CardHeader,
+    27→  CardTitle,
+    28→} from "@/components/ui/card";
+    29→import { Input } from "@/components/ui/input";
+    30→import { Label } from "@/components/ui/label";
+    31→import {
+    32→  Select,
+    33→  SelectContent,
+    34→  SelectItem,
+    35→  SelectTrigger,
+    36→  SelectValue,
+    37→} from "@/components/ui/select";
+    38→import { Switch } from "@/components/ui/switch";
+    39→import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+    40→import {
+    41→  AccountSelect,
+    42→  Field,
+    43→  InstrumentSelect,
+    44→  TimeframeSelect,
+    45→  toSpec,
+    46→  useTradingLabels,
+    47→} from "@/components/trades/trade-bits";
+    48→import {
+    49→  useAccounts,
+    50→  useCreateTrade,
+    51→  useInstruments,
+    52→  useRecordTemplateUse,
+    53→  useStrategies,
+    54→  useTemplates,
+    55→  type MutationResult,
+    56→} from "@/hooks/use-trading";
+    57→import type { TemplateDTO } from "@/lib/trading/dto";
+    58→import { useToast } from "@/hooks/use-toast";
+    59→import { useSession } from "@/components/app/session-context";
+    60→import { ApiClientError, apiFetch } from "@/lib/api-client";
+    61→import { apiErrorMessage, sizingErrorMessage } from "@/lib/i18n-errors";
+    62→import { tradeInputSchema, type TradeInput } from "@/lib/validations/trade";
+    63→import {
+    64→  applyTradeTemplate,
+    65→  stopPriceFromPips,
+    66→  takeProfitPriceFromPips,
+    67→  type TradeTemplateData,
+    68→} from "@/lib/trading/template";
+    69→import {
+    70→  calcPositionSize,
+    71→  previewTrade,
+    72→  type PositionSizeResult,
+    73→} from "@/lib/trading/calculate";
+    74→import {
+    75→  EXIT_REASONS,
+    76→  type Direction,
+    77→  type ExitReason,
+    78→  type Timeframe,
+    79→} from "@/lib/trading/types";
+    80→import {
+    81→  fmtMoney,
+    82→  fmtNum,
+    83→  fmtPrice,
+    84→  isoToLocalInput,
+    85→  localInputToIso,
+    86→} from "@/lib/format";
+    87→
+    88→// ── Helpers ──────────────────────────────────────────────────────────────────
+    89→
+    90→function nowIso(): string {
+    91→  return (
+    92→    localInputToIso(isoToLocalInput(new Date().toISOString())) ??
+    93→    new Date().toISOString()
+    94→  );
+    95→}
+    96→
+    97→function asTemplateData(tpl: TemplateDTO): TradeTemplateData {
+    98→  return {
+    99→    ...tpl,
+   100→    direction: tpl.direction as TradeTemplateData["direction"],
+   101→    timeframe: tpl.timeframe as TradeTemplateData["timeframe"],
+   102→    session: tpl.session as TradeTemplateData["session"],
+   103→    orderType: tpl.orderType as TradeTemplateData["orderType"],
+   104→  };
+   105→}
+   106→
+   107→type RiskMode = "percent" | "amount" | "lots";
+   108→
+   109→interface QuickFormState {
+   110→  accountId: string;
+   111→  instrumentId: string;
+   112→  direction: Direction;
+   113→  timeframe: string;
+   114→  strategyId: string;
+   115→  entryTime: string; // ISO
+   116→  entryPrice: string;
+   117→  stopPips: string;
+   118→  tpPips: string;
+   119→  riskMode: RiskMode;
+   120→  riskPercent: string;
+   121→  riskAmount: string;
+   122→  lots: string;
+   123→  notes: string;
+   124→  closed: boolean;
+   125→  exitPrice: string;
+   126→  exitReason: string;
+   127→  tagIds: string[];
+   128→}
+   129→
+   130→function emptyForm(): QuickFormState {
+   131→  return {
+   132→    accountId: "",
+   133→    instrumentId: "",
+   134→    direction: "LONG",
+   135→    timeframe: "",
+   136→    strategyId: "",
+   137→    entryTime: nowIso(),
+   138→    entryPrice: "",
+   139→    stopPips: "",
+   140→    tpPips: "",
+   141→    riskMode: "percent",
+   142→    riskPercent: "1",
+   143→    riskAmount: "",
+   144→    lots: "",
+   145→    notes: "",
+   146→    closed: false,
+   147→    exitPrice: "",
+   148→    exitReason: "",
+   149→    tagIds: [],
+   150→  };
+   151→}
+   152→
+   153→// ── Component ────────────────────────────────────────────────────────────────
+   154→
+   155→export function QuickTradeView() {
+   156→  const t = useTranslations("quick");
+   157→  const tc = useTranslations("common");
+   158→  const tRoot = useTranslations();
+   159→  const labels = useTradingLabels();
+   160→  const { toast } = useToast();
+   161→  const { session } = useSession();
+   162→
+   163→  const [form, setForm] = React.useState<QuickFormState>(emptyForm);
+   164→  const [templateId, setTemplateId] = React.useState("");
+   165→  const [submitting, setSubmitting] = React.useState(false);
+   166→  const [saved, setSaved] = React.useState<{ symbol: string; closed: boolean } | null>(
+   167→    null
+   168→  );
+   169→
+   170→  const entryPriceRef = React.useRef<HTMLInputElement>(null);
+   171→  const baseInitRef = React.useRef(false);
+   172→  const riskInitRef = React.useRef(false);
+   173→  const autoTemplateRef = React.useRef(false);
+   174→  const directionTouchedRef = React.useRef(false);
+   175→  const mutationIdRef = React.useRef<string>(
+   176→    typeof crypto !== "undefined" && "randomUUID" in crypto
+   177→      ? crypto.randomUUID()
+   178→      : `qt-${Date.now()}-${Math.random().toString(36).slice(2)}`
+   179→  );
+   180→
+   181→  const accountsQuery = useAccounts();
+   182→  const accounts = accountsQuery.data;
+   183→  const { data: instruments } = useInstruments();
+   184→  const { data: strategies } = useStrategies();
+   185→  const { data: templates } = useTemplates();
+   186→
+   187→  const createTrade = useCreateTrade();
+   188→  const recordTemplateUse = useRecordTemplateUse();
+   189→
+   190→  // ── Defaults on mount: remembered account / instrument / timeframe ──
+   191→  React.useEffect(() => {
+   192→    if (baseInitRef.current || !accounts) return;
+   193→    baseInitRef.current = true;
+   194→    const prefs = session?.profile.preferences ?? {};
+   195→    const valid = (id: string | null | undefined): string | null =>
+   196→      id && accounts.some((a) => a.id === id) ? id : null;
+   197→    const accountId =
+   198→      valid(prefs.lastAccountId) ??
+   199→      valid(session?.profile.defaultAccountId) ??
+   200→      accounts.find((a) => a.isActive)?.id ??
+   201→      "";
+   202→    setForm((f) => ({
+   203→      ...f,
+   204→      accountId: f.accountId || accountId,
+   205→      instrumentId: f.instrumentId || prefs.lastInstrumentId || "",
+   206→      timeframe: f.timeframe || prefs.lastTimeframe || "",
+   207→    }));
+   208→  }, [accounts, session]);
+   209→
+   210→  // ── Remembered lot size for the pre-selected instrument ──
+   211→  React.useEffect(() => {
+   212→    if (riskInitRef.current || !instruments || !form.instrumentId) return;
+   213→    riskInitRef.current = true;
+   214→    const symbol = instruments.find((i) => i.id === form.instrumentId)?.symbol;
+   215→    const remembered = symbol
+   216→      ? session?.profile.preferences?.rememberedLots?.[symbol]
+   217→      : undefined;
+   218→    if (remembered != null && remembered !== "") {
+   219→      setForm((f) => ({ ...f, riskMode: "lots", lots: remembered }));
+   220→    }
+   221→  }, [instruments, form.instrumentId, session]);
+   222→
+   223→  // ── Derived data ──
+   224→  const spec = React.useMemo(
+   225→    () => (instruments ?? []).find((i) => i.id === form.instrumentId) ?? null,
+   226→    [instruments, form.instrumentId]
+   227→  );
+   228→  const account = React.useMemo(
+   229→    () => (accounts ?? []).find((a) => a.id === form.accountId) ?? null,
+   230→    [accounts, form.accountId]
+   231→  );
+   232→  const accountCurrency = account?.currency ?? "";
+   233→  const symbol = spec?.symbol ?? "";
+   234→
+   235→  const entry = form.entryPrice.trim();
+   236→  const stop = form.stopPips.trim();
+   237→
+   238→  /** SL/TP prices + position size derived from the current inputs. */
+   239→  const derived = React.useMemo(() => {
+   240→    if (!spec || !entry || !stop) return null;
+   241→    const s = toSpec(spec);
+   242→    const stopLoss = stopPriceFromPips(form.direction, entry, stop, s);
+   243→    const takeProfit = form.tpPips.trim()
+   244→      ? takeProfitPriceFromPips(form.direction, entry, form.tpPips.trim(), s)
+   245→      : null;
+   246→
+   247→    let sizing: PositionSizeResult | null = null;
+   248→    if (form.riskMode !== "lots" && account) {
+   249→      sizing = calcPositionSize({
+   250→        accountBalance: account.initialBalance,
+   251→        riskPercent: form.riskMode === "percent" ? form.riskPercent.trim() || null : null,
+   252→        riskAmount: form.riskMode === "amount" ? form.riskAmount.trim() || null : null,
+   253→        entry,
+   254→        stopLoss,
+   255→        instrument: s,
+   256→        direction: form.direction,
+   257→      });
+   258→    }
+   259→    const lots =
+   260→      form.riskMode === "lots"
+   261→        ? form.lots.trim()
+   262→        : sizing?.valid
+   263→          ? sizing.lots.toString()
+   264→          : "";
+   265→    return { spec: s, stopLoss, takeProfit, sizing, lots };
+   266→  }, [spec, entry, stop, form.tpPips, form.direction, form.riskMode, form.riskPercent, form.riskAmount, form.lots, account]);
+   267→
+   268→  const effectiveLots = derived?.lots ?? "";
+   269→  const sizingError =
+   270→    derived?.sizing && !derived.sizing.valid
+   271→      ? sizingErrorMessage(
+   272→          tRoot,
+   273→          derived.sizing.reason,
+   274→          derived.sizing.minLots.toString()
+   275→        )
+   276→      : null;
+   277→
+   278→  const previewReady = Boolean(spec && entry && stop && effectiveLots);
+   279→  const preview = React.useMemo(() => {
+   280→    if (!previewReady || !derived) return null;
+   281→    try {
+   282→      return previewTrade({
+   283→        instrument: derived.spec,
+   284→        direction: form.direction,
+   285→        lots: effectiveLots,
+   286→        entry,
+   287→        exit:
+   288→          (form.closed && form.exitPrice.trim()) ||
+   289→          derived.takeProfit ||
+   290→          entry,
+   291→        stopLoss: derived.stopLoss,
+   292→        takeProfit: derived.takeProfit,
+   293→        accountCurrency: accountCurrency || null,
+   294→        accountBalance: account?.initialBalance ?? null,
+   295→      });
+   296→    } catch {
+   297→      return null;
+   298→    }
+   299→  }, [previewReady, derived, form.direction, effectiveLots, entry, form.closed, form.exitPrice, accountCurrency, account]);
+   300→
+   301→  // ── Handlers ──
+   302→  const set = <K extends keyof QuickFormState>(key: K, value: QuickFormState[K]) =>
+   303→    setForm((f) => ({ ...f, [key]: value }));
+   304→
+   305→  const setDirection = (value: string) => {
+   306→    if (value !== "LONG" && value !== "SHORT") return;
+   307→    directionTouchedRef.current = true;
+   308→    set("direction", value);
+   309→  };
+   310→
+   311→  const riskValue =
+   312→    form.riskMode === "percent"
+   313→      ? form.riskPercent
+   314→      : form.riskMode === "amount"
+   315→        ? form.riskAmount
+   316→        : form.lots;
+   317→  const setRiskValue = (value: string) => {
+   318→    if (form.riskMode === "percent") set("riskPercent", value);
+   319→    else if (form.riskMode === "amount") set("riskAmount", value);
+   320→    else set("lots", value);
+   321→  };
+   322→
+   323→  function applyTemplate(tpl: TemplateDTO) {
+   324→    setTemplateId(tpl.id);
+   325→    const strategyRisk =
+   326→      strategies?.find((s) => s.id === tpl.strategyId)?.defaultRiskPercent ?? null;
+   327→    const prefill = applyTradeTemplate(asTemplateData(tpl), {
+   328→      instruments: (instruments ?? []).map(toSpec),
+   329→      entryPrice: entry || null,
+   330→      direction: directionTouchedRef.current ? form.direction : null,
+   331→      strategyDefaultRiskPercent: strategyRisk,
+   332→    });
+   333→    setForm((f) => ({
+   334→      ...f,
+   335→      strategyId: prefill.strategyId ?? f.strategyId,
+   336→      instrumentId: prefill.instrumentId ?? f.instrumentId,
+   337→      direction: (prefill.direction ?? f.direction) as Direction,
+   338→      timeframe: prefill.timeframe ?? f.timeframe,
+   339→      stopPips: prefill.stopLossPips ?? f.stopPips,
+   340→      tpPips: prefill.takeProfitPips ?? f.tpPips,
+   341→      notes: prefill.notes ?? f.notes,
+   342→      tagIds:
+   343→        prefill.tagIds.length > 0
+   344→          ? Array.from(new Set([...f.tagIds, ...prefill.tagIds]))
+   345→          : f.tagIds,
+   346→      riskMode: prefill.lots != null ? "lots" : f.riskMode,
+   347→      riskPercent: prefill.riskPercent ?? f.riskPercent,
+   348→      riskAmount: prefill.riskAmount ?? f.riskAmount,
+   349→      lots: prefill.lots ?? f.lots,
+   350→    }));
+   351→    toast({ title: t("templateApplied", { name: tpl.name }) });
+   352→    recordTemplateUse.mutate(tpl.id);
+   353→  }
+   354→
+   355→  // ── Auto-apply ?template=<id> from the hash (templates "use" action) ──
+   356→  React.useEffect(() => {
+   357→    if (autoTemplateRef.current || !templates) return;
+   358→    autoTemplateRef.current = true;
+   359→    const hash = typeof window === "undefined" ? "" : window.location.hash;
+   360→    const qIndex = hash.indexOf("?");
+   361→    if (qIndex === -1) return;
+   362→    const id = new URLSearchParams(hash.slice(qIndex + 1)).get("template");
+   363→    if (!id) return;
+   364→    const tpl = templates.find((x) => x.id === id);
+   365→    if (tpl) applyTemplate(tpl);
+   366→  }, [templates]);
+   367→
+   368→  async function onSubmit(event: React.FormEvent) {
+   369→    event.preventDefault();
+   370→    if (!form.instrumentId || !entry || !effectiveLots) {
+   371→      toast({
+   372→        title: t("validationTitle"),
+   373→        description: t("validationDesc"),
+   374→        variant: "destructive",
+   375→      });
+   376→      return;
+   377→    }
+   378→    const raw: TradeInput = {
+   379→      accountId: form.accountId,
+   380→      strategyId: form.strategyId || null,
+   381→      instrumentId: form.instrumentId,
+   382→      direction: form.direction,
+   383→      orderType: "MARKET",
+   384→      status: form.closed ? "CLOSED" : "OPEN",
+   385→      timeframe: (form.timeframe || null) as Timeframe | null,
+   386→      session: null,
+   387→      setupType: null,
+   388→      marketCondition: null,
+   389→      entryTime: form.entryTime || nowIso(),
+   390→      exitTime: form.closed ? nowIso() : null,
+   391→      entryPrice: entry,
+   392→      exitPrice:
+   393→        form.closed && form.exitPrice.trim() ? form.exitPrice.trim() : null,
+   394→      stopLoss: derived?.stopLoss ?? null,
+   395→      takeProfit: derived?.takeProfit ?? null,
+   396→      mfePrice: null,
+   397→      maePrice: null,
+   398→      lots: effectiveLots,
+   399→      riskPercent:
+   400→        form.riskMode === "percent" && form.riskPercent.trim()
+   401→          ? form.riskPercent.trim()
+   402→          : null,
+   403→      riskAmount:
+   404→        form.riskMode === "amount" && form.riskAmount.trim()
+   405→          ? form.riskAmount.trim()
+   406→          : null,
+   407→      plannedRiskPercent: null,
+   408→      quoteToAccountRate: null,
+   409→      commission: "0",
+   410→      swap: "0",
+   411→      fees: "0",
+   412→      pnlSource: "CALCULATED",
+   413→      manualNetPnl: null,
+   414→      exitReason:
+   415→        form.closed && form.exitReason
+   416→          ? (form.exitReason as ExitReason)
+   417→          : null,
+   418→      emotionBefore: null,
+   419→      emotionDuring: null,
+   420→      emotionAfter: null,
+   421→      confidence: null,
+   422→      setupQualityRating: null,
+   423→      executionRating: null,
+   424→      followedPlan: null,
+   425→      tagIds: form.tagIds,
+   426→      checklistResults: null,
+   427→      preTradeAnalysis: "",
+   428→      postTradeReview: "",
+   429→      notes: form.notes.trim() || null,
+   430→      tradingViewUrl: null,
+   431→      reviewStatus: "NOT_REVIEWED",
+   432→      isDraft: false,
+   433→      clientMutationId: mutationIdRef.current,
+   434→    };
+   435→    const parsed = tradeInputSchema.safeParse(raw);
+   436→    if (!parsed.success) {
+   437→      toast({
+   438→        title: t("validationTitle"),
+   439→        description: t("validationDesc"),
+   440→        variant: "destructive",
+   441→      });
+   442→      return;
+   443→    }
+   444→
+   445→    setSubmitting(true);
+   446→    try {
+   447→      const result: MutationResult = await createTrade.mutateAsync(parsed.data as TradeInput);
+   448→      toast({
+   449→        title: result.deduplicated
+   450→          ? t("savedToast")
+   451→          : form.closed
+   452→            ? t("savedClosedToast")
+   453→            : t("savedToast"),
+   454→      });
+   455→
+   456→      // Persist quick-entry defaults (fire and forget).
+   457→      const prefs = session?.profile.preferences ?? {};
+   458→      void apiFetch("/api/profile", {
+   459→        method: "PATCH",
+   460→        body: JSON.stringify({
+   461→          preferences: {
+   462→            lastAccountId: form.accountId || null,
+   463→            lastInstrumentId: form.instrumentId || null,
+   464→            lastTimeframe: form.timeframe || null,
+   465→            rememberedLots: {
+   466→              ...(prefs.rememberedLots ?? {}),
+   467→              ...(symbol ? { [symbol]: effectiveLots } : {}),
+   468→            },
+   469→          },
+   470→        }),
+   471→      }).catch(() => {});
+   472→
+   473→      setSaved({ symbol: symbol || form.instrumentId, closed: form.closed });
+   474→    } catch (error) {
+   475→      const err = error instanceof ApiClientError ? error : null;
+   476→      toast({
+   477→        title: apiErrorMessage(
+   478→          tRoot,
+   479→          err?.code,
+   480→          error instanceof Error ? error.message : ""
+   481→        ),
+   482→        variant: "destructive",
+   483→      });
+   484→    } finally {
+   485→      setSubmitting(false);
+   486→    }
+   487→  }
+   488→
+   489→  const onAnother = () => {
+   490→    setSaved(null);
+   491→    mutationIdRef.current = `qt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+   492→    setForm((f) => ({
+   493→      ...f,
+   494→      entryTime: nowIso(),
+   495→      entryPrice: "",
+   496→      closed: false,
+   497→      exitPrice: "",
+   498→      exitReason: "",
+   499→      notes: "",
+   500→    }));
+   501→    requestAnimationFrame(() => entryPriceRef.current?.focus());
+   502→  };
+   503→
+   504→  // ── Gates ──
+   505→  if (accountsQuery.isError) {
+   506→    return (
+   507→      <Card>
+   508→        <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+   509→          <p className="text-sm text-muted-foreground">{t("loadError")}</p>
+   510→          <Button variant="outline" onClick={() => void accountsQuery.refetch()}>
+   511→            {tc("retry")}
+   512→          </Button>
+   513→        </CardContent>
+   514→      </Card>
+   515→    );
+   516→  }
+   517→  if (accounts && accounts.filter((a) => a.isActive).length === 0) {
+   518→    return (
+   519→      <Card>
+   520→        <CardContent className="py-10 text-center">
+   521→          <p className="text-sm text-muted-foreground">{t("accountMissing")}</p>
+   522→        </CardContent>
+   523→      </Card>
+   524→    );
+   525→  }
+   526→
+   527→  const favoriteIds =
+   528→    session?.profile.preferences?.favoriteInstrumentIds ?? [];
+   529→  const slPriceText =
+   530→    derived && spec && stop ? fmtPrice(derived.stopLoss, spec.digits) : null;
+   531→  const tpPriceText =
+   532→    derived && spec && form.tpPips.trim() && derived.takeProfit
+   533→      ? fmtPrice(derived.takeProfit, spec.digits)
+   534→      : null;
+   535→
+   536→  return (
+   537→    <div className="mx-auto w-full max-w-2xl space-y-4">
+   538→      <div className="space-y-1 text-center sm:text-left">
+   539→        <h2 className="text-xl font-bold tracking-tight sm:text-2xl">{t("title")}</h2>
+   540→        <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
+   541→      </div>
+   542→
+   543→      <Card>
+   544→        <CardHeader className="pb-3">
+   545→          <CardTitle className="text-base sr-only">{t("title")}</CardTitle>
+   546→          <CardDescription className="sr-only">{t("subtitle")}</CardDescription>
+   547→          <Field label={t("template")} htmlFor="qt-template">
+   548→            <Select
+   549→              value={templateId}
+   550→              onValueChange={(id) => {
+   551→                if (!id) return; // spurious Radix empty sync — ignore
+   552→                const tpl = templates?.find((x) => x.id === id);
+   553→                if (tpl) applyTemplate(tpl);
+   554→              }}
+   555→            >
+   556→              <SelectTrigger id="qt-template" className="w-full">
+   557→                <SelectValue placeholder={t("templateNone")} />
+   558→              </SelectTrigger>
+   559→              <SelectContent className="max-h-72">
+   560→                {(templates ?? []).map((tpl) => (
+   561→                  <SelectItem key={tpl.id} value={tpl.id}>
+   562→                    {tpl.name}
+   563→                  </SelectItem>
+   564→                ))}
+   565→              </SelectContent>
+   566→            </Select>
+   567→          </Field>
+   568→        </CardHeader>
+   569→        <CardContent className="space-y-4">
+   570→          {saved && (
+   571→            <div className="flex flex-col items-center gap-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-4 text-center">
+   572→              <CheckCircle2
+   573→                className="h-8 w-8 text-emerald-500 dark:text-emerald-400"
+   574→                aria-hidden="true"
+   575→              />
+   576→              <div>
+   577→                <p className="text-sm font-semibold">
+   578→                  {saved.closed ? t("savedClosedToast") : t("savedToast")}
+   579→                </p>
+   580→                {saved.symbol && (
+   581→                  <p className="text-xs tabular-nums text-muted-foreground">
+   582→                    {saved.symbol} · {fmtNum(effectiveLots, 2, 2)} {tc("lots")}
+   583→                  </p>
+   584→                )}
+   585→              </div>
+   586→              <Button variant="outline" size="lg" onClick={onAnother}>
+   587→                {t("another")}
+   588→              </Button>
+   589→            </div>
+   590→          )}
+   591→
+   592→          <form
+   593→            className="grid gap-4 sm:grid-cols-2"
+   594→            onSubmit={(e) => void onSubmit(e)}
+   595→          >
+   596→            <Field
+   597→              label={t("account")}
+   598→              htmlFor="qt-account"
+   599→              hint={t("rememberHint")}
+   600→            >
+   601→              <AccountSelect
+   602→                id="qt-account"
+   603→                value={form.accountId}
+   604→                onChange={(v) => set("accountId", v)}
+   605→                className="w-full"
+   606→              />
+   607→            </Field>
+   608→            <Field label={t("instrument")} htmlFor="qt-instrument">
+   609→              <InstrumentSelect
+   610→                id="qt-instrument"
+   611→                value={form.instrumentId}
+   612→                onChange={(v) => set("instrumentId", v)}
+   613→                favoriteIds={favoriteIds}
+   614→                className="w-full"
+   615→              />
+   616→            </Field>
+   617→
+   618→            <Field label={t("direction")} className="sm:col-span-2">
+   619→              <ToggleGroup
+   620→                type="single"
+   621→                value={form.direction}
+   622→                onValueChange={setDirection}
+   623→                className="w-full"
+   624→              >
+   625→                <ToggleGroupItem
+   626→                  value="LONG"
+   627→                  className="min-h-10 flex-1 gap-1.5"
+   628→                  aria-label={labels.direction("LONG")}
+   629→                >
+   630→                  <ArrowUpRight
+   631→                    className="h-4 w-4 text-emerald-500"
+   632→                    aria-hidden="true"
+   633→                  />
+   634→                  {labels.direction("LONG")}
+   635→                </ToggleGroupItem>
+   636→                <ToggleGroupItem
+   637→                  value="SHORT"
+   638→                  className="min-h-10 flex-1 gap-1.5"
+   639→                  aria-label={labels.direction("SHORT")}
+   640→                >
+   641→                  <ArrowDownRight
+   642→                    className="h-4 w-4 text-rose-500"
+   643→                    aria-hidden="true"
+   644→                  />
+   645→                  {labels.direction("SHORT")}
+   646→                </ToggleGroupItem>
+   647→              </ToggleGroup>
+   648→            </Field>
+   649→
+   650→            <Field label={t("timeframe")} htmlFor="qt-timeframe">
+   651→              <TimeframeSelect
+   652→                id="qt-timeframe"
+   653→                value={form.timeframe}
+   654→                onChange={(v) => set("timeframe", v)}
+   655→                className="w-full"
+   656→              />
+   657→            </Field>
+   658→            <Field label={t("entryTime")} htmlFor="qt-entry-time">
+   659→              <Input
+   660→                id="qt-entry-time"
+   661→                type="datetime-local"
+   662→                value={isoToLocalInput(form.entryTime)}
+   663→                onChange={(e) =>
+   664→                  set("entryTime", localInputToIso(e.target.value) ?? "")
+   665→                }
+   666→              />
+   667→            </Field>
+   668→            <Field label={t("entryPrice")} htmlFor="qt-entry-price">
+   669→              <Input
+   670→                ref={entryPriceRef}
+   671→                id="qt-entry-price"
+   672→                type="number"
+   673→                inputMode="decimal"
+   674→                step="any"
+   675→                min="0"
+   676→                required
+   677→                value={form.entryPrice}
+   678→                onChange={(e) => set("entryPrice", e.target.value)}
+   679→                className="min-h-10 tabular-nums"
+   680→              />
+   681→            </Field>
+   682→            <Field
+   683→              label={t("stopPips")}
+   684→              htmlFor="qt-stop-pips"
+   685→              hint={slPriceText ? `≈ ${slPriceText}` : undefined}
+   686→            >
+   687→              <Input
+   688→                id="qt-stop-pips"
+   689→                type="number"
+   690→                inputMode="decimal"
+   691→                step="any"
+   692→                min="0"
+   693→                value={form.stopPips}
+   694→                onChange={(e) => set("stopPips", e.target.value)}
+   695→                className="min-h-10 tabular-nums"
+   696→              />
+   697→            </Field>
+   698→            <Field
+   699→              label={t("tpPips")}
+   700→              htmlFor="qt-tp-pips"
+   701→              hint={tpPriceText ? `≈ ${tpPriceText}` : undefined}
+   702→            >
+   703→              <Input
+   704→                id="qt-tp-pips"
+   705→                type="number"
+   706→                inputMode="decimal"
+   707→                step="any"
+   708→                min="0"
+   709→                value={form.tpPips}
+   710→                onChange={(e) => set("tpPips", e.target.value)}
+   711→                className="min-h-10 tabular-nums"
+   712→              />
+   713→            </Field>
+   714→
+   715→            <Field
+   716→              label={t("risk")}
+   717→              htmlFor="qt-risk"
+   718→              className="sm:col-span-2"
+   719→              hint={
+   720→                sizingError ? (
+   721→                  <span className="font-medium text-rose-600 dark:text-rose-400">
+   722→                    {sizingError}
+   723→                  </span>
+   724→                ) : form.riskMode !== "lots" && effectiveLots ? (
+   725→                  `${t("orLots")} : ${fmtNum(effectiveLots, 2, 2)} ${tc("lots")}`
+   726→                ) : undefined
+   727→              }
+   728→            >
+   729→              <div className="flex gap-2">
+   730→                <ToggleGroup
+   731→                  type="single"
+   732→                  value={form.riskMode}
+   733→                  onValueChange={(v) => {
+   734→                    if (v === "percent" || v === "amount" || v === "lots") {
+   735→                      set("riskMode", v);
+   736→                    }
+   737→                  }}
+   738→                  className="shrink-0"
+   739→                >
+   740→                  <ToggleGroupItem
+   741→                    value="percent"
+   742→                    className="min-h-10"
+   743→                    aria-label={t("riskPercentAria")}
+   744→                  >
+   745→                    %
+   746→                  </ToggleGroupItem>
+   747→                  <ToggleGroupItem
+   748→                    value="amount"
+   749→                    className="min-h-10"
+   750→                    aria-label={t("riskAmountAria")}
+   751→                  >
+   752→                    {accountCurrency || "—"}
+   753→                  </ToggleGroupItem>
+   754→                  <ToggleGroupItem
+   755→                    value="lots"
+   756→                    className="min-h-10"
+   757→                    aria-label={t("lots")}
+   758→                  >
+   759→                    {tc("lots")}
+   760→                  </ToggleGroupItem>
+   761→                </ToggleGroup>
+   762→                <Input
+   763→                  id="qt-risk"
+   764→                  type="number"
+   765→                  inputMode="decimal"
+   766→                  step="any"
+   767→                  min="0"
+   768→                  aria-label={
+   769→                    form.riskMode === "percent"
+   770→                      ? t("riskPercentAria")
+   771→                      : form.riskMode === "amount"
+   772→                        ? t("riskAmountAria")
+   773→                        : t("lots")
+   774→                  }
+   775→                  value={riskValue}
+   776→                  onChange={(e) => setRiskValue(e.target.value)}
+   777→                  className="min-h-10 flex-1 tabular-nums"
+   778→                />
+   779→              </div>
+   780→            </Field>
+   781→
+   782→            <Field label={t("notes")} htmlFor="qt-notes" className="sm:col-span-2">
+   783→              <Input
+   784→                id="qt-notes"
+   785→                value={form.notes}
+   786→                onChange={(e) => set("notes", e.target.value)}
+   787→              />
+   788→            </Field>
+   789→
+   790→            <div className="flex min-h-10 items-center justify-between gap-3 rounded-lg border px-3 sm:col-span-2">
+   791→              <Label htmlFor="qt-closed">{t("closedToggle")}</Label>
+   792→              <Switch
+   793→                id="qt-closed"
+   794→                checked={form.closed}
+   795→                onCheckedChange={(v) => set("closed", v)}
+   796→              />
+   797→            </div>
+   798→
+   799→            {form.closed && (
+   800→              <>
+   801→                <Field label={t("exitPrice")} htmlFor="qt-exit-price">
+   802→                  <Input
+   803→                    id="qt-exit-price"
+   804→                    type="number"
+   805→                    inputMode="decimal"
+   806→                    step="any"
+   807→                    min="0"
+   808→                    value={form.exitPrice}
+   809→                    onChange={(e) => set("exitPrice", e.target.value)}
+   810→                    className="min-h-10 tabular-nums"
+   811→                  />
+   812→                </Field>
+   813→                <Field label={t("exitReason")} htmlFor="qt-exit-reason">
+   814→                  <Select
+   815→                    value={form.exitReason || "none"}
+   816→                    onValueChange={(v) => {
+   817→                      if (v !== "") set("exitReason", v === "none" ? "" : v);
+   818→                    }}
+   819→                  >
+   820→                    <SelectTrigger id="qt-exit-reason" className="w-full">
+   821→                      <SelectValue />
+   822→                    </SelectTrigger>
+   823→                    <SelectContent>
+   824→                      <SelectItem value="none">{tc("none")}</SelectItem>
+   825→                      {EXIT_REASONS.map((r) => (
+   826→                        <SelectItem key={r} value={r}>
+   827→                          {labels.exitReason(r)}
+   828→                        </SelectItem>
+   829→                      ))}
+   830→                    </SelectContent>
+   831→                  </Select>
+   832→                </Field>
+   833→              </>
+   834→            )}
+   835→
+   836→            {/* ── Live preview strip ── */}
+   837→            <div className="rounded-md bg-muted p-3 sm:col-span-2">
+   838→              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+   839→                {t("preview")}
+   840→              </p>
+   841→              {!previewReady ? (
+   842→                <p className="mt-1 text-xs text-muted-foreground">
+   843→                  {t("previewInvalid")}
+   844→                </p>
+   845→              ) : (
+   846→                <dl className="mt-2 grid grid-cols-3 gap-2">
+   847→                  <div>
+   848→                    <dt className="text-xs text-muted-foreground">
+   849→                      {t("previewPips")}
+   850→                    </dt>
+   851→                    <dd className="font-semibold tabular-nums">
+   852→                      {fmtNum(stop, 1)} {tc("pips")}
+   853→                    </dd>
+   854→                  </div>
+   855→                  <div>
+   856→                    <dt className="text-xs text-muted-foreground">
+   857→                      {t("previewRisk")}
+   858→                    </dt>
+   859→                    <dd className="font-semibold tabular-nums">
+   860→                      {derived?.sizing?.valid
+   861→                        ? fmtMoney(derived.sizing.actualRiskAmount, accountCurrency)
+   862→                        : preview?.riskAmount
+   863→                          ? fmtMoney(preview.riskAmount, accountCurrency)
+   864→                          : "—"}
+   865→                    </dd>
+   866→                  </div>
+   867→                  <div>
+   868→                    <dt className="text-xs text-muted-foreground">
+   869→                      {t("previewRr")}
+   870→                    </dt>
+   871→                    <dd className="font-semibold tabular-nums">
+   872→                      {preview?.plannedRR
+   873→                        ? `1 : ${fmtNum(preview.plannedRR, 2)}`
+   874→                        : "—"}
+   875→                    </dd>
+   876→                  </div>
+   877→                </dl>
+   878→              )}
+   879→            </div>
+   880→
+   881→            <Button
+   882→              type="submit"
+   883→              size="lg"
+   884→              disabled={submitting || saved !== null}
+   885→              className="w-full sm:col-span-2"
+   886→            >
+   887→              {submitting ? (
+   888→                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+   889→              ) : (
+   890→                <Save className="h-4 w-4" aria-hidden="true" />
+   891→              )}
+   892→              {submitting
+   893→                ? t("submitting")
+   894→                : form.closed
+   895→                  ? t("submitClosed")
+   896→                  : t("submit")}
+   897→            </Button>
+   898→          </form>
+   899→        </CardContent>
+   900→      </Card>
+   901→    </div>
+   902→  );
+   903→}
+   904→
