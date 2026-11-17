@@ -27,47 +27,47 @@ type CodedError = {
 };
 
 const CODE_MESSAGES: Record<string, string> = {
-  ACCOUNT_NOT_FOUND: "Compte introuvable.",
-  INSTRUMENT_NOT_FOUND: "Instrument introuvable.",
-  STRATEGY_NOT_FOUND: "Stratégie introuvable.",
-  TAG_NOT_FOUND: "Tag introuvable.",
-  CHECKLIST_NOT_FOUND: "Élément de checklist introuvable.",
-  EXIT_PRICE_REQUIRED: "Un prix de sortie est requis pour clôturer un trade.",
-  ALREADY_CLOSED: "Ce trade est déjà clôturé.",
-  INVALID_DATE: "Date invalide.",
-  TRADES_ON_ACCOUNT: "Ce compte contient des trades - archivage seulement.",
-  UNSUPPORTED_TYPE: "Type de fichier non supporté (PNG, JPEG ou WebP).",
-  FILE_TOO_LARGE: "Fichier trop volumineux (max 5 Mo).",
-  TRADE_NOT_FOUND: "Capture rattachée à un trade introuvable.",
-  INVALID_PERIOD: "Période de rapport invalide.",
-  SHARE_TRADE_NOT_FOUND: "Trade introuvable - impossible de le partager.",
+  ACCOUNT_NOT_FOUND: "Account not found.",
+  INSTRUMENT_NOT_FOUND: "Instrument not found.",
+  STRATEGY_NOT_FOUND: "Strategy not found.",
+  TAG_NOT_FOUND: "Tag not found.",
+  CHECKLIST_NOT_FOUND: "Checklist item not found.",
+  EXIT_PRICE_REQUIRED: "An exit price is required to close a trade.",
+  ALREADY_CLOSED: "This trade is already closed.",
+  INVALID_DATE: "Invalid date.",
+  TRADES_ON_ACCOUNT: "This account contains trades – archiving only.",
+  UNSUPPORTED_TYPE: "Unsupported file type (PNG, JPEG or WebP).",
+  FILE_TOO_LARGE: "File too large (max 5 MB).",
+  TRADE_NOT_FOUND: "Screenshot attached to a missing trade.",
+  INVALID_PERIOD: "Invalid report period.",
+  SHARE_TRADE_NOT_FOUND: "Trade not found – cannot share it.",
   // v3 Phase 5 — mentoring & comments
-  ACCESS_DENIED: "Accès refusé.",
-  HANDLE_INVALID: "Handle invalide (a-z, 0-9, _, 3-24 caractères).",
-  HANDLE_TAKEN: "Ce handle est déjà utilisé.",
-  HANDLE_REQUIRED: "Choisissez d'abord votre handle.",
-  SELF_INVITE: "Vous ne pouvez pas vous inviter vous-même.",
-  INVITE_ALREADY_PENDING: "Une invitation est déjà en attente pour cet email.",
-  MENTOR_ALREADY_ACTIVE: "Ce mentor a déjà un accès actif.",
-  TOO_MANY_PENDING: "Trop d'invitations en attente.",
-  INVITE_RATE_LIMITED: "Trop d'invitations envoyées aujourd'hui.",
-  INVITE_NOT_FOUND: "Invitation introuvable.",
-  INVITE_NOT_PENDING: "Cette invitation a déjà été traitée.",
-  INVITE_EXPIRED: "Cette invitation a expiré.",
-  ACCESS_NOT_FOUND: "Accès de mentorat introuvable.",
-  ACCESS_REVOKED: "Cet accès est révoqué.",
-  COMMENT_NOT_FOUND: "Commentaire introuvable.",
-  COMMENT_DELETED: "Ce commentaire est supprimé.",
-  COMMENT_RATE_LIMITED: "Trop de commentaires - patientez quelques instants.",
-  PARENT_INVALID: "Commentaire parent invalide.",
-  MENTION_INVALID: "Mention impossible : cette personne n'a pas accès à ce trade.",
+  ACCESS_DENIED: "Access denied.",
+  HANDLE_INVALID: "Invalid handle (a-z, 0-9, _, 3–24 characters).",
+  HANDLE_TAKEN: "This handle is already taken.",
+  HANDLE_REQUIRED: "Choose your handle first.",
+  SELF_INVITE: "You cannot invite yourself.",
+  INVITE_ALREADY_PENDING: "An invitation is already pending for this email.",
+  MENTOR_ALREADY_ACTIVE: "This mentor already has active access.",
+  TOO_MANY_PENDING: "Too many pending invitations.",
+  INVITE_RATE_LIMITED: "Too many invitations sent today.",
+  INVITE_NOT_FOUND: "Invitation not found.",
+  INVITE_NOT_PENDING: "This invitation has already been handled.",
+  INVITE_EXPIRED: "This invitation has expired.",
+  ACCESS_NOT_FOUND: "Mentorship access not found.",
+  ACCESS_REVOKED: "This access has been revoked.",
+  COMMENT_NOT_FOUND: "Comment not found.",
+  COMMENT_DELETED: "This comment has been deleted.",
+  COMMENT_RATE_LIMITED: "Too many comments – please wait a moment.",
+  PARENT_INVALID: "Invalid parent comment.",
+  MENTION_INVALID: "Mention not possible: this person does not have access to this trade.",
   // v1 Phase 7 — instruments personnalisés
-  INSTRUMENT_DUPLICATE: "Vous avez déjà un instrument avec ce symbole.",
-  INSTRUMENT_PIP_INVALID: "Taille de pip invalide (ex. 0.0001 ou 0.01 pour XAUUSD).",
-  INSTRUMENT_HAS_TRADES: "Des trades référencent cet instrument - suppression impossible.",
+  INSTRUMENT_DUPLICATE: "You already have an instrument with this symbol.",
+  INSTRUMENT_PIP_INVALID: "Invalid pip size (e.g. 0.0001 or 0.01 for XAUUSD).",
+  INSTRUMENT_HAS_TRADES: "Trades reference this instrument – deletion not possible.",
   // v2.5 Module 4 — productivity (custom fields, bulk edits)
-  CUSTOM_FIELDS_INVALID: "Certains champs personnalisés sont invalides.",
-  TOO_MANY_CUSTOM_FIELDS: "Limite de 30 champs personnalisés atteinte.",
+  CUSTOM_FIELDS_INVALID: "Some custom fields are invalid.",
+  TOO_MANY_CUSTOM_FIELDS: "Limit of 30 custom fields reached.",
   DASHBOARD_NOT_FOUND: "Dashboard not found.",
   WIDGET_NOT_FOUND: "Widget not found.",
   TOO_MANY_DASHBOARDS: "Dashboard limit reached (max 8).",
@@ -83,38 +83,38 @@ const CODE_MESSAGES: Record<string, string> = {
   FORMULA_INVALID: "Invalid formula expression.",
   // v2.5 Module 5 — trading tools
   TOOLS_TABLES_MISSING:
-    "Les tables des outils n'existent pas encore en base. Lancez `npx prisma db push` sur votre PC puis rechargez la page.",
-  FX_RATE_SAME_CURRENCY: "La devise de base et la devise de cotation doivent différer.",
-  FX_RATE_DUPLICATE: "Un taux existe déjà pour cette paire.",
-  EXIT_PLAN_NOT_FOUND: "Plan de sortie introuvable.",
-  EXIT_PLAN_INVALID: "Les paliers doivent totaliser 100 % avec des cibles positives.",
+    "The tools tables do not exist in the database yet. Run `npx prisma db push` on your PC, then reload the page.",
+  FX_RATE_SAME_CURRENCY: "The base currency and the quote currency must differ.",
+  FX_RATE_DUPLICATE: "A rate already exists for this pair.",
+  EXIT_PLAN_NOT_FOUND: "Exit plan not found.",
+  EXIT_PLAN_INVALID: "Tiers must total 100% with positive targets.",
   // v2.5 Module 9 — Discord / Telegram integrations
   ENCRYPTION_KEY_MISSING:
-    "La clé de chiffrement des intégrations n'est pas configurée. Définissez INTEGRATION_ENCRYPTION_KEY sur le serveur.",
+    "The integrations encryption key is not configured. Set INTEGRATION_ENCRYPTION_KEY on the server.",
   ENCRYPTION_KEY_INVALID:
-    "INTEGRATION_ENCRYPTION_KEY est invalide (32 octets, hex ou base64).",
-  INVALID_ENDPOINT_TYPE: "Type d'intégration invalide.",
-  INVALID_LABEL: "Nom invalide (1 à 60 caractères).",
-  TOO_MANY_ENDPOINTS: "Limite de 10 intégrations atteinte.",
+    "INTEGRATION_ENCRYPTION_KEY is invalid (32 bytes, hex or base64).",
+  INVALID_ENDPOINT_TYPE: "Invalid integration type.",
+  INVALID_LABEL: "Invalid name (1 to 60 characters).",
+  TOO_MANY_ENDPOINTS: "Limit of 10 integrations reached.",
   INVALID_WEBHOOK_URL:
-    "URL de webhook Discord invalide (format attendu : https://discord.com/api/webhooks/<id>/<token>).",
-  WEBHOOK_NOT_HTTPS: "L'URL du webhook doit commencer par https://.",
+    "Invalid Discord webhook URL (expected format: https://discord.com/api/webhooks/<id>/<token>).",
+  WEBHOOK_NOT_HTTPS: "The webhook URL must start with https://.",
   WEBHOOK_HOST_NOT_ALLOWED:
-    "Hôte non autorisé : seuls discord.com et discordapp.com sont acceptés.",
+    "Unauthorized host: only discord.com and discordapp.com are accepted.",
   INVALID_TELEGRAM_TOKEN:
-    "Token de bot Telegram invalide (format attendu : <id>:<jeton>).",
+    "Invalid Telegram bot token (expected format: <id>:<token>).",
   INVALID_CHAT_ID:
-    "Identifiant de chat invalide (nombre, ou @nom de canal).",
+    "Invalid chat ID (a number, or @channel name).",
   INVALID_QUIET_HOURS: "Heures calmes invalides (format HH:mm).",
-  INVALID_PRIVACY_LEVEL: "Niveau de confidentialité invalide.",
-  INVALID_EVENT_TYPE: "Type d'événement invalide.",
-  INVALID_VALUE: "Valeur invalide.",
-  ENDPOINT_NOT_FOUND: "Intégration introuvable.",
-  SUBSCRIPTION_NOT_FOUND: "Abonnement introuvable.",
-  ENDPOINT_DISABLED: "Cette intégration est désactivée.",
+  INVALID_PRIVACY_LEVEL: "Invalid privacy level.",
+  INVALID_EVENT_TYPE: "Invalid event type.",
+  INVALID_VALUE: "Invalid value.",
+  ENDPOINT_NOT_FOUND: "Integration not found.",
+  SUBSCRIPTION_NOT_FOUND: "Subscription not found.",
+  ENDPOINT_DISABLED: "This integration is disabled.",
   TELEGRAM_API_ERROR:
-    "Telegram n'a pas répondu ou le token est invalide.",
-  TEST_FAILED: "Le message de test n'a pas pu être envoyé.",
+    "Telegram did not respond or the token is invalid.",
+  TEST_FAILED: "The test message could not be sent.",
 };
 
 function isCoded(error: unknown): error is CodedError {
@@ -138,7 +138,7 @@ function isCoded(error: unknown): error is CodedError {
 export function apiError(error: unknown, route: string): NextResponse {
   if (error instanceof UnauthorizedError) {
     return NextResponse.json(
-      { error: "UNAUTHORIZED", message: "Session absente ou expirée." },
+      { error: "UNAUTHORIZED", message: "Session missing or expired." },
       { status: 401 }
     );
   }
@@ -146,14 +146,14 @@ export function apiError(error: unknown, route: string): NextResponse {
     return NextResponse.json(
       {
         error: error.code,
-        message: CODE_MESSAGES[error.code] ?? "Requête invalide.",
+        message: CODE_MESSAGES[error.code] ?? "Invalid request.",
       },
       { status: error.status }
     );
   }
   console.error(`[api/${route}] failed:`, error);
   return NextResponse.json(
-    { error: "INTERNAL", message: "Une erreur est survenue. Réessayez." },
+    { error: "INTERNAL", message: "An error occurred. Please try again." },
     { status: 500 }
   );
 }

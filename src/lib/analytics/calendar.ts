@@ -6,7 +6,7 @@
  * decimal.js — strings at the boundaries, exactly like the analytics engine.
  *
  * Documented conventions:
- *  - Calendar weeks start on MONDAY (fr-CA convention).
+ *  - Calendar weeks start on MONDAY.
  *  - A "trading day" is a local day with at least one closed trade.
  *  - PROP daily loss limit  = maxDailyLossPercent × initialBalance (firm
  *    convention: % of the initial balance, not of the running equity).

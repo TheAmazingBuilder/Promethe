@@ -43,7 +43,7 @@ export async function POST(req: Request, ctx: Ctx) {
       return NextResponse.json(
         {
           error: "VALIDATION",
-          message: "Action invalide.",
+          message: "Invalid action.",
           fieldErrors: zodFieldErrors(parsed.error),
         },
         { status: 422 }

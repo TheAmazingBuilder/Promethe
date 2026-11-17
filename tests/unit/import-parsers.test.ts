@@ -253,7 +253,7 @@ describe("failure modes", () => {
   it("throws a coded error for unrecognized content", () => {
     expect(() =>
       parseImportFile({ fileName: "x.txt", extension: "txt", text: "hello world\nnothing here" })
-    ).toThrow(/non reconnu|requises/i);
+    ).toThrow(/required columns|not recognized/i);
   });
 
   it("throws NO_TRADES_FOUND for an HTML file without trade tables", () => {
@@ -263,7 +263,7 @@ describe("failure modes", () => {
         extension: "html",
         text: "<html><body><table><tr><td>nothing</td></tr></table></body></html>",
       })
-    ).toThrow(/Aucun trade/);
+    ).toThrow(/No trades found/);
   });
 
   it("never imports garbage silently (empty CSV)", () => {

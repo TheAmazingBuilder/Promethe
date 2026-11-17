@@ -17,7 +17,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: "VALIDATION",
-          message: "Certains champs sont invalides.",
+          message: "Some fields are invalid.",
           fieldErrors: zodFieldErrors(parsed.error),
         },
         { status: 422 }
@@ -30,13 +30,13 @@ export async function POST(req: Request) {
       email.split("@")[0].slice(0, 60) ||
       "Trader";
     const timezone = parsed.data.timezone || "UTC";
-    const locale = parsed.data.locale || "fr";
+    const locale = parsed.data.locale || "en";
 
     if (!rateLimit(`signup:${email}`, 5, 15 * 60 * 1000)) {
       return NextResponse.json(
         {
           error: "RATE_LIMITED",
-          message: "Trop de tentatives pour ce courriel. Réessayez dans quelques minutes.",
+          message: "Too many attempts for this email. Please try again in a few minutes.",
         },
         { status: 429 }
       );
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     });
     if (existing) {
       return NextResponse.json(
-        { error: "EMAIL_TAKEN", message: "Un compte existe déjà avec ce courriel." },
+        { error: "EMAIL_TAKEN", message: "An account already exists with this email." },
         { status: 409 }
       );
     }
@@ -69,13 +69,13 @@ export async function POST(req: Request) {
     // Unique-constraint race → same message as the pre-check.
     if ((error as { code?: string } | null)?.code === "P2002") {
       return NextResponse.json(
-        { error: "EMAIL_TAKEN", message: "Un compte existe déjà avec ce courriel." },
+        { error: "EMAIL_TAKEN", message: "An account already exists with this email." },
         { status: 409 }
       );
     }
     console.error("[api/auth/signup] failed:", error);
     return NextResponse.json(
-      { error: "INTERNAL", message: "Une erreur est survenue. Réessayez." },
+      { error: "INTERNAL", message: "An error occurred. Please try again." },
       { status: 500 }
     );
   }

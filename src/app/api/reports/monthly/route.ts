@@ -14,14 +14,14 @@ export async function GET(req: Request) {
     const month = url.searchParams.get("month") ?? "";
     if (monthRange(month) == null) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Mois invalide (format AAAA-MM)." },
+        { error: "VALIDATION", message: "Invalid month (YYYY-MM format)." },
         { status: 422 }
       );
     }
     const report = await getMonthlyReport(session.user.id, month);
     if (!report) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Mois invalide." },
+        { error: "VALIDATION", message: "Invalid month." },
         { status: 422 }
       );
     }

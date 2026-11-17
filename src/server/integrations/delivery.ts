@@ -349,7 +349,7 @@ export async function checkDrawdownAlerts(
           kind: "BREACHED",
           accountName: account.name,
           detail:
-            "Une limite prop a été dépassée (perte journalière ou drawdown total).",
+            "A prop limit was exceeded (daily loss or total drawdown).",
         },
         `prop:${userId}:${account.id}:BREACHED:${dayKey}`
       );
@@ -360,7 +360,7 @@ export async function checkDrawdownAlerts(
         {
           kind: "TARGET_REACHED",
           accountName: account.name,
-          detail: "Objectif de profit du challenge atteint.",
+          detail: "Challenge profit target reached.",
         },
         `prop:${userId}:${account.id}:TARGET:${dayKey}`
       );
@@ -373,7 +373,7 @@ export async function checkDrawdownAlerts(
           {
             kind: "DAILY_LOSS_WARNING",
             accountName: account.name,
-            detail: `Perte journalière à ${status.dailyLoss.usedPercent ?? "?"} % de la limite autorisée.`,
+            detail: `Daily loss at ${status.dailyLoss.usedPercent ?? "?"}% of the allowed limit.`,
           },
           `prop:${userId}:${account.id}:DAILY80:${dayKey}`
         );
@@ -495,10 +495,10 @@ async function sendOutbound(
     return sendToDiscord(secret, event, privacy);
   }
   if (endpointType === "TELEGRAM_BOT") {
-    if (!chatId) return { ok: false, error: "Chat Telegram manquant." };
+    if (!chatId) return { ok: false, error: "Missing Telegram chat." };
     return sendToTelegram(secret, chatId, event, privacy);
   }
-  return { ok: false, error: "Type d'endpoint inconnu." };
+  return { ok: false, error: "Unknown endpoint type." };
 }
 
 function backoffDelayMs(attempts: number): number {
@@ -583,7 +583,7 @@ export async function processOutbox(
     if (!endpoint || !endpoint.isEnabled) {
       await db.outboundMessage.update({
         where: { id: row.id },
-        data: { status: "DEAD", lastError: "Endpoint désactivé ou supprimé." },
+        data: { status: "DEAD", lastError: "Endpoint disabled or deleted." },
       });
       report.dead += 1;
       continue;
@@ -650,7 +650,7 @@ export async function processOutbox(
       logError("decrypt failed", error);
       await db.outboundMessage.update({
         where: { id: row.id },
-        data: { status: "DEAD", lastError: "Secret illisible (clé de chiffrement ?)." },
+        data: { status: "DEAD", lastError: "Unreadable secret (encryption key?)." },
       });
       report.dead += 1;
       continue;
@@ -699,7 +699,7 @@ export async function processOutbox(
     if (attempts >= MAX_OUTBOX_ATTEMPTS) {
       await db.outboundMessage.update({
         where: { id: row.id },
-        data: { status: "DEAD", attempts, lastError: outcome.error ?? "Échec répété." },
+        data: { status: "DEAD", attempts, lastError: outcome.error ?? "Repeated failure." },
       });
       await recordFailure(endpoint.id, outcome.error);
       report.dead += 1;
@@ -709,7 +709,7 @@ export async function processOutbox(
         data: {
           status: "FAILED",
           attempts,
-          lastError: outcome.error ?? "Échec d'envoi.",
+          lastError: outcome.error ?? "Send failed.",
           nextAttemptAt: new Date(now.getTime() + backoffDelayMs(attempts)),
         },
       });

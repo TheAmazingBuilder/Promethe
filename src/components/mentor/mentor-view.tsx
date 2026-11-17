@@ -178,9 +178,9 @@ function InvitationsCard({
       await queryClient.invalidateQueries({ queryKey: ["mentor-space"] });
     } catch (error) {
       toast({
-        title: "Erreur",
+        title: "Error",
         description:
-          error instanceof ApiClientError ? error.message : "Réessayez.",
+          error instanceof ApiClientError ? error.message : "Please try again.",
         variant: "destructive",
       });
     } finally {

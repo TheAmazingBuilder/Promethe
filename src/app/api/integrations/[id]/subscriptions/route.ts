@@ -23,7 +23,7 @@ export async function POST(req: Request, ctx: Ctx) {
     } | null;
     if (!body || typeof body.eventType !== "string") {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Requête invalide." },
+        { error: "VALIDATION", message: "Invalid request." },
         { status: 422 }
       );
     }

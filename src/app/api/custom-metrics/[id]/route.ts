@@ -24,7 +24,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
       return NextResponse.json(
         {
           error: "VALIDATION",
-          message: "Certains champs sont invalides.",
+          message: "Some fields are invalid.",
           fieldErrors: zodFieldErrors(parsed.error),
         },
         { status: 422 }
@@ -44,7 +44,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     const ok = await deleteCustomMetric(session.user.id, id);
     if (!ok) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Métrique introuvable." },
+        { error: "NOT_FOUND", message: "Metric not found." },
         { status: 404 }
       );
     }

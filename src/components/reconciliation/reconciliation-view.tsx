@@ -63,7 +63,7 @@ interface MergeLogDTO {
 
 function formatTime(iso: string | null): string {
   if (!iso) return "-";
-  return new Date(iso).toLocaleString("fr-FR", {
+  return new Date(iso).toLocaleString("en-CA", {
     dateStyle: "short",
     timeStyle: "short",
   });

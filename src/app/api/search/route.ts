@@ -15,7 +15,7 @@ export async function GET(req: Request) {
     const parsed = searchQuerySchema.safeParse(raw);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Recherche invalide.", fieldErrors: zodFieldErrors(parsed.error) },
+        { error: "VALIDATION", message: "Invalid search.", fieldErrors: zodFieldErrors(parsed.error) },
         { status: 422 }
       );
     }

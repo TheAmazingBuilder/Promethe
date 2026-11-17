@@ -30,7 +30,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { useI18n } from "@/i18n/i18n-provider";
 import { useCreateShareLink } from "@/hooks/use-sharing";
 import type { SharePolicyInput } from "@/lib/sharing/types";
 import type { ShareLinkInput } from "@/lib/validations/sharing";
@@ -95,7 +94,6 @@ export function ShareDialog({
   defaultTitle,
 }: ShareDialogProps) {
   const t = useTranslations("shareDialog");
-  const { locale } = useI18n();
   const { toast } = useToast();
   const create = useCreateShareLink();
 
@@ -298,7 +296,7 @@ export function ShareDialog({
                 {periodPreset === "custom" && (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <Label htmlFor="period-start">Début</Label>
+                      <Label htmlFor="period-start">Start</Label>
                       <DateField
                         id="period-start"
                         value={customStart}
@@ -306,7 +304,7 @@ export function ShareDialog({
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="period-end">Fin</Label>
+                      <Label htmlFor="period-end">End</Label>
                       <DateField
                         id="period-end"
                         value={customEnd}
@@ -418,7 +416,7 @@ export function ShareDialog({
                   <SelectContent>
                     {EXPIRY_OPTIONS.map((days) => (
                       <SelectItem key={days} value={String(days)}>
-                        {expiryLabel(days, locale)}
+                        {expiryLabel(days)}
                       </SelectItem>
                     ))}
                   </SelectContent>

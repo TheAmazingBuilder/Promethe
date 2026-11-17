@@ -18,14 +18,14 @@ export async function GET(_req: Request, ctx: Ctx) {
     sweepRateLimits();
     if (!rateLimit(`strategy-versions:${session.user.id}`, 60, 60 * 1000)) {
       return NextResponse.json(
-        { error: "RATE_LIMITED", message: "Trop de requêtes, patientez." },
+        { error: "RATE_LIMITED", message: "Too many requests, please wait." },
         { status: 429 }
       );
     }
     const versions = await listVersions(session.user.id, id);
     if (versions == null) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Stratégie introuvable." },
+        { error: "NOT_FOUND", message: "Strategy not found." },
         { status: 404 }
       );
     }
@@ -42,7 +42,7 @@ export async function POST(req: Request, ctx: Ctx) {
     sweepRateLimits();
     if (!rateLimit(`strategy-version-post:${session.user.id}`, 20, 60 * 1000)) {
       return NextResponse.json(
-        { error: "RATE_LIMITED", message: "Trop de requêtes, patientez." },
+        { error: "RATE_LIMITED", message: "Too many requests, please wait." },
         { status: 429 }
       );
     }
@@ -50,7 +50,7 @@ export async function POST(req: Request, ctx: Ctx) {
     const parsed = strategyVersionSchema.safeParse(body ?? {});
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Note invalide.", fieldErrors: zodFieldErrors(parsed.error) },
+        { error: "VALIDATION", message: "Invalid note.", fieldErrors: zodFieldErrors(parsed.error) },
         { status: 422 }
       );
     }
@@ -61,7 +61,7 @@ export async function POST(req: Request, ctx: Ctx) {
     );
     if (version == null) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Stratégie introuvable." },
+        { error: "NOT_FOUND", message: "Strategy not found." },
         { status: 404 }
       );
     }

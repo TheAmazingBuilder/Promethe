@@ -56,7 +56,7 @@ export function SessionProvider({
 export function useSession(): SessionContextValue {
   const ctx = React.useContext(SessionContext);
   if (!ctx) {
-    throw new Error("useSession doit être utilisé à l'intérieur de <SessionProvider>");
+    throw new Error("useSession must be used inside <SessionProvider>");
   }
   return ctx;
 }

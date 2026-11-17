@@ -12,7 +12,7 @@ export async function POST() {
   } catch (error) {
     console.error("[api/auth/logout] failed:", error);
     return NextResponse.json(
-      { error: "INTERNAL", message: "Impossible de se déconnecter. Réessayez." },
+      { error: "INTERNAL", message: "Could not sign out. Please try again." },
       { status: 500 }
     );
   }

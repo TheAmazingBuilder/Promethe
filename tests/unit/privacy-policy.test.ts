@@ -114,7 +114,7 @@ describe("privacy policy", () => {
   });
 
   it("privacyMask returns the placeholder only in HIDE mode", () => {
-    const real = "987,65 USD";
+    const real = "987.65 USD";
     setPrivacy({ mode: "BLUR" });
     expect(privacyMask(getPrivacySnapshot(), "amount", real)).toBe(real);
     setPrivacy({ mode: "HIDE" });
@@ -137,11 +137,11 @@ describe("privacy policy", () => {
 describe("privacy-aware formatters (choke point)", () => {
   it("fmtMoney returns the placeholder in HIDE mode", () => {
     setPrivacy({ mode: "OFF" });
-    expect(fmtMoney("987.65", "USD")).toBe("987,65 USD");
+    expect(fmtMoney("987.65", "USD")).toBe("987.65 USD");
     setPrivacy({ mode: "HIDE" });
     expect(fmtMoney("1234.56", "USD")).toBe(PRIVACY_PLACEHOLDER);
     setPrivacy({ mode: "OFF" });
-    expect(fmtMoney("987.65", "USD")).toBe("987,65 USD");
+    expect(fmtMoney("987.65", "USD")).toBe("987.65 USD");
   });
 
   it("fmtSignedMoney masks the sign too", () => {
@@ -152,7 +152,7 @@ describe("privacy-aware formatters (choke point)", () => {
 
   it("fmtPct respects hidePercentages (default false)", () => {
     setPrivacy({ mode: "HIDE" });
-    expect(fmtPct(58.3)).toBe("58,3 %");
+    expect(fmtPct(58.3)).toBe("58.3 %");
     setPrivacy({ mode: "HIDE", scope: { hidePercentages: true } });
     expect(fmtPct(58.3)).toBe(PRIVACY_PLACEHOLDER);
   });

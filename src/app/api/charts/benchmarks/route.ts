@@ -28,7 +28,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: "VALIDATION",
-          message: "Benchmark invalide.",
+          message: "Invalid benchmark.",
           fieldErrors: zodFieldErrors(parsed.error),
         },
         { status: 422 }

@@ -54,7 +54,7 @@ const FALLBACK_PROFILE: SessionProfile = {
   displayName: "Trader",
   timezone: "UTC",
   baseCurrency: "USD",
-  locale: "fr",
+  locale: "en",
   theme: "system",
   defaultAccountId: null,
   preferences: {},
@@ -120,7 +120,7 @@ export async function createUserWithDefaults(
     const account = await tx.account.create({
       data: {
         userId: user.id,
-        name: "Compte principal",
+        name: "Main account",
         type: "DEMO",
         currency: input.baseCurrency,
         initialBalance: "10000",
@@ -158,7 +158,7 @@ export async function ensureUserSetup(userId: string): Promise<SessionPayload> {
     const account = await tx.account.create({
       data: {
         userId,
-        name: "Compte principal",
+        name: "Main account",
         type: "DEMO",
         currency: "USD",
         initialBalance: "10000",
@@ -170,7 +170,7 @@ export async function ensureUserSetup(userId: string): Promise<SessionPayload> {
         displayName: user.email.split("@")[0].slice(0, 60) || "Trader",
         timezone: "UTC",
         baseCurrency: "USD",
-        locale: "fr",
+        locale: "en",
         defaultAccountId: account.id,
       },
     });
@@ -282,12 +282,12 @@ export async function setHandle(
   publicDisplayName?: string | null
 ): Promise<SessionPayload> {
   if (!HANDLE_RE.test(handle)) {
-    throw new UserValidationError("HANDLE_INVALID", "Handle invalide (a-z, 0-9, _, 3-24).");
+    throw new UserValidationError("HANDLE_INVALID", "Invalid handle (a-z, 0-9, _, 3–24).");
   }
   await ensureUserSetup(userId);
   const taken = await db.profile.findUnique({ where: { handle } });
   if (taken && taken.id !== userId) {
-    throw new UserValidationError("HANDLE_TAKEN", "Ce handle est déjà utilisé.");
+    throw new UserValidationError("HANDLE_TAKEN", "This handle is already taken.");
   }
   try {
     await db.profile.update({
@@ -306,7 +306,7 @@ export async function setHandle(
       "code" in error &&
       (error as { code?: string }).code === "P2002"
     ) {
-      throw new UserValidationError("HANDLE_TAKEN", "Ce handle est déjà utilisé.");
+      throw new UserValidationError("HANDLE_TAKEN", "This handle is already taken.");
     }
     throw error;
   }

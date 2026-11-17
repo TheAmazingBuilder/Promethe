@@ -73,10 +73,10 @@ function conflictError(code: string, message: string): GaiaError {
   return new GaiaError("Conflict", code, 409, message);
 }
 
-const NOTE_NOT_FOUND = () => notFound("NOTE_NOT_FOUND", "Note introuvable.");
-const FOLDER_NOT_FOUND = () => notFound("FOLDER_NOT_FOUND", "Dossier introuvable.");
-const TEMPLATE_NOT_FOUND = () => notFound("TEMPLATE_NOT_FOUND", "Modèle introuvable.");
-const VERSION_NOT_FOUND = () => notFound("VERSION_NOT_FOUND", "Version introuvable.");
+const NOTE_NOT_FOUND = () => notFound("NOTE_NOT_FOUND", "Note not found.");
+const FOLDER_NOT_FOUND = () => notFound("FOLDER_NOT_FOUND", "Folder not found.");
+const TEMPLATE_NOT_FOUND = () => notFound("TEMPLATE_NOT_FOUND", "Template not found.");
+const VERSION_NOT_FOUND = () => notFound("VERSION_NOT_FOUND", "Version not found.");
 
 /**
  * Convertit une GaiaError en réponse HTTP ({ error, code?, message?, issues? }).
@@ -148,7 +148,7 @@ function parseOrThrow<T>(schema: SafeParser<T>, input: unknown): T {
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
     throw validationError(
-      "Certains champs sont invalides.",
+      "Some fields are invalid.",
       parsed.error.issues.map((issue) => ({
         path: issue.path.join("."),
         message: issue.message,
@@ -162,7 +162,7 @@ function parseOrThrow<T>(schema: SafeParser<T>, input: unknown): T {
 function assertSafeImageSources(blocks: GaiaBlock[]): void {
   for (const block of blocks) {
     if (block.type === "image" && !isSafeImageSrc(block.src)) {
-      throw validationError("Source d'image non autorisée.");
+      throw validationError("Image source not allowed.");
     }
   }
 }
@@ -428,7 +428,7 @@ export async function listNotes(
   if (query.refKind !== undefined && query.refId !== undefined) {
     const parsed = gaiaRefKindSchema.safeParse(query.refKind);
     if (!parsed.success) {
-      throw validationError("Type de référence invalide.");
+      throw validationError("Invalid reference type.");
     }
     const kind = parsed.data;
     const linked = all.filter(
@@ -650,7 +650,7 @@ export async function duplicateNote(
   if (!source) throw NOTE_NOT_FOUND();
   const title =
     parsed.title?.trim() ??
-    (source.title === "" ? "Note sans titre (copie)" : `${source.title} (copie)`);
+    (source.title === "" ? "Untitled note (copy)" : `${source.title} (copie)`);
   const now = new Date();
   const copy = await db.note.create({
     data: {
@@ -751,13 +751,13 @@ export async function createFolder(userId: string, input: unknown): Promise<Gaia
   const parsed = parseOrThrow(folderInputSchema, input);
   const name = parsed.name.trim();
   if (name === "") {
-    throw validationError("Le nom du dossier est requis.", [
-      { path: "name", message: "Le nom du dossier est requis." },
+    throw validationError("The folder name is required.", [
+      { path: "name", message: "The folder name is required." },
     ]);
   }
   const folders = await loadFolders(userId);
   if (folders.some((f) => nameKeyOf(f.name) === nameKeyOf(name))) {
-    throw conflictError("FOLDER_EXISTS", "Un dossier avec ce nom existe déjà.");
+    throw conflictError("FOLDER_EXISTS", "A folder with this name already exists.");
   }
   const folder = await db.noteFolder.create({ data: { userId, name } });
   return { ...folder, noteCount: 0 };
@@ -771,8 +771,8 @@ export async function updateFolder(
   const parsed = parseOrThrow(folderInputSchema, input);
   const name = parsed.name.trim();
   if (name === "") {
-    throw validationError("Le nom du dossier est requis.", [
-      { path: "name", message: "Le nom du dossier est requis." },
+    throw validationError("The folder name is required.", [
+      { path: "name", message: "The folder name is required." },
     ]);
   }
   const folder = await db.noteFolder.findFirst({ where: { userId, id: folderId } });
@@ -781,7 +781,7 @@ export async function updateFolder(
   if (
     folders.some((f) => f.id !== folder.id && nameKeyOf(f.name) === nameKeyOf(name))
   ) {
-    throw conflictError("FOLDER_EXISTS", "Un dossier avec ce nom existe déjà.");
+    throw conflictError("FOLDER_EXISTS", "A folder with this name already exists.");
   }
   const updated = await db.noteFolder.update({ where: { id: folder.id }, data: { name } });
   const noteCount = await db.note.count({
@@ -820,8 +820,8 @@ export async function createTag(userId: string, input: unknown): Promise<GaiaTag
   const parsed = parseOrThrow(tagInputSchema, input);
   const name = normalizeTagName(parsed.name);
   if (name === "") {
-    throw validationError("Le nom du tag est requis.", [
-      { path: "name", message: "Le nom du tag est requis." },
+    throw validationError("The tag name is required.", [
+      { path: "name", message: "The tag name is required." },
     ]);
   }
   const tags = await loadTags(userId);

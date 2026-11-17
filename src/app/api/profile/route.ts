@@ -19,7 +19,7 @@ export async function PATCH(req: Request) {
       return NextResponse.json(
         {
           error: "VALIDATION",
-          message: "Certains champs sont invalides.",
+          message: "Some fields are invalid.",
           fieldErrors: zodFieldErrors(parsed.error),
         },
         { status: 422 }
@@ -31,13 +31,13 @@ export async function PATCH(req: Request) {
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return NextResponse.json(
-        { error: "UNAUTHORIZED", message: "Session absente ou expirée." },
+        { error: "UNAUTHORIZED", message: "Session missing or expired." },
         { status: 401 }
       );
     }
     console.error("[api/profile] PATCH failed:", error);
     return NextResponse.json(
-      { error: "INTERNAL", message: "Une erreur est survenue. Réessayez." },
+      { error: "INTERNAL", message: "An error occurred. Please try again." },
       { status: 500 }
     );
   }

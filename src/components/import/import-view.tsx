@@ -111,7 +111,7 @@ export function ImportView() {
         setProgress({
           phase: "error",
           percent: 0,
-          message: error instanceof Error ? error.message : "Analyse impossible.",
+          message: error instanceof Error ? error.message : "Analysis failed.",
         });
       } finally {
         setParsing(false);
@@ -144,7 +144,7 @@ export function ImportView() {
       setProgress({
         phase: "error",
         percent: 0,
-        message: error instanceof Error ? error.message : "Import impossible.",
+        message: error instanceof Error ? error.message : "Import failed.",
       });
     }
   };

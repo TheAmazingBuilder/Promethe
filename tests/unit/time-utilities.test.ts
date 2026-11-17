@@ -151,8 +151,8 @@ describe("zoned parts & formatting", () => {
     expect(formatClock(14, 32, "24H", "en")).toBe("14:32");
     expect(formatClock(14, 32, "12H", "en")).toBe("2:32 PM");
     expect(formatClock(0, 5, "12H", "en")).toBe("12:05 AM");
-    expect(formatClock(0, 5, "24H", "fr")).toBe("00:05");
-    expect(formatClock(13, 0, "LOCALE", "fr-CA")).toBe("13:00");
+    expect(formatClock(0, 5, "24H", "en")).toBe("00:05");
+    expect(formatClock(13, 0, "LOCALE", "en-CA")).toBe("1:00 PM");
     expect(formatClock(13, 0, "LOCALE", "en")).toBe("1:00 PM");
   });
 

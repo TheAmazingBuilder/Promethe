@@ -132,12 +132,12 @@ export function matchesChord(event: KeyboardEvent, chord: string): boolean {
   return wanted.every((p) => got.includes(p));
 }
 
-/** Human label for a chord: "mod+k" → "Ctrl+K", "shift+h" → "Maj+H". */
-export function formatChord(chord: string, locale = "fr"): string {
+/** Human label for a chord: "mod+k" → "Ctrl+K", "shift+h" → "Shift+H". */
+export function formatChord(chord: string): string {
   return parseChord(chord)
     .map((p) => {
       if (p === "mod") return "Ctrl/⌘";
-      if (p === "shift") return locale === "fr" ? "Maj" : "Shift";
+      if (p === "shift") return "Shift";
       if (p === "alt") return "Alt";
       if (p === "?") return "?";
       return p.toUpperCase();

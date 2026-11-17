@@ -19,7 +19,7 @@ export async function GET(_req: Request, ctx: Ctx) {
     const chart = await getSavedChart(session.user.id, id);
     if (!chart) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Graphique introuvable." },
+        { error: "NOT_FOUND", message: "Chart not found." },
         { status: 404 }
       );
     }
@@ -39,7 +39,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
       return NextResponse.json(
         {
           error: "VALIDATION",
-          message: "Configuration de graphique invalide.",
+          message: "Invalid chart configuration.",
           fieldErrors: zodFieldErrors(parsed.error),
         },
         { status: 422 }
@@ -48,7 +48,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const chart = await updateSavedChart(session.user.id, id, parsed.data);
     if (!chart) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Graphique introuvable." },
+        { error: "NOT_FOUND", message: "Chart not found." },
         { status: 404 }
       );
     }
@@ -65,7 +65,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     const deleted = await deleteSavedChart(session.user.id, id);
     if (!deleted) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Graphique introuvable." },
+        { error: "NOT_FOUND", message: "Chart not found." },
         { status: 404 }
       );
     }

@@ -13,7 +13,7 @@ export async function POST(_req: Request, ctx: Ctx) {
     const view = await duplicateSavedView(session.user.id, id);
     if (!view) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Vue introuvable." },
+        { error: "NOT_FOUND", message: "View not found." },
         { status: 404 }
       );
     }

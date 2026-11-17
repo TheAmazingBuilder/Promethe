@@ -127,14 +127,14 @@ function CopyField({ label, value }: { label: string; value: string }) {
           type="button"
           variant="outline"
           size="icon"
-          aria-label={copied ? "Copié" : "Copier"}
+          aria-label={copied ? "Copied" : "Copy"}
           onClick={async () => {
             try {
               await navigator.clipboard.writeText(value);
               setCopied(true);
               setTimeout(() => setCopied(false), 2000);
             } catch {
-              toast({ title: "Copie impossible", description: "Copiez manuellement." });
+              toast({ title: "Copy failed", description: "Copiez manuellement." });
             }
           }}
         >
@@ -625,10 +625,10 @@ function ActivitySection() {
 
   const relative = (iso: string) => {
     const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-    if (minutes < 1) return "à l'instant";
-    if (minutes < 60) return `il y a ${minutes} min`;
-    if (minutes < 1440) return `il y a ${Math.round(minutes / 60)} h`;
-    return new Date(iso).toLocaleDateString("fr-FR");
+    if (minutes < 1) return "just now";
+    if (minutes < 60) return `${minutes} min ago`;
+    if (minutes < 1440) return `${Math.round(minutes / 60)} h ago`;
+    return new Date(iso).toLocaleDateString("en-CA");
   };
 
   const statusStyle: Record<string, string> = {

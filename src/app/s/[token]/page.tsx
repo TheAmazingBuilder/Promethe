@@ -24,12 +24,7 @@ import {
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { clientIpFrom, hashIp, hashToken } from "@/lib/tokens";
 import { MESSAGES } from "@/i18n/dictionaries";
-import {
-  DEFAULT_LOCALE,
-  intlLocale,
-  isAppLocale,
-  type AppLocale,
-} from "@/i18n/config";
+import { DEFAULT_LOCALE, intlLocale, type AppLocale } from "@/i18n/config";
 import type {
   PublicReportPayload,
   PublicSharePayload,
@@ -41,14 +36,9 @@ export const dynamic = "force-dynamic";
 
 type PageProps = {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ lang?: string }>;
 };
 
-// ── locale resolution: explicit ?lang= only (EN default, no cookie) ────────
-
-async function resolveLocale(searchParams: { lang?: string }): Promise<AppLocale> {
-  return isAppLocale(searchParams.lang) ? searchParams.lang : DEFAULT_LOCALE;
-}
+// ── English only (Phase 3): no ?lang= parameter, no locale resolution ──────
 
 /** Deduped resolution - generateMetadata and the page share ONE call. */
 const resolve = cache((token: string) =>
@@ -68,10 +58,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function SharedPage({ params, searchParams }: PageProps) {
+export default async function SharedPage({ params }: PageProps) {
   const { token } = await params;
-  const sp = await searchParams;
-  const locale = await resolveLocale(sp);
+  const locale = DEFAULT_LOCALE;
   const m = MESSAGES[locale].publicShare;
 
   // ── rate limits (hashed keys only) ──
@@ -116,7 +105,7 @@ export default async function SharedPage({ params, searchParams }: PageProps) {
 
 // ── GONE view ────────────────────────────────────────────────────────────────
 
-function GoneView({ m, locale }: { m: (typeof MESSAGES)["fr"]["publicShare"]; locale: AppLocale }) {
+function GoneView({ m, locale }: { m: (typeof MESSAGES)["en"]["publicShare"]; locale: AppLocale }) {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-4 py-16 text-center">
@@ -136,7 +125,7 @@ function GoneView({ m, locale }: { m: (typeof MESSAGES)["fr"]["publicShare"]; lo
       <footer className="mt-auto border-t bg-card/40">
         <div className="mx-auto max-w-md px-4 py-4 text-center">
           <p className="text-xs text-muted-foreground">
-            Promethe - {locale === "fr" ? "journal de trading" : "trading journal"}
+            Promethe - trading journal
           </p>
         </div>
       </footer>
@@ -202,7 +191,7 @@ function ViewHeader({
 }: {
   title: string;
   payload: PublicSharePayload;
-  m: (typeof MESSAGES)["fr"]["publicShare"];
+  m: (typeof MESSAGES)["en"]["publicShare"];
   locale: AppLocale;
 }) {
   return (
@@ -235,7 +224,7 @@ function TradeView({
 }: {
   payload: PublicTradePayload;
   locale: AppLocale;
-  m: (typeof MESSAGES)["fr"]["publicShare"];
+  m: (typeof MESSAGES)["en"]["publicShare"];
 }) {
   const t = MESSAGES[locale].trading;
   const tr = payload.trade;
@@ -630,7 +619,7 @@ function ReportView({
 }: {
   payload: PublicReportPayload;
   locale: AppLocale;
-  m: (typeof MESSAGES)["fr"]["publicShare"];
+  m: (typeof MESSAGES)["en"]["publicShare"];
 }) {
   const r = m.report;
   const s = payload.stats;

@@ -150,7 +150,7 @@ model Profile {
   displayName       String   @map("display_name")
   timezone          String   @default("UTC")
   baseCurrency      String   @default("USD") @map("base_currency")
-  locale            String   @default("fr") // 'fr' | 'en' — UI language (addendum §11.6)
+  locale            String   @default("en") // 'en' — UI language, English only (addendum §11.6)
   theme             String   @default("system")
   defaultAccountId  String?  @map("default_account_id")
   /// v2 — quick-entry smart defaults (JSON): lastAccountId, lastInstrumentId,
@@ -1015,8 +1015,8 @@ model ReportSetting {
   emailEnabled       Boolean @default(false) @map("email_enabled")
   emailAddress       String? @map("email_address")
   includeScreenshots Boolean @default(false) @map("include_screenshots")
-  /// fr | en
-  language           String  @default("fr")
+  /// en (English only)
+  language           String  @default("en")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

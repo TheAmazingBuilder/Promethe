@@ -92,11 +92,11 @@ export async function scheduleAccountDeletion(
   await notifyInApp({
     userId,
     type: "DELETION_SCHEDULED",
-    title: "Suppression du compte programmée",
-    body: `Votre compte et toutes vos données seront définitivement supprimés le ${scheduledFor.toLocaleDateString(
-      "fr-FR",
+    title: "Account deletion scheduled",
+    body: `Your account and all your data will be permanently deleted on ${scheduledFor.toLocaleDateString(
+      "en-CA",
       { day: "numeric", month: "long", year: "numeric" }
-    )}. Vous pouvez annuler à tout moment d'ici là.`,
+    )}. You can cancel at any time before then.`,
     url: "#/reglages/compte",
     dedupeWithinMs: 0,
   });
@@ -122,8 +122,8 @@ export async function cancelAccountDeletion(userId: string): Promise<boolean> {
   await notifyInApp({
     userId,
     type: "DELETION_CANCELLED",
-    title: "Suppression du compte annulée",
-    body: "Votre demande de suppression a été annulée. Vos données sont conservées.",
+    title: "Account deletion cancelled",
+    body: "Your deletion request was cancelled. Your data is kept.",
     url: "#/reglages/compte",
     dedupeWithinMs: 0,
   });

@@ -15,7 +15,7 @@ export async function POST(_req: Request, ctx: Ctx) {
     const template = await recordTemplateUse(session.user.id, id);
     if (!template) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Modèle introuvable." },
+        { error: "NOT_FOUND", message: "Template not found." },
         { status: 404 }
       );
     }

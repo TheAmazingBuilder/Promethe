@@ -42,7 +42,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useI18n } from "@/i18n/i18n-provider";
 import { useAccounts } from "@/hooks/use-trading";
 import {
   useRevokeShareLink,
@@ -71,11 +70,11 @@ function statusIcon(status: ShareLink["status"]) {
   }
 }
 
-function fmtDateTime(locale: string, iso: string | null): string {
+function fmtDateTime(iso: string | null): string {
   if (!iso) return "-";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "-";
-  return new Intl.DateTimeFormat(locale === "fr" ? "fr-CA" : "en-CA", {
+  return new Intl.DateTimeFormat("en-CA", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(d);
@@ -83,12 +82,10 @@ function fmtDateTime(locale: string, iso: string | null): string {
 
 function LinkRow({
   link,
-  locale,
   onRevoke,
   revoking,
 }: {
   link: ShareLink;
-  locale: "fr" | "en";
   onRevoke: (id: string) => void;
   revoking: boolean;
 }) {
@@ -121,14 +118,14 @@ function LinkRow({
         </div>
         <p className="text-xs text-muted-foreground">
           {link.type === "TRADE" ? t("typeTrade") : t("typeReport")} ·{" "}
-          {link.tokenPrefix}… · {policySummary(link.policy, locale)}
+          {link.tokenPrefix}… · {policySummary(link.policy)}
         </p>
         <p className="text-[11px] text-muted-foreground">
           {t("colViews")} : {link.viewCount}
           {link.maxViews !== null ? ` / ${link.maxViews}` : ""} ·{" "}
-          {t("colExpiry")} : {fmtDateTime(locale, link.expiresAt)} ·{" "}
+          {t("colExpiry")} : {fmtDateTime(link.expiresAt)} ·{" "}
           {t("colLastViewed")} :{" "}
-          {link.lastViewedAt ? fmtDateTime(locale, link.lastViewedAt) : t("neverViewed")}
+          {link.lastViewedAt ? fmtDateTime(link.lastViewedAt) : t("neverViewed")}
         </p>
       </div>
       {link.status === "ACTIVE" && (
@@ -154,7 +151,6 @@ function LinkRow({
 export function SharingView() {
   const t = useTranslations("sharing");
   const tCommon = useTranslations("common");
-  const { locale } = useI18n();
   const { toast } = useToast();
   const linksQuery = useShareLinks();
   const accountsQuery = useAccounts();
@@ -231,7 +227,6 @@ export function SharingView() {
                 <LinkRow
                   key={link.id}
                   link={link}
-                  locale={locale}
                   onRevoke={(id) => {
                     const target = links.find((l) => l.id === id) ?? null;
                     setRevokeTarget(target);
@@ -279,9 +274,7 @@ export function SharingView() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         report={{ accounts }}
-        defaultTitle={
-          locale === "fr" ? "Rapport de performance" : "Performance report"
-        }
+        defaultTitle={"Performance report"}
       />
 
       {/* Revoke confirmation */}

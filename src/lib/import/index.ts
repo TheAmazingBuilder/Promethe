@@ -73,7 +73,7 @@ export function parseImportFile(content: ImportFileContent): ParseResult {
   if (!detected) {
     throw new ImportParseError(
       "FORMAT_UNRECOGNIZED",
-      "Format non reconnu - formats supportés : relevés MT4/MT5 (HTML), historiques MT5 (XLSX/CSV), cTrader (CSV/XLSX), TradingView (CSV), CSV générique."
+      "Unrecognized format – supported formats: MT4/MT5 statements (HTML), MT5 history (XLSX/CSV), cTrader (CSV/XLSX), TradingView (CSV), generic CSV."
     );
   }
 
@@ -87,7 +87,7 @@ export function parseImportFile(content: ImportFileContent): ParseResult {
       if (alternative.trades.length > 0 || alternative.cash.length > 0) return alternative;
       throw new ImportParseError(
         "NO_TRADES_FOUND",
-        "Aucun trade trouvé dans ce fichier - vérifiez qu'il s'agit bien d'un relevé d'historique (transactions clôturées)."
+        "No trades found in this file – check that it is a history statement (closed transactions)."
       );
     }
     return result;
@@ -105,7 +105,7 @@ export function parseImportFile(content: ImportFileContent): ParseResult {
     if (parsed.trades.length === 0 && parsed.cash.length === 0) {
       throw new ImportParseError(
         "NO_TRADES_FOUND",
-        "Aucun trade trouvé dans ce classeur - vérifiez l'onglet (Deals / Positions / Historique)."
+        "No trades found in this workbook – check the tab (Deals / Positions / History)."
       );
     }
     return {
@@ -122,7 +122,7 @@ export function parseImportFile(content: ImportFileContent): ParseResult {
   if (content.text !== undefined) {
     const rows = csvToRows(content.text);
     if (rows.length === 0) {
-      throw new ImportParseError("EMPTY_FILE", "Le fichier est vide ou illisible.");
+      throw new ImportParseError("EMPTY_FILE", "The file is empty or unreadable.");
     }
     const warnings = [];
 
@@ -130,14 +130,14 @@ export function parseImportFile(content: ImportFileContent): ParseResult {
       case "MT5_CSV": {
         const parsed = parseMt5Rows(rows, warnings);
         if (parsed.trades.length === 0 && parsed.cash.length === 0) {
-          throw new ImportParseError("NO_TRADES_FOUND", "Colonnes MT5 détectées mais aucune ligne exploitable.");
+          throw new ImportParseError("NO_TRADES_FOUND", "MT5 columns detected but no usable rows.");
         }
-        return { format: "MT5_CSV", formatLabel: "MetaTrader 5 Historique (CSV)", ...parsed };
+        return { format: "MT5_CSV", formatLabel: "MetaTrader 5 History (CSV)", ...parsed };
       }
       case "CTRADER_CSV": {
         const parsed = parseCtraderRows(rows, warnings);
         if (parsed.trades.length === 0 && parsed.cash.length === 0) {
-          throw new ImportParseError("NO_TRADES_FOUND", "Colonnes cTrader détectées mais aucune ligne exploitable.");
+          throw new ImportParseError("NO_TRADES_FOUND", "cTrader columns detected but no usable rows.");
         }
         return { format: "CTRADER_CSV", formatLabel: "cTrader (CSV)", ...parsed };
       }
@@ -146,10 +146,10 @@ export function parseImportFile(content: ImportFileContent): ParseResult {
         if (parsed.trades.length === 0) {
           throw new ImportParseError(
             "NO_TRADES_FOUND",
-            "Colonnes TradingView détectées mais aucun trade clôturé (seuls les trades remplis/clôturés sont importés)."
+            "TradingView columns detected but no closed trades (only filled/closed trades are imported)."
           );
         }
-        return { format: "TRADINGVIEW_CSV", formatLabel: "TradingView Historique de compte (CSV)", ...parsed };
+        return { format: "TRADINGVIEW_CSV", formatLabel: "TradingView account history (CSV)", ...parsed };
       }
       default: {
         // Generic CSV: auto-map columns, keep the mapping for the preview UI.
@@ -157,13 +157,13 @@ export function parseImportFile(content: ImportFileContent): ParseResult {
         if (!columns.symbol || !columns.direction || !columns.openTime) {
           throw new ImportParseError(
             "GENERIC_COLUMNS_MISSING",
-            "Colonnes requises non détectées (date, symbole, sens). Utilisez le mapping manuel après le dépôt du fichier."
+            "Required columns not detected (date, symbol, side). Use manual mapping after dropping the file."
           );
         }
         const parsed = makeGenericParser(columns)(rows, warnings);
         return {
           format: "GENERIC_CSV",
-          formatLabel: "CSV générique",
+          formatLabel: "Generic CSV",
           columns,
           ...parsed,
         };
@@ -171,5 +171,5 @@ export function parseImportFile(content: ImportFileContent): ParseResult {
     }
   }
 
-  throw new ImportParseError("FORMAT_UNRECOGNIZED", "Contenu indisponible pour l'analyse.");
+  throw new ImportParseError("FORMAT_UNRECOGNIZED", "Content unavailable for analysis.");
 }

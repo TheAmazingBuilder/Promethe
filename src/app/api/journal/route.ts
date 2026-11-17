@@ -27,7 +27,7 @@ export async function GET(req: Request) {
     sweepRateLimits();
     if (!rateLimit(`journal:${session.user.id}`, 60, 60 * 1000)) {
       return NextResponse.json(
-        { error: "RATE_LIMITED", message: "Trop de requêtes, patientez." },
+        { error: "RATE_LIMITED", message: "Too many requests, please wait." },
         { status: 429 }
       );
     }
@@ -36,7 +36,7 @@ export async function GET(req: Request) {
     const parsed = journalQuerySchema.safeParse(raw);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Date invalide.", fieldErrors: zodFieldErrors(parsed.error) },
+        { error: "VALIDATION", message: "Invalid date.", fieldErrors: zodFieldErrors(parsed.error) },
         { status: 422 }
       );
     }
@@ -57,7 +57,7 @@ export async function PUT(req: Request) {
     sweepRateLimits();
     if (!rateLimit(`journal-put:${session.user.id}`, 30, 60 * 1000)) {
       return NextResponse.json(
-        { error: "RATE_LIMITED", message: "Trop de requêtes, patientez." },
+        { error: "RATE_LIMITED", message: "Too many requests, please wait." },
         { status: 429 }
       );
     }
@@ -65,7 +65,7 @@ export async function PUT(req: Request) {
     const parsed = journalEntrySchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Entrée de journal invalide.", fieldErrors: zodFieldErrors(parsed.error) },
+        { error: "VALIDATION", message: "Invalid journal entry.", fieldErrors: zodFieldErrors(parsed.error) },
         { status: 422 }
       );
     }
@@ -84,14 +84,14 @@ export async function DELETE(req: Request) {
     const parsed = journalDeleteQuerySchema.safeParse(raw);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Date invalide.", fieldErrors: zodFieldErrors(parsed.error) },
+        { error: "VALIDATION", message: "Invalid date.", fieldErrors: zodFieldErrors(parsed.error) },
         { status: 422 }
       );
     }
     const ok = await deleteJournalEntry(session.user.id, parsed.data.date);
     if (!ok) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Entrée introuvable." },
+        { error: "NOT_FOUND", message: "Entry not found." },
         { status: 404 }
       );
     }

@@ -146,17 +146,15 @@ export type ClockFormat = "12H" | "24H" | "LOCALE";
 
 /**
  * Formats a time-of-day honoring the user's 12H/24H/LOCALE preference.
- * `locale` drives the LOCALE fallback (fr → 24H style, en → 12H style).
+ * English only (Phase 3): the LOCALE fallback is the 12H style.
  */
 export function formatClock(
   hour: number,
   minute: number,
   format: ClockFormat,
-  locale: string
+  _locale: string
 ): string {
-  const use12 =
-    format === "12H" ||
-    (format === "LOCALE" && !locale.toLowerCase().startsWith("fr"));
+  const use12 = format === "12H" || format === "LOCALE";
   if (!use12) {
     return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
   }

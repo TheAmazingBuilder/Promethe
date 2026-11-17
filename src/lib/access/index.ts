@@ -38,7 +38,7 @@ export function mentorContext(
   scope: AccessScope
 ): AccessContext {
   if (mentorId === ownerId) {
-    throw new AccessDeniedError("Auto-mentorat impossible : utilisez le compte propriétaire.");
+    throw new AccessDeniedError("Self-mentorship is not possible: use the owner account.");
   }
   return {
     viewerId: mentorId,

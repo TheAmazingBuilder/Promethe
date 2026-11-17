@@ -144,7 +144,7 @@ export async function getMonthlyReport(
   });
 
   const { bySymbol, byStrategy } = groupRows(trades);
-  const monthLabel = new Intl.DateTimeFormat("fr-FR", {
+  const monthLabel = new Intl.DateTimeFormat("en-CA", {
     month: "long",
     year: "numeric",
   }).format(start);

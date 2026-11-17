@@ -10,7 +10,7 @@ export async function GET() {
     const session = await getSession();
     if (!session) {
       return NextResponse.json(
-        { error: "UNAUTHORIZED", message: "Session absente ou expirée." },
+        { error: "UNAUTHORIZED", message: "Session missing or expired." },
         { status: 401 }
       );
     }
@@ -18,7 +18,7 @@ export async function GET() {
   } catch (error) {
     console.error("[api/auth/me] failed:", error);
     return NextResponse.json(
-      { error: "INTERNAL", message: "Une erreur est survenue." },
+      { error: "INTERNAL", message: "An error occurred." },
       { status: 500 }
     );
   }

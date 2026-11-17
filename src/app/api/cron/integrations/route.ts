@@ -31,13 +31,13 @@ async function handle(req: Request) {
       "[cron/integrations] CRON_SECRET is missing or too short - refusing to run."
     );
     return NextResponse.json(
-      { error: "CRON_SECRET_UNSET", message: "CRON_SECRET manquant ou trop court." },
+      { error: "CRON_SECRET_UNSET", message: "CRON_SECRET missing or too short." },
       { status: 503 }
     );
   }
   if (!authorized(req)) {
     return NextResponse.json(
-      { error: "BAD_TOKEN", message: "Jeton cron invalide." },
+      { error: "BAD_TOKEN", message: "Invalid cron token." },
       { status: 401 }
     );
   }

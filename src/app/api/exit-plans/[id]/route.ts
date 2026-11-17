@@ -22,14 +22,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const parsed = exitPlanPatchSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Certains champs sont invalides.", fieldErrors: zodFieldErrors(parsed.error) },
+        { error: "VALIDATION", message: "Some fields are invalid.", fieldErrors: zodFieldErrors(parsed.error) },
         { status: 422 }
       );
     }
     const plan = await updateExitPlan(session.user.id, id, parsed.data);
     if (!plan) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Plan introuvable." },
+        { error: "NOT_FOUND", message: "Plan not found." },
         { status: 404 }
       );
     }
@@ -46,7 +46,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     const ok = await deleteExitPlan(session.user.id, id);
     if (!ok) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Plan introuvable." },
+        { error: "NOT_FOUND", message: "Plan not found." },
         { status: 404 }
       );
     }

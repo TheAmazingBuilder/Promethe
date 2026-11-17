@@ -33,7 +33,7 @@ export async function PUT(req: Request) {
     const parsed = shortcutUpsertSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Raccourci invalide.", fieldErrors: zodFieldErrors(parsed.error) },
+        { error: "VALIDATION", message: "Invalid shortcut.", fieldErrors: zodFieldErrors(parsed.error) },
         { status: 422 }
       );
     }
@@ -46,7 +46,7 @@ export async function PUT(req: Request) {
   } catch (error) {
     if (error instanceof Error && error.message === "ACTION_NOT_EDITABLE") {
       return NextResponse.json(
-        { error: "ACTION_NOT_EDITABLE", message: "Ce raccourci ne peut pas être modifié ici." },
+        { error: "ACTION_NOT_EDITABLE", message: "This shortcut cannot be changed here." },
         { status: 422 }
       );
     }

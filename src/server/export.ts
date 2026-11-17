@@ -9,7 +9,7 @@
 import { db } from "@/lib/db";
 import { tradeListWhere } from "@/server/trades";
 import { toTradeListItem } from "@/server/trades";
-import { tradesToCsv, type CsvLocale } from "@/lib/trading/csv-export";
+import { tradesToCsv } from "@/lib/trading/csv-export";
 import type { TradeListItemDTO } from "@/lib/trading/dto";
 import type { TradeListQuery } from "@/lib/validations/trade";
 
@@ -17,8 +17,7 @@ const MAX_EXPORT_ROWS = 10_000;
 
 export async function exportTradesCsv(
   userId: string,
-  query: TradeListQuery,
-  locale: CsvLocale
+  query: TradeListQuery
 ): Promise<{ csv: string; count: number; truncated: boolean }> {
   const rows = await db.trade.findMany({
     where: tradeListWhere(userId, query),
@@ -36,7 +35,7 @@ export async function exportTradesCsv(
     .slice(0, MAX_EXPORT_ROWS)
     .map(toTradeListItem);
   return {
-    csv: tradesToCsv(items, locale),
+    csv: tradesToCsv(items),
     count: items.length,
     truncated,
   };

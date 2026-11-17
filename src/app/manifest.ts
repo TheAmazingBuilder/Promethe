@@ -7,10 +7,10 @@ import type { MetadataRoute } from "next";
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Promethe - Journal de trading",
+    name: "Promethe – Trading journal",
     short_name: "Promethe",
     description:
-      "Journal de trading XAUUSD et Forex : trades, stratégies et analyses.",
+      "XAUUSD and Forex trading journal: trades, strategies and analysis.",
     start_url: "/",
     scope: "/",
     display: "standalone",

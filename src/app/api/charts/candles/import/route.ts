@@ -19,7 +19,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: "VALIDATION",
-          message: "Import invalide.",
+          message: "Invalid import.",
           fieldErrors: zodFieldErrors(parsed.error),
         },
         { status: 422 }

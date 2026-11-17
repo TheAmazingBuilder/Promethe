@@ -79,7 +79,7 @@ function TestShell({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <SessionProvider initialSession={SESSION}>
-        <I18nProvider initialLocale="en">
+        <I18nProvider>
           <A11yProvider>
             <TimeProvider>{children}</TimeProvider>
           </A11yProvider>

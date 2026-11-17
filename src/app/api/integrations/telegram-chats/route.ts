@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     );
     if (!rl.allowed) {
       return NextResponse.json(
-        { error: "RATE_LIMITED", message: "Trop de requêtes, patientez une minute." },
+        { error: "RATE_LIMITED", message: "Too many requests, please wait a minute." },
         { status: 429 }
       );
     }
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: checked.code,
-          message: "Token de bot Telegram invalide.",
+          message: "Invalid Telegram bot token.",
         },
         { status: 422 }
       );
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
         {
           error: result.error,
           message:
-            "Telegram n'a pas répondu. Vérifiez le token et envoyez d'abord un message au bot.",
+            "Telegram did not respond. Check the token and send a message to the bot first.",
         },
         { status: 422 }
       );

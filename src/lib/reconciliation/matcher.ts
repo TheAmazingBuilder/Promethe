@@ -104,7 +104,7 @@ export function scorePair(
     reasons.push({
       code: manual.dateOnly ? "ENTRY_TIME_SAME_DAY_DATE_ONLY" : "ENTRY_TIME_SAME_DAY",
       weight: 0.1,
-      detail: manual.dateOnly ? "trade manuel sans horodatage" : "même jour",
+      detail: manual.dateOnly ? "manual trade without timestamp" : "same day",
     });
   } else {
     entryPlausible = false;

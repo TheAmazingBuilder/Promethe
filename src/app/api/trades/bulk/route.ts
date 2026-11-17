@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     const parsed = bulkTradesSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Sélection invalide.", fieldErrors: zodFieldErrors(parsed.error) },
+        { error: "VALIDATION", message: "Invalid selection.", fieldErrors: zodFieldErrors(parsed.error) },
         { status: 422 }
       );
     }
@@ -24,13 +24,13 @@ export async function POST(req: Request) {
   } catch (error) {
     if (error instanceof BulkValidationError) {
       const messages: Record<string, string> = {
-        STRATEGY_NOT_FOUND: "Stratégie introuvable.",
-        ACCOUNT_NOT_FOUND: "Compte introuvable.",
-        TAG_NOT_FOUND: "Tag introuvable.",
-        TRADE_NOT_FOUND: "Aucun trade sélectionné trouvé.",
+        STRATEGY_NOT_FOUND: "Strategy not found.",
+        ACCOUNT_NOT_FOUND: "Account not found.",
+        TAG_NOT_FOUND: "Tag not found.",
+        TRADE_NOT_FOUND: "No selected trade found.",
       };
       return NextResponse.json(
-        { error: error.message, message: messages[error.message] ?? "Requête invalide." },
+        { error: error.message, message: messages[error.message] ?? "Invalid request." },
         { status: 422 }
       );
     }

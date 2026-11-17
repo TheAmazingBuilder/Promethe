@@ -10,7 +10,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     const session = await requireUser();
     const removed = await deleteMagicMapping(session.user.id, id);
     if (!removed) {
-      return NextResponse.json({ error: "NOT_FOUND", message: "Mapping introuvable." }, { status: 404 });
+      return NextResponse.json({ error: "NOT_FOUND", message: "Mapping not found." }, { status: 404 });
     }
     return NextResponse.json({ ok: true });
   } catch (error) {

@@ -944,8 +944,8 @@ export async function processIngestPayload(
     await notifyInApp({
       userId: connection.userId,
       type: "SYNC_MISMATCH",
-      title: "Connexion MT en conflit",
-      body: `Le terminal « ${connection.label} » envoie des données d'un autre compte (${payload.server} / ${payload.login}). Les événements sont rejetés - vérifiez le token.`,
+      title: "MT connection conflict",
+      body: `The terminal “${connection.label}” is sending data from another account (${payload.server} / ${payload.login}). Events are rejected – check the token.`,
       url: "#/reglages/broker-sync",
       dedupeWithinMs: 24 * 60 * 60 * 1000,
     });
@@ -1040,7 +1040,7 @@ export async function sweepStaleConnections(now: Date = new Date()): Promise<Sta
           userId: connection.userId,
           type: "SYNC_STALE",
           title: "Synchronisation interrompue",
-          body: `Aucun heartbeat de « ${connection.label} » depuis plus de 30 minutes - MetaTrader est-il ouvert ?`,
+          body: `No heartbeat from “${connection.label}” for over 30 minutes – is MetaTrader open?`,
           url: "#/reglages/broker-sync",
           dedupeWithinMs: 6 * 60 * 60 * 1000,
         });

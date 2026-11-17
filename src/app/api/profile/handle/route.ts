@@ -29,7 +29,7 @@ export async function PUT(req: Request) {
       return NextResponse.json(
         {
           error: "VALIDATION",
-          message: "Handle invalide (a-z, 0-9, _, 3-24 caractères).",
+          message: "Invalid handle (a-z, 0-9, _, 3–24 characters).",
           fieldErrors: zodFieldErrors(parsed.error),
         },
         { status: 422 }

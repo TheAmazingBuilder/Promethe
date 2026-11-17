@@ -15,9 +15,9 @@ export interface LegalIdentity {
 
 export async function GET() {
   const identity: LegalIdentity = {
-    entityName: process.env.LEGAL_ENTITY_NAME || "L'éditeur de Promethe",
+    entityName: process.env.LEGAL_ENTITY_NAME || "The Promethe publisher",
     contactEmail: process.env.LEGAL_CONTACT_EMAIL || "contact@tradejournal.app",
-    address: process.env.LEGAL_ADDRESS || "Adresse sur demande",
+    address: process.env.LEGAL_ADDRESS || "Address on request",
     privacyContact: process.env.PRIVACY_CONTACT_EMAIL || "privacy@tradejournal.app",
     supervisoryAuthority: process.env.SUPERVISORY_AUTHORITY || "CNIL",
   };

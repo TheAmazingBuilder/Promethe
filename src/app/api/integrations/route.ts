@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     } | null;
     if (!body) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Requête invalide." },
+        { error: "VALIDATION", message: "Invalid request." },
         { status: 422 }
       );
     }

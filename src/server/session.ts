@@ -15,7 +15,7 @@ const SESSION_TTL_MS = SESSION_TTL_S * 1000;
 
 export class UnauthorizedError extends Error {
   constructor() {
-    super("Non authentifié");
+    super("Not authenticated");
     this.name = "UnauthorizedError";
   }
 }

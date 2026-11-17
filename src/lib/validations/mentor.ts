@@ -13,7 +13,7 @@ export const handleSchema = z
   .string()
   .trim()
   .toLowerCase()
-  .regex(/^[a-z0-9_]{3,24}$/, "3-24 caractères : a-z, 0-9, _");
+  .regex(/^[a-z0-9_]{3,24}$/, "3–24 characters: a-z, 0-9, _");
 
 /** Fine-grained mentor permissions (scope of the mentee's journal). */
 export const mentorPermissionsSchema = z
@@ -51,7 +51,7 @@ export const mentorAccessPatchSchema = z
     status: z.enum(["ACTIVE", "PAUSED"]).optional(),
   })
   .refine((v) => v.permissions !== undefined || v.status !== undefined, {
-    message: "Rien à modifier.",
+    message: "Nothing to change.",
   });
 
 export type MentorAccessPatch = z.infer<typeof mentorAccessPatchSchema>;

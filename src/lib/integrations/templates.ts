@@ -105,13 +105,13 @@ export function escapeHtml(value: string): string {
 function eventLabel(eventType: IntegrationEventType): string {
   switch (eventType) {
     case "DAILY_SUMMARY":
-      return "Résumé quotidien";
+      return "Daily summary";
     case "DRAWDOWN_ALERT":
-      return "Alerte drawdown";
+      return "Drawdown alert";
     case "PROP_ALERT":
-      return "Alerte prop";
+      return "Prop alert";
     case "TEST":
-      return "Message de test";
+      return "Test message";
   }
 }
 
@@ -125,7 +125,7 @@ function minimalDiscord(
       {
         title: trunc(`Promethe : ${eventLabel(eventType)}`, 256),
         description: trunc(
-          "Nouvel événement dans votre journal. Ouvrez Promethe pour voir le détail.",
+          "New event in your journal. Open Promethe to see the details.",
           4096
         ),
         color: COLOR_NEUTRAL,
@@ -138,8 +138,8 @@ function minimalDiscord(
 function minimalTelegram(eventType: IntegrationEventType, appUrl: string): string {
   return (
     `<b>Promethe : ${escapeHtml(eventLabel(eventType))}</b>\n` +
-    `Nouvel événement dans votre journal. Ouvrez Promethe pour voir le détail.\n` +
-    `<a href="${escapeHtml(appUrl)}">Ouvrir Promethe</a>`
+    `New event in your journal. Open Promethe to see the details.\n` +
+    `<a href="${escapeHtml(appUrl)}">Open Promethe</a>`
   );
 }
 
@@ -159,9 +159,9 @@ function renderDiscordEmbed(
     return {
       embeds: [
         {
-          title: "Promethe : message de test",
+          title: "Promethe: test message",
           description: clean(
-            "Si vous lisez ce message, votre intégration fonctionne."
+            "If you are reading this message, your integration works."
           ),
           color: COLOR_EMERALD,
           url: appUrl,
@@ -176,14 +176,14 @@ function renderDiscordEmbed(
     const fields: DiscordEmbedField[] = [];
     if (!hideAmounts) {
       fields.push({
-        name: "P&L du jour",
+        name: "P&L today",
         value: trunc(clean(money(d.pnl, d.currency)), 1024),
         inline: true,
       });
     }
     fields.push(
       {
-        name: "Trades clôturés",
+        name: "Closed trades",
         value: trunc(String(d.tradeCount), 1024),
         inline: true,
       },
@@ -206,14 +206,14 @@ function renderDiscordEmbed(
     return {
       embeds: [
         {
-          title: trunc(`Promethe : résumé du ${d.date}`, 256),
+          title: trunc(`Promethe: summary for ${d.date}`, 256),
           description: trunc(
             clean(
               pnlNum > 0
-                ? "Journée positive."
+                ? "Positive day."
                 : pnlNum < 0
-                  ? "Journée négative."
-                  : "Journée neutre."
+                  ? "Negative day."
+                  : "Neutral day."
             ),
             4096
           ),
@@ -229,24 +229,24 @@ function renderDiscordEmbed(
     const d = event.data;
     const fields: DiscordEmbedField[] = [
       {
-        name: "Seuil franchi",
-        value: trunc(`${d.threshold} % du drawdown max`, 1024),
+        name: "Threshold crossed",
+        value: trunc(`${d.threshold}% of max drawdown`, 1024),
         inline: true,
       },
       {
-        name: "Drawdown utilisé",
+        name: "Drawdown used",
         value: trunc(`${d.usedPercent} %`, 1024),
         inline: true,
       },
       {
-        name: "Compte",
+        name: "Account",
         value: trunc(clean(d.accountName), 1024),
         inline: true,
       },
     ];
     if (!hideAmounts) {
       fields.push({
-        name: "Drawdown actuel",
+        name: "Current drawdown",
         value: trunc(
           clean(
             d.drawdownLimit == null
@@ -262,12 +262,12 @@ function renderDiscordEmbed(
       embeds: [
         {
           title: trunc(
-            `Promethe : drawdown à ${d.usedPercent} % (${d.drawdownType === "TRAILING" ? "trailing" : "statique"})`,
+            `Promethe: drawdown at ${d.usedPercent}% (${d.drawdownType === "TRAILING" ? "trailing" : "static"})`,
             256
           ),
           description: trunc(
             clean(
-              "Votre drawdown a franchi un seuil de vigilance. Vérifiez vos positions ouvertes."
+              "Your drawdown has crossed a watch threshold. Check your open positions."
             ),
             4096
           ),
@@ -283,10 +283,10 @@ function renderDiscordEmbed(
   const d = event.data;
   const title =
     d.kind === "BREACHED"
-      ? "Promethe : règle prop violée"
+      ? "Promethe: prop rule violated"
       : d.kind === "TARGET_REACHED"
-        ? "Promethe : objectif prop atteint"
-        : "Promethe : perte journalière proche de la limite";
+        ? "Promethe: prop target reached"
+        : "Promethe: daily loss near the limit";
   return {
     embeds: [
       {
@@ -295,7 +295,7 @@ function renderDiscordEmbed(
         color: d.kind === "BREACHED" ? COLOR_RED : COLOR_EMERALD,
         fields: [
           {
-            name: "Compte",
+            name: "Account",
             value: trunc(clean(d.accountName), 1024),
             inline: true,
           },
@@ -325,12 +325,12 @@ function renderTelegramText(
   const hideAmounts = privacy === "NO_AMOUNTS";
   const clean = (s: string) =>
     hideAmounts ? redactAmountsInText(s) : s;
-  const link = `<a href="${escapeHtml(appUrl)}">Ouvrir Promethe</a>`;
+  const link = `<a href="${escapeHtml(appUrl)}">Open Promethe</a>`;
 
   if (event.eventType === "TEST") {
     return (
-      `<b>Promethe : message de test</b>\n` +
-      `${escapeHtml(clean("Si vous lisez ce message, votre intégration fonctionne."))}\n` +
+      `<b>Promethe: test message</b>\n` +
+      `${escapeHtml(clean("If you are reading this message, your integration works."))}\n` +
       link
     );
   }
@@ -339,22 +339,22 @@ function renderTelegramText(
     const d = event.data;
     const pnlNum = Number(d.pnl);
     const lines = [
-      `<b>Promethe : résumé du ${escapeHtml(d.date)}</b>`,
+      `<b>Promethe: summary for ${escapeHtml(d.date)}</b>`,
       escapeHtml(
         clean(
           pnlNum > 0
-            ? "Journée positive."
+            ? "Positive day."
             : pnlNum < 0
-              ? "Journée négative."
-              : "Journée neutre."
+              ? "Negative day."
+              : "Neutral day."
         )
       ),
     ];
     if (!hideAmounts) {
-      lines.push(`P&amp;L du jour : <b>${escapeHtml(clean(money(d.pnl, d.currency)))}</b>`);
+      lines.push(`P&amp;L today: <b>${escapeHtml(clean(money(d.pnl, d.currency)))}</b>`);
     }
     lines.push(
-      `Trades clôturés : ${d.tradeCount}`,
+      `Closed trades: ${d.tradeCount}`,
       `Gagnants / perdants : ${d.wins} / ${d.losses}`,
       `Win rate : ${d.winRate == null ? "n/a" : `${escapeHtml(d.winRate)} %`}`,
       `Trades ouverts : ${d.openTrades}`,
@@ -366,17 +366,17 @@ function renderTelegramText(
   if (event.eventType === "DRAWDOWN_ALERT") {
     const d = event.data;
     const lines = [
-      `<b>Promethe : drawdown à ${escapeHtml(d.usedPercent)} %</b>`,
-      `Seuil franchi : ${d.threshold} % du drawdown max (${d.drawdownType === "TRAILING" ? "trailing" : "statique"})`,
-      `Compte : ${escapeHtml(clean(d.accountName))}`,
+      `<b>Promethe: drawdown at ${escapeHtml(d.usedPercent)}%</b>`,
+      `Threshold crossed: ${d.threshold}% of max drawdown (${d.drawdownType === "TRAILING" ? "trailing" : "static"})`,
+      `Account: ${escapeHtml(clean(d.accountName))}`,
     ];
     if (!hideAmounts) {
       lines.push(
-        `Drawdown actuel : ${escapeHtml(clean(d.drawdownLimit == null ? money(d.drawdownUsed, d.currency) : `${money(d.drawdownUsed, d.currency)} / ${money(d.drawdownLimit, d.currency)}`))}`
+        `Current drawdown : ${escapeHtml(clean(d.drawdownLimit == null ? money(d.drawdownUsed, d.currency) : `${money(d.drawdownUsed, d.currency)} / ${money(d.drawdownLimit, d.currency)}`))}`
       );
     }
     lines.push(
-      escapeHtml(clean("Vérifiez vos positions ouvertes.")),
+      escapeHtml(clean("Check your open positions.")),
       link
     );
     return lines.join("\n");
@@ -385,14 +385,14 @@ function renderTelegramText(
   const d = event.data;
   const title =
     d.kind === "BREACHED"
-      ? "Promethe : règle prop violée"
+      ? "Promethe: prop rule violated"
       : d.kind === "TARGET_REACHED"
-        ? "Promethe : objectif prop atteint"
-        : "Promethe : perte journalière proche de la limite";
+        ? "Promethe: prop target reached"
+        : "Promethe: daily loss near the limit";
   return [
     `<b>${escapeHtml(title)}</b>`,
     escapeHtml(clean(d.detail)),
-    `Compte : ${escapeHtml(clean(d.accountName))}`,
+    `Account: ${escapeHtml(clean(d.accountName))}`,
     link,
   ].join("\n");
 }

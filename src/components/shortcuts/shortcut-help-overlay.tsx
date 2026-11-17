@@ -16,7 +16,6 @@ import {
   effectiveKeys,
   formatChord,
 } from "@/lib/shortcuts/registry";
-import { useI18n } from "@/i18n/i18n-provider";
 import type { ShortcutDTO } from "@/lib/trading/dto";
 
 /**
@@ -33,7 +32,6 @@ export function ShortcutHelpOverlay({
   overrides: ShortcutDTO[];
 }) {
   const t = useTranslations("shortcutsView");
-  const { locale } = useI18n();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -58,7 +56,7 @@ export function ShortcutHelpOverlay({
                 </p>
               </div>
               <Badge variant="outline" className="shrink-0 font-mono">
-                {formatChord(effectiveKeys(action.id, overrides), locale)}
+                {formatChord(effectiveKeys(action.id, overrides))}
               </Badge>
             </div>
           ))}

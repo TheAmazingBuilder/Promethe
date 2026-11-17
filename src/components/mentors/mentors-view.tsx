@@ -184,9 +184,9 @@ function HandleCard({
       onSaved();
     } catch (error) {
       toast({
-        title: "Erreur",
+        title: "Error",
         description:
-          error instanceof ApiClientError ? error.message : "Réessayez.",
+          error instanceof ApiClientError ? error.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -282,9 +282,9 @@ function InviteCard({
       toast({ title: t("inviteCreated") });
     } catch (error) {
       toast({
-        title: "Erreur",
+        title: "Error",
         description:
-          error instanceof ApiClientError ? error.message : "Réessayez.",
+          error instanceof ApiClientError ? error.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -381,9 +381,9 @@ function PendingInvitationsCard({
       onChanged();
     } catch (error) {
       toast({
-        title: "Erreur",
+        title: "Error",
         description:
-          error instanceof ApiClientError ? error.message : "Réessayez.",
+          error instanceof ApiClientError ? error.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -568,9 +568,9 @@ function AccessActions({
       onChanged();
     } catch (error) {
       toast({
-        title: "Erreur",
+        title: "Error",
         description:
-          error instanceof ApiClientError ? error.message : "Réessayez.",
+          error instanceof ApiClientError ? error.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -585,9 +585,9 @@ function AccessActions({
       onChanged();
     } catch (error) {
       toast({
-        title: "Erreur",
+        title: "Error",
         description:
-          error instanceof ApiClientError ? error.message : "Réessayez.",
+          error instanceof ApiClientError ? error.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -661,9 +661,9 @@ function EditAccessDialog({
       onClose();
     } catch (error) {
       toast({
-        title: "Erreur",
+        title: "Error",
         description:
-          error instanceof ApiClientError ? error.message : "Réessayez.",
+          error instanceof ApiClientError ? error.message : "Please try again.",
         variant: "destructive",
       });
     } finally {

@@ -211,7 +211,7 @@ export function newBlockId(): string {
 export function gaiaErrorMessage(err: unknown): string {
   if (err instanceof ApiClientError) return err.message;
   if (err instanceof Error) return err.message;
-  return "Erreur";
+  return "Error";
 }
 
 // ── Ref kinds: icon + hue (emerald/teal Promethe palette, never cobalt) ────
@@ -279,7 +279,7 @@ export function gaiaRelativeTime(
   if (diffHours < 48) return t("gaia.time.yesterday");
   const diffDays = Math.floor(diffHours / 24);
   if (diffDays < 7) return compose(diffDays, t("gaia.time.days"), t("gaia.time.days"));
-  return date.toLocaleDateString("fr-CA");
+  return date.toLocaleDateString("en-CA");
 }
 
 // ── Small shared visuals ─────────────────────────────────────────────────────

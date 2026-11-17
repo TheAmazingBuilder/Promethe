@@ -28,7 +28,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: "VALIDATION",
-          message: "Configuration de graphique invalide.",
+          message: "Invalid chart configuration.",
           fieldErrors: zodFieldErrors(parsed.error),
         },
         { status: 422 }

@@ -26,7 +26,6 @@ import {
   formatChord,
   type ShortcutAction,
 } from "@/lib/shortcuts/registry";
-import { useI18n } from "@/i18n/i18n-provider";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import { ApiClientError } from "@/lib/api-client";
 import type { ShortcutDTO } from "@/lib/trading/dto";
@@ -41,7 +40,6 @@ export function ShortcutsView() {
   const t = useTranslations("shortcutsView");
   const tRoot = useTranslations();
   const tCommon = useTranslations("common");
-  const { locale } = useI18n();
   const { toast } = useToast();
   const shortcuts = useShortcuts();
   const upsert = useUpsertShortcut();
@@ -170,7 +168,7 @@ export function ShortcutsView() {
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <Badge variant="outline" className="font-mono">
-                        {formatChord(keys, locale)}
+                        {formatChord(keys)}
                       </Badge>
                       {!isDefault && (
                         <Badge variant="secondary">{t("custom")}</Badge>
@@ -208,7 +206,7 @@ export function ShortcutsView() {
           <CardContent className="space-y-3 px-4 py-4">
             <p className="text-sm font-medium">
               {t("conflictTitle", {
-                chord: formatChord(conflict.chord, locale),
+                chord: formatChord(conflict.chord),
                 action: t(conflict.withAction.labelKey),
               })}
             </p>

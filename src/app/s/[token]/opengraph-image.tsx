@@ -37,7 +37,7 @@ export default async function OgImage({
           }}>P</div>
           <div style={{ fontSize: 44, fontWeight: 700, color: text }}>Promethe</div>
         </div>
-        <div style={{ fontSize: 26, color: muted }}>Journal de trading - trading journal</div>
+        <div style={{ fontSize: 26, color: muted }}>Trading journal</div>
       </div>
     );
   }

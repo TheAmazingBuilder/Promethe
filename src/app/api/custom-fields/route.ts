@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     const parsed = customFieldDefinitionInputSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Certains champs sont invalides.", fieldErrors: zodFieldErrors(parsed.error) },
+        { error: "VALIDATION", message: "Some fields are invalid.", fieldErrors: zodFieldErrors(parsed.error) },
         { status: 422 }
       );
     }
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
   } catch (error) {
     if (error instanceof CustomFieldValidationError) {
       return NextResponse.json(
-        { error: error.message, message: "Limite de 30 champs personnalisés atteinte." },
+        { error: error.message, message: "Limit of 30 custom fields reached." },
         { status: 422 }
       );
     }

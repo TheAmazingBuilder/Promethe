@@ -195,7 +195,7 @@ function MentorTradeBody({
               <img
                 key={shot.id}
                 src={shot.url}
-                alt={shot.label ?? "Capture du trade"}
+                alt={shot.label ?? "Trade screenshot"}
                 loading="lazy"
                 className="rounded-md border"
               />

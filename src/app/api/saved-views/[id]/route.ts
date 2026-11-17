@@ -25,14 +25,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const parsed = savedViewPatchSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Certains champs sont invalides.", fieldErrors: zodFieldErrors(parsed.error) },
+        { error: "VALIDATION", message: "Some fields are invalid.", fieldErrors: zodFieldErrors(parsed.error) },
         { status: 422 }
       );
     }
     const view = await updateSavedView(session.user.id, id, parsed.data);
     if (!view) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Vue introuvable." },
+        { error: "NOT_FOUND", message: "View not found." },
         { status: 404 }
       );
     }
@@ -49,7 +49,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     const ok = await deleteSavedView(session.user.id, id);
     if (!ok) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Vue introuvable." },
+        { error: "NOT_FOUND", message: "View not found." },
         { status: 404 }
       );
     }

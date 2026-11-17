@@ -22,7 +22,7 @@ export async function POST(_req: Request, ctx: Ctx) {
     );
     if (!rl.allowed) {
       return NextResponse.json(
-        { error: "RATE_LIMITED", message: "Trop de tests, patientez une minute." },
+        { error: "RATE_LIMITED", message: "Too many tests, please wait a minute." },
         { status: 429 }
       );
     }
@@ -31,7 +31,7 @@ export async function POST(_req: Request, ctx: Ctx) {
       return NextResponse.json(
         {
           error: result.error ?? "TEST_FAILED",
-          message: "Le message de test n'a pas pu être envoyé.",
+          message: "The test message could not be sent.",
         },
         { status: 422 }
       );

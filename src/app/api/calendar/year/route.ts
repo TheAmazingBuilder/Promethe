@@ -20,7 +20,7 @@ export async function GET(req: Request) {
     const parsed = querySchema.safeParse(params);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Paramètres invalides." },
+        { error: "VALIDATION", message: "Invalid parameters." },
         { status: 422 }
       );
     }

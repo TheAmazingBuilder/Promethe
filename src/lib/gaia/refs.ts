@@ -71,7 +71,7 @@ async function resolveStrategy(userId: string, id: string): Promise<GaiaRefHit |
     kind: "STRATEGY",
     id: strategy.id,
     label: strategy.name,
-    meta: "Stratégie du playbook",
+    meta: "Playbook strategy",
     href: "#/strategies",
   };
 }
@@ -106,8 +106,8 @@ async function resolveSetup(userId: string, id: string): Promise<GaiaRefHit | nu
     label: id,
     meta:
       trades.length === 1
-        ? "Setup de trade · 1 trade"
-        : `Setup de trade · ${trades.length} trades`,
+        ? "Trade setup · 1 trade"
+        : `Trade setup · ${trades.length} trades`,
     href: "#/trades",
   };
 }
@@ -132,7 +132,7 @@ async function resolveRule(userId: string, id: string): Promise<GaiaRefHit | nul
     kind: "RULE",
     id: rule.id,
     label: rule.description ?? rule.kind,
-    meta: "Règle de trading",
+    meta: "Trading rule",
     href: "#/rules",
   };
 }
@@ -162,7 +162,7 @@ async function resolveNote(userId: string, id: string): Promise<GaiaRefHit | nul
   return {
     kind: "NOTE",
     id: note.id,
-    label: note.title === "" ? "Note sans titre" : note.title,
+    label: note.title === "" ? "Untitled note" : note.title,
     meta: "Note Gaïa",
     href: `#/gaia?tab=notes&note=${note.id}`,
   };
@@ -224,7 +224,7 @@ export async function resolveNoteRefs(
         ref: {
           kind: block.ref.kind,
           id: block.ref.id,
-          label: block.ref.label ?? "Référence non résolue",
+          label: block.ref.label ?? "Unresolved reference",
           meta: null,
           href: null,
         },

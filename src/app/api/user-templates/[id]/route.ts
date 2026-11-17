@@ -13,7 +13,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     const ok = await deleteUserTemplate(session.user.id, id);
     if (!ok) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Modèle introuvable." },
+        { error: "NOT_FOUND", message: "Template not found." },
         { status: 404 }
       );
     }

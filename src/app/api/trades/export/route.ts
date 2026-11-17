@@ -7,12 +7,11 @@ import {
   zodFieldErrors,
 } from "@/lib/validations/shared";
 import { exportTradesCsv } from "@/server/export";
-import type { CsvLocale } from "@/lib/trading/csv-export";
 
 /**
  * GET /api/trades/export — CSV download of the FILTERED trade list (same
- * filters as the list endpoint). ?lang=fr|en (default: fr) localizes the
- * headers. UTF-8 BOM + CRLF for Excel friendliness.
+ * filters as the list endpoint). English headers, always. UTF-8 BOM + CRLF
+ * for Excel friendliness.
  */
 export async function GET(req: Request) {
   try {
@@ -20,7 +19,7 @@ export async function GET(req: Request) {
     sweepRateLimits();
     if (!rateLimit(`trades-export:${session.user.id}`, 10, 60 * 1000)) {
       return NextResponse.json(
-        { error: "RATE_LIMITED", message: "Trop d'exports, patientez." },
+        { error: "RATE_LIMITED", message: "Too many exports, please wait." },
         { status: 429 }
       );
     }
@@ -31,17 +30,15 @@ export async function GET(req: Request) {
       return NextResponse.json(
         {
           error: "VALIDATION",
-          message: "Filtres invalides.",
+          message: "Invalid filters.",
           fieldErrors: zodFieldErrors(parsed.error),
         },
         { status: 422 }
       );
     }
-    const lang = url.searchParams.get("lang") === "en" ? "en" : "fr";
     const { csv, count, truncated } = await exportTradesCsv(
       session.user.id,
-      parsed.data,
-      lang satisfies CsvLocale
+      parsed.data
     );
 
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");

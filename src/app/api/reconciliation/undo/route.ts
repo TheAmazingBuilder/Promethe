@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     const session = await requireUser();
     const body = (await req.json().catch(() => null)) as { mergeLogId?: string } | null;
     if (!body?.mergeLogId) {
-      return NextResponse.json({ error: "VALIDATION", message: "mergeLogId requis." }, { status: 422 });
+      return NextResponse.json({ error: "VALIDATION", message: "mergeLogId required." }, { status: 422 });
     }
     const result = await undoMerge(session.user.id, body.mergeLogId);
     return NextResponse.json(result);

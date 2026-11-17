@@ -1,7 +1,7 @@
 /**
  * Application navigation — single source of truth for the sidebar, the mobile
  * sheet, the command palette and the header title. Labels and descriptions are
- * absolute i18n message keys (see messages/fr.json & messages/en.json).
+ * absolute i18n message keys (see messages/en.json).
  *
  * Sidebar kept short on purpose: only the pages used every day live here.
  * Settings sub-pages live as links inside the Settings page, charts and

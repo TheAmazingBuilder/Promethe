@@ -57,7 +57,7 @@ export function detectFormat(content: ImportFileContent): DetectedFormat | null 
       ) {
         return {
           format: "MT4_HTML",
-          label: "Relevé détaillé MT4 (HTML)",
+          label: "Detailed MT4 statement (HTML)",
           confidence: "certain",
           reason: "html-closed-transactions",
         };
@@ -69,14 +69,14 @@ export function detectFormat(content: ImportFileContent): DetectedFormat | null 
       ) {
         return {
           format: "MT5_HTML",
-          label: "Rapport d'historique MT5 (HTML)",
+          label: "MT5 history report (HTML)",
           confidence: "certain",
           reason: "html-trade-history",
         };
       }
       return {
         format: "MT4_HTML",
-        label: "Relevé HTML",
+        label: "HTML statement",
         confidence: "likely",
         reason: "html-tables",
       };
@@ -97,7 +97,7 @@ export function detectFormat(content: ImportFileContent): DetectedFormat | null 
     if (has("positionid") || (has("ticket") && has("opentime") && has("sl"))) {
       return {
         format: "MT5_CSV",
-        label: "MetaTrader 5 Historique (CSV)",
+        label: "MetaTrader 5 History (CSV)",
         confidence: "certain",
         reason: "positionid-column",
       };
@@ -105,7 +105,7 @@ export function detectFormat(content: ImportFileContent): DetectedFormat | null 
     if (has("avgfilledprice") || has("avgfilled") || (has("symbol") && has("side") && has("status"))) {
       return {
         format: "TRADINGVIEW_CSV",
-        label: "TradingView Historique de compte (CSV)",
+        label: "TradingView account history (CSV)",
         confidence: "certain",
         reason: "tv-columns",
       };
@@ -113,7 +113,7 @@ export function detectFormat(content: ImportFileContent): DetectedFormat | null 
     if (extension === "csv" || extension === "txt" || extension === "tsv") {
       return {
         format: "GENERIC_CSV",
-        label: "CSV générique",
+        label: "Generic CSV",
         confidence: "likely",
         reason: "fallback",
       };

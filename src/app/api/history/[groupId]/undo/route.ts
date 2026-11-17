@@ -19,7 +19,7 @@ export async function POST(_req: Request, ctx: Ctx) {
   } catch (error) {
     if (error instanceof Error && error.message === "NOT_UNDOABLE") {
       return NextResponse.json(
-        { error: "NOT_UNDOABLE", message: "Cette action ne peut plus être annulée." },
+        { error: "NOT_UNDOABLE", message: "This action can no longer be undone." },
         { status: 410 }
       );
     }

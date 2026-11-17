@@ -18,14 +18,14 @@ export async function POST(req: Request, ctx: Ctx) {
     const parsed = closeTradeSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Certains champs sont invalides.", fieldErrors: zodFieldErrors(parsed.error) },
+        { error: "VALIDATION", message: "Some fields are invalid.", fieldErrors: zodFieldErrors(parsed.error) },
         { status: 422 }
       );
     }
     const trade = await closeTrade(session.user.id, id, parsed.data);
     if (!trade) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Trade introuvable." },
+        { error: "NOT_FOUND", message: "Trade not found." },
         { status: 404 }
       );
     }

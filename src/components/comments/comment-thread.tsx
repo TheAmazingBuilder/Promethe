@@ -45,7 +45,7 @@ async function apiJson<T>(url: string, init?: RequestInit): Promise<T> {
     | (T & { error?: string; message?: string })
     | null;
   if (!res.ok) {
-    throw new Error(body?.message || "Erreur");
+    throw new Error(body?.message || "Error");
   }
   return body as T;
 }
@@ -118,8 +118,8 @@ export function CommentThread({
       await queryClient.invalidateQueries({ queryKey: ["mentor-space"] });
     } catch (err) {
       toast({
-        title: "Erreur",
-        description: err instanceof Error ? err.message : "Réessayez.",
+        title: "Error",
+        description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -363,8 +363,8 @@ function CommentItem({
       await queryClient.invalidateQueries({ queryKey: ["comments", tradeId] });
     } catch (err) {
       toast({
-        title: "Erreur",
-        description: err instanceof Error ? err.message : "Réessayez.",
+        title: "Error",
+        description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -380,8 +380,8 @@ function CommentItem({
       await queryClient.invalidateQueries({ queryKey: ["comments", tradeId] });
     } catch (err) {
       toast({
-        title: "Erreur",
-        description: err instanceof Error ? err.message : "Réessayez.",
+        title: "Error",
+        description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
     }

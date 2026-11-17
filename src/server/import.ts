@@ -102,7 +102,7 @@ export async function createImportBatch(
 
   const duplicateWarning =
     previous !== null && previous.status !== "FAILED"
-      ? `Ce fichier a déjà été importé le ${previous.createdAt.toLocaleDateString("fr-FR")} (${previous.fileName}). Ré-importer mettra à jour les champs broker sans dupliquer les trades.`
+      ? `This file was already imported on ${previous.createdAt.toLocaleDateString("en-CA")} (${previous.fileName}). Re-importing will update the broker fields without duplicating trades.`
       : false;
   return { batch: toDTO(batch), duplicateWarning };
 }
@@ -144,7 +144,7 @@ export async function importChunk(
   const tradesRaw = (payload as { trades?: unknown[] })?.trades ?? [];
   const cashRaw = (payload as { cash?: unknown[] })?.cash ?? [];
   if (tradesRaw.length + cashRaw.length === 0 || tradesRaw.length > 200) {
-    throw new ImportError("CHUNK_SIZE", 422, "Chunk vide ou > 200 lignes.");
+    throw new ImportError("CHUNK_SIZE", 422, "Empty chunk or more than 200 rows.");
   }
 
   const result: ChunkResult = { created: 0, updated: 0, duplicates: 0, manualSkipped: 0, restored: 0, errors: [] };

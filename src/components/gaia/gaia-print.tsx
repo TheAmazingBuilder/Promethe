@@ -222,7 +222,7 @@ export function NotePrintDialog({
                 <p className="mt-1 text-xs text-muted-foreground">
                   {t("gaia.print.updated")}{" "}
                   {note?.updatedAt
-                    ? new Date(note.updatedAt).toLocaleDateString("fr-CA")
+                    ? new Date(note.updatedAt).toLocaleDateString("en-CA")
                     : ""}
                   {folderName ? ` · ${folderName}` : ""}
                   {tagNames.length > 0 ? ` · ${tagNames.map((n) => `#${n}`).join(" ")}` : ""}

@@ -79,8 +79,6 @@ export async function GET(req: Request) {
         profile.name?.trim() ||
         email.split("@")[0].slice(0, 60) ||
         "Trader";
-      const acceptLanguage = req.headers.get("accept-language") ?? "";
-      const locale = acceptLanguage.toLowerCase().includes("fr") ? "fr" : "en";
       const created = await createUserWithDefaults({
         email,
         // Unusable random password: this account signs in with Google only.
@@ -88,7 +86,7 @@ export async function GET(req: Request) {
         displayName,
         timezone: "UTC",
         baseCurrency: "USD",
-        locale,
+        locale: "en",
       });
       await createSession(created.user.id);
     }

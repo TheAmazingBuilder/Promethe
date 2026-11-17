@@ -1,6 +1,6 @@
 /**
  * Locale-aware formatting. The locale is set by the I18nProvider on mount
- * and on every language switch (setFormatLocale) — defaults to fr-CA.
+ * — English only (Phase 3), defaults to en-CA.
  * All functions accept Decimal | number | string and never throw.
  *
  * v2.5 Module 8 — SINGLE CHOKE POINT RULE: fmtMoney / fmtSignedMoney /
@@ -14,7 +14,7 @@ import { toD, type DecimalInput } from "./trading/dec";
 import { getPrivacySnapshot } from "./privacy/store";
 import { privacyMask } from "./privacy/policy";
 
-let currentLocale = "fr-CA";
+let currentLocale = "en-CA";
 
 /** Called by the I18nProvider - keeps every formatter in sync with the UI. */
 export function setFormatLocale(locale: string): void {
@@ -26,7 +26,7 @@ export function getFormatLocale(): string {
   return currentLocale;
 }
 
-export const LOCALE = "fr-CA"; // legacy constant (kept for compatibility)
+export const LOCALE = "en-CA"; // legacy constant (kept for compatibility)
 
 export function fmtNum(
   v: DecimalInput | null | undefined,

@@ -16,7 +16,7 @@ export async function GET(_req: Request, ctx: Ctx) {
     const file = await readUpload(session.user.id, id);
     if (!file) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Capture introuvable." },
+        { error: "NOT_FOUND", message: "Screenshot not found." },
         { status: 404 }
       );
     }
@@ -39,7 +39,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     const ok = await deleteUpload(session.user.id, id);
     if (!ok) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Capture introuvable." },
+        { error: "NOT_FOUND", message: "Screenshot not found." },
         { status: 404 }
       );
     }

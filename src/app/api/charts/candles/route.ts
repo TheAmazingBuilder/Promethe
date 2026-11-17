@@ -16,7 +16,7 @@ export async function GET(req: Request) {
     const parsed = candleWindowQuerySchema.safeParse(params);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Paramètres invalides." },
+        { error: "VALIDATION", message: "Invalid parameters." },
         { status: 422 }
       );
     }
@@ -25,7 +25,7 @@ export async function GET(req: Request) {
   } catch (error) {
     if (error instanceof Error && error.message === "INSTRUMENT_NOT_FOUND") {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Instrument introuvable." },
+        { error: "NOT_FOUND", message: "Instrument not found." },
         { status: 404 }
       );
     }

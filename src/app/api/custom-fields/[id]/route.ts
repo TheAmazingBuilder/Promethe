@@ -25,14 +25,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const parsed = customFieldDefinitionPatchSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Certains champs sont invalides.", fieldErrors: zodFieldErrors(parsed.error) },
+        { error: "VALIDATION", message: "Some fields are invalid.", fieldErrors: zodFieldErrors(parsed.error) },
         { status: 422 }
       );
     }
     const definition = await updateCustomFieldDefinition(session.user.id, id, parsed.data);
     if (!definition) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Champ introuvable." },
+        { error: "NOT_FOUND", message: "Field not found." },
         { status: 404 }
       );
     }
@@ -49,7 +49,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     const ok = await deleteCustomFieldDefinition(session.user.id, id);
     if (!ok) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Champ introuvable." },
+        { error: "NOT_FOUND", message: "Field not found." },
         { status: 404 }
       );
     }

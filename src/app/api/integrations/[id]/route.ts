@@ -26,7 +26,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     } | null;
     if (!body) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Requête invalide." },
+        { error: "VALIDATION", message: "Invalid request." },
         { status: 422 }
       );
     }
@@ -44,7 +44,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     const deleted = await deleteEndpoint(session.user.id, id);
     if (!deleted) {
       return NextResponse.json(
-        { error: "ENDPOINT_NOT_FOUND", message: "Intégration introuvable." },
+        { error: "ENDPOINT_NOT_FOUND", message: "Integration not found." },
         { status: 404 }
       );
     }

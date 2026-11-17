@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { PwaRegister } from "@/components/app/pwa-register";
 import { ThemeProvider } from "@/components/theme-provider";
 import { I18nProvider } from "@/i18n/i18n-provider";
-import { DEFAULT_LOCALE, type AppLocale } from "@/i18n/config";
+import { DEFAULT_LOCALE } from "@/i18n/config";
 import { PRE_PAINT_SCRIPT } from "@/lib/a11y/pre-paint";
 
 const geistSans = Geist({
@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Promethe - Journal de trading & analytique",
+  title: "Promethe – Trading journal & analytics",
   description:
     "Promethe, a multi-user trading journal for XAUUSD and Forex: pips, lots, contract sizes, strategy statistics and insights.",
   manifest: "/manifest.webmanifest",
@@ -45,17 +45,13 @@ export const viewport: Viewport = {
   themeColor: "#10b981",
 };
 
-/** App locale - English only since the language switcher was removed. */
-function getInitialLocale(): AppLocale {
-  return DEFAULT_LOCALE;
-}
-
+/** App locale - English only (Phase 3, no language switcher). */
 export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const locale = getInitialLocale();
+  const locale = DEFAULT_LOCALE;
 
   return (
     <html lang={locale} suppressHydrationWarning>
@@ -67,7 +63,7 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
-        <I18nProvider initialLocale={locale}>
+        <I18nProvider>
           <ThemeProvider
             attribute="class"
             defaultTheme="dark"

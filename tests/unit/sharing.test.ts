@@ -73,34 +73,27 @@ describe("shareLinkStatus", () => {
 // ── policySummary / expiryLabel ──────────────────────────────────────────────
 
 describe("policySummary", () => {
-  it("liste ce qui est masqué en FR", () => {
-    const summary = policySummary(PIPS_R_ONLY_PRESET, "fr");
-    expect(summary).toContain("montants");
-    expect(summary).toContain("compte");
-    expect(summary).toContain("captures");
+  it("lists what is hidden", () => {
+    const summary = policySummary(PIPS_R_ONLY_PRESET);
+    expect(summary).toContain("amounts");
+    expect(summary).toContain("account");
+    expect(summary).toContain("screenshots");
     expect(summary).not.toContain("notes");
   });
 
-  it("liste ce qui est masqué en EN", () => {
-    const summary = policySummary(PIPS_R_ONLY_PRESET, "en");
-    expect(summary).toContain("amounts");
-    expect(summary).toContain("account");
-  });
-
-  it("affiche « rien de masqué » quand la politique est ouverte", () => {
-    expect(policySummary(NO_REDACTION, "fr")).toBe("rien de masqué");
-    expect(policySummary(NO_REDACTION, "en")).toBe("nothing hidden");
+  it("shows \u201cnothing hidden\u201d when the policy is open", () => {
+    expect(policySummary(NO_REDACTION)).toBe("nothing hidden");
   });
 });
 
 describe("expiryLabel", () => {
-  it("formate les options standard FR/EN", () => {
-    expect(expiryLabel(7, "fr")).toBe("7 jours");
-    expect(expiryLabel(365, "fr")).toBe("1 an");
-    expect(expiryLabel(3650, "en")).toBe("10 years (max)");
+  it("formats the standard options", () => {
+    expect(expiryLabel(7)).toBe("7 days");
+    expect(expiryLabel(365)).toBe("1 year");
+    expect(expiryLabel(3650)).toBe("10 years (max)");
   });
 
-  it("plafonne l'expiration à 10 ans", () => {
+  it("caps expiry at 10 years", () => {
     expect(MAX_EXPIRY_DAYS).toBe(3650);
   });
 });
@@ -178,7 +171,7 @@ describe("redactReportPayload", () => {
     expect(out.byStrategy[0].totalR).toBe("4.2");
   });
 
-  it("convertit la courbe en pourcentage quand les montants sont masqués", () => {
+  it("converts the curve to percentages when amounts are hidden", () => {
     const out = redactReportPayload(RAW_REPORT, PIPS_R_ONLY_PRESET);
     expect(out.equity.unit).toBe("PERCENT");
     expect(out.equity.points[0].value).toBe(0);

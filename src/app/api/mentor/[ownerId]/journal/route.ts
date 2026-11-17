@@ -24,7 +24,7 @@ export async function GET(req: Request, ctx: Ctx) {
       Number(url.searchParams.get("pageSize")) || 20
     );
     if (!result) {
-      throw new AccessDeniedError("Le journal n'est pas partagé avec vous.");
+      throw new AccessDeniedError("The journal is not shared with you.");
     }
     return NextResponse.json(result);
   } catch (error) {

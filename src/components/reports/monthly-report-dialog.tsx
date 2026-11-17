@@ -71,7 +71,7 @@ function buildPdf(report: MonthlyReport, generatedLabel: string): void {
   let y = 18;
   let page = 1;
 
-  const money = new Intl.NumberFormat("fr-FR", {
+  const money = new Intl.NumberFormat("en-CA", {
     style: "currency",
     currency: report.currency,
   });
@@ -84,7 +84,7 @@ function buildPdf(report: MonthlyReport, generatedLabel: string): void {
     doc.setFontSize(8);
     doc.setTextColor(130, 130, 130);
     doc.text(
-      `Promethe - Rapport mensuel ${report.monthLabel}  ·  ${page}`,
+      `Promethe – Monthly report ${report.monthLabel}  ·  ${page}`,
       margin,
       290
     );
@@ -128,7 +128,7 @@ function buildPdf(report: MonthlyReport, generatedLabel: string): void {
   doc.text("Promethe", margin, y);
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(13);
-  doc.text(`Rapport mensuel - ${report.monthLabel}`, margin, y + 8);
+  doc.text(`Monthly report – ${report.monthLabel}`, margin, y + 8);
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(100, 100, 100);
@@ -137,30 +137,30 @@ function buildPdf(report: MonthlyReport, generatedLabel: string): void {
   y += 24;
 
   if (report.tradeCount === 0) {
-    section("Aucun trade");
+    section("No trades");
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text("Aucun trade clôturé ce mois-ci.", margin, y);
+    doc.text("No trades closed this month.", margin, y);
     footer();
-    doc.save(`promethe-rapport-${report.month}.pdf`);
+    doc.save(`promethe-report-${report.month}.pdf`);
     return;
   }
 
   // ── KPIs ──
-  section("Chiffres clés");
-  kvRow("Trades clôturés", String(report.tradeCount));
-  kvRow("P&L net", moneyOf(report.netPnl));
-  kvRow("Taux de réussite", pctOf(report.winRate));
-  kvRow("Facteur de profit", report.profitFactor ?? "-");
-  kvRow("Gain moyen", moneyOf(report.avgWin));
-  kvRow("Perte moyenne", moneyOf(report.avgLoss));
-  kvRow("R total", report.totalR ?? "-");
-  kvRow("Drawdown max", moneyOf(report.maxDrawdown));
+  section("Key figures");
+  kvRow("Closed trades", String(report.tradeCount));
+  kvRow("Net P&L", moneyOf(report.netPnl));
+  kvRow("Win rate", pctOf(report.winRate));
+  kvRow("Profit factor", report.profitFactor ?? "-");
+  kvRow("Average win", moneyOf(report.avgWin));
+  kvRow("Average loss", moneyOf(report.avgLoss));
+  kvRow("Total R", report.totalR ?? "-");
+  kvRow("Max drawdown", moneyOf(report.maxDrawdown));
   y += 4;
 
   // ── Equity curve ──
   if (report.equity.length >= 2) {
-    section("Courbe d'équité");
+    section("Equity curve");
     const boxH = 42;
     ensureSpace(boxH + 4);
     const boxY = y;
@@ -223,8 +223,8 @@ function buildPdf(report: MonthlyReport, generatedLabel: string): void {
   };
 
   table(
-    "Par instrument",
-    ["Symbole", "Trades", "Gagnants", "P&L net"],
+    "By instrument",
+    ["Symbol", "Trades", "Winners", "Net P&L"],
     [60, 40, 40, 40],
     report.bySymbol.map((g) => [
       g.name,
@@ -235,8 +235,8 @@ function buildPdf(report: MonthlyReport, generatedLabel: string): void {
   );
 
   table(
-    "Par stratégie",
-    ["Stratégie", "Trades", "Réussite", "P&L net"],
+    "By strategy",
+    ["Strategy", "Trades", "Win rate", "Net P&L"],
     [70, 30, 40, 40],
     report.byStrategy.map((g) => [
       g.name,
@@ -250,24 +250,24 @@ function buildPdf(report: MonthlyReport, generatedLabel: string): void {
     trades.map((t) => [
       t.date,
       t.symbol,
-      t.direction === "LONG" ? "Achat" : "Vente",
+      t.direction === "LONG" ? "Buy" : "Sell",
       moneyOf(t.netPnl),
     ]);
   table(
-    "Meilleurs trades",
-    ["Date", "Symbole", "Sens", "P&L net"],
+    "Best trades",
+    ["Date", "Symbol", "Side", "Net P&L"],
     [45, 55, 40, 40],
     tradeRows(report.bestTrades)
   );
   table(
-    "Pires trades",
-    ["Date", "Symbole", "Sens", "P&L net"],
+    "Worst trades",
+    ["Date", "Symbol", "Side", "Net P&L"],
     [45, 55, 40, 40],
     tradeRows(report.worstTrades)
   );
 
   footer();
-  doc.save(`promethe-rapport-${report.month}.pdf`);
+  doc.save(`promethe-report-${report.month}.pdf`);
 }
 
 export function MonthlyReportDialog({
@@ -294,7 +294,7 @@ export function MonthlyReportDialog({
         return;
       }
       const generatedLabel = `${t("generatedOn")} ${new Intl.DateTimeFormat(
-        "fr-FR",
+        "en-CA",
         { dateStyle: "medium" }
       ).format(new Date())}`;
       buildPdf(report, generatedLabel);

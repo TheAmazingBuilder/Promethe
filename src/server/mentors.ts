@@ -154,7 +154,7 @@ export async function createInvitation(
   if (!rl.allowed) {
     throw new MentorValidationError(
       "INVITE_RATE_LIMITED",
-      "Trop d'invitations envoyées aujourd'hui. Réessayez demain.",
+      "Too many invitations sent today. Please try again tomorrow.",
       429
     );
   }
@@ -166,13 +166,13 @@ export async function createInvitation(
   if (!owner?.profile?.handle) {
     throw new MentorValidationError(
       "HANDLE_REQUIRED",
-      "Choisissez d'abord votre handle (Réglages → Mentors) avant d'inviter."
+      "Choose your handle first (Settings → Mentors) before inviting."
     );
   }
   if (input.email === owner.email.toLowerCase()) {
     throw new MentorValidationError(
       "SELF_INVITE",
-      "Vous ne pouvez pas vous inviter vous-même."
+      "You cannot invite yourself."
     );
   }
 
@@ -192,13 +192,13 @@ export async function createInvitation(
   if (pending) {
     throw new MentorValidationError(
       "INVITE_ALREADY_PENDING",
-      "Une invitation est déjà en attente pour cet email."
+      "An invitation is already pending for this email."
     );
   }
   if (existingAccess && isLive(existingAccess)) {
     throw new MentorValidationError(
       "MENTOR_ALREADY_ACTIVE",
-      "Ce mentor a déjà un accès actif - modifiez ses permissions à la place."
+      "This mentor already has active access – change their permissions instead."
     );
   }
 
@@ -208,7 +208,7 @@ export async function createInvitation(
   if (pendingCount >= MAX_PENDING_INVITES) {
     throw new MentorValidationError(
       "TOO_MANY_PENDING",
-      `Maximum ${MAX_PENDING_INVITES} invitations en attente.`,
+      `Maximum ${MAX_PENDING_INVITES} pending invitations.`,
     );
   }
 
@@ -234,8 +234,8 @@ export async function createInvitation(
     await notifyInApp({
       userId: invitee.id,
       type: "MENTOR_INVITE_RECEIVED",
-      title: "Invitation de mentorat",
-      body: `${ownerName} (@${owner.profile.handle}) vous invite à suivre son journal de trading.`,
+      title: "Mentorship invitation",
+      body: `${ownerName} (@${owner.profile.handle}) invites you to follow their trading journal.`,
       url: `/invitation/${token}`,
       dedupeWithinMs: 60 * 60 * 1000,
     });
@@ -269,7 +269,7 @@ function toInvitationDTO(row: {
 
 export async function revokeInvitation(ownerId: string, invitationId: string): Promise<void> {
   const row = await db.mentorInvitation.findFirst({ where: { id: invitationId, ownerId } });
-  if (!row) throw new MentorValidationError("INVITE_NOT_FOUND", "Invitation introuvable.", 404);
+  if (!row) throw new MentorValidationError("INVITE_NOT_FOUND", "Invitation not found.", 404);
   if (row.status === "PENDING") {
     await db.mentorInvitation.update({
       where: { id: row.id },
@@ -380,9 +380,9 @@ export async function updateAccess(
   patch: MentorAccessPatch
 ): Promise<MentorAccessDTO> {
   const row = await db.mentorAccess.findFirst({ where: { id: accessId, ownerId } });
-  if (!row) throw new MentorValidationError("ACCESS_NOT_FOUND", "Accès introuvable.", 404);
+  if (!row) throw new MentorValidationError("ACCESS_NOT_FOUND", "Access not found.", 404);
   if (row.status === "REVOKED") {
-    throw new MentorValidationError("ACCESS_REVOKED", "Cet accès est révoqué - invitez à nouveau le mentor.");
+    throw new MentorValidationError("ACCESS_REVOKED", "This access has been revoked – invite the mentor again.");
   }
 
   const data: Prisma.MentorAccessUpdateInput = {};
@@ -414,7 +414,7 @@ export async function revokeAccess(ownerId: string, accessId: string): Promise<v
     where: { id: accessId, ownerId },
     include: { owner: { include: { profile: true } }, mentor: { include: { profile: true } } },
   });
-  if (!row) throw new MentorValidationError("ACCESS_NOT_FOUND", "Accès introuvable.", 404);
+  if (!row) throw new MentorValidationError("ACCESS_NOT_FOUND", "Access not found.", 404);
   if (row.status !== "REVOKED") {
     await db.mentorAccess.update({
       where: { id: row.id },
@@ -424,8 +424,8 @@ export async function revokeAccess(ownerId: string, accessId: string): Promise<v
     await notifyInApp({
       userId: row.mentorId,
       type: "MENTOR_ACCESS_REVOKED",
-      title: "Accès révoqué",
-      body: `${ownerName ?? "Un trader"} a révoqué votre accès de mentorat.`,
+      title: "Access revoked",
+      body: `${ownerName ?? "A trader"} revoked your mentorship access.`,
       url: null,
       dedupeWithinMs: 0,
     });
@@ -480,12 +480,12 @@ export async function acceptInvitation(
   const tokenHash = hashToken(token);
   const invitation = await db.mentorInvitation.findUnique({ where: { tokenHash } });
   if (!invitation) {
-    throw new MentorValidationError("INVITE_NOT_FOUND", "Invitation introuvable.", 404);
+    throw new MentorValidationError("INVITE_NOT_FOUND", "Invitation not found.", 404);
   }
   if (invitation.status !== "PENDING") {
     throw new MentorValidationError(
       "INVITE_NOT_PENDING",
-      "Cette invitation a déjà été traitée."
+      "This invitation has already been handled."
     );
   }
   if (invitation.expiresAt.getTime() <= Date.now()) {
@@ -493,21 +493,21 @@ export async function acceptInvitation(
       where: { id: invitation.id },
       data: { status: "EXPIRED" },
     });
-    throw new MentorValidationError("INVITE_EXPIRED", "Cette invitation a expiré.");
+    throw new MentorValidationError("INVITE_EXPIRED", "This invitation has expired.");
   }
   if (invitation.inviteeEmail !== viewer.email.toLowerCase()) {
     // Neutral message — do not leak the invitation's existence to a wrong account.
-    throw new MentorValidationError("INVITE_NOT_FOUND", "Invitation introuvable.", 404);
+    throw new MentorValidationError("INVITE_NOT_FOUND", "Invitation not found.", 404);
   }
   if (invitation.ownerId === viewer.id) {
-    throw new MentorValidationError("SELF_INVITE", "Invitation invalide.");
+    throw new MentorValidationError("SELF_INVITE", "Invalid invitation.");
   }
 
   const viewerProfile = await db.profile.findUnique({ where: { id: viewer.id } });
   if (!viewerProfile?.handle) {
     throw new MentorValidationError(
       "HANDLE_REQUIRED",
-      "Choisissez d'abord votre handle (Réglages → Mentors) pour accepter un mentorat."
+      "Choose your handle first (Settings → Mentors) to accept a mentorship."
     );
   }
 
@@ -545,12 +545,12 @@ export async function acceptInvitation(
     db.profile.findUnique({ where: { id: viewer.id } }),
   ]);
   const ownerName =
-    owner?.profile?.publicDisplayName || owner?.profile?.displayName || "Un trader";
+    owner?.profile?.publicDisplayName || owner?.profile?.displayName || "A trader";
   await notifyInApp({
     userId: invitation.ownerId,
     type: "MENTOR_INVITE_ACCEPTED",
-    title: "Mentorat accepté",
-    body: `${mentorProfile?.publicDisplayName || mentorProfile?.displayName || "Votre mentor"} (@${viewerProfile.handle}) a accepté votre invitation.`,
+    title: "Mentorship accepted",
+    body: `${mentorProfile?.publicDisplayName || mentorProfile?.displayName || "Your mentor"} (@${viewerProfile.handle}) accepted your invitation.`,
     url: "/reglages/mentors",
     dedupeWithinMs: 0,
   });
@@ -565,10 +565,10 @@ export async function declineInvitation(
   const tokenHash = hashToken(token);
   const invitation = await db.mentorInvitation.findUnique({ where: { tokenHash } });
   if (!invitation || invitation.status !== "PENDING") {
-    throw new MentorValidationError("INVITE_NOT_FOUND", "Invitation introuvable.", 404);
+    throw new MentorValidationError("INVITE_NOT_FOUND", "Invitation not found.", 404);
   }
   if (invitation.inviteeEmail !== viewer.email.toLowerCase()) {
-    throw new MentorValidationError("INVITE_NOT_FOUND", "Invitation introuvable.", 404);
+    throw new MentorValidationError("INVITE_NOT_FOUND", "Invitation not found.", 404);
   }
   await db.mentorInvitation.update({
     where: { id: invitation.id },
@@ -599,7 +599,7 @@ export async function previewInvitation(
     invitation.expiresAt.getTime() <= Date.now() ||
     invitation.inviteeEmail !== viewer.email.toLowerCase()
   ) {
-    throw new MentorValidationError("INVITE_NOT_FOUND", "Invitation introuvable.", 404);
+    throw new MentorValidationError("INVITE_NOT_FOUND", "Invitation not found.", 404);
   }
   const owner = await db.user.findUnique({
     where: { id: invitation.ownerId },
@@ -627,7 +627,7 @@ export async function acceptInvitationById(
     invitation.status !== "PENDING" ||
     invitation.inviteeEmail !== viewer.email.toLowerCase()
   ) {
-    throw new MentorValidationError("INVITE_NOT_FOUND", "Invitation introuvable.", 404);
+    throw new MentorValidationError("INVITE_NOT_FOUND", "Invitation not found.", 404);
   }
   const token = `mtr_${generateToken()}`;
   // Reuse the token flow by minting a fresh single-use token bound to the
@@ -649,7 +649,7 @@ export async function declineInvitationById(
     invitation.status !== "PENDING" ||
     invitation.inviteeEmail !== viewer.email.toLowerCase()
   ) {
-    throw new MentorValidationError("INVITE_NOT_FOUND", "Invitation introuvable.", 404);
+    throw new MentorValidationError("INVITE_NOT_FOUND", "Invitation not found.", 404);
   }
   await db.mentorInvitation.update({
     where: { id: invitation.id },
@@ -669,13 +669,13 @@ export async function requireMentorContext(
   ownerId: string
 ): Promise<AccessContext> {
   if (viewerId === ownerId) {
-    throw new AccessDeniedError("Auto-mentorat impossible.");
+    throw new AccessDeniedError("Self-mentorship is not possible.");
   }
   const access = await db.mentorAccess.findUnique({
     where: { ownerId_mentorId: { ownerId, mentorId: viewerId } },
   });
   if (!access || !isLive(access)) {
-    throw new AccessDeniedError("Accès de mentorat absent, expiré ou révoqué.");
+    throw new AccessDeniedError("Mentorship access missing, expired or revoked.");
   }
   return mentorContext(viewerId, ownerId, accessScopeOf(access));
 }
