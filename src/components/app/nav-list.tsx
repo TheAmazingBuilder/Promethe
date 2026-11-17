@@ -1,5 +1,7 @@
 "use client";
 
+import * as React from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { NAV_GROUPS } from "./nav";
@@ -54,6 +56,10 @@ export function NavList({
 }) {
   const t = useTranslations();
   const isMentor = useIsMentor();
+  const reduceMotion = useReducedMotion();
+  // Scoped per NavList instance (desktop sidebar + mobile sheet can both
+  // be mounted) so the shared layoutId never collides across instances.
+  const pillId = React.useId();
 
   return (
     <>
@@ -67,27 +73,51 @@ export function NavList({
             <SidebarGroupLabel>{t(group.labelKey)}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {items.map((item) => (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={activeView === item.view}
-                      tooltip={t(item.descriptionKey)}
-                      className="data-[active=true]:bg-emerald-500/10 data-[active=true]:font-medium data-[active=true]:text-emerald-700 dark:data-[active=true]:text-emerald-400"
-                    >
-                      <a
-                        href={item.path}
-                        onClick={onNavigate}
-                        aria-current={
-                          activeView === item.view ? "page" : undefined
-                        }
+                {items.map((item) => {
+                  const isActive = activeView === item.view;
+                  return (
+                    <SidebarMenuItem key={item.path}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive}
+                        tooltip={t(item.descriptionKey)}
+                        className="relative data-[active=true]:font-medium data-[active=true]:text-emerald-700 dark:data-[active=true]:text-emerald-400"
                       >
-                        <item.icon aria-hidden="true" />
-                        <span>{t(item.labelKey)}</span>
-                      </a>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                        <a
+                          href={item.path}
+                          onClick={onNavigate}
+                          aria-current={isActive ? "page" : undefined}
+                        >
+                          {/* Sliding active pill - one shared element that
+                              glides between items (plain span when reduced
+                              motion is on). Rendered first so it paints
+                              under the icon and label. */}
+                          {isActive ? (
+                            reduceMotion ? (
+                              <span
+                                className="absolute inset-0 rounded-md bg-emerald-500/10"
+                                aria-hidden="true"
+                              />
+                            ) : (
+                              <motion.span
+                                layoutId={`nav-active-pill-${pillId}`}
+                                className="absolute inset-0 rounded-md bg-emerald-500/10"
+                                aria-hidden="true"
+                                transition={{
+                                  type: "spring",
+                                  stiffness: 500,
+                                  damping: 40,
+                                }}
+                              />
+                            )
+                          ) : null}
+                          <item.icon aria-hidden="true" />
+                          <span>{t(item.labelKey)}</span>
+                        </a>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

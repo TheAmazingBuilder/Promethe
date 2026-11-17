@@ -1,5 +1,7 @@
 "use client";
 
+import * as React from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useHashRoute } from "@/lib/router";
 import { findNavItem } from "@/components/app/nav";
 import { DashboardsView } from "@/components/dashboard/dashboards-view";
@@ -46,98 +48,173 @@ const FEATURES: Record<string, string[]> = {};
 
 export function ViewSwitch() {
   const route = useHashRoute();
+  const reduceMotion = useReducedMotion();
+  // Key changes only when the page itself changes - query params (filters,
+  // drill-downs) keep the same view mounted, no transition replay.
+  const viewKey = [
+    route.view,
+    route.id,
+    route.mode,
+    route.ownerId,
+    route.token,
+    route.legalPage,
+    route.journalDate,
+  ]
+    .filter(Boolean)
+    .join("/");
 
+  let view: React.ReactNode;
   switch (route.view) {
     case "dashboard":
-      return <DashboardsView />;
+      view = <DashboardsView />;
+      break;
     case "focus":
-      return <FocusView />;
+      view = <FocusView />;
+      break;
     case "appearance-settings":
-      return <AppearanceView />;
+      view = <AppearanceView />;
+      break;
     case "privacy-settings":
-      return <PrivacyView />;
+      view = <PrivacyView />;
+      break;
     case "accessibility-settings":
-      return <AccessibilityView />;
+      view = <AccessibilityView />;
+      break;
     case "dashboards-settings":
-      return <DashboardsSettingsView />;
+      view = <DashboardsSettingsView />;
+      break;
     case "analytics":
-      return <AnalyticsView />;
+      view = <AnalyticsView />;
+      break;
     case "analytics-charts":
-      return <ChartBuilderView />;
+      view = <ChartBuilderView />;
+      break;
     case "analytics-heatmaps":
-      return <HeatmapsView />;
+      view = <HeatmapsView />;
+      break;
     case "analytics-benchmark":
-      return <BenchmarkView />;
+      view = <BenchmarkView />;
+      break;
     case "analytics-annotations":
-      return <AnnotationsView />;
+      view = <AnnotationsView />;
+      break;
     case "calendar":
-      return <CalendarView />;
+      view = <CalendarView />;
+      break;
     case "journal":
-      return <JournalView date={route.journalDate} />;
+      view = <JournalView date={route.journalDate} />;
+      break;
     case "strategies":
-      return <StrategiesView />;
+      view = <StrategiesView />;
+      break;
     case "rules":
-      return <RulesView />;
+      view = <RulesView />;
+      break;
     case "accounts":
-      return <AccountsView />;
+      view = <AccountsView />;
+      break;
     case "instruments":
-      return <InstrumentsView />;
+      view = <InstrumentsView />;
+      break;
     case "tags":
-      return <TagsView />;
+      view = <TagsView />;
+      break;
     case "tools":
-      return <ToolsView />;
+      view = <ToolsView />;
+      break;
     case "settings":
-      return <SettingsView />;
+      view = <SettingsView />;
+      break;
     case "trades":
-      return <TradesView />;
+      view = <TradesView />;
+      break;
     case "trade":
-      return <TradeDetailView tradeId={route.id ?? ""} />;
+      view = <TradeDetailView tradeId={route.id ?? ""} />;
+      break;
     case "trade-form":
-      return <TradeFormView mode={route.mode ?? "create"} tradeId={route.id} />;
+      view = <TradeFormView mode={route.mode ?? "create"} tradeId={route.id} />;
+      break;
     case "quick-trade":
-      return <QuickTradeView />;
+      view = <QuickTradeView />;
+      break;
     case "templates":
-      return <TemplatesView />;
+      view = <TemplatesView />;
+      break;
     case "broker-sync":
-      return <BrokerSyncView />;
+      view = <BrokerSyncView />;
+      break;
     case "import":
-      return <ImportView />;
+      view = <ImportView />;
+      break;
     case "reconciliation":
-      return <ReconciliationView />;
+      view = <ReconciliationView />;
+      break;
     case "sharing":
-      return <SharingView />;
+      view = <SharingView />;
+      break;
     case "mentors":
-      return <MentorsView />;
+      view = <MentorsView />;
+      break;
     case "mentor":
-      return <MentorView />;
+      view = <MentorView />;
+      break;
     case "mentor-owner":
-      return <MentorOwnerView ownerId={route.ownerId ?? ""} />;
+      view = <MentorOwnerView ownerId={route.ownerId ?? ""} />;
+      break;
     case "mentor-trade":
-      return (
+      view = (
         <MentorTradeView ownerId={route.ownerId ?? ""} tradeId={route.id ?? ""} />
       );
+      break;
     case "invitation":
-      return <InvitationView token={route.token ?? ""} />;
+      view = <InvitationView token={route.token ?? ""} />;
+      break;
     case "account-settings":
-      return <AccountSettingsView />;
+      view = <AccountSettingsView />;
+      break;
     case "trash":
-      return <TrashView />;
+      view = <TrashView />;
+      break;
     case "legal":
-      return <LegalView page={route.legalPage ?? "mentions"} />;
+      view = <LegalView page={route.legalPage ?? "mentions"} />;
+      break;
     default: {
       const item = findNavItem(route.view);
       if (!item || item.phase === null) {
-        return <DashboardsView />;
+        view = <DashboardsView />;
+      } else {
+        view = (
+          <PlaceholderView
+            titleKey={item.labelKey}
+            descriptionKey={item.descriptionKey}
+            icon={item.icon}
+            phase={item.phase}
+            featureKeys={FEATURES[route.view] ?? []}
+          />
+        );
       }
-      return (
-        <PlaceholderView
-          titleKey={item.labelKey}
-          descriptionKey={item.descriptionKey}
-          icon={item.icon}
-          phase={item.phase}
-          featureKeys={FEATURES[route.view] ?? []}
-        />
-      );
+      break;
     }
   }
+
+  // Reduced motion: no transition at all, the page just swaps.
+  if (reduceMotion) return <>{view}</>;
+
+  // Short opacity-only fade between pages (150 ms). mode="wait" keeps a
+  // single page in the layout so the content never stacks or jumps.
+  // initial={false} skips the fade on first load - the dashboard widgets
+  // already have their own entrance animation.
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div
+        key={viewKey}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.15, ease: "easeOut" }}
+      >
+        {view}
+      </motion.div>
+    </AnimatePresence>
+  );
 }
