@@ -749,7 +749,7 @@ export function DashboardsView() {
     (widgetId: string, patch: WidgetPatchInput) =>
       patchWidgetNormal.mutate({ dashboardId, widgetId, patch });
 
-  const renderShell = (w: DashboardWidgetDTO) => {
+  const renderShell = (w: DashboardWidgetDTO, index = 0) => {
     if (!active) return null;
     const definition = getWidgetDefinition(w.type);
     const entry = dashboardData?.widgets[w.id];
@@ -759,6 +759,7 @@ export function DashboardsView() {
     return (
       <WidgetShell
         key={w.id}
+        index={index}
         widget={w}
         definition={definition}
         editMode={editMode}
@@ -936,7 +937,7 @@ export function DashboardsView() {
                   </span>
                 </div>
               ) : null}
-              {renderShell(w)}
+              {renderShell(w, index)}
             </div>
           );
         })}
@@ -958,7 +959,7 @@ export function DashboardsView() {
         onResizeStart={onGridInteractionStart}
         className="min-h-40"
       >
-        {active.widgets.map((w) => renderShell(w))}
+        {active.widgets.map((w, i) => renderShell(w, i))}
       </ResponsiveGridLayout>
     );
 

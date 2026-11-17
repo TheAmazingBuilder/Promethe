@@ -17,6 +17,7 @@ import {
   pnlClass,
 } from "@/lib/format";
 import { useFormat } from "@/lib/format/use-format";
+import { useAnimatedDecimal } from "@/hooks/use-count-up";
 import type { KpiKey } from "@/lib/dashboard/types";
 import { kpiStripConfigSchema } from "@/lib/dashboard/registry";
 import type { KpiBlock, KpiWidgetData } from "./types";
@@ -40,7 +41,7 @@ export function KpiCard({
   compact?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg border p-3 sm:p-4">
+    <div className="flex flex-col gap-1.5 rounded-lg border p-3 transition-colors hover:border-accent-foreground/25 hover:bg-accent/40 sm:p-4">
       <p className="truncate text-xs font-medium text-muted-foreground">
         {label}
       </p>
@@ -256,7 +257,7 @@ function useKpiDisplay() {
         case "duration":
           return { value: durationLabel(d?.toNumber() ?? 0), tone: "" };
         case "streak": {
-          const n = d?.toNumber() ?? 0;
+          const n = Math.round(d?.toNumber() ?? 0);
           if (n > 0) {
             return { value: tDash("streakWin", { count: n }), tone: EMERALD };
           }
@@ -370,6 +371,53 @@ export function parseKpiStripConfig(config: unknown): {
   };
 }
 
+/** One KPI card with a count-up on its value (see useAnimatedDecimal). */
+function AnimatedKpiCard({
+  kpiKey,
+  raw,
+  block,
+  compare,
+  showDelta,
+  currency,
+  compact = false,
+}: {
+  kpiKey: KpiKey;
+  raw: string | null;
+  block: KpiBlock | null;
+  compare: KpiBlock | null;
+  showDelta: boolean;
+  currency: string;
+  compact?: boolean;
+}) {
+  const t = useTranslations("dashboards");
+  const fmt = useFormat();
+  const display = useKpiDisplay();
+  const animatedRaw = useAnimatedDecimal(raw);
+  const { value, tone } = display(kpiKey, animatedRaw, currency);
+  const prevRaw = showDelta ? kpiRaw(compare, kpiKey) : null;
+  const sub =
+    showDelta && compare != null ? (
+      <KpiDelta
+        kpi={kpiKey}
+        current={raw}
+        previous={prevRaw}
+        currency={currency}
+      />
+    ) : kpiKey === "maxDrawdown" &&
+        block?.stats.maxDrawdownPercent != null ? (
+      <span>{fmt.pct(block.stats.maxDrawdownPercent)}</span>
+    ) : null;
+  return (
+    <KpiCard
+      compact={compact}
+      label={t(`kpi.${kpiKey}`)}
+      value={value}
+      valueClassName={tone}
+      sub={sub}
+    />
+  );
+}
+
 /** Shared body: renders the KPI cards of the widget payload (strip + single). */
 export function KpiCards({
   data,
@@ -384,9 +432,6 @@ export function KpiCards({
   currency: string;
   compact?: boolean;
 }) {
-  const t = useTranslations("dashboards");
-  const fmt = useFormat();
-  const display = useKpiDisplay();
   const block: KpiBlock | null = data
     ? { stats: data.stats, advanced: data.advanced, extras: data.extras }
     : null;
@@ -394,33 +439,18 @@ export function KpiCards({
 
   return (
     <>
-      {kpis.map((key) => {
-        const raw = kpiRaw(block, key);
-        const { value, tone } = display(key, raw, currency);
-        const prevRaw = showDelta ? kpiRaw(compare, key) : null;
-        const sub =
-          showDelta && compare != null ? (
-            <KpiDelta
-              kpi={key}
-              current={raw}
-              previous={prevRaw}
-              currency={currency}
-            />
-          ) : key === "maxDrawdown" &&
-              block?.stats.maxDrawdownPercent != null ? (
-            <span>{fmt.pct(block.stats.maxDrawdownPercent)}</span>
-          ) : null;
-        return (
-          <KpiCard
-            key={key}
-            compact={compact}
-            label={t(`kpi.${key}`)}
-            value={value}
-            valueClassName={tone}
-            sub={sub}
-          />
-        );
-      })}
+      {kpis.map((key) => (
+        <AnimatedKpiCard
+          key={key}
+          kpiKey={key}
+          raw={kpiRaw(block, key)}
+          block={block}
+          compare={compare}
+          showDelta={showDelta}
+          currency={currency}
+          compact={compact}
+        />
+      ))}
     </>
   );
 }

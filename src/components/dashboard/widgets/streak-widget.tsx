@@ -22,7 +22,7 @@ export function StreakWidget({ data }: { data: unknown }) {
         className={`flex items-center gap-2 ${isWin ? EMERALD : current < 0 ? ROSE : "text-muted-foreground"}`}
       >
         {isWin ? (
-          <Flame className="h-6 w-6" aria-hidden="true" />
+          <Flame className="h-6 w-6 animate-pulse" aria-hidden="true" />
         ) : current < 0 ? (
           <Snowflake className="h-6 w-6" aria-hidden="true" />
         ) : null}

@@ -443,6 +443,23 @@
   }
 }
 
+/* Dashboard widget entrance - short fade-up, staggered per widget via an
+ * inline animation-delay. Fill mode "both" keeps the hidden start state
+ * during the delay. Reduced motion (above) collapses it to an instant show. */
+@keyframes widget-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.widget-enter {
+  animation: widget-enter 320ms ease-out both;
+}
+
 /* Font families (§3.3).
  * DYSLEXIA_FRIENDLY: system dyslexia-recommended stack (Verdana/Tahoma/
  * Comic Sans MS) — zero download, works offline, license-free (decision
