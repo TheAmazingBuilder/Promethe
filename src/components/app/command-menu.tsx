@@ -25,7 +25,7 @@ import {
   CommandSeparator,
   CommandShortcut,
 } from "@/components/ui/command";
-import { NAV_GROUPS } from "./nav";
+import { allNavItems } from "./nav";
 import { useSession } from "./session-context";
 import { navigate } from "@/lib/router";
 import { useToast } from "@/hooks/use-toast";
@@ -129,7 +129,7 @@ export function CommandMenu({
           </>
         )}
         <CommandGroup heading={t("commandNav")}>
-          {NAV_GROUPS.flatMap((group) => group.items).map((item) => (
+          {allNavItems().map((item) => (
             <CommandItem
               key={item.path}
               value={`${tRoot(item.labelKey)} ${tRoot(item.descriptionKey)}`}

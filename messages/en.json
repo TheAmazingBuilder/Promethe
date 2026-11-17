@@ -50,6 +50,7 @@
       "data": "Data",
       "app": "Application"
     },
+    "dataDesc": "Accounts, instruments, tags, imports and sync",
     "dashboard": "Dashboard",
     "dashboardDesc": "Overview and getting started",
     "focus": "Focus mode",

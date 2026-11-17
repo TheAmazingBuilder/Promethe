@@ -7,6 +7,13 @@
  * Settings sub-pages live as links inside the Settings page, charts and
  * heatmaps as buttons inside Analytics, quick trade as a floating button,
  * and focus mode as a header button.
+ *
+ * The Data group is the one exception to the flat list: it renders as a
+ * single collapsible parent row ("Data", collapsed by default) whose six
+ * pages (Accounts, Instruments, Tags, Import, Broker Sync,
+ * Reconciliation) appear as sub-entries when expanded. The pages are real
+ * routes either way: `allNavItems()` still lists all of them, so the
+ * command palette and the mobile sheet keep every page reachable.
  */
 import type { LucideIcon } from "lucide-react";
 import {
@@ -16,6 +23,7 @@ import {
   CalendarDays,
   CandlestickChart,
   Coins,
+  Database,
   GitMerge,
   GraduationCap,
   LayoutDashboard,
@@ -50,6 +58,13 @@ export interface NavGroup {
   /** Absolute message key, e.g. "nav.groups.tracking". */
   labelKey: string;
   items: NavItem[];
+  /**
+   * Renders as one collapsible parent row (label + chevron) instead of a
+   * flat list. The group's items become sub-entries shown when expanded.
+   */
+  collapsible?: boolean;
+  /** Icon for the collapsible parent row. */
+  icon?: LucideIcon;
 }
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -160,6 +175,8 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     labelKey: "nav.groups.data",
+    collapsible: true,
+    icon: Database,
     items: [
       {
         labelKey: "nav.accounts",
@@ -249,4 +266,25 @@ export function findNavItem(view: ViewId): NavItem | undefined {
     if (item) return item;
   }
   return undefined;
+}
+
+/**
+ * Every page in the app, in sidebar order — the single list the command
+ * palette (and any full-page index) reads, so a page that is only a
+ * sub-entry in the sidebar is still listed everywhere else.
+ */
+export function allNavItems(): NavItem[] {
+  return NAV_GROUPS.flatMap((group) => group.items);
+}
+
+/**
+ * Collapsible group expansion rule: a stored collapse never hides the
+ * page the user is on — when a sub-entry is active, its parent group
+ * auto-expands even if the user left it collapsed.
+ */
+export function isGroupExpanded(
+  storedCollapsed: boolean,
+  hasActiveChild: boolean
+): boolean {
+  return !storedCollapsed || hasActiveChild;
 }

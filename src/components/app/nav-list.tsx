@@ -2,9 +2,10 @@
 
 import * as React from "react";
 import { motion, useReducedMotion } from "framer-motion";
+import { ChevronDown } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { NAV_GROUPS } from "./nav";
+import { isGroupExpanded, NAV_GROUPS, type NavGroup } from "./nav";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -12,6 +13,10 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { apiFetch } from "@/lib/api-client";
 import type { MenteeSummaryDTO, ReceivedInvitationDTO } from "@/lib/mentor/dto";
@@ -42,6 +47,127 @@ export function useIsMentor(): boolean {
   return data?.isMentor === true;
 }
 
+/** localStorage key for the Data group collapse state (collapsed by default). */
+export const DATA_GROUP_COLLAPSED_KEY = "promethe.sidebar.data-collapsed";
+
+/**
+ * Collapsed state persisted per device. Defaults to collapsed; storage
+ * failures (private mode) fall back to in-memory state.
+ */
+function usePersistedCollapsed(): [boolean, () => void] {
+  const [collapsed, setCollapsed] = React.useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      const raw = window.localStorage.getItem(DATA_GROUP_COLLAPSED_KEY);
+      return raw === null ? true : raw === "true";
+    } catch {
+      return true;
+    }
+  });
+  const toggle = React.useCallback(() => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(DATA_GROUP_COLLAPSED_KEY, String(next));
+      } catch {
+        // Storage unavailable - in-memory state still works.
+      }
+      return next;
+    });
+  }, []);
+  return [collapsed, toggle];
+}
+
+/**
+ * A nav group rendered as one collapsible parent row (icon + label +
+ * chevron) with its pages as sub-entries. Collapsed by default; when one
+ * of its pages is the active route the parent is highlighted and the
+ * group auto-expands, so the active page is never hidden behind a
+ * collapse. In the icon rail the label and chevron hide and a click first
+ * re-opens the full sidebar so the sub-entries are visible.
+ */
+function CollapsibleNavGroup({
+  group,
+  activeView,
+  onNavigate,
+}: {
+  group: NavGroup;
+  activeView: ViewId;
+  onNavigate?: () => void;
+}) {
+  const t = useTranslations();
+  const isMentor = useIsMentor();
+  const { state: sidebarState, setOpen } = useSidebar();
+  const [storedCollapsed, toggleCollapsed] = usePersistedCollapsed();
+
+  const items = group.items.filter((item) => !item.mentorOnly || isMentor);
+  if (!items.length) return null;
+  const containsActive = items.some((item) => item.view === activeView);
+  const expanded = isGroupExpanded(storedCollapsed, containsActive);
+  const GroupIcon = group.icon;
+  const subListId = `nav-sub-${group.labelKey.replace(/[^a-zA-Z0-9]/g, "-")}`;
+
+  const handleToggle = () => {
+    if (sidebarState === "collapsed") setOpen(true);
+    toggleCollapsed();
+  };
+
+  return (
+    <SidebarGroup>
+      <SidebarGroupContent>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              isActive={containsActive}
+              onClick={handleToggle}
+              aria-expanded={expanded}
+              aria-controls={subListId}
+              tooltip={t("nav.dataDesc")}
+              className="relative data-[active=true]:font-medium data-[active=true]:text-emerald-700 dark:data-[active=true]:text-emerald-400"
+            >
+              {GroupIcon ? <GroupIcon aria-hidden="true" /> : null}
+              <span className="group-data-[collapsible=icon]:hidden">
+                {t(group.labelKey)}
+              </span>
+              <ChevronDown
+                aria-hidden="true"
+                className={`ml-auto shrink-0 transition-transform duration-200 motion-reduce:transition-none group-data-[collapsible=icon]:hidden ${
+                  expanded ? "" : "-rotate-90"
+                }`}
+              />
+            </SidebarMenuButton>
+            {expanded ? (
+              <SidebarMenuSub id={subListId}>
+                {items.map((item) => {
+                  const isActive = activeView === item.view;
+                  return (
+                    <SidebarMenuSubItem key={item.path}>
+                      <SidebarMenuSubButton
+                        asChild
+                        isActive={isActive}
+                        className="data-[active=true]:font-medium data-[active=true]:text-emerald-700 dark:data-[active=true]:text-emerald-400"
+                      >
+                        <a
+                          href={item.path}
+                          onClick={onNavigate}
+                          aria-current={isActive ? "page" : undefined}
+                        >
+                          <item.icon aria-hidden="true" />
+                          <span>{t(item.labelKey)}</span>
+                        </a>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  );
+                })}
+              </SidebarMenuSub>
+            ) : null}
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
 /**
  * Navigation list — sidebar menu with icon-rail support (tooltips shown
  * when the sidebar is collapsed). Shared by the desktop sidebar and the
@@ -64,6 +190,16 @@ export function NavList({
   return (
     <>
       {NAV_GROUPS.map((group) => {
+        if (group.collapsible) {
+          return (
+            <CollapsibleNavGroup
+              key={group.labelKey}
+              group={group}
+              activeView={activeView}
+              onNavigate={onNavigate}
+            />
+          );
+        }
         const items = group.items.filter(
           (item) => !item.mentorOnly || isMentor
         );
