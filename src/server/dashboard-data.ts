@@ -134,6 +134,9 @@ export interface KpiBlock {
 
 export interface KpiWidgetData extends KpiBlock {
   compare: KpiBlock | null;
+  /** Cumulative net P&L per trade, chronological - mini equity curve used
+      for the KPI sparklines (capped at 30 points). */
+  sparkline: string[];
 }
 
 export interface CurveWidgetData {
@@ -359,6 +362,23 @@ function computeKpiBlock(sample: DashboardTrade[]): KpiBlock {
   };
 }
 
+/** Cumulative net P&L per trade, chronological, capped at 30 points
+    (downsampled, always keeping the final point). */
+function computeSparkline(sample: DashboardTrade[]): string[] {
+  let cum = D0;
+  const points = sortChronologically(sample).map((t) => {
+    cum = cum.plus(toD(t.netPnl ?? 0));
+    return cum.toString();
+  });
+  if (points.length <= 30) return points;
+  const step = Math.ceil(points.length / 30);
+  const down = points.filter((_, i) => i % step === 0);
+  if (down[down.length - 1] !== points[points.length - 1]) {
+    down.push(points[points.length - 1]);
+  }
+  return down;
+}
+
 // ── Journal prompts (deterministic daily rotation) ───────────────────────────
 
 const JOURNAL_PROMPTS: readonly string[] = [
@@ -424,6 +444,7 @@ async function computeWidgetData(
       const data: KpiWidgetData = {
         ...computeKpiBlock(sample),
         compare: compareSample != null ? computeKpiBlock(compareSample) : null,
+        sparkline: computeSparkline(sample),
       };
       return data;
     }

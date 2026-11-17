@@ -6,7 +6,7 @@ export function BrandMark({ compact = false }: { compact?: boolean }) {
       <img
         src="/brand/phoenix-1.png"
         alt="Promethe"
-        className="h-8 w-8 shrink-0 rounded-lg object-contain"
+        className="h-8 w-8 shrink-0 rounded-lg object-contain transition-all duration-300 hover:scale-105 hover:drop-shadow-[0_0_14px_rgba(16,185,129,0.55)]"
       />
       <span className="flex flex-col leading-none group-data-[collapsible=icon]:hidden">
         <span className="text-sm font-semibold tracking-tight">Promethe</span>

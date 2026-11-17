@@ -460,6 +460,34 @@
   animation: widget-enter 320ms ease-out both;
 }
 
+/* Loading skeleton shimmer - a light sweep across the placeholder, on top
+ * of the pulse. Reduced motion (above) collapses it to a static block. */
+@keyframes skeleton-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.08),
+    transparent
+  );
+  animation: skeleton-shimmer 1.6s infinite;
+}
+
 /* Font families (§3.3).
  * DYSLEXIA_FRIENDLY: system dyslexia-recommended stack (Verdana/Tahoma/
  * Comic Sans MS) — zero download, works offline, license-free (decision

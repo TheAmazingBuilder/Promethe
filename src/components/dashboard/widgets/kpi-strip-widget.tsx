@@ -18,6 +18,7 @@ import {
 } from "@/lib/format";
 import { useFormat } from "@/lib/format/use-format";
 import { useAnimatedDecimal } from "@/hooks/use-count-up";
+import { cn } from "@/lib/utils";
 import type { KpiKey } from "@/lib/dashboard/types";
 import { kpiStripConfigSchema } from "@/lib/dashboard/registry";
 import type { KpiBlock, KpiWidgetData } from "./types";
@@ -32,12 +33,14 @@ export function KpiCard({
   value,
   valueClassName,
   sub,
+  sparkline,
   compact = false,
 }: {
   label: string;
   value: React.ReactNode;
   valueClassName?: string;
   sub?: React.ReactNode;
+  sparkline?: React.ReactNode;
   compact?: boolean;
 }) {
   return (
@@ -52,12 +55,56 @@ export function KpiCard({
       >
         {value}
       </p>
+      {sparkline}
       {sub != null ? (
         <p className="text-xs tabular-nums text-muted-foreground">{sub}</p>
       ) : null}
     </div>
   );
 }
+
+/** Tiny inline SVG sparkline - cumulative P&L path of the period. Green when
+    the period ends above where it started, red otherwise. */
+function Sparkline({ values }: { values: number[] }) {
+  if (values.length < 2) return null;
+  const w = 72;
+  const h = 24;
+  const pad = 2;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const points = values
+    .map(
+      (v, i) =>
+        `${(pad + (i * (w - pad * 2)) / (values.length - 1)).toFixed(1)},${(
+          h -
+          pad -
+          ((v - min) / span) * (h - pad * 2)
+        ).toFixed(1)}`
+    )
+    .join(" ");
+  const up = values[values.length - 1] >= values[0];
+  return (
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+      className={cn("h-6 w-full", up ? "text-gain" : "text-loss")}
+      aria-hidden="true"
+    >
+      <polyline
+        points={points}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** Formats whose value is money - the only ones a P&L sparkline describes. */
+const SPARKLINE_FORMATS = new Set<KpiFormat>(["money", "moneySigned"]);
 
 /** Raw decimal string of one KPI from a KPI block, or null. */
 function kpiRaw(block: KpiBlock | null, key: KpiKey): string | null {
@@ -377,6 +424,8 @@ function AnimatedKpiCard({
   raw,
   block,
   compare,
+  sparkline,
+  showSparkline,
   showDelta,
   currency,
   compact = false,
@@ -385,6 +434,8 @@ function AnimatedKpiCard({
   raw: string | null;
   block: KpiBlock | null;
   compare: KpiBlock | null;
+  sparkline: number[] | null;
+  showSparkline: boolean;
   showDelta: boolean;
   currency: string;
   compact?: boolean;
@@ -414,6 +465,13 @@ function AnimatedKpiCard({
       value={value}
       valueClassName={tone}
       sub={sub}
+      sparkline={
+        showSparkline &&
+        SPARKLINE_FORMATS.has(KPI_FORMAT[kpiKey]) &&
+        sparkline != null ? (
+          <Sparkline values={sparkline} />
+        ) : undefined
+      }
     />
   );
 }
@@ -423,12 +481,14 @@ export function KpiCards({
   data,
   kpis,
   showDelta,
+  showSparkline = false,
   currency,
   compact = false,
 }: {
   data: KpiWidgetData | null;
   kpis: KpiKey[];
   showDelta: boolean;
+  showSparkline?: boolean;
   currency: string;
   compact?: boolean;
 }) {
@@ -436,6 +496,10 @@ export function KpiCards({
     ? { stats: data.stats, advanced: data.advanced, extras: data.extras }
     : null;
   const compare = data?.compare ?? null;
+  const sparkline =
+    data?.sparkline != null
+      ? data.sparkline.map((v) => Number(v)).filter((n) => Number.isFinite(n))
+      : null;
 
   return (
     <>
@@ -446,6 +510,8 @@ export function KpiCards({
           raw={kpiRaw(block, key)}
           block={block}
           compare={compare}
+          sparkline={sparkline}
+          showSparkline={showSparkline}
           showDelta={showDelta}
           currency={currency}
           compact={compact}
@@ -472,6 +538,7 @@ export function KpiStripWidget({
         data={kpiData}
         kpis={parsed.kpis}
         showDelta={parsed.showDelta}
+        showSparkline={parsed.showSparkline}
         currency={currency}
         compact={parsed.kpis.length > 4}
       />

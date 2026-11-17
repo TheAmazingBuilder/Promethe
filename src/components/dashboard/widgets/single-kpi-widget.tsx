@@ -34,6 +34,7 @@ export function SingleKpiWidget({
           data={kpiData}
           kpis={[parsed.kpi]}
           showDelta={parsed.showDelta}
+          showSparkline={false}
           currency={currency}
         />
       </div>
