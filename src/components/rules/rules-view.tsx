@@ -597,14 +597,18 @@ function RuleEditor({
           {!isCustom && (
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground" htmlFor="rule-value">
-                {isCount ? t("valueCount") : t("valueAmount", { currency })}
+                {isCount
+                  ? t("valueCount")
+                  : form.kind === "MIN_PLANNED_RR"
+                    ? t("valueRatio")
+                    : t("valueAmount", { currency })}
               </label>
               <Input
                 id="rule-value"
                 inputMode="decimal"
                 value={form.value}
                 onChange={(e) => set("value", e.target.value)}
-                placeholder={isCount ? "3" : "500"}
+                placeholder={isCount ? "3" : form.kind === "MIN_PLANNED_RR" ? "1.5" : "500"}
               />
             </div>
           )}

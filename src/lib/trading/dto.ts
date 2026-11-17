@@ -440,10 +440,67 @@ export interface AccountDTO {
 export interface ToolScenarioDTO {
   id: string;
   name: string;
-  /** MULTI_TP | MARGIN */
+  /** MULTI_TP | MARGIN | RISK_REWARD */
   kind: string;
   payload: Record<string, unknown>;
   createdAt: string;
+}
+
+// ── Risk / Reward summary (Phase 2) ──────────────────────────────────────────
+
+/** Real stats from the user's own closed trades — never invented. */
+export interface RiskRewardRealStats {
+  /** Closed non-draft trades with a known result. */
+  closedTrades: number;
+  wins: number;
+  losses: number;
+  breakevens: number;
+  /** Fraction 0–1, null when no closed trade. */
+  winRate: string | null;
+  /** Mean realized R, null when no trade carries one. */
+  avgRealizedRR: string | null;
+  /** Mean planned R:R, null when no trade carries one. */
+  avgPlannedRR: string | null;
+  /** Mean net P&L per closed trade, account currency. */
+  expectancyMoney: string | null;
+  /** Mean R multiple per closed trade. */
+  expectancyR: string | null;
+  /** Mean winning trade, account currency (positive). */
+  avgWin: string | null;
+  /** Mean losing trade magnitude, account currency (positive). */
+  avgLoss: string | null;
+}
+
+export interface RiskRewardSummaryDTO {
+  currency: string;
+  /** Trading day (YYYY-MM-DD) the budget figures refer to. */
+  tradingDay: string;
+  /** Current balance = starting balances + realized P&L + cash flows. */
+  balance: string;
+  budget: {
+    /** Daily risk budget as % of balance, null when not set. */
+    percent: string | null;
+    /** Daily risk budget in account currency, null when not set. */
+    amount: string | null;
+    isSet: boolean;
+  };
+  today: {
+    /** Open trades whose risk is still live. */
+    openTrades: number;
+    /** Σ riskAmount of open trades (account currency). */
+    openRisk: string;
+    /** Realized losses of the trading day, as a positive amount. */
+    realizedLossToday: string;
+    /** Net P&L of the trading day (signed). */
+    realizedPnlToday: string;
+    /** Consumed budget = open risk + realized losses of the day. */
+    consumed: string;
+    /** Remaining budget, null when no budget is set. */
+    remaining: string | null;
+    /** Consumed share of the budget (0–1+), null when no budget is set. */
+    usedPercent: number | null;
+  };
+  realStats: RiskRewardRealStats;
 }
 
 export interface FxRateDTO {

@@ -17,6 +17,10 @@
  * - MAX_RISK_PER_TRADE  : violation when the trade's own risk amount
  *   (riskAmount) EXCEEDS the limit (risk > value). Open trades count —
  *   the risk is known at entry.
+ * - MIN_PLANNED_RR      : WARNING when the trade's planned reward:risk
+ *   (plannedRR) is BELOW the limit (plannedRR < value, e.g. 1.5).
+ *   Warning only, never a block: like every rule here it only records a
+ *   violation row — nothing in the app blocks a trade on a rule.
  * - CUSTOM              : documentation-only rule, never auto-detected.
  *
  * Rule values are positive decimal strings (account currency for money
@@ -28,6 +32,7 @@ export const RULE_KINDS = [
   "MAX_TRADES_PER_DAY",
   "MAX_DAILY_LOSS",
   "MAX_RISK_PER_TRADE",
+  "MIN_PLANNED_RR",
   "CUSTOM",
 ] as const;
 
@@ -52,6 +57,9 @@ export interface RuleTradeContext {
   exitLocalDay: string | null;
   /** Risk at entry (account currency) - null when unknown. */
   riskAmount: string | null;
+  /** Planned reward:risk (e.g. "1.5" = 1.5:1) - null when unknown.
+   *  Optional for callers that predate the MIN_PLANNED_RR gate. */
+  plannedRR?: string | null;
   /** Realized net P&L - null while open. */
   netPnl: string | null;
 }
@@ -129,6 +137,23 @@ function violatesMaxRiskPerTrade(
   };
 }
 
+function violatesMinPlannedRR(
+  rule: RuleDef,
+  trade: RuleTradeContext
+): RuleViolationResult | null {
+  if (trade.plannedRR == null) return null;
+  const limit = toD(rule.value);
+  if (limit.lte(0)) return null;
+  const rr = toD(trade.plannedRR);
+  if (!rr.lt(limit)) return null;
+  return {
+    ruleId: rule.id,
+    kind: "MIN_PLANNED_RR",
+    measured: rr.toString(),
+    limit: limit.toString(),
+  };
+}
+
 /**
  * Evaluate all rules against one trade. Draft trades are never evaluated
  * (they are not real positions yet). CUSTOM rules never fire — they are
@@ -156,6 +181,11 @@ export function evaluateRules(
       }
       case "MAX_RISK_PER_TRADE": {
         const v = violatesMaxRiskPerTrade(rule, trade);
+        if (v) violations.push(v);
+        break;
+      }
+      case "MIN_PLANNED_RR": {
+        const v = violatesMinPlannedRR(rule, trade);
         if (v) violations.push(v);
         break;
       }

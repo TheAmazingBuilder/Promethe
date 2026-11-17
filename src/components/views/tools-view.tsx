@@ -13,6 +13,7 @@ import { ExposureDashboard } from "@/components/tools/exposure-dashboard";
 import { MarketHoursClock } from "@/components/tools/market-hours-clock";
 import { CurrencyConverter } from "@/components/tools/currency-converter";
 import { ExitPlansManager } from "@/components/tools/exit-plans-manager";
+import { RiskRewardCalculator } from "@/components/tools/risk-reward-calculator";
 import { PRESET_INSTRUMENTS } from "@/lib/trading/instruments";
 import { Badge } from "@/components/ui/badge";
 
@@ -26,6 +27,7 @@ const TAB_VALUES = [
   "converter",
   "exit-plans",
   "instruments",
+  "risk-reward",
 ] as const;
 
 type TabValue = (typeof TAB_VALUES)[number];
@@ -55,6 +57,8 @@ function readTabFromHash(): TabValue {
     converter: "converter",
     sorties: "exit-plans",
     "exit-plans": "exit-plans",
+    "risk-reward": "risk-reward",
+    "risque-recompense": "risk-reward",
     taille: "sizing",
     sizing: "sizing",
     pnl: "pnl",
@@ -100,6 +104,7 @@ export function ToolsView() {
               {PRESET_INSTRUMENTS.length}
             </Badge>
           </TabsTrigger>
+          <TabsTrigger value="risk-reward">{t("tabRiskReward")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="sizing">
@@ -208,6 +213,18 @@ export function ToolsView() {
             </CardHeader>
             <CardContent>
               <InstrumentsBrowser />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="risk-reward">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t("riskRewardTitle")}</CardTitle>
+              <p className="text-sm text-muted-foreground">{t("riskRewardDesc")}</p>
+            </CardHeader>
+            <CardContent>
+              <RiskRewardCalculator />
             </CardContent>
           </Card>
         </TabsContent>

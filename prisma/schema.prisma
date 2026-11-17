@@ -748,7 +748,7 @@ model JournalEntry {
 model TradingRule {
   id          String   @id @default(cuid())
   userId      String   @map("user_id")
-  kind        String // MAX_TRADES_PER_DAY | MAX_DAILY_LOSS | MAX_RISK_PER_TRADE | CUSTOM
+  kind        String // MAX_TRADES_PER_DAY | MAX_DAILY_LOSS | MAX_RISK_PER_TRADE | MIN_PLANNED_RR | CUSTOM
   value       Decimal
   description String?
   isActive    Boolean  @default(true) @map("is_active")
@@ -1455,7 +1455,7 @@ model ToolScenario {
   id        String   @id @default(cuid())
   userId    String   @map("user_id")
   name      String
-  /// MULTI_TP | MARGIN
+  /// MULTI_TP | MARGIN | RISK_REWARD
   kind      String
   /// JSON: calculator inputs (payload shape depends on kind).
   payloadJson String @map("payload_json")

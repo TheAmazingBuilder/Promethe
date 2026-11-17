@@ -35,6 +35,7 @@ import { WidgetPreview } from "./widget-preview";
 // Registers the v2.5 M2 chart widgets (saved-chart / heatmap / year-calendar)
 // before the catalog lists definitions — idempotent side-effect import.
 import "@/lib/dashboard/register-chart-widgets";
+import "@/lib/dashboard/register-risk-reward-widgets";
 
 export function WidgetCatalog({
   open,

@@ -195,3 +195,36 @@ describe("evaluateRules — règles globales", () => {
     expect(v).toEqual([]);
   });
 });
+
+// ── MIN_PLANNED_RR ──────────────────────────────────────────────────────────
+
+describe("evaluateRules — MIN_PLANNED_RR", () => {
+  it("plannedRR < seuil → warning avec la valeur mesurée", () => {
+    const v = evaluateRules(
+      [rule({ id: "r1", kind: "MIN_PLANNED_RR", value: "1.5" })],
+      trade({ plannedRR: "1.2" }),
+      day()
+    );
+    expect(v).toEqual([
+      { ruleId: "r1", kind: "MIN_PLANNED_RR", measured: "1.2", limit: "1.5" },
+    ]);
+  });
+
+  it("plannedRR = seuil → OK (la limite est atteignable)", () => {
+    const v = evaluateRules(
+      [rule({ id: "r1", kind: "MIN_PLANNED_RR", value: "1.5" })],
+      trade({ plannedRR: "1.5" }),
+      day()
+    );
+    expect(v).toEqual([]);
+  });
+
+  it("plannedRR inconnu → pas de violation (jamais de faux positif)", () => {
+    const v = evaluateRules(
+      [rule({ id: "r1", kind: "MIN_PLANNED_RR", value: "1.5" })],
+      trade({ plannedRR: null }),
+      day()
+    );
+    expect(v).toEqual([]);
+  });
+});

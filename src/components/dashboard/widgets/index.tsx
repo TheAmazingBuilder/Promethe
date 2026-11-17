@@ -38,7 +38,10 @@ import {
   SavedChartWidget,
   YearCalendarWidget,
 } from "./chart-widgets";
+import { RiskBudgetWidget } from "./risk-budget-widget";
+import { DisciplineScoreWidget } from "./discipline-score-widget";
 import "@/lib/dashboard/register-chart-widgets";
+import "@/lib/dashboard/register-risk-reward-widgets";
 
 export interface WidgetRendererProps {
   type: string;
@@ -169,6 +172,10 @@ export function WidgetRenderer({
       return <HeatmapWidget config={config} currency={currency} />;
     case "year-calendar":
       return <YearCalendarWidget />;
+    case "risk-budget":
+      return <RiskBudgetWidget />;
+    case "discipline-score":
+      return <DisciplineScoreWidget />;
     default:
       return null;
   }

@@ -30,6 +30,8 @@ import {
 // v2.5 M2 — registers the chart widgets (saved-chart / heatmap /
 // year-calendar) through the same extension point the app uses.
 import "@/lib/dashboard/register-chart-widgets";
+// Phase 2 — registers the risk-budget / discipline-score widgets.
+import "@/lib/dashboard/register-risk-reward-widgets";
 
 const templateCases: Array<{ source: string; dashboards: TemplateDashboard[] }> = [
   ...BUILT_IN_TEMPLATES.map((t) => ({

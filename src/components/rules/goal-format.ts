@@ -36,6 +36,7 @@ export const RULE_KIND_LIST = [
   "MAX_TRADES_PER_DAY",
   "MAX_DAILY_LOSS",
   "MAX_RISK_PER_TRADE",
+  "MIN_PLANNED_RR",
   "CUSTOM",
 ] as const;
 
@@ -78,7 +79,7 @@ export function goalBarTone(progressPercent: number, isAchieved: boolean): strin
   return "bg-primary";
 }
 
-/** Rule limit display - count vs money depending on the kind. */
+/** Rule limit display - count vs money vs R:R ratio depending on the kind. */
 export function formatRuleValue(
   fmt: FormatApi,
   kind: string,
@@ -87,6 +88,10 @@ export function formatRuleValue(
 ): string {
   if (kind === "MAX_TRADES_PER_DAY") return fmtNum(Number(value), 0);
   if (kind === "CUSTOM") return value;
+  if (kind === "MIN_PLANNED_RR") {
+    const n = Number(value);
+    return Number.isFinite(n) ? `${fmtNum(n, 2)}:1` : value;
+  }
   return fmt.money(value, currency);
 }
 
@@ -99,6 +104,10 @@ export function formatMeasuredValue(
 ): string {
   if (measured === "") return "-";
   if (kind === "MAX_TRADES_PER_DAY") return fmtNum(Number(measured), 0);
+  if (kind === "MIN_PLANNED_RR") {
+    const n = Number(measured);
+    return Number.isFinite(n) ? `${fmtNum(n, 2)}:1` : measured;
+  }
   if (kind === "MAX_DAILY_LOSS" || kind === "MAX_RISK_PER_TRADE") {
     return fmt.signedMoney(measured, currency);
   }

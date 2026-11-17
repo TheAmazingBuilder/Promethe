@@ -136,6 +136,7 @@ import { BUILT_IN_TEMPLATES } from "@/lib/dashboard/templates";
 // Registers the v2.5 M2 chart widgets before any getWidgetDefinition /
 // safeParseWidgetConfig call — idempotent side-effect import.
 import "@/lib/dashboard/register-chart-widgets";
+import "@/lib/dashboard/register-risk-reward-widgets";
 import type { WidgetPatchInput } from "@/lib/validations/dashboard";
 import { WidgetShell } from "@/components/dashboard/widget-shell";
 import { WidgetCatalog } from "@/components/dashboard/widget-catalog";

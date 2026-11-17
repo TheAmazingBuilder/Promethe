@@ -68,6 +68,8 @@ const SHAPE_BY_TYPE: Record<WidgetType, Shape> = {
   "custom-metric": "bigNumber",
   "period-compare": "bars",
   "saved-chart": "line",
+  "risk-budget": "progress",
+  "discipline-score": "bigNumber",
   heatmap: "heatmap",
   "year-calendar": "calendar",
 };

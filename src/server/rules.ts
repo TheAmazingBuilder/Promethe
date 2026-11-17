@@ -111,6 +111,7 @@ const EVAL_SELECT = {
   entryTime: true,
   exitTime: true,
   riskAmount: true,
+  plannedRR: true,
   netPnl: true,
 } as const;
 
@@ -168,6 +169,7 @@ export async function evaluateTradeViolations(
         entryLocalDay,
         exitLocalDay,
         riskAmount: trade.riskAmount?.toString() ?? null,
+        plannedRR: trade.plannedRR?.toString() ?? null,
         netPnl: trade.netPnl?.toString() ?? null,
       },
       {
@@ -301,6 +303,7 @@ export async function reevaluateViolations(userId: string): Promise<void> {
         entryLocalDay,
         exitLocalDay,
         riskAmount: t.riskAmount?.toString() ?? null,
+        plannedRR: t.plannedRR?.toString() ?? null,
         netPnl: t.netPnl?.toString() ?? null,
       },
       {

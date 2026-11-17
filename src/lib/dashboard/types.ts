@@ -39,6 +39,9 @@ export const WIDGET_TYPES = [
   "saved-chart",
   "heatmap",
   "year-calendar",
+  // Phase 2 — risk / reward widgets
+  "risk-budget",
+  "discipline-score",
 ] as const;
 
 export type WidgetType = (typeof WIDGET_TYPES)[number];
