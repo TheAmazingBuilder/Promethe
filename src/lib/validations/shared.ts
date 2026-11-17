@@ -95,6 +95,25 @@ export type {
   WidgetPatchInput,
 } from "./dashboard";
 
+export {
+  searchQuerySchema,
+  bulkTradesSchema,
+  customFieldDefinitionInputSchema,
+  customFieldDefinitionPatchSchema,
+  tableColumnsInputSchema,
+  shortcutUpsertSchema,
+  savedViewPatchSchema,
+} from "./productivity";
+export type {
+  SearchQuery,
+  BulkTradesInput,
+  CustomFieldDefinitionInput,
+  CustomFieldDefinitionPatch,
+  TableColumnsInput,
+  ShortcutUpsertInput,
+  SavedViewPatch,
+} from "./productivity";
+
 export { zodFieldErrors };
 
 // v2.5 Module 8 — privacy, accessibility & time zones

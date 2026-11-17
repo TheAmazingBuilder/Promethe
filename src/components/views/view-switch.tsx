@@ -41,6 +41,10 @@ import { AppearanceView } from "@/components/settings-views/appearance-view";
 import { DashboardsSettingsView } from "@/components/settings-views/dashboards-settings-view";
 import { PrivacyView } from "@/components/settings-views/privacy-view";
 import { AccessibilityView } from "@/components/settings-views/accessibility-view";
+import { CustomFieldsView } from "@/components/settings-views/custom-fields-view";
+import { ShortcutsView } from "@/components/settings-views/shortcuts-view";
+import { SearchView } from "@/components/search/search-view";
+import { HistoryView } from "@/components/history/history-view";
 import { TrashView } from "@/components/trash/trash-view";
 
 /** No locked sections remain - phase 7 shipped every placeholder. */
@@ -79,6 +83,18 @@ export function ViewSwitch() {
       break;
     case "accessibility-settings":
       view = <AccessibilityView />;
+      break;
+    case "custom-fields-settings":
+      view = <CustomFieldsView />;
+      break;
+    case "shortcuts-settings":
+      view = <ShortcutsView />;
+      break;
+    case "search":
+      view = <SearchView />;
+      break;
+    case "history":
+      view = <HistoryView />;
       break;
     case "dashboards-settings":
       view = <DashboardsSettingsView />;

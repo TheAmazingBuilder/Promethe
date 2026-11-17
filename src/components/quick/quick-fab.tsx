@@ -3,29 +3,29 @@
 import * as React from "react";
 import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { useShortcuts } from "@/hooks/use-productivity";
+import {
+  effectiveKeys,
+  isTypingTarget,
+  matchesChord,
+} from "@/lib/shortcuts/registry";
 import { navigate } from "@/lib/router";
 import { Button } from "@/components/ui/button";
 
 /**
  * Floating "+" quick-trade button (mobile) + "Q" keyboard shortcut (v2 §4.1).
  * Hidden when a text input/textarea/select has focus so typing "q" is safe.
+ * v2.5 Module 4 — the chord is reassignable via the shortcuts registry.
  */
 export function QuickFab() {
   const t = useTranslations("quick");
   const [visible, setVisible] = React.useState(true);
+  const shortcuts = useShortcuts();
+  const overrides = shortcuts.data ?? [];
 
   React.useEffect(() => {
-    const isTypingTarget = (target: EventTarget | null): boolean => {
-      if (!(target instanceof HTMLElement)) return false;
-      return (
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.tagName === "SELECT" ||
-        target.isContentEditable
-      );
-    };
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() !== "q" || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (!matchesChord(e, effectiveKeys("quick-trade", overrides))) return;
       if (isTypingTarget(e.target)) return;
       const route = window.location.hash.replace(/^#\/?/, "").split("?")[0];
       if (route.startsWith("trades/quick")) return;
@@ -34,7 +34,7 @@ export function QuickFab() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [overrides]);
 
   // Route-aware visibility: hidden on the quick form itself.
   React.useEffect(() => {

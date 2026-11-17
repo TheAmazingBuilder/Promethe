@@ -409,21 +409,67 @@ export async function updateTag(
 
 // ── Saved views (named filter presets) ──────────────────────────────────────
 
+/** Parse the optional JSON columns/sort/grouping of a SavedView row. */
+function parseViewJson<T>(raw: string | null | undefined, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function toSavedViewDTO(row: {
+  id: string;
+  page: string;
+  name: string;
+  filtersJson: string;
+  columnsJson: string | null;
+  sortJson: string | null;
+  groupingJson: string | null;
+  entity: string | null;
+  isPinned: boolean;
+  isDefault: boolean;
+  order: number;
+  createdAt: Date;
+  updatedAt: Date;
+}): SavedViewDTO {
+  return {
+    id: row.id,
+    page: row.page,
+    name: row.name,
+    filters: parseViewJson<Record<string, unknown>>(row.filtersJson, {}),
+    columns: parseViewJson<string[] | null>(row.columnsJson, null),
+    sort: parseViewJson<Array<{ id: string; desc: boolean }> | null>(
+      row.sortJson,
+      null
+    ),
+    grouping: parseViewJson<Record<string, unknown> | null>(
+      row.groupingJson,
+      null
+    ),
+    entity: row.entity,
+    isPinned: row.isPinned,
+    isDefault: row.isDefault,
+    order: row.order,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
 export async function listSavedViews(
   userId: string,
   page: string
 ): Promise<SavedViewDTO[]> {
   const rows = await db.savedView.findMany({
     where: { userId, page },
-    orderBy: { createdAt: "desc" },
+    orderBy: [
+      { isPinned: "desc" },
+      { order: "asc" },
+      { createdAt: "desc" },
+    ],
   });
-  return rows.map((v) => ({
-    id: v.id,
-    page: v.page,
-    name: v.name,
-    filters: JSON.parse(v.filtersJson) as Record<string, unknown>,
-    createdAt: v.createdAt.toISOString(),
-  }));
+  return rows.map(toSavedViewDTO);
 }
 
 export async function createSavedView(
@@ -431,25 +477,153 @@ export async function createSavedView(
   input: z.infer<typeof savedViewInputSchema>
 ): Promise<SavedViewDTO> {
   const json = JSON.stringify(input.filters);
-  // Upsert semantics: same (page, name) → replace filters.
+  // Upsert semantics: same (page, name) → replace the view state.
   const existing = await db.savedView.findFirst({
     where: { userId, page: input.page, name: input.name },
   });
-  const row = existing
-    ? await db.savedView.update({
-        where: { id: existing.id },
-        data: { filtersJson: json },
-      })
-    : await db.savedView.create({
-        data: { userId, page: input.page, name: input.name, filtersJson: json },
-      });
-  return {
-    id: row.id,
-    page: row.page,
-    name: row.name,
-    filters: JSON.parse(row.filtersJson) as Record<string, unknown>,
-    createdAt: row.createdAt.toISOString(),
+  const data = {
+    filtersJson: json,
+    columnsJson:
+      input.columns !== undefined && input.columns !== null
+        ? JSON.stringify(input.columns)
+        : undefined,
+    sortJson:
+      input.sort !== undefined && input.sort !== null
+        ? JSON.stringify(input.sort)
+        : undefined,
+    groupingJson:
+      input.grouping !== undefined && input.grouping !== null
+        ? JSON.stringify(input.grouping)
+        : undefined,
+    isPinned: input.isPinned ?? undefined,
   };
+  const row = existing
+    ? await db.savedView.update({ where: { id: existing.id }, data })
+    : await db.savedView.create({
+        data: {
+          userId,
+          page: input.page,
+          name: input.name,
+          ...data,
+          order: input.order ?? (await nextViewOrder(userId, input.page)),
+        },
+      });
+  if (input.isDefault) {
+    await unsetOtherDefaults(userId, input.page, row.id);
+    return toSavedViewDTO(
+      await db.savedView.update({
+        where: { id: row.id },
+        data: { isDefault: true },
+      })
+    );
+  }
+  return toSavedViewDTO(row);
+}
+
+async function nextViewOrder(userId: string, page: string): Promise<number> {
+  const last = await db.savedView.findFirst({
+    where: { userId, page },
+    orderBy: { order: "desc" },
+    select: { order: true },
+  });
+  return (last?.order ?? 0) + 10;
+}
+
+async function unsetOtherDefaults(
+  userId: string,
+  page: string,
+  exceptId: string
+): Promise<void> {
+  await db.savedView.updateMany({
+    where: { userId, page, id: { not: exceptId }, isDefault: true },
+    data: { isDefault: false },
+  });
+}
+
+export async function updateSavedView(
+  userId: string,
+  id: string,
+  patch: {
+    name?: string;
+    filters?: Record<string, unknown>;
+    columns?: string[] | null;
+    sort?: Array<{ id: string; desc: boolean }> | null;
+    grouping?: Record<string, unknown> | null;
+    isPinned?: boolean;
+    isDefault?: boolean;
+    order?: number;
+  }
+): Promise<SavedViewDTO | null> {
+  const existing = await db.savedView.findFirst({ where: { id, userId } });
+  if (!existing) return null;
+  if (patch.isDefault) {
+    await unsetOtherDefaults(userId, existing.page, id);
+  }
+  const row = await db.savedView.update({
+    where: { id },
+    data: {
+      name: patch.name ?? undefined,
+      filtersJson:
+        patch.filters !== undefined ? JSON.stringify(patch.filters) : undefined,
+      columnsJson:
+        patch.columns !== undefined
+          ? patch.columns === null
+            ? null
+            : JSON.stringify(patch.columns)
+          : undefined,
+      sortJson:
+        patch.sort !== undefined
+          ? patch.sort === null
+            ? null
+            : JSON.stringify(patch.sort)
+          : undefined,
+      groupingJson:
+        patch.grouping !== undefined
+          ? patch.grouping === null
+            ? null
+            : JSON.stringify(patch.grouping)
+          : undefined,
+      isPinned: patch.isPinned ?? undefined,
+      isDefault: patch.isDefault ?? undefined,
+      order: patch.order ?? undefined,
+    },
+  });
+  return toSavedViewDTO(row);
+}
+
+export async function duplicateSavedView(
+  userId: string,
+  id: string
+): Promise<SavedViewDTO | null> {
+  const existing = await db.savedView.findFirst({ where: { id, userId } });
+  if (!existing) return null;
+  let name = `${existing.name} (copie)`;
+  let suffix = 2;
+  while (
+    await db.savedView.findFirst({
+      where: { userId, page: existing.page, name },
+      select: { id: true },
+    })
+  ) {
+    name = `${existing.name} (copie ${suffix})`;
+    suffix += 1;
+  }
+  const row = await db.savedView.create({
+    data: {
+      userId,
+      page: existing.page,
+      name,
+      filtersJson: existing.filtersJson,
+      columnsJson: existing.columnsJson,
+      sortJson: existing.sortJson,
+      groupingJson: existing.groupingJson,
+      entity: existing.entity,
+      isPinned: false,
+      isDefault: false,
+      order: await nextViewOrder(userId, existing.page),
+    },
+  });
+  return toSavedViewDTO(row);
 }
 
 export async function deleteSavedView(userId: string, id: string): Promise<boolean> {

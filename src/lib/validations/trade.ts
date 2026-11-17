@@ -95,6 +95,9 @@ export const tradeInputSchema = z.object({
 
   reviewStatus: z.enum(["NOT_REVIEWED", "REVIEWED"]).default("NOT_REVIEWED"),
   isDraft: z.boolean().default(false),
+  // v2.5 Module 4 — custom-field values, validated server-side against the
+  // live definitions (unknown keys are dropped).
+  customFields: z.record(z.string(), z.unknown()).nullish(),
   /// Offline idempotency key (v2 §4.2): the server dedupes on it.
   clientMutationId: z.string().max(64).nullish(),
   /// Optimistic-concurrency base (v2 §4.2): last updatedAt seen by the client.
@@ -143,6 +146,10 @@ export const tradeListQuerySchema = z.object({
   dateFrom: z.string().optional(), // ISO
   dateTo: z.string().optional(),
   search: z.string().max(100).optional(),
+  // v2.5 Module 4 — filter by a SELECT custom field (server matches the
+  // exact JSON fragment "\"key\":\"value\"" in Trade.customFields).
+  customFieldKey: z.string().max(60).optional(),
+  customFieldValue: z.string().max(200).optional(),
   /// v2.5 M2 drill-down — local entry hour (0-23, user's timezone).
   entryHour: z.coerce.number().int().min(0).max(23).optional(),
   /// v2.5 M2 drill-down — local ISO weekday (1 = Monday … 7 = Sunday).
@@ -284,4 +291,14 @@ export const savedViewInputSchema = z.object({
   page: z.string().trim().min(1).max(40),
   name: z.string().trim().min(1, "required").max(60),
   filters: z.record(z.string(), z.unknown()),
+  // v2.5 Module 4 — full view state (all optional, filters-only stays valid).
+  columns: z.array(z.string().min(1)).max(60).nullish(),
+  sort: z
+    .array(z.object({ id: z.string().min(1), desc: z.boolean() }))
+    .max(10)
+    .nullish(),
+  grouping: z.record(z.string(), z.unknown()).nullish(),
+  isPinned: z.boolean().optional(),
+  isDefault: z.boolean().optional(),
+  order: z.number().int().min(0).max(100000).optional(),
 });

@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
-import { Accessibility, Check, ChevronRight, Compass, EyeOff, LayoutDashboard, LayoutTemplate, Link2, Monitor, Moon, Palette, Plug, ShieldCheck, Sun, Trash2, Users } from "lucide-react";
+import { Accessibility, Check, ChevronRight, Compass, EyeOff, History, Keyboard, LayoutDashboard, LayoutTemplate, Link2, ListPlus, Monitor, Moon, Palette, Plug, ShieldCheck, Sun, Trash2, Users } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -410,6 +410,48 @@ export function SettingsView() {
           <div>
             <p className="text-sm font-medium">{tNav("accessibility")}</p>
             <p className="text-xs text-muted-foreground">{tNav("accessibilityDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </a>
+
+      <a
+        href="#/reglages/champs-personnalises"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <ListPlus className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{t("customFieldsLink")}</p>
+            <p className="text-xs text-muted-foreground">{t("customFieldsLinkDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </a>
+
+      <a
+        href="#/reglages/raccourcis"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <Keyboard className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{t("shortcutsLink")}</p>
+            <p className="text-xs text-muted-foreground">{t("shortcutsLinkDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </a>
+
+      <a
+        href="#/history"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <History className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{t("historyLink")}</p>
+            <p className="text-xs text-muted-foreground">{t("historyLinkDesc")}</p>
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />

@@ -42,6 +42,8 @@ export interface AnalyticsTrade extends StatTrade {
   localHour: number | null;
   /** Trade duration in minutes (exit − entry), null while open. */
   durationMin: number | null;
+  /** Custom-field values, keyed by definition key (v2.5 Module 4 §4.7). */
+  customFields?: Record<string, unknown> | null;
 }
 
 // ── Advanced KPIs ────────────────────────────────────────────────────────────
@@ -228,6 +230,12 @@ export interface Breakdowns {
   emotion: GroupStat[];
   /** Followed the plan - keys "yes" / "no". */
   plan: GroupStat[];
+  /**
+   * Custom-field breakdowns (v2.5 Module 4 §4.7) - only for definitions
+   * flagged usableInAnalytics. Keyed by definition key; each entry is a
+   * GroupStat[] over the field's values. Absent when no such definition.
+   */
+  custom?: Record<string, GroupStat[]>;
 }
 
 /** Weekday index (1 = Monday … 7 = Sunday) from an ISO date. */
@@ -237,8 +245,11 @@ export function weekdayOfIsoDate(isoDate: string): number {
   return d.getUTCDay() === 0 ? 7 : d.getUTCDay();
 }
 
-export function computeBreakdowns(trades: AnalyticsTrade[]): Breakdowns {
-  return {
+export function computeBreakdowns(
+  trades: AnalyticsTrade[],
+  customDefs?: Array<{ key: string; label: string }>
+): Breakdowns {
+  const out: Breakdowns = {
     strategy: groupStats(trades, (t) => t.strategyName),
     symbol: groupStats(trades, (t) => t.symbol),
     session: groupStats(trades, (t) => t.session),
@@ -256,6 +267,18 @@ export function computeBreakdowns(trades: AnalyticsTrade[]): Breakdowns {
       t.followedPlan == null ? null : t.followedPlan ? "yes" : "no"
     ),
   };
+  if (customDefs && customDefs.length > 0) {
+    const custom: Record<string, GroupStat[]> = {};
+    for (const def of customDefs) {
+      custom[def.key] = groupStats(trades, (t) => {
+        const v = t.customFields?.[def.key];
+        if (v === null || v === undefined || v === "") return null;
+        return Array.isArray(v) ? v.map(String).join(", ") : String(v);
+      });
+    }
+    out.custom = custom;
+  }
+  return out;
 }
 
 // ── Insights — « ce qui marche / ce qui coûte » ─────────────────────────────

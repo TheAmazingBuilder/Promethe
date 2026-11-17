@@ -30,6 +30,13 @@ import { NavList } from "./nav-list";
 import { UserMenu } from "./user-menu";
 import { CommandMenu } from "./command-menu";
 import { TourProvider } from "@/components/tour/guided-tour";
+import { ShortcutsProvider } from "@/components/shortcuts/shortcuts-provider";
+import { useShortcuts } from "@/hooks/use-productivity";
+import {
+  effectiveKeys,
+  isTypingTarget,
+  matchesChord,
+} from "@/lib/shortcuts/registry";
 import { NotificationsBell } from "./notifications-bell";
 import { DeletionBanner } from "./deletion-banner";
 import { findNavItem } from "./nav";
@@ -53,6 +60,9 @@ export function AppShell({
   const tRoot = useTranslations();
   const tPhase = useTranslations("common");
   const [commandOpen, setCommandOpen] = React.useState(false);
+  // v2.5 Module 4 — stored shortcut overrides (defaults while loading).
+  const shortcuts = useShortcuts();
+  const overrides = shortcuts.data ?? [];
 
   const activeNavView: ViewId =
     route.view === "trade" || route.view === "trade-form"
@@ -63,34 +73,23 @@ export function AppShell({
   const navItem = findNavItem(activeNavView);
   const pageTitle = navItem ? tRoot(navItem.labelKey) : "Promethe";
 
-  // ⌘K / Ctrl+K toggles the command palette.
+  // ⌘K / Ctrl+K toggles the command palette (chord is reassignable).
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setCommandOpen((v) => !v);
-      }
+      if (!matchesChord(event, effectiveKeys("command-palette", overrides))) return;
+      event.preventDefault();
+      setCommandOpen((v) => !v);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [overrides]);
 
   // Bare "f"/"F" enters focus mode (v2.5 M1) — no modifiers, not while
   // typing in a field and no overlay open (pragmatic dialog check).
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "f" && event.key !== "F") return;
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-      const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.tagName === "SELECT" ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
+      if (!matchesChord(event, effectiveKeys("focus-mode", overrides))) return;
+      if (isTypingTarget(event.target)) return;
       if (document.querySelector("[data-state=open]") != null) return;
       if (window.location.hash === "#/focus") return;
       event.preventDefault();
@@ -98,10 +97,11 @@ export function AppShell({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [overrides]);
 
   return (
     <TourProvider>
+      <ShortcutsProvider>
       <SidebarProvider defaultOpen={defaultSidebarOpen}>
       {/* ── Sidebar (black brand block + nav, collapses to an icon rail) ── */}
       <Sidebar collapsible="icon" aria-label={t("sidebarLabel")}>
@@ -237,6 +237,7 @@ export function AppShell({
 
       <CommandMenu open={commandOpen} onOpenChange={setCommandOpen} />
       </SidebarProvider>
+      </ShortcutsProvider>
     </TourProvider>
   );
 }

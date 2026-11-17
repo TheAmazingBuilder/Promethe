@@ -30,6 +30,14 @@ import type {
 } from "@/lib/trading/dto";
 import { evaluateTradeViolations } from "@/server/rules";
 import { refreshTradeSearchText } from "@/server/search-index";
+import { foldText } from "@/lib/search/text";
+import {
+  buildCustomFieldsSchema,
+  parseCustomFields,
+  serializeCustomFields,
+} from "@/lib/custom-fields/validate";
+import { activeCustomFieldDefinitions } from "@/server/custom-fields";
+import { expiryDate, newGroupId } from "@/server/change-log";
 
 /** Validation/ownership errors - mapped to typed API responses by the routes. */
 export class TradeValidationError extends Error {
@@ -162,6 +170,7 @@ function baseItem(t: TradeRow): TradeListItemDTO {
       .filter((tt) => tt.tag.deletedAt == null)
       .map((tt) => tt.tag)
       .map((tag): TagDTO => ({ id: tag.id, name: tag.name, color: tag.color, kind: tag.kind })),
+    customFields: parseCustomFields(t.customFields),
   };
 }
 
@@ -450,13 +459,22 @@ export function tradeListWhere(
       : {}),
     ...(query.search
       ? {
-          OR: [
-            { notes: { contains: query.search } },
-            { preTradeAnalysis: { contains: query.search } },
-            { postTradeReview: { contains: query.search } },
-            { setupType: { contains: query.search } },
-            { instrument: { symbol: { contains: query.search } } },
-          ],
+          // v2.5 Module 4 — accent-insensitive search over the maintained
+          // searchText column (symbol, setup, notes, analyses, lesson,
+          // broker comment, tag names, custom-field values). Multi-term
+          // queries AND the folded terms.
+          AND: foldText(query.search)
+            .split(/\s+/)
+            .filter(Boolean)
+            .map((term) => ({ searchText: { contains: term } })),
+        }
+      : {}),
+    ...(query.customFieldKey && query.customFieldValue
+      ? {
+          // SELECT custom-field filter: exact JSON fragment match.
+          customFields: {
+            contains: `"${query.customFieldKey}":"${query.customFieldValue}"`,
+          },
         }
       : {}),
   };
@@ -567,6 +585,25 @@ export interface CreateTradeResult {
   deduplicated: boolean;
 }
 
+/** Validate custom-field values against the live definitions (non-drafts
+ * only) and serialize them in definition order. Unknown keys are dropped.
+ * Drafts skip validation so a half-filled field never blocks saving. */
+async function resolveCustomFields(
+  userId: string,
+  values: Record<string, unknown> | null | undefined,
+  opts: { validate: boolean }
+): Promise<string | null> {
+  if (!values) return null;
+  const defs = await activeCustomFieldDefinitions(userId);
+  if (opts.validate) {
+    const parsed = buildCustomFieldsSchema(defs).safeParse(values);
+    if (!parsed.success) {
+      throw new TradeValidationError("CUSTOM_FIELDS_INVALID");
+    }
+  }
+  return serializeCustomFields(values, defs);
+}
+
 export async function createTrade(
   userId: string,
   input: TradeInput
@@ -601,6 +638,10 @@ export async function createTrade(
   }
 
   const balanceAtEntry = await computeBalanceAt(userId, input.accountId, entryTime);
+
+  const customFieldsJson = await resolveCustomFields(userId, input.customFields, {
+    validate: !input.isDraft,
+  });
 
   const derived = computeDerived({
     instrument,
@@ -682,6 +723,7 @@ export async function createTrade(
         checklistResults: input.checklistResults
           ? JSON.stringify(input.checklistResults)
           : null,
+        customFields: customFieldsJson,
         clientMutationId: input.clientMutationId ?? null,
         tags: {
           create: tagIds.map((tagId) => ({ tagId })),
@@ -800,6 +842,13 @@ export async function updateTrade(
   const tagIds =
     patch.tagIds !== undefined ? await filterOwnTags(userId, patch.tagIds) : null;
 
+  const customFieldsJson =
+    patch.customFields !== undefined
+      ? await resolveCustomFields(userId, patch.customFields, {
+          validate: patch.isDraft !== true,
+        })
+      : undefined;
+
   const closed = status === "CLOSED" && exitPrice != null;
   const balanceAtEntry = patch.accountId
     ? await computeBalanceAt(userId, patch.accountId, entryTime)
@@ -906,6 +955,8 @@ export async function updateTrade(
               ? JSON.stringify(patch.checklistResults)
               : null
             : undefined,
+        customFields:
+          patch.customFields !== undefined ? customFieldsJson : undefined,
       },
     });
     if (tagIds !== null) {
@@ -1020,9 +1071,45 @@ export async function deleteTrade(userId: string, id: string): Promise<boolean> 
   // Soft delete: children (executions, screenshots, tags, reviews) and the
   // (accountId, externalId) key are KEPT — restore brings everything back.
   // The daily cron purges rows trashed more than 30 days ago.
-  const updated = await db.trade.updateMany({
+  // v2.5 Module 4 — the delete is logged as a one-trade ChangeLog group so
+  // it can be undone from #/history (or with Cmd+Z) within 30 days.
+  const current = await db.trade.findFirst({
     where: { id, userId, deletedAt: null },
-    data: { deletedAt: new Date(), deletedBy: userId },
+    select: {
+      id: true,
+      strategyId: true,
+      accountId: true,
+      customFields: true,
+      deletedAt: true,
+      tags: { select: { tagId: true } },
+    },
   });
-  return updated.count > 0;
+  if (!current) return false;
+  const before = {
+    strategyId: current.strategyId,
+    accountId: current.accountId,
+    tagIds: current.tags.map((t) => t.tagId),
+    customFields: parseCustomFields(current.customFields),
+    deletedAt: null as string | null,
+  };
+  await db.$transaction(async (tx) => {
+    await tx.trade.updateMany({
+      where: { id, userId, deletedAt: null },
+      data: { deletedAt: new Date(), deletedBy: userId },
+    });
+    await tx.changeLog.create({
+      data: {
+        userId,
+        groupId: newGroupId(),
+        entity: "TRADE",
+        entityId: id,
+        action: "DELETE",
+        beforeJson: JSON.stringify(before),
+        afterJson: JSON.stringify({ ...before, deletedAt: new Date().toISOString() }),
+        source: "UI",
+        expiresAt: expiryDate(),
+      },
+    });
+  });
+  return true;
 }

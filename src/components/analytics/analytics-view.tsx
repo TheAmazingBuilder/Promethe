@@ -70,6 +70,7 @@ import { MonthlyReportDialog } from "@/components/reports/monthly-report-dialog"
 import { useSession } from "@/components/app/session-context";
 import { useI18n } from "@/i18n/i18n-provider";
 import { useAccounts, useAnalytics } from "@/hooks/use-trading";
+import { useCustomFields } from "@/hooks/use-productivity";
 import type { AnalyticsPeriod } from "@/lib/validations/analytics";
 import type { GroupStat } from "@/lib/analytics/engine";
 import type { Insight } from "@/lib/analytics/insights";
@@ -287,6 +288,8 @@ export function AnalyticsView() {
 
   const { data: accountsData } = useAccounts();
   const accounts = accountsData ?? [];
+  // v2.5 M4 — labels for the custom-field breakdowns below.
+  const customFieldDefs = (useCustomFields(false).data ?? []);
 
   const effectiveAccount = accountId === "all" ? undefined : accountId;
   const { data, isLoading, isError, refetch } = useAnalytics({
@@ -1025,6 +1028,24 @@ export function AnalyticsView() {
                   k === "yes" ? t("planYes") : t("planNo")
                 }
               />
+              {/* v2.5 M4 — breakdowns per usable-in-analytics custom field. */}
+              {customFieldDefs
+                .filter((d) => d.usableInAnalytics)
+                .map((def) => {
+                  const entries = data.breakdowns.custom?.[def.key] ?? [];
+                  if (entries.length === 0) return null;
+                  return (
+                    <BreakdownCard
+                      key={def.key}
+                      title={def.label}
+                      description={t("bdCustomDesc")}
+                      icon={ListChecks}
+                      entries={entries}
+                      currency={currency}
+                      renderKey={(k) => k}
+                    />
+                  );
+                })}
             </div>
           </section>
 

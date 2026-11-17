@@ -352,6 +352,11 @@ export function useCreateSavedView() {
       page: string;
       name: string;
       filters: Record<string, unknown>;
+      columns?: string[] | null;
+      sort?: Array<{ id: string; desc: boolean }> | null;
+      grouping?: Record<string, unknown> | null;
+      isPinned?: boolean;
+      isDefault?: boolean;
     }) =>
       apiFetch<{ view: SavedViewDTO }>("/api/saved-views", {
         method: "POST",
@@ -359,6 +364,51 @@ export function useCreateSavedView() {
       }),
     onSuccess: (_data, variables) =>
       void qc.invalidateQueries({ queryKey: ["saved-views", variables.page] }),
+  });
+}
+
+export function useUpdateSavedView() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: {
+        name?: string;
+        filters?: Record<string, unknown>;
+        columns?: string[] | null;
+        sort?: Array<{ id: string; desc: boolean }> | null;
+        grouping?: Record<string, unknown> | null;
+        isPinned?: boolean;
+        isDefault?: boolean;
+        order?: number;
+      };
+    }) =>
+      (
+        await apiFetch<{ view: SavedViewDTO }>(`/api/saved-views/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify(patch),
+        })
+      ).view,
+    onSuccess: (view) =>
+      void qc.invalidateQueries({ queryKey: ["saved-views", view.page] }),
+  });
+}
+
+export function useDuplicateSavedView() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (view: SavedViewDTO) =>
+      (
+        await apiFetch<{ view: SavedViewDTO }>(
+          `/api/saved-views/${view.id}/duplicate`,
+          { method: "POST" }
+        )
+      ).view,
+    onSuccess: (view) =>
+      void qc.invalidateQueries({ queryKey: ["saved-views", view.page] }),
   });
 }
 

@@ -60,7 +60,9 @@ const CODE_MESSAGES: Record<string, string> = {
   INSTRUMENT_DUPLICATE: "Vous avez déjà un instrument avec ce symbole.",
   INSTRUMENT_PIP_INVALID: "Taille de pip invalide (ex. 0.0001 ou 0.01 pour XAUUSD).",
   INSTRUMENT_HAS_TRADES: "Des trades référencent cet instrument - suppression impossible.",
-  // v2.5 Module 1 — customizable dashboards (English by module convention)
+  // v2.5 Module 4 — productivity (custom fields, bulk edits)
+  CUSTOM_FIELDS_INVALID: "Certains champs personnalisés sont invalides.",
+  TOO_MANY_CUSTOM_FIELDS: "Limite de 30 champs personnalisés atteinte.",
   DASHBOARD_NOT_FOUND: "Dashboard not found.",
   WIDGET_NOT_FOUND: "Widget not found.",
   TOO_MANY_DASHBOARDS: "Dashboard limit reached (max 8).",

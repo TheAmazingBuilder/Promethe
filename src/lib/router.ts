@@ -51,6 +51,10 @@ export const VIEW_IDS = [
   "analytics-annotations",
   // v2.5 Module 4 — productivity & ergonomics
   "trash",
+  "search",
+  "history",
+  "custom-fields-settings",
+  "shortcuts-settings",
   // v2.5 Module 8 — privacy, accessibility & time zones
   "privacy-settings",
   "accessibility-settings",
@@ -183,6 +187,18 @@ export function parseHash(hash: string): AppRoute {
   if (view === "settings" && second === "accessibility") {
     return withQuery({ view: "accessibility-settings" });
   }
+  // #/reglages/champs-personnalises — custom trade fields (v2.5 M4)
+  if (view === "settings" && second === "champs-personnalises") {
+    return withQuery({ view: "custom-fields-settings" });
+  }
+  // #/reglages/raccourcis — keyboard shortcuts (v2.5 M4)
+  if (view === "settings" && second === "raccourcis") {
+    return withQuery({ view: "shortcuts-settings" });
+  }
+  // #/search — global search (v2.5 M4)
+  if (head === "search") return withQuery({ view: "search" });
+  // #/history — change history + undo (v2.5 M4)
+  if (head === "history") return withQuery({ view: "history" });
   // #/focus — distraction-free trading mode (v2.5 M1)
   if (head === "focus") return withQuery({ view: "focus" });
   // #/trash — soft-deleted items, 30-day retention (v2.5 M4)

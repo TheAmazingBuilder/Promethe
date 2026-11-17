@@ -25,6 +25,8 @@ import { toD } from "@/lib/trading/dec";
 import type { AnalyticsPayload } from "@/lib/trading/dto";
 import type { AnalyticsQuery } from "@/lib/validations/analytics";
 import type { Prisma } from "@prisma/client";
+import { parseCustomFields } from "@/lib/custom-fields/validate";
+import { activeCustomFieldDefinitions } from "@/server/custom-fields";
 
 const TRADE_INCLUDE = {
   instrument: true,
@@ -131,6 +133,7 @@ function toAnalyticsTrade(t: Row, timezone: string): AnalyticsTrade {
       entryLocal != null ? weekdayOfIsoDate(entryLocal.date) : null,
     localHour: entryLocal?.hour ?? null,
     durationMin,
+    customFields: parseCustomFields(t.customFields),
   };
 }
 
@@ -171,7 +174,11 @@ export async function getAnalytics(
 
   const stats = trades.length > 0 ? computeTradeStats(trades) : null;
   const advanced = stats != null ? computeAdvancedStats(trades, stats) : null;
-  const breakdowns = computeBreakdowns(trades);
+  // v2.5 Module 4 — breakdowns per usable-in-analytics custom field.
+  const customDefs = (await activeCustomFieldDefinitions(userId))
+    .filter((d) => d.usableInAnalytics)
+    .map((d) => ({ key: d.key, label: d.label }));
+  const breakdowns = computeBreakdowns(trades, customDefs);
   const insights =
     stats != null && advanced != null
       ? computeInsights(trades, breakdowns, stats, advanced)

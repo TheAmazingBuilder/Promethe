@@ -70,6 +70,8 @@ import {
 } from "@/hooks/use-trading";
 import type { TemplateDTO } from "@/lib/trading/dto";
 import { useToast } from "@/hooks/use-toast";
+import { useCustomFields } from "@/hooks/use-productivity";
+import { CustomFieldInputs } from "./custom-field-inputs";
 import { useSession } from "@/components/app/session-context";
 import { Money } from "@/components/privacy/money";
 import { useFormat } from "@/lib/format/use-format";
@@ -184,6 +186,8 @@ interface TradeFormState {
   followedPlan: boolean;
   tagIds: string[];
   checklistResults: Record<string, boolean>;
+  /** Custom-field values, keyed by definition key (v2.5 Module 4 §4.7). */
+  customFields: Record<string, unknown>;
   preTradeAnalysis: string;
   postTradeReview: string;
   notes: string;
@@ -232,6 +236,7 @@ function emptyForm(): TradeFormState {
     followedPlan: false,
     tagIds: [],
     checklistResults: {},
+    customFields: {},
     preTradeAnalysis: "",
     postTradeReview: "",
     notes: "",
@@ -305,6 +310,28 @@ export function TradeFormView({
   );
 
   const tradeQuery = useTrade(mode === "edit" ? tradeId ?? null : null);
+  const customFieldsQuery = useCustomFields(false);
+  const customFieldDefs = customFieldsQuery.data ?? [];
+
+  // Create mode: apply definition default values once they load.
+  React.useEffect(() => {
+    if (mode !== "create" || customFieldDefs.length === 0) return;
+    setForm((f) => {
+      const next = { ...f.customFields };
+      let changed = false;
+      for (const d of customFieldDefs) {
+        if (
+          next[d.key] === undefined &&
+          d.defaultValue !== null &&
+          d.defaultValue !== undefined
+        ) {
+          next[d.key] = d.defaultValue;
+          changed = true;
+        }
+      }
+      return changed ? { ...f, customFields: next } : f;
+    });
+  }, [mode, customFieldDefs]);
   const trade = tradeQuery.data;
   const { data: accounts } = useAccounts();
   const { data: instruments } = useInstruments();
@@ -363,6 +390,7 @@ export function TradeFormView({
       followedPlan: trade.followedPlan ?? false,
       tagIds: trade.tags.map((tag) => tag.id),
       checklistResults: trade.checklistResults ?? {},
+      customFields: trade.customFields ?? {},
       preTradeAnalysis: trade.preTradeAnalysis,
       postTradeReview: trade.postTradeReview,
       notes: trade.notes ?? "",
@@ -570,6 +598,7 @@ export function TradeFormView({
       executionRating: toIntOrNull(form.executionRating),
       followedPlan: form.followedPlan,
       tagIds: form.tagIds,
+      customFields: form.customFields,
       checklistResults:
         Object.keys(form.checklistResults).length > 0 ? form.checklistResults : null,
       preTradeAnalysis: form.preTradeAnalysis,
@@ -1455,6 +1484,22 @@ export function TradeFormView({
               </div>
             </CardContent>
           </Card>
+
+          {/* Custom fields (v2.5 Module 4 §4.7) */}
+          {customFieldDefs.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">{t("sectionCustomFields")}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CustomFieldInputs
+                  definitions={customFieldDefs}
+                  values={form.customFields}
+                  onChange={(next) => set("customFields", next)}
+                />
+              </CardContent>
+            </Card>
+          )}
 
           {/* Strategy checklist */}
           {strategy && strategy.checklistItems.length > 0 && (

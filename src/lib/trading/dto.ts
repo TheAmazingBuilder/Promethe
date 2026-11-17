@@ -71,6 +71,8 @@ export interface TradeListItemDTO {
   createdAt: string;
   updatedAt: string;
   tags: TagDTO[];
+  /** User custom-field values, keyed by definition key (null when none). */
+  customFields: Record<string, unknown> | null;
 }
 
 export interface ScreenshotDTO {
@@ -208,7 +210,101 @@ export interface SavedViewDTO {
   page: string;
   name: string;
   filters: Record<string, unknown>;
+  /** Visible column ids in order (null = table default). */
+  columns: string[] | null;
+  /** Sort state [{ id, desc }] (null = table default). */
+  sort: Array<{ id: string; desc: boolean }> | null;
+  /** Grouping state (null = none). */
+  grouping: Record<string, unknown> | null;
+  entity: string | null;
+  isPinned: boolean;
+  isDefault: boolean;
+  order: number;
   createdAt: string;
+  updatedAt: string;
+}
+
+// ── v2.5 Module 4 — productivity ────────────────────────────────────────────
+
+export type CustomFieldType =
+  | "TEXT"
+  | "LONG_TEXT"
+  | "NUMBER"
+  | "DECIMAL"
+  | "SELECT"
+  | "MULTI_SELECT"
+  | "CHECKBOX"
+  | "DATE"
+  | "URL";
+
+export interface CustomFieldDefinitionDTO {
+  id: string;
+  entity: string;
+  key: string;
+  label: string;
+  type: CustomFieldType;
+  /** Select options (null when the type has none). */
+  options: string[] | null;
+  required: boolean;
+  defaultValue: unknown;
+  order: number;
+  showInTable: boolean;
+  showInQuickForm: boolean;
+  usableInAnalytics: boolean;
+  archivedAt: string | null;
+  createdAt: string;
+}
+
+export interface TableColumnPreferenceDTO {
+  tableKey: string;
+  columnOrder: string[];
+  columnVisibility: Record<string, boolean>;
+  density: string | null;
+  updatedAt: string;
+}
+
+export interface ShortcutDTO {
+  actionId: string;
+  keys: string;
+  /** True when no stored row exists (the default chord applies). */
+  isDefault: boolean;
+}
+
+export interface SearchResultItemDTO {
+  id: string;
+  entity: "trade" | "strategy" | "journal";
+  title: string;
+  subtitle: string | null;
+  snippet: string;
+  href: string;
+}
+
+export interface SearchPayload {
+  query: string;
+  trades: SearchResultItemDTO[];
+  strategies: SearchResultItemDTO[];
+  journal: SearchResultItemDTO[];
+  total: number;
+}
+
+/** One undoable action = one ChangeLog group (bulk edit or bulk delete). */
+export interface ChangeLogGroupDTO {
+  groupId: string;
+  action: string;
+  source: string;
+  entity: string;
+  /** Number of entries (trades) in the group. */
+  count: number;
+  createdAt: string;
+  undoneAt: string | null;
+  expiresAt: string;
+  /** Human-readable summary, derived from the first entry's snapshots. */
+  summary: {
+    strategyId?: string | null;
+    accountId?: string | null;
+    tagIds?: string[];
+    deleted?: boolean;
+  };
 }
 
 export interface PaginatedDTO<T> {
