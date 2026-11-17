@@ -37,8 +37,6 @@ import {
 import type { SessionPayload } from "@/lib/auth/types";
 import { useToast } from "@/hooks/use-toast";
 
-const DEMO_CREDENTIALS = { email: "demo@tradejournal.app", password: "demo1234" };
-
 export function AuthScreen() {
   const [tab, setTab] = React.useState<string>("login");
   const t = useTranslations("auth");
@@ -66,8 +64,6 @@ export function AuthScreen() {
               <SignupForm />
             </TabsContent>
           </Tabs>
-
-          <DemoHint />
 
           <p className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
             {t("signupNote")}
@@ -437,69 +433,6 @@ function SignupForm() {
         {loading ? t("signupLoading") : t("signup")}
       </Button>
     </form>
-  );
-}
-
-/* ── Demo hint ─────────────────────────────────────────────────────────── */
-
-function DemoHint() {
-  const { setSession } = useSession();
-  const { toast } = useToast();
-  const t = useTranslations("auth");
-  const [loading, setLoading] = React.useState(false);
-
-  async function loginDemo() {
-    setLoading(true);
-    try {
-      const payload = await apiFetch<SessionPayload>("/api/auth/login", {
-        method: "POST",
-        body: JSON.stringify(DEMO_CREDENTIALS),
-      });
-      toast({
-        title: t("welcomeToastTitle", { name: payload.profile.displayName }),
-        description: t("demoToastDesc"),
-      });
-      setSession(payload);
-    } catch {
-      toast({
-        title: t("demoUnavailableTitle"),
-        description: t("demoUnavailableDesc"),
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <Card className="mt-6 border-dashed">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm">{t("demoTitle")}</CardTitle>
-        <CardDescription className="text-xs">
-          {t("demoDesc", {
-            email: DEMO_CREDENTIALS.email,
-            password: DEMO_CREDENTIALS.password,
-          })}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="w-full"
-          onClick={loginDemo}
-          disabled={loading}
-        >
-          {loading ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-          ) : (
-            <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-          )}
-          {loading ? t("loginLoading") : t("demoButton")}
-        </Button>
-      </CardContent>
-    </Card>
   );
 }
 
