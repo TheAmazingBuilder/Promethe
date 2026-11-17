@@ -1,0 +1,16 @@
+import { NextResponse } from "next/server";
+import { requireUser } from "@/server/session";
+import { apiError } from "@/server/api";
+import { gaiaErrorResponse, instantiateTemplate } from "@/server/gaia";
+
+/** POST /api/gaia/templates/instantiate : nouvelle note depuis un modèle (201). */
+export async function POST(req: Request) {
+  try {
+    const session = await requireUser();
+    const body = await req.json().catch(() => null);
+    const result = await instantiateTemplate(session.user.id, body);
+    return NextResponse.json(result, { status: 201 });
+  } catch (error) {
+    return gaiaErrorResponse(error) ?? apiError(error, "gaia/templates/instantiate");
+  }
+}

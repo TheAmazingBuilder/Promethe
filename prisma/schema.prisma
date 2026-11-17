@@ -101,6 +101,13 @@ model User {
   // ── v2.5 Module 8 — privacy, accessibility & time zones ──
   displayPreference     UserDisplayPreference?
 
+  // ── Gaïa — workspace de notes ──
+  gaiaNotes     Note[]
+  gaiaFolders   NoteFolder[]
+  gaiaTags      NoteTag[]
+  gaiaTemplates NoteTemplate[]
+  gaiaVersions  NoteVersion[]
+
   @@map("users")
 }
 
@@ -1996,4 +2003,108 @@ model UserDisplayPreference {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_display_preferences")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Gaïa — workspace de notes
+// ═════════════════════════════════════════════════════════════════════════════
+// Réplique du workspace Nofy d'Euforia, adaptée aux tables Prisma de Promethe
+// (une table par entité, JSON stocké en String comme Trade.customFields).
+// Le contenu humain est en français ; les ids machine restent en anglais.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Une note Gaïa : titre, dossier, tags, blocs JSON (voir src/lib/gaia/content.ts).
+model Note {
+  id           String    @id @default(cuid())
+  userId       String    @map("user_id")
+  title        String    @default("")
+  icon         String?
+  folderId     String?   @map("folder_id")
+  /// JSON string[] des ids de NoteTag.
+  tagIds       String    @default("[]") @map("tag_ids")
+  favorite     Boolean   @default(false)
+  templateId   String?   @map("template_id")
+  /// JSON GaiaBlock[] (contenu éditorial, jamais de HTML brut).
+  blocks       String    @default("[]")
+  lastViewedAt DateTime? @map("last_viewed_at")
+  deletedAt    DateTime? @map("deleted_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder   NoteFolder?   @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  versions NoteVersion[]
+
+  @@index([userId])
+  @@index([userId, folderId])
+  @@map("gaia_notes")
+}
+
+/// Dossier de notes (nom unique par utilisateur, insensible à la casse).
+model NoteFolder {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notes Note[]
+
+  @@index([userId])
+  @@map("gaia_folders")
+}
+
+/// Tag de notes (nom unique par utilisateur, insensible à la casse, "#" retiré).
+model NoteTag {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("gaia_tags")
+}
+
+/// Modèle de note créé par l'utilisateur. Les 5 modèles built-in (tpl-...)
+/// vivent dans le code (src/lib/gaia/templates.ts) et ne sont jamais persistés.
+model NoteTemplate {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  name        String
+  description String   @default("")
+  icon        String   @default("📄")
+  /// JSON GaiaBlock[] (les blocs ref sont supprimés à la création).
+  blocks      String   @default("[]")
+  builtIn     Boolean  @default(false) @map("built_in")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("gaia_templates")
+}
+
+/// Snapshot immuable d'une note avant modification (versioning, cap 12).
+model NoteVersion {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  noteId    String   @map("note_id")
+  title     String   @default("")
+  /// JSON GaiaBlock[] tels qu'avant la modification.
+  blocks    String   @default("[]")
+  /// = updatedAt de la note AVANT la modification.
+  savedAt   DateTime @map("saved_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  note Note @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([userId, noteId])
+  @@index([noteId, savedAt])
+  @@map("gaia_versions")
 }
