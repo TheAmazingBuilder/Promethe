@@ -62,6 +62,13 @@ import { ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import { pnlClass } from "@/lib/format";
 import { Money } from "@/components/privacy/money";
+import { GaiaLinkedNotesSection } from "@/components/gaia/gaia-linked-notes";
+import {
+  gaiaErrorMessage,
+  newBlockId,
+  useCreateGaiaNote,
+} from "@/components/gaia/gaia-shared";
+import { navigate } from "@/lib/router";
 import { TIMEFRAMES } from "@/lib/trading/types";
 import type { StrategyDTO, StrategyStatsDTO } from "@/lib/trading/dto";
 
@@ -581,6 +588,36 @@ export function StrategiesView() {
   }, [statsData]);
 
   const del = useDeleteStrategy();
+  const createGaiaNote = useCreateGaiaNote();
+  // Id de la stratégie dont une note Gaïa est en cours de création (une
+  // seule création à la fois, le bouton des autres cartes reste actif).
+  const [creatingGaiaFor, setCreatingGaiaFor] = React.useState<string | null>(
+    null,
+  );
+
+  // Gaïa: créer une note liée à la stratégie puis ouvrir l'éditeur.
+  const handleCreateGaiaNote = (s: StrategyDTO) => {
+    setCreatingGaiaFor(s.id);
+    void createGaiaNote
+      .mutateAsync({
+        title: `Note - ${s.name}`,
+        blocks: [
+          {
+            id: newBlockId(),
+            type: "ref",
+            text: "",
+            ref: { kind: "STRATEGY", id: s.id },
+          },
+          { id: newBlockId(), type: "paragraph", text: "" },
+        ],
+      })
+      .then(
+        (res) => navigate(`#/gaia?tab=notes&note=${res.note.id}`),
+        (err: unknown) =>
+          toast({ title: gaiaErrorMessage(err), variant: "destructive" }),
+      )
+      .finally(() => setCreatingGaiaFor(null));
+  };
 
   const [editorOpen, setEditorOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<StrategyDTO | null>(null);
@@ -730,6 +767,14 @@ export function StrategiesView() {
                   ) : (
                     <p className="text-xs text-muted-foreground">{t("stats.noTrades")}</p>
                   )}
+                  {/* Gaïa: notes liées à cette stratégie */}
+                  <GaiaLinkedNotesSection
+                    kind="STRATEGY"
+                    id={s.id}
+                    testidPrefix={`strategy-${s.id}`}
+                    creating={creatingGaiaFor === s.id}
+                    onCreateNote={() => handleCreateGaiaNote(s)}
+                  />
                 </CardContent>
               </Card>
             );

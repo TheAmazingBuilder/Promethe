@@ -91,6 +91,12 @@ const LazyReplayPlayer = dynamic(
   { ssr: false, loading: () => <Skeleton className="h-[640px] w-full" /> }
 );
 import { TradeViolationsSection } from "@/components/rules/trade-violations-section";
+import { GaiaLinkedNotesSection } from "@/components/gaia/gaia-linked-notes";
+import {
+  gaiaErrorMessage,
+  newBlockId,
+  useCreateGaiaNote,
+} from "@/components/gaia/gaia-shared";
 import {
   DirectionBadge,
   DraftBadge,
@@ -155,6 +161,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
   const closeTrade = useCloseTrade();
   const uploadScreenshot = useUploadScreenshot();
   const deleteScreenshot = useDeleteScreenshot();
+  const createGaiaNote = useCreateGaiaNote();
 
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [closeOpen, setCloseOpen] = React.useState(false);
@@ -272,6 +279,29 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
         onError: mutationErrorToast,
       }
     );
+  };
+
+  // Gaïa: créer une note liée à ce trade puis ouvrir l'éditeur Gaïa.
+  const handleCreateGaiaNote = () => {
+    if (!trade) return;
+    void createGaiaNote
+      .mutateAsync({
+        title: `Note - Trade ${trade.symbol} ${trade.direction}`,
+        blocks: [
+          {
+            id: newBlockId(),
+            type: "ref",
+            text: "",
+            ref: { kind: "TRADE", id: trade.id },
+          },
+          { id: newBlockId(), type: "paragraph", text: "" },
+        ],
+      })
+      .then(
+        (res) => navigate(`#/gaia?tab=notes&note=${res.note.id}`),
+        (err: unknown) =>
+          toast({ title: gaiaErrorMessage(err), variant: "destructive" }),
+      );
   };
 
   const confirmDelete = () => {
@@ -979,6 +1009,15 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
           )}
         </CardContent>
       </Card>
+
+      {/* Gaïa: notes liées à ce trade */}
+      <GaiaLinkedNotesSection
+        kind="TRADE"
+        id={trade.id}
+        testidPrefix="trade-detail"
+        creating={createGaiaNote.isPending}
+        onCreateNote={handleCreateGaiaNote}
+      />
 
       {/* ── v3 Phase 5 — comment thread (owner + scoped mentors) ── */}
       {session && (
