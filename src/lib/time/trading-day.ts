@@ -185,3 +185,18 @@ export function rolloverLabel(settings: TradingDaySettings): string {
 export function zonedHourIn(instant: Date, tz: string): number {
   return zonedParts(instant, tz).hour;
 }
+
+/**
+ * Day-key function for the analytics engine: a trade is attributed to its
+ * TRADING day (getTradingDay), not to the UTC calendar date of its exit.
+ * Falls back to the UTC date slice when the ISO string is unparseable —
+ * the engine never throws on bad input.
+ */
+export function tradingDayOfTrade(
+  timezone: string,
+  settings: TradingDaySettings
+): (t: { exitTime: string }) => string {
+  return (t) =>
+    getTradingDayOfIso(t.exitTime, timezone, settings) ??
+    t.exitTime.slice(0, 10);
+}

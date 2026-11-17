@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Journal view (v1 phase 5) — one entry per local day: pre-market plan,
+ * Journal view (v1 phase 5) — one entry per trading day: pre-market plan,
  * post-market review, mood/sleep/discipline scores (1-5), market bias and
  * key lesson. Deep-linkable (#/journal/{date}) from the calendar.
  */
@@ -32,6 +32,7 @@ import { fmtDateInTz, pnlClass } from "@/lib/format";
 import { Money } from "@/components/privacy/money";
 import { navigate } from "@/lib/router";
 import { toD } from "@/lib/trading/dec";
+import { useTimePrefs } from "@/components/time/time-provider";
 import type { JournalEntryInput } from "@/lib/validations/journal";
 
 const SCORES = [1, 2, 3, 4, 5] as const;
@@ -40,11 +41,6 @@ function shiftDay(isoDay: string, delta: number): string {
   const d = new Date(`${isoDay}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + delta);
   return d.toISOString().slice(0, 10);
-}
-
-function todayIsoDay(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
 /** Star-less 1-5 score picker - buttons with an active state. */
@@ -92,7 +88,14 @@ export function JournalView({ date }: { date?: string }) {
   const t = useTranslations("journalView");
   const tRoot = useTranslations();
   const { toast } = useToast();
-  const today = React.useMemo(() => todayIsoDay(), []);
+  // "Today" is the current TRADING day (user setting, default MIDNIGHT_LOCAL
+  // = the local calendar day) — the entry is keyed by that day, matching
+  // the calendar buckets and the daily P&L shown above the form.
+  const { tradingDayOf, loaded: timeLoaded } = useTimePrefs();
+  const today = React.useMemo(
+    () => tradingDayOf(),
+    [tradingDayOf, timeLoaded]
+  );
   const day = date ?? today;
 
   const { data: entry, isLoading } = useJournalEntry(day);

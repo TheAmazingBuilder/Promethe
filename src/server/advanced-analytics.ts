@@ -35,6 +35,8 @@ import type { AnalyticsQuery } from "@/lib/validations/analytics";
 import type { AdvancedAnalyticsPayload } from "@/lib/trading/dto";
 import type { Prisma } from "@prisma/client";
 import { parseCustomFields } from "@/lib/custom-fields/validate";
+import { getDisplayPreferences } from "@/server/display-preferences";
+import { getTradingDay, tradingDayOfTrade } from "@/lib/time/trading-day";
 
 const TRADE_INCLUDE = {
   instrument: true,
@@ -71,6 +73,7 @@ interface LoadedTrades {
   trades: AdvancedTrade[];
   timezone: string;
   currency: string;
+  tradingDay: Parameters<typeof getTradingDay>[2];
 }
 
 /** Closed trades mapped to the advanced engine shape (no persistence). */
@@ -79,9 +82,10 @@ async function loadAdvancedTrades(
   accountId?: string,
   period?: AnalyticsQuery["period"]
 ): Promise<LoadedTrades> {
-  const [profile, accounts] = await Promise.all([
+  const [profile, accounts, prefs] = await Promise.all([
     db.profile.findUnique({ where: { id: userId } }),
     db.account.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
+    getDisplayPreferences(userId),
   ]);
   const accountFilter =
     accountId != null
@@ -107,18 +111,21 @@ async function loadAdvancedTrades(
 
   const timeMap = await computeTimeInProfit(rows);
   const trades: AdvancedTrade[] = rows.map((t) =>
-    toAdvancedTrade(t, timezone, timeMap.get(t.id))
+    toAdvancedTrade(t, timezone, prefs.tradingDay, timeMap.get(t.id))
   );
-  return { trades, timezone, currency };
+  return { trades, timezone, currency, tradingDay: prefs.tradingDay };
 }
 
 function toAdvancedTrade(
   t: Row,
   timezone: string,
+  tradingDay: Parameters<typeof getTradingDay>[2],
   time?: { profitMin: number | null; lossMin: number | null }
 ): AdvancedTrade {
   const exit = t.exitTime ?? t.entryTime;
-  const exitLocal = localParts(exit, timezone);
+  // Daily attribution follows the user's TRADING day (default MIDNIGHT_LOCAL
+  // = the local calendar day). Weekday/hour stay on the local ENTRY time.
+  const tradingDayOfExit = getTradingDay(exit, timezone, tradingDay);
   const entryLocal = localParts(t.entryTime, timezone);
   const durationMin =
     t.exitTime != null
@@ -163,7 +170,7 @@ function toAdvancedTrade(
     commission: t.commission?.toString() ?? null,
     swap: t.swap?.toString() ?? null,
     fees: t.fees?.toString() ?? null,
-    localDate: exitLocal?.date ?? null,
+    localDate: tradingDayOfExit,
     localWeekday: entryLocal?.weekday ?? null,
     localHour: entryLocal?.hour ?? null,
     durationMin,
@@ -352,12 +359,14 @@ export async function getAdvancedAnalytics(
   userId: string,
   query: AnalyticsQuery
 ): Promise<AdvancedAnalyticsPayload> {
-  const { trades, timezone, currency } = await loadAdvancedTrades(
+  const { trades, timezone, currency, tradingDay } = await loadAdvancedTrades(
     userId,
     query.account ?? undefined,
     query.period
   );
-  const stats = computeTradeStats(trades);
+  const stats = computeTradeStats(trades, {
+    dayOf: tradingDayOfTrade(timezone, tradingDay),
+  });
   const advancedStats = computeAdvancedStats(trades, stats);
   const computed = computeAdvancedAnalytics(trades, stats, advancedStats);
   const now = new Date();

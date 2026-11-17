@@ -34,6 +34,8 @@ import {
 import { getPropStatus } from "@/server/prop-status";
 import { computeTradeStats } from "@/lib/analytics/engine";
 import { localDateInTz } from "@/lib/analytics/calendar";
+import { getDisplayPreferences } from "@/server/display-preferences";
+import { getTradingDay, tradingDayOfTrade } from "@/lib/time/trading-day";
 import { consumeRateLimit } from "@/lib/rate-limit";
 
 export const MAX_OUTBOX_ATTEMPTS = 5;
@@ -143,12 +145,18 @@ export async function buildDailySummaryData(
   userId: string,
   date: string
 ): Promise<IntegrationEventData & { eventType: "DAILY_SUMMARY" }> {
-  const profile = await db.profile.findUnique({
-    where: { id: userId },
-    select: { timezone: true, baseCurrency: true },
-  });
+  const [profile, prefs] = await Promise.all([
+    db.profile.findUnique({
+      where: { id: userId },
+      select: { timezone: true, baseCurrency: true },
+    }),
+    getDisplayPreferences(userId),
+  ]);
   const timezone = profile?.timezone ?? "UTC";
   const currency = profile?.baseCurrency ?? "USD";
+  // `date` is a TRADING day (the sender computes it with getTradingDay):
+  // trades belong to it when their exit falls in that trading day.
+  const dayOf = (d: Date) => getTradingDay(d, timezone, prefs.tradingDay);
   const since = new Date(Date.now() - 48 * 60 * 60 * 1000);
   const [closed, openCount] = await Promise.all([
     db.trade.findMany({
@@ -178,7 +186,7 @@ export async function buildDailySummaryData(
     }),
   ]);
   const today = closed
-    .filter((t) => t.exitTime != null && localDateInTz(t.exitTime, timezone) === date)
+    .filter((t) => t.exitTime != null && dayOf(t.exitTime) === date)
     .map((t) => ({
       id: t.id,
       exitTime: t.exitTime?.toISOString() ?? "",
@@ -193,7 +201,9 @@ export async function buildDailySummaryData(
       session: t.session,
       lots: t.lots?.toString() ?? null,
     }));
-  const stats = computeTradeStats(today);
+  const stats = computeTradeStats(today, {
+    dayOf: tradingDayOfTrade(timezone, prefs.tradingDay),
+  });
   return {
     eventType: "DAILY_SUMMARY",
     data: {
@@ -242,18 +252,17 @@ export async function sendDailySummariesDue(
       byUser.set(sub.userId, list);
     }
     for (const [userId, userSubs] of byUser) {
-      const profile = await db.profile.findUnique({
-        where: { id: userId },
-        select: { timezone: true },
-      });
+      const [profile, prefs] = await Promise.all([
+        db.profile.findUnique({
+          where: { id: userId },
+          select: { timezone: true },
+        }),
+        getDisplayPreferences(userId),
+      ]);
       const timezone = profile?.timezone ?? "UTC";
-      let date: string | null = null;
-      try {
-        date = localDateInTz(now, timezone);
-      } catch {
-        date = null;
-      }
-      if (!date) continue;
+      // The summary covers the current TRADING day (default MIDNIGHT_LOCAL
+      // = the local calendar day, i.e. the previous behaviour).
+      const date = getTradingDay(now, timezone, prefs.tradingDay);
       // Skip endpoints in quiet hours for this pass.
       const active = userSubs.filter(
         (s) => !isInQuietHours(now, timezone, s.quietHoursStart, s.quietHoursEnd)

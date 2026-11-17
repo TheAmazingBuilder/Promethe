@@ -6,11 +6,11 @@
  * updated (P&L/risk can change on close/edit) and rewrites the violations
  * attached to THAT trade (delete-then-insert, idempotent).
  *
- * Semantics (documented — mirrors the calendar's local-day attribution):
+ * Semantics (documented — mirrors the calendar's trading-day attribution):
  * - MAX_TRADES_PER_DAY  : violation when the count of non-draft trades
- *   OPENED on the same local day (user TZ, entry time) as the trade,
+ *   OPENED on the same trading day (user setting, entry time) as the trade,
  *   including the trade itself, EXCEEDS the limit (count > value).
- * - MAX_DAILY_LOSS      : violation when the net P&L of the same local day
+ * - MAX_DAILY_LOSS      : violation when the net P&L of the same trading day
  *   as the trade's EXIT (closed trades only, exit-day attribution — same
  *   convention as the P&L calendar), including this trade, is ≤ −value.
  *   Evaluated only on CLOSED trades.
@@ -42,13 +42,13 @@ export interface RuleDef {
   isActive: boolean;
 }
 
-/** The trade under evaluation, with its local-day keys precomputed. */
+/** The trade under evaluation, with its trading-day keys precomputed. */
 export interface RuleTradeContext {
   status: string; // OPEN | CLOSED
   isDraft: boolean;
-  /** Local calendar day (YYYY-MM-DD, user TZ) of the ENTRY time. */
+  /** Trading day (YYYY-MM-DD, user setting) of the ENTRY time. */
   entryLocalDay: string;
-  /** Local calendar day of the EXIT time - null while the trade is open. */
+  /** Trading day of the EXIT time - null while the trade is open. */
   exitLocalDay: string | null;
   /** Risk at entry (account currency) - null when unknown. */
   riskAmount: string | null;

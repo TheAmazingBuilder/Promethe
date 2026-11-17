@@ -49,6 +49,7 @@ import {
 import { ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import { ASSET_CLASSES, COMMON_CURRENCIES } from "@/lib/trading/types";
+import { COMMON_TIMEZONES } from "@/lib/time/zones";
 
 const CLASS_BADGE: Record<string, string> = {
   METAL: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
@@ -73,6 +74,7 @@ const EMPTY: InstrumentInputBody = {
   tickSize: null,
   tickValue: null,
   isActive: true,
+  marketTimezone: null,
 };
 
 const POSITIVE = /^\d+(\.\d+)?$/;
@@ -111,6 +113,7 @@ function InstrumentEditor({
             tickSize: editing.tickSize,
             tickValue: editing.tickValue,
             isActive: editing.isActive,
+            marketTimezone: editing.marketTimezone,
           }
         : EMPTY,
     );
@@ -301,6 +304,30 @@ function InstrumentEditor({
           <p className="rounded-md border border-dashed p-2 text-[11px] text-muted-foreground">
             {t("pipHint")}
           </p>
+          <div className="space-y-1.5">
+            <Label htmlFor="ins-market-tz">{t("marketTimezone")}</Label>
+            <Select
+              value={form.marketTimezone ?? "none"}
+              onValueChange={(v) =>
+                set("marketTimezone", v === "none" ? null : v)
+              }
+            >
+              <SelectTrigger id="ins-market-tz">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{t("marketTimezoneNone")}</SelectItem>
+                {COMMON_TIMEZONES.map((tz) => (
+                  <SelectItem key={tz} value={tz}>
+                    {tz}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              {t("marketTimezoneHint")}
+            </p>
+          </div>
           <div className="flex items-center justify-between rounded-md border p-3">
             <Label htmlFor="ins-active">{t("active")}</Label>
             <Switch
@@ -484,6 +511,14 @@ export function InstrumentsView() {
                             {i.quoteCurrency}
                           </dd>
                         </div>
+                        {i.marketTimezone != null && (
+                          <div>
+                            <dt className="text-muted-foreground">{t("marketTimezoneShort")}</dt>
+                            <dd className="truncate tabular-nums" title={i.marketTimezone}>
+                              {i.marketTimezone}
+                            </dd>
+                          </div>
+                        )}
                       </dl>
                     </CardContent>
                   </Card>
@@ -518,6 +553,9 @@ export function InstrumentsView() {
                         <th scope="col" className="py-2 pr-3 font-medium">
                           {t("contract")}
                         </th>
+                        <th scope="col" className="py-2 pr-3 font-medium">
+                          {t("marketTimezoneShort")}
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -541,6 +579,9 @@ export function InstrumentsView() {
                           </td>
                           <td className="py-2 pr-3 font-mono tabular-nums text-muted-foreground">
                             {i.contractSize}
+                          </td>
+                          <td className="py-2 pr-3 tabular-nums text-muted-foreground">
+                            {i.marketTimezone ?? "—"}
                           </td>
                         </tr>
                       ))}

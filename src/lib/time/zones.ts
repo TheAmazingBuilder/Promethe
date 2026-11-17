@@ -169,3 +169,39 @@ export function formatClock(
 export function offsetLabelOfTz(instant: Date, tz: string): string {
   return formatOffsetLabel(offsetMinutesOfTz(instant, tz));
 }
+
+/**
+ * Common IANA timezones offered in the settings UI (profile timezone,
+ * extra zones, rollover zone). The user's current zone is always offered
+ * in addition when it is not in this list.
+ */
+export const COMMON_TIMEZONES: readonly string[] = [
+  "UTC",
+  "America/Toronto",
+  "America/New_York",
+  "America/Chicago",
+  "America/Vancouver",
+  "America/Los_Angeles",
+  "America/Mexico_City",
+  "America/Sao_Paulo",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Brussels",
+  "Europe/Zurich",
+  "Europe/Frankfurt",
+  "Europe/Madrid",
+  "Europe/Lisbon",
+  "Europe/Amsterdam",
+  "Africa/Casablanca",
+  "Africa/Lagos",
+  "Africa/Johannesburg",
+  "Asia/Dubai",
+  "Asia/Moscow",
+  "Asia/Kolkata",
+  "Asia/Singapore",
+  "Asia/Hong_Kong",
+  "Asia/Shanghai",
+  "Asia/Tokyo",
+  "Australia/Sydney",
+  "Pacific/Auckland",
+];

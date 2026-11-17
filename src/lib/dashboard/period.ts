@@ -10,6 +10,12 @@
  *  - month starts on day 1 local;
  *  - rolling N days = N local calendar days back from today inclusive;
  *  - comparisons span the identical duration immediately before the period.
+ *
+ * v2.5 Module 8 — "today" (and every window anchored on it) follows the
+ * user's TRADING day when `tradingDay` is provided: the window then starts
+ * at tradingDayStartUtc(from) instead of local midnight, so a NY-close
+ * trade at 18:00 New York still belongs to "today". Default (no settings)
+ * is MIDNIGHT_LOCAL — the previous behaviour, exactly.
  */
 import type {
   GlobalFilter,
@@ -17,6 +23,12 @@ import type {
   PeriodPreset,
   ResolvedPeriod,
 } from "./types";
+import {
+  DEFAULT_TRADING_DAY,
+  getTradingDay,
+  tradingDayStartUtc,
+  type TradingDaySettings,
+} from "@/lib/time/trading-day";
 
 /** Local calendar day (YYYY-MM-DD) of an instant in `timezone`. */
 function localDateInTz(date: Date, timezone: string): string {
@@ -87,8 +99,10 @@ function startOfWeek(isoDay: string): string {
   return addDays(isoDay, -backToMonday);
 }
 
-function presetFrom(preset: PeriodPreset, timezone: string, now: Date): string | null {
-  const today = localDateInTz(now, timezone);
+function presetFrom(
+  preset: PeriodPreset,
+  today: string
+): string | null {
   switch (preset) {
     case "today":
       return today;
@@ -108,19 +122,14 @@ function presetFrom(preset: PeriodPreset, timezone: string, now: Date): string |
 }
 
 /** Duration (in local days) of a preset window - for comparison periods. */
-function presetLengthDays(
-  preset: PeriodPreset,
-  timezone: string,
-  now: Date
-): number {
-  const today = localDateInTz(now, timezone);
+function presetLengthDays(preset: PeriodPreset, today: string): number {
   switch (preset) {
     case "today":
       return 1;
     case "week":
       return 7;
     case "month": {
-      const from = presetFrom(preset, timezone, now)!;
+      const from = presetFrom(preset, today)!;
       return daysBetween(from, addDays(today, 1));
     }
     case "last30":
@@ -128,7 +137,7 @@ function presetLengthDays(
     case "last90":
       return 90;
     case "ytd":
-      return daysBetween(presetFrom(preset, timezone, now)!, addDays(today, 1));
+      return daysBetween(presetFrom(preset, today)!, addDays(today, 1));
     case "all":
       return 0;
   }
@@ -149,49 +158,51 @@ const ISO_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
  * @param override the widget's period override (null = inherit)
  * @param timezone user IANA timezone (calendar semantics)
  * @param now      reference instant (injectable for tests)
+ * @param tradingDay user trading-day setting (default MIDNIGHT_LOCAL —
+ *                 the previous behaviour, exactly)
  */
 export function resolvePeriod(
   global: GlobalFilter,
   override: PeriodOverride | null,
   timezone: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  tradingDay: TradingDaySettings = DEFAULT_TRADING_DAY
 ): ResolvedPeriod {
   const mode = override?.mode ?? "INHERIT";
+  // "Today" is the TRADING day: with NY_CLOSE, 18:00 New York already
+  // belongs to tomorrow's trading day, so the window starts at the
+  // rollover instant, not at local midnight.
+  const today = getTradingDay(now, timezone, tradingDay);
+  const dayStart = (dayKey: string): string =>
+    dayStartInstant(dayKey, timezone, tradingDay).toISOString();
 
   if (mode === "INHERIT" || mode === "PRESET") {
     const preset: PeriodPreset =
       mode === "PRESET" ? (override?.preset ?? global.preset) : global.preset;
-    const from = presetFrom(preset, timezone, now);
+    const from = presetFrom(preset, today);
     const compare =
       override?.compareToPrevious && from != null
         ? (() => {
-            const len = presetLengthDays(preset, timezone, now);
+            const len = presetLengthDays(preset, today);
             return len > 0 ? addDays(from, -len) : null;
           })()
         : null;
     return {
-      from: from != null ? localDayToUtcInstant(from, timezone).toISOString() : null,
+      from: from != null ? dayStart(from) : null,
       lastTrades: null,
-      compareFrom:
-        compare != null
-          ? localDayToUtcInstant(compare, timezone).toISOString()
-          : null,
+      compareFrom: compare != null ? dayStart(compare) : null,
       labelKey: preset,
     };
   }
 
   if (mode === "ROLLING_DAYS") {
     const days = Math.min(365, Math.max(1, Math.floor(override?.rollingDays ?? 30)));
-    const today = localDateInTz(now, timezone);
     const from = addDays(today, -(days - 1));
     const compare = override?.compareToPrevious ? addDays(from, -days) : null;
     return {
-      from: localDayToUtcInstant(from, timezone).toISOString(),
+      from: dayStart(from),
       lastTrades: null,
-      compareFrom:
-        compare != null
-          ? localDayToUtcInstant(compare, timezone).toISOString()
-          : null,
+      compareFrom: compare != null ? dayStart(compare) : null,
       labelKey: "rollingDays",
     };
   }
@@ -199,9 +210,9 @@ export function resolvePeriod(
   if (mode === "ROLLING_TRADES") {
     const n = Math.min(1000, Math.max(1, Math.floor(override?.rollingTrades ?? 20)));
     // The global preset still bounds the dataset; the tail N trades are kept.
-    const from = presetFrom(global.preset, timezone, now);
+    const from = presetFrom(global.preset, today);
     return {
-      from: from != null ? localDayToUtcInstant(from, timezone).toISOString() : null,
+      from: from != null ? dayStart(from) : null,
       lastTrades: n,
       compareFrom: null,
       labelKey: "rollingTrades",
@@ -215,9 +226,7 @@ export function resolvePeriod(
   const toDay = ISO_DAY_RE.test(override?.customTo ?? "")
     ? (override!.customTo as string)
     : null;
-  const fromInstant = fromDay
-    ? localDayToUtcInstant(fromDay, timezone).toISOString()
-    : null;
+  const fromInstant = fromDay ? dayStart(fromDay) : null;
   const compare =
     override?.compareToPrevious && fromDay && toDay
       ? (() => {
@@ -228,12 +237,25 @@ export function resolvePeriod(
   return {
     from: fromInstant,
     lastTrades: null,
-    compareFrom:
-      compare != null
-        ? localDayToUtcInstant(compare, timezone).toISOString()
-        : null,
+    compareFrom: compare != null ? dayStart(compare) : null,
     labelKey: "custom",
   };
+}
+
+/**
+ * UTC instant at which `dayKey` starts: local midnight for MIDNIGHT_LOCAL
+ * (the previous behaviour, DST-safe via localDayToUtcInstant), the rollover
+ * instant for NY_CLOSE / CUSTOM.
+ */
+function dayStartInstant(
+  dayKey: string,
+  timezone: string,
+  tradingDay: TradingDaySettings
+): Date {
+  if (tradingDay.mode === "MIDNIGHT_LOCAL") {
+    return localDayToUtcInstant(dayKey, timezone);
+  }
+  return tradingDayStartUtc(dayKey, timezone, tradingDay);
 }
 
 /** Filter trades by a resolved period (exit-time attribution). */

@@ -67,6 +67,7 @@ export const VIEW_IDS = [
   // v2.5 Module 8 — privacy, accessibility & time zones
   "privacy-settings",
   "accessibility-settings",
+  "time-settings",
   // v2.5 Module 9 — Discord / Telegram integrations
   "integrations-settings",
 ] as const;
@@ -247,6 +248,10 @@ export function parseHash(hash: string): AppRoute {
   // #/reglages/accessibility — text scale, contrast, motion, fonts (v2.5 M8)
   if (view === "settings" && second === "accessibility") {
     return withQuery({ view: "accessibility-settings" });
+  }
+  // #/reglages/heure — time zones, extra clocks, trading day (v2.5 M8)
+  if (view === "settings" && second === "heure") {
+    return withQuery({ view: "time-settings" });
   }
   // #/reglages/champs-personnalises — custom trade fields (v2.5 M4)
   if (view === "settings" && second === "champs-personnalises") {

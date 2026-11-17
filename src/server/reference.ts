@@ -248,6 +248,9 @@ export function toAccountDTO(a: AccountRow): AccountDTO {
     startDate: a.startDate?.toISOString() ?? null,
     marginCallLevel: a.marginCallLevel?.toString() ?? null,
     stopOutLevel: a.stopOutLevel?.toString() ?? null,
+    serverTimezoneMode: a.serverTimezoneMode,
+    serverTimezone: a.serverTimezone,
+    serverFixedOffsetMinutes: a.serverFixedOffsetMinutes,
     createdAt: a.createdAt.toISOString(),
   };
 }
@@ -281,6 +284,9 @@ export async function createAccount(
       startDate: input.startDate ? new Date(input.startDate) : null,
       marginCallLevel: input.marginCallLevel ?? null,
       stopOutLevel: input.stopOutLevel ?? null,
+      serverTimezoneMode: input.serverTimezoneMode ?? "IANA",
+      serverTimezone: input.serverTimezone ?? null,
+      serverFixedOffsetMinutes: input.serverFixedOffsetMinutes ?? null,
     },
   });
   return toAccountDTO(created);
@@ -315,6 +321,18 @@ export async function updateAccount(
         patch.marginCallLevel !== undefined ? patch.marginCallLevel : undefined,
       stopOutLevel:
         patch.stopOutLevel !== undefined ? patch.stopOutLevel : undefined,
+      serverTimezoneMode:
+        patch.serverTimezoneMode != null
+          ? patch.serverTimezoneMode
+          : undefined,
+      serverTimezone:
+        patch.serverTimezone !== undefined
+          ? patch.serverTimezone
+          : undefined,
+      serverFixedOffsetMinutes:
+        patch.serverFixedOffsetMinutes !== undefined
+          ? patch.serverFixedOffsetMinutes
+          : undefined,
       startDate:
         patch.startDate !== undefined
           ? patch.startDate

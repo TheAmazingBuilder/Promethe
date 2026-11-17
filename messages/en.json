@@ -111,7 +111,9 @@
     "privacy": "Privacy mode",
     "privacyDesc": "Hide or blur amounts",
     "accessibility": "Accessibility",
-    "accessibilityDesc": "Text size, contrast, motion"
+    "accessibilityDesc": "Text size, contrast, motion",
+    "time": "Time & time zones",
+    "timeDesc": "Clocks, extra zones, trading day"
   },
   "auth": {
     "tabLogin": "Sign in",
@@ -2568,7 +2570,17 @@
       "save": "Save",
       "saving": "Saving…",
       "created": "Account created.",
-      "updated": "Account updated."
+      "updated": "Account updated.",
+      "serverTimeSection": "Broker server time",
+      "serverTimeHint": "The clock of the broker server, used to display server time and to interpret imported timestamps.",
+      "serverTimeMode": "Server clock",
+      "serverTimeModeIana": "Timezone (IANA)",
+      "serverTimeModeFixed": "Fixed offset (GMT)",
+      "serverTimeModeNyClose": "New York close (MT4/MT5)",
+      "serverTimeZone": "Server timezone",
+      "serverTimeOffset": "Offset from UTC (hours)",
+      "serverTimeOffsetHint": "In hours, e.g. +2 or -5.5.",
+      "serverTimeNow": "Server time now: {time} ({zone})"
     }
   },
   "instrumentsView": {
@@ -2592,6 +2604,7 @@
     "digitsCol": "Digits",
     "contract": "Contract",
     "pair": "Pair",
+    "marketTimezoneShort": "Market",
     "form": {
       "createTitle": "New instrument",
       "editTitle": "Edit instrument",
@@ -2611,7 +2624,10 @@
       "save": "Save",
       "saving": "Saving…",
       "created": "Instrument created.",
-      "updated": "Instrument updated."
+      "updated": "Instrument updated.",
+      "marketTimezone": "Market timezone",
+      "marketTimezoneNone": "No market timezone",
+      "marketTimezoneHint": "Timezone of the market where this instrument trades, shown in the instruments list."
     }
   },
   "tagsView": {
@@ -3802,6 +3818,57 @@
     "optFontMono": "Monospace",
     "optFocusStandard": "Standard",
     "optFocusEnhanced": "Enhanced"
+  },
+  "time": {
+    "title": "Time & time zones",
+    "description": "Clocks, extra time zones and the trading day used across the journal, calendar, stats and daily rules.",
+    "clocksTitle": "Clocks",
+    "clocksDesc": "Local time and your extra zones, live.",
+    "clockListAria": "Time zones",
+    "localLabel": "Local",
+    "clockAria": "Local time {local}. Open time settings.",
+    "clockAriaExtra": "Local time {local}, {extra}. Open time settings.",
+    "clockTitle": "Time settings",
+    "mainTitle": "Main timezone",
+    "mainDesc": "Drives the calendar, the daily stats and the journal. Change it here or in your profile.",
+    "mainLabel": "Timezone",
+    "mainSaved": "Timezone saved.",
+    "save": "Save",
+    "saving": "Saving…",
+    "saveFailed": "Could not save. Please try again.",
+    "extraTitle": "Extra time zones",
+    "extraDesc": "Up to 3 extra clocks, shown in the top bar and on this page.",
+    "extraEmpty": "No extra time zone yet.",
+    "extraLabel": "Label",
+    "extraLabelPlaceholder": "e.g. New York",
+    "extraZone": "Timezone",
+    "extraAdd": "Add",
+    "extraRemove": "Remove {label}",
+    "extraFull": "You already have 3 extra time zones.",
+    "formatTitle": "Clock format",
+    "formatDesc": "How times are shown in the clocks.",
+    "formatLabel": "Format",
+    "formatLocale": "Locale default",
+    "format24": "24-hour",
+    "format12": "12-hour (AM/PM)",
+    "tradingDayTitle": "Trading day",
+    "tradingDayDesc": "Defines which day a trade belongs to, everywhere: daily P&L, calendar, journal, daily rules and goals.",
+    "tradingDayMode": "Day starts at",
+    "modeMidnight": "Midnight (local)",
+    "modeMidnightDesc": "The trading day is the local calendar day.",
+    "modeNyClose": "New York close (17:00)",
+    "modeNyCloseDesc": "The trading day ends at 17:00 New York time, the forex market close.",
+    "modeCustom": "Custom time",
+    "modeCustomDesc": "The trading day ends at your chosen time, in your chosen zone.",
+    "rolloverTime": "Rollover time",
+    "rolloverZone": "Rollover timezone",
+    "rolloverNow": "Current rollover: {rollover}",
+    "brokerTitle": "Broker server time",
+    "brokerDesc": "Live server time of each account, read-only. Configure the server clock in the account editor.",
+    "brokerManage": "Manage accounts",
+    "brokerListAria": "Broker server times",
+    "noAccounts": "No account yet.",
+    "noBroker": "No broker"
   },
   "searchView": {
     "title": "Search",

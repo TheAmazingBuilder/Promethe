@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { useAccounts } from "@/hooks/use-trading";
 import { useCalendar } from "@/hooks/use-journal";
+import { useTimePrefs } from "@/components/time/time-provider";
 import { pnlClass } from "@/lib/format";
 import { useFormat } from "@/lib/format/use-format";
 import { navigate } from "@/lib/router";
@@ -37,19 +38,34 @@ import { toD } from "@/lib/trading/dec";
 const EMERALD_BG = "bg-gain-subtle";
 const ROSE_BG = "bg-loss-subtle";
 
-function todayIsoDay(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-}
-
 export function CalendarView() {
   const t = useTranslations("calendar");
   const fmt = useFormat();
-  const today = React.useMemo(() => todayIsoDay(), []);
+  // "Today" is the current TRADING day (user setting, default MIDNIGHT_LOCAL
+  // = the local calendar day). The server buckets the P&L by the same day.
+  const { tradingDayOf, loaded: timeLoaded } = useTimePrefs();
+  const today = React.useMemo(
+    () => tradingDayOf(),
+    [tradingDayOf, timeLoaded]
+  );
   const [cursor, setCursor] = React.useState(() => {
     const [y, m] = today.split("-").map(Number);
     return { year: y, month: m };
   });
+  // Once the server row arrives the trading day can shift to another month
+  // (e.g. NY close after 17:00 on the last day of the month) — follow it.
+  const initialMonthRef = React.useRef(`${cursor.year}-${cursor.month}`);
+  React.useEffect(() => {
+    if (!timeLoaded) return;
+    const [y, m] = today.split("-").map(Number);
+    const key = `${y}-${m}`;
+    if (initialMonthRef.current !== key) {
+      initialMonthRef.current = key;
+      setCursor({ year: y, month: m });
+    }
+    // Runs once when the time preferences finish loading.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeLoaded]);
   const [accountId, setAccountId] = React.useState<string>("all");
   // v2.5 M2 — year (contribution calendar) vs month mode.
   const [mode, setMode] = React.useState<"month" | "year">("month");

@@ -17,6 +17,8 @@ import type {
   StrategyVersionDTO,
 } from "@/lib/trading/dto";
 import { toStrategyDTO } from "@/server/reference";
+import { getDisplayPreferences } from "@/server/display-preferences";
+import { tradingDayOfTrade } from "@/lib/time/trading-day";
 
 interface SnapshotShape {
   name: string;
@@ -165,7 +167,7 @@ export async function deleteVersion(
 export async function strategyStats(
   userId: string
 ): Promise<StrategyStatsDTO[]> {
-  const [strategies, trades] = await Promise.all([
+  const [strategies, trades, profile, prefs] = await Promise.all([
     db.strategy.findMany({
       where: { userId },
       orderBy: { createdAt: "asc" },
@@ -183,6 +185,8 @@ export async function strategyStats(
         strategyId: true,
       },
     }),
+    db.profile.findUnique({ where: { id: userId } }),
+    getDisplayPreferences(userId),
   ]);
 
   const byId = new Map<string, StatTrade[]>();
@@ -207,12 +211,17 @@ export async function strategyStats(
     else byId.set(t.strategyId, [stat]);
   }
 
+  // Per-strategy "trading days" follow the user's trading-day setting.
+  const dayOf = tradingDayOfTrade(
+    profile?.timezone ?? "UTC",
+    prefs.tradingDay
+  );
   return strategies.map((s) => ({
     key: s.id,
     name: s.name,
     color: s.color,
     status: s.status,
-    stats: computeTradeStats(byId.get(s.id) ?? []),
+    stats: computeTradeStats(byId.get(s.id) ?? [], { dayOf }),
   }));
 }
 

@@ -32,6 +32,8 @@ export interface InstrumentDTO {
   tickSize: string | null;
   tickValue: string | null;
   isActive: boolean;
+  /** Market timezone (IANA) for market-time display, null when unset. */
+  marketTimezone: string | null;
 }
 
 export interface TradeListItemDTO {
@@ -212,6 +214,12 @@ export interface AccountDTO {
   marginCallLevel: string | null;
   /** Stop-out level in % (null = broker default 50). */
   stopOutLevel: string | null;
+  /** Broker server clock: IANA | FIXED_OFFSET | NY_CLOSE (v2.5 Module 8). */
+  serverTimezoneMode: string;
+  /** IANA zone when serverTimezoneMode = IANA. */
+  serverTimezone: string | null;
+  /** Fixed UTC offset in minutes when serverTimezoneMode = FIXED_OFFSET. */
+  serverFixedOffsetMinutes: number | null;
   createdAt: string;
 }
 

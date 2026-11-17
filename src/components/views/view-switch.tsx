@@ -49,6 +49,7 @@ import { AppearanceView } from "@/components/settings-views/appearance-view";
 import { DashboardsSettingsView } from "@/components/settings-views/dashboards-settings-view";
 import { PrivacyView } from "@/components/settings-views/privacy-view";
 import { AccessibilityView } from "@/components/settings-views/accessibility-view";
+import { TimeView } from "@/components/settings-views/time-view";
 import { CustomFieldsView } from "@/components/settings-views/custom-fields-view";
 import { ShortcutsView } from "@/components/settings-views/shortcuts-view";
 import { IntegrationsView } from "@/components/settings-views/integrations-view";
@@ -92,6 +93,9 @@ export function ViewSwitch() {
       break;
     case "accessibility-settings":
       view = <AccessibilityView />;
+      break;
+    case "time-settings":
+      view = <TimeView />;
       break;
     case "custom-fields-settings":
       view = <CustomFieldsView />;

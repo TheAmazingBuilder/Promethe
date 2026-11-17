@@ -13,7 +13,8 @@
  */
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { localDateInTz } from "@/lib/analytics/calendar";
+import { getDisplayPreferences } from "@/server/display-preferences";
+import { getTradingDay } from "@/lib/time/trading-day";
 import {
   evaluateRules,
   type RuleDef,
@@ -124,18 +125,23 @@ export async function evaluateTradeViolations(
   tradeId: string
 ): Promise<void> {
   try {
-    const [profile, trade] = await Promise.all([
+    const [profile, prefs, trade] = await Promise.all([
       db.profile.findUnique({ where: { id: userId } }),
+      getDisplayPreferences(userId),
       db.trade.findFirst({ where: { id: tradeId, userId }, select: EVAL_SELECT }),
     ]);
     if (!trade) return;
     const timezone = profile?.timezone ?? "UTC";
+    // Daily rules (MAX_TRADES_PER_DAY, MAX_DAILY_LOSS) are evaluated on the
+    // user's TRADING day, not the civil day — default MIDNIGHT_LOCAL keeps
+    // the previous behaviour exactly.
+    const dayOf = (d: Date) => getTradingDay(d, timezone, prefs.tradingDay);
 
     const [rules, entryDay, exitDay] = await Promise.all([
       db.tradingRule.findMany({ where: { userId, isActive: true } }),
-      dayContext(userId, timezone, localDateInTz(trade.entryTime, timezone)),
+      dayContext(userId, dayOf(trade.entryTime), dayOf),
       trade.exitTime
-        ? dayContext(userId, timezone, localDateInTz(trade.exitTime, timezone))
+        ? dayContext(userId, dayOf(trade.exitTime), dayOf)
         : Promise.resolve(null),
     ]);
     if (rules.length === 0) {
@@ -151,11 +157,8 @@ export async function evaluateTradeViolations(
       isActive: r.isActive,
     }));
 
-    const entryLocalDay = localDateInTz(trade.entryTime, timezone);
-    const exitLocalDay = trade.exitTime
-      ? localDateInTz(trade.exitTime, timezone)
-      : null;
-    if (entryLocalDay == null) return;
+    const entryLocalDay = dayOf(trade.entryTime);
+    const exitLocalDay = trade.exitTime ? dayOf(trade.exitTime) : null;
 
     const violations = evaluateRules(
       ruleDefs,
@@ -179,11 +182,13 @@ export async function evaluateTradeViolations(
   }
 }
 
-/** One local day's aggregates, margins included (SQLite has no TZ math). */
+/** One trading day's aggregates, margins included (SQLite has no TZ math).
+ * The ±1 day margin covers TZ offsets and rollovers (a NY-close trading day
+ * spans 17:00 NY the previous day to 17:00 NY the same day). */
 async function dayContext(
   userId: string,
-  timezone: string,
-  day: string | null
+  day: string | null,
+  dayOf: (d: Date) => string
 ): Promise<{ entryCount: number; exitPnl: string[] }> {
   if (day == null) return { entryCount: 0, exitPnl: [] };
   const from = new Date(`${day}T00:00:00Z`);
@@ -213,11 +218,9 @@ async function dayContext(
   ]);
 
   return {
-    entryCount: entries.filter(
-      (t) => localDateInTz(t.entryTime, timezone) === day
-    ).length,
+    entryCount: entries.filter((t) => dayOf(t.entryTime) === day).length,
     exitPnl: exits
-      .filter((t) => localDateInTz(t.exitTime!, timezone) === day)
+      .filter((t) => dayOf(t.exitTime!) === day)
       .map((t) => t.netPnl?.toString() ?? "0"),
   };
 }
@@ -251,8 +254,9 @@ async function writeViolations(
  * violation rows.
  */
 export async function reevaluateViolations(userId: string): Promise<void> {
-  const [profile, rules, trades] = await Promise.all([
+  const [profile, prefs, rules, trades] = await Promise.all([
     db.profile.findUnique({ where: { id: userId } }),
+    getDisplayPreferences(userId),
     db.tradingRule.findMany({ where: { userId, isActive: true } }),
     db.trade.findMany({
       where: { userId, isDraft: false, status: { in: ["OPEN", "CLOSED"] } },
@@ -260,21 +264,19 @@ export async function reevaluateViolations(userId: string): Promise<void> {
     }),
   ]);
   const timezone = profile?.timezone ?? "UTC";
+  // Trading-day buckets (default MIDNIGHT_LOCAL = previous behaviour).
+  const dayOf = (d: Date) => getTradingDay(d, timezone, prefs.tradingDay);
 
   const entryCountByDay = new Map<string, number>();
   const exitPnlByDay = new Map<string, string[]>();
   for (const t of trades) {
-    const entryDay = localDateInTz(t.entryTime, timezone);
-    if (entryDay != null) {
-      entryCountByDay.set(entryDay, (entryCountByDay.get(entryDay) ?? 0) + 1);
-    }
+    const entryDay = dayOf(t.entryTime);
+    entryCountByDay.set(entryDay, (entryCountByDay.get(entryDay) ?? 0) + 1);
     if (t.status === "CLOSED" && t.exitTime != null) {
-      const exitDay = localDateInTz(t.exitTime, timezone);
-      if (exitDay != null) {
-        const list = exitPnlByDay.get(exitDay) ?? [];
-        list.push(t.netPnl?.toString() ?? "0");
-        exitPnlByDay.set(exitDay, list);
-      }
+      const exitDay = dayOf(t.exitTime);
+      const list = exitPnlByDay.get(exitDay) ?? [];
+      list.push(t.netPnl?.toString() ?? "0");
+      exitPnlByDay.set(exitDay, list);
     }
   }
 
@@ -288,12 +290,9 @@ export async function reevaluateViolations(userId: string): Promise<void> {
 
   const toWrite: Array<{ tradeId: string; ruleId: string; note: string }> = [];
   for (const t of trades) {
-    const entryLocalDay = localDateInTz(t.entryTime, timezone);
-    if (entryLocalDay == null) continue;
+    const entryLocalDay = dayOf(t.entryTime);
     const exitLocalDay =
-      t.status === "CLOSED" && t.exitTime != null
-        ? localDateInTz(t.exitTime, timezone)
-        : null;
+      t.status === "CLOSED" && t.exitTime != null ? dayOf(t.exitTime) : null;
     const violations = evaluateRules(
       ruleDefs,
       {

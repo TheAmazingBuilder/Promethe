@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/sidebar";
 import { ModeToggle } from "@/components/mode-toggle";
 import { PrivacyToggle } from "@/components/privacy/privacy-toggle";
+import { MultiZoneClock } from "@/components/time/multi-zone-clock";
 import { BrandMark } from "./brand";
 import { NavList } from "./nav-list";
 import { UserMenu } from "./user-menu";
@@ -162,6 +163,12 @@ export function AppShell({
             </Breadcrumb>
             <h1 className="sr-only">{pageTitle}</h1>
             <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
+              {/* v2.5 M8 — discreet multi-zone clock (local + first extra
+                  zone), hidden below the lg breakpoint so the bar stays
+                  light on small screens. */}
+              <div className="hidden lg:flex">
+                <MultiZoneClock variant="compact" />
+              </div>
               <Button
                 variant="ghost"
                 size="sm"

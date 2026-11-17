@@ -6,6 +6,7 @@ import { SessionProvider, useSession } from "./session-context";
 import { AppearanceProvider } from "./appearance-provider";
 import { PrivacyProvider } from "@/components/privacy/privacy-provider";
 import { A11yProvider } from "@/components/a11y/a11y-provider";
+import { TimeProvider } from "@/components/time/time-provider";
 import { AuthScreen } from "@/components/auth/auth-screen";
 import { AppShell } from "./app-shell";
 import { ViewSwitch } from "@/components/views/view-switch";
@@ -36,7 +37,9 @@ export function AppRoot({
         <AppearanceProvider>
           <PrivacyProvider>
             <A11yProvider>
-              <AppRootInner defaultSidebarOpen={defaultSidebarOpen} />
+              <TimeProvider>
+                <AppRootInner defaultSidebarOpen={defaultSidebarOpen} />
+              </TimeProvider>
             </A11yProvider>
           </PrivacyProvider>
         </AppearanceProvider>

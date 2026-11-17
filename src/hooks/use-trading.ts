@@ -53,6 +53,7 @@ export interface InstrumentApiDTO {
   tickSize: string | null;
   tickValue: string | null;
   isActive: boolean;
+  marketTimezone: string | null;
 }
 
 export function useInstruments() {
@@ -456,6 +457,9 @@ export interface AccountInputBody {
   stopOutLevel?: string | null;
   drawdownType?: "STATIC" | "TRAILING" | null;
   startDate?: string | null;
+  serverTimezoneMode?: "IANA" | "FIXED_OFFSET" | "NY_CLOSE" | null;
+  serverTimezone?: string | null;
+  serverFixedOffsetMinutes?: number | null;
 }
 
 export function useCreateAccount() {
@@ -575,6 +579,7 @@ export interface InstrumentInputBody {
   tickSize?: string | null;
   tickValue?: string | null;
   isActive: boolean;
+  marketTimezone?: string | null;
 }
 
 export function useCreateInstrument() {

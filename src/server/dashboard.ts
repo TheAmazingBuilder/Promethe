@@ -19,6 +19,8 @@ import type {
 import { toAccountDTO } from "@/server/reference";
 import { toTradeListItem } from "@/server/trades";
 import type { Prisma } from "@prisma/client";
+import { getDisplayPreferences } from "@/server/display-preferences";
+import { tradingDayOfTrade } from "@/lib/time/trading-day";
 
 const TRADE_INCLUDE = {
   instrument: true,
@@ -48,7 +50,7 @@ function toStatTrade(t: Row): StatTrade {
 }
 
 export async function getDashboard(userId: string): Promise<DashboardPayload> {
-  const [profile, accounts, strategies] = await Promise.all([
+  const [profile, accounts, strategies, prefs] = await Promise.all([
     db.profile.findUnique({ where: { id: userId } }),
     db.account.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
     db.strategy.findMany({
@@ -56,8 +58,13 @@ export async function getDashboard(userId: string): Promise<DashboardPayload> {
       include: { checklistItems: { orderBy: { order: "asc" } } },
       orderBy: { createdAt: "asc" },
     }),
+    getDisplayPreferences(userId),
   ]);
   const currency = profile?.baseCurrency ?? "USD";
+  const timezone = profile?.timezone ?? "UTC";
+  // KPI "trading days" counts TRADING days (default MIDNIGHT_LOCAL = the
+  // local calendar day, i.e. the previous behaviour).
+  const dayOf = tradingDayOfTrade(timezone, prefs.tradingDay);
 
   // Closed non-draft trades (full history — the demo dataset stays small;
   // larger books are covered by the paginated trades list).
@@ -73,8 +80,10 @@ export async function getDashboard(userId: string): Promise<DashboardPayload> {
     (t) => new Date(t.exitTime).getTime() >= cutoff
   );
 
-  const kpisAllTime = statTrades.length > 0 ? computeTradeStats(statTrades) : null;
-  const kpis30d = last30.length > 0 ? computeTradeStats(last30) : null;
+  const kpisAllTime =
+    statTrades.length > 0 ? computeTradeStats(statTrades, { dayOf }) : null;
+  const kpis30d =
+    last30.length > 0 ? computeTradeStats(last30, { dayOf }) : null;
 
   // Equity in the profile currency — accounts in other currencies are excluded
   // from the curve (documented limitation: naive multi-currency aggregation).

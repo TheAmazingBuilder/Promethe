@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
-import { Accessibility, Check, ChevronRight, Compass, EyeOff, History, Keyboard, LayoutDashboard, LayoutTemplate, Link2, ListPlus, Monitor, Moon, Palette, Plug, Send, ShieldCheck, Sun, Trash2, Users } from "lucide-react";
+import { Accessibility, Check, ChevronRight, Clock, Compass, EyeOff, History, Keyboard, LayoutDashboard, LayoutTemplate, Link2, ListPlus, Monitor, Moon, Palette, Plug, Send, ShieldCheck, Sun, Trash2, Users } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -27,6 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import { COMMON_CURRENCIES } from "@/lib/trading/types";
+import { COMMON_TIMEZONES } from "@/lib/time/zones";
 import { cn } from "@/lib/utils";
 import { MarketSessionsSettingsCard } from "@/components/tools/market-sessions-settings";
 
@@ -37,36 +38,7 @@ const THEME_OPTIONS = [
 ] as const;
 
 /** Common IANA timezones - the current profile tz is always offered. */
-const TIMEZONES = [
-  "UTC",
-  "America/Toronto",
-  "America/New_York",
-  "America/Chicago",
-  "America/Vancouver",
-  "America/Los_Angeles",
-  "America/Mexico_City",
-  "America/Sao_Paulo",
-  "Europe/London",
-  "Europe/Paris",
-  "Europe/Brussels",
-  "Europe/Zurich",
-  "Europe/Frankfurt",
-  "Europe/Madrid",
-  "Europe/Lisbon",
-  "Europe/Amsterdam",
-  "Africa/Casablanca",
-  "Africa/Lagos",
-  "Africa/Johannesburg",
-  "Asia/Dubai",
-  "Asia/Moscow",
-  "Asia/Kolkata",
-  "Asia/Singapore",
-  "Asia/Hong_Kong",
-  "Asia/Shanghai",
-  "Asia/Tokyo",
-  "Australia/Sydney",
-  "Pacific/Auckland",
-];
+const TIMEZONES = COMMON_TIMEZONES;
 
 /** Profile editor - PATCH /api/profile, then refresh the global session. */
 function ProfileEditorCard() {
@@ -427,6 +399,20 @@ export function SettingsView() {
           <div>
             <p className="text-sm font-medium">{tNav("accessibility")}</p>
             <p className="text-xs text-muted-foreground">{tNav("accessibilityDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </a>
+
+      <a
+        href="#/reglages/heure"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <Clock className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{tNav("time")}</p>
+            <p className="text-xs text-muted-foreground">{tNav("timeDesc")}</p>
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />

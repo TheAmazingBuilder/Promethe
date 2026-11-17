@@ -1,12 +1,14 @@
 /**
- * Calendar aggregation (v1 phase 5) — per-local-day P&L for the month grid.
+ * Calendar aggregation (v1 phase 5) — per-trading-day P&L for the month grid.
  *
- * Local days are computed in the USER's timezone (profile.timezone): a trade
- * belongs to the day it CLOSED locally. Aggregation happens in SQL by
- * grouping on a computed local date via raw SQL date conversion? — no:
- * SQLite has no TZ support. Instead we fetch the month (+ a 1-day margin for
- * TZ offsets) and bucket in JS through Intl, same approach as the analytics
- * localDate breakdowns. Month volumes are small (≤ a few hundred trades).
+ * Trading days are computed with getTradingDay (user setting, default
+ * MIDNIGHT_LOCAL = the local calendar day in the user's timezone
+ * (profile.timezone)): a trade belongs to the trading day it CLOSED on.
+ * Aggregation happens in SQL by grouping on a computed local date via raw
+ * SQL date conversion? — no: SQLite has no TZ support. Instead we fetch the
+ * month (+ a 1-day margin for TZ offsets and rollovers) and bucket in JS
+ * through Intl, same approach as the analytics localDate breakdowns. Month
+ * volumes are small (≤ a few hundred trades).
  */
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -15,13 +17,14 @@ import {
   buildMonthGrid,
   computeDayStreaks,
   computeMonthSummary,
-  localDateInTz,
   monthBounds,
   type CalendarDay,
 } from "@/lib/analytics/calendar";
 import type { CalendarPayload } from "@/lib/trading/dto";
 import type { CalendarQuery } from "@/lib/validations/journal";
 import { journalDays } from "@/server/journal";
+import { getDisplayPreferences } from "@/server/display-preferences";
+import { getTradingDay } from "@/lib/time/trading-day";
 
 const TRADE_SELECT = {
   exitTime: true,
@@ -40,19 +43,19 @@ interface MutableDay extends CalendarDay {
 }
 
 /**
- * Local-day buckets over the month + margin. The margin (±1 day) covers TZ
- * offsets: a UTC exit slightly outside the local month can land inside it,
- * and vice versa.
+ * Trading-day buckets over the month + margin. The margin (±1 day) covers
+ * TZ offsets and rollovers: a UTC exit slightly outside the local month can
+ * land inside it, and vice versa (a NY-close trade at 18:00 New York belongs
+ * to the NEXT trading day).
  */
-function bucketByLocalDay(
+function bucketByTradingDay(
   rows: TradeRow[],
-  timezone: string
+  dayOf: (d: Date) => string
 ): Map<string, MutableDay> {
   const map = new Map<string, MutableDay>();
   for (const t of rows) {
     if (t.exitTime == null) continue; // open trades are not P&L yet
-    const local = localDateInTz(t.exitTime, timezone);
-    if (!local) continue;
+    const local = dayOf(t.exitTime);
     const pnl = toD(t.netPnl ?? 0);
     const existing: MutableDay = map.get(local) ?? {
       date: local,
@@ -83,9 +86,10 @@ export async function getCalendar(
   userId: string,
   query: CalendarQuery
 ): Promise<CalendarPayload> {
-  const [profile, accounts] = await Promise.all([
+  const [profile, accounts, prefs] = await Promise.all([
     db.profile.findUnique({ where: { id: userId } }),
     db.account.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
+    getDisplayPreferences(userId),
   ]);
 
   // Account filter must belong to the user (silent fallback to "all").
@@ -96,6 +100,9 @@ export async function getCalendar(
 
   const timezone = profile?.timezone ?? "UTC";
   const currency = accountFilter?.currency ?? profile?.baseCurrency ?? "USD";
+  // Trades are attributed to their TRADING day (user setting, default
+  // MIDNIGHT_LOCAL = the local calendar day, i.e. the previous behaviour).
+  const dayOf = (d: Date) => getTradingDay(d, timezone, prefs.tradingDay);
 
   const { year, month } = query;
   const { first, last } = monthBounds(year, month);
@@ -117,7 +124,7 @@ export async function getCalendar(
     journalDays(userId, first, last),
   ]);
 
-  const buckets = bucketByLocalDay(rows, timezone);
+  const buckets = bucketByTradingDay(rows, dayOf);
   // Mark journal days (only those inside the requested month matter).
   for (const d of journalSet) {
     const bucket = buckets.get(d);
@@ -193,23 +200,25 @@ export interface YearDaysPayload {
 }
 
 /**
- * Daily aggregates for the whole year (local days in the user's timezone,
- * trades attributed to their local CLOSE day — same convention as the month
- * view), plus journal flags and discipline scores.
+ * Daily aggregates for the whole year (TRADING days — trades attributed to
+ * their trading CLOSE day, same convention as the month view), plus journal
+ * flags and discipline scores.
  */
 export async function getYearDays(
   userId: string,
   year: number,
   accountId?: string
 ): Promise<YearDaysPayload> {
-  const [profile, accounts] = await Promise.all([
+  const [profile, accounts, prefs] = await Promise.all([
     db.profile.findUnique({ where: { id: userId } }),
     db.account.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
+    getDisplayPreferences(userId),
   ]);
   const accountFilter =
     accountId != null ? (accounts.find((a) => a.id === accountId) ?? null) : null;
   const timezone = profile?.timezone ?? "UTC";
   const currency = accountFilter?.currency ?? profile?.baseCurrency ?? "USD";
+  const dayOf = (d: Date) => getTradingDay(d, timezone, prefs.tradingDay);
 
   const from = new Date(Date.UTC(year, 0, 1));
   from.setUTCDate(from.getUTCDate() - 1);
@@ -258,9 +267,7 @@ export async function getYearDays(
 
   for (const t of rows) {
     if (t.exitTime == null) continue;
-    const local = localDateInTz(t.exitTime, timezone);
-    if (!local) continue;
-    const d = ensure(local);
+    const d = ensure(dayOf(t.exitTime));
     const pnl = toD(t.netPnl ?? 0);
     d.netPnl += Number(pnl.toString());
     d.tradeCount += 1;

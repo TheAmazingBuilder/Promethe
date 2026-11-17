@@ -49,6 +49,12 @@ import {
 } from "@/hooks/use-trading";
 import { ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
+import { COMMON_TIMEZONES } from "@/lib/time/zones";
+import {
+  brokerClock,
+  brokerZoneLabel,
+  type BrokerTimeConfig,
+} from "@/lib/time/broker-time";
 import { Money, Sensitive } from "@/components/privacy/money";
 import type { AccountDTO } from "@/lib/trading/dto";
 
@@ -68,6 +74,9 @@ const EMPTY: AccountInputBody = {
   profitTarget: null,
   drawdownType: null,
   startDate: null,
+  serverTimezoneMode: "IANA",
+  serverTimezone: null,
+  serverFixedOffsetMinutes: null,
 };
 
 function toForm(a: AccountDTO): AccountInputBody {
@@ -91,6 +100,13 @@ function toForm(a: AccountDTO): AccountInputBody {
         ? a.drawdownType
         : null,
     startDate: a.startDate ? a.startDate.slice(0, 10) : null,
+    serverTimezoneMode:
+      a.serverTimezoneMode === "FIXED_OFFSET" ||
+      a.serverTimezoneMode === "NY_CLOSE"
+        ? a.serverTimezoneMode
+        : "IANA",
+    serverTimezone: a.serverTimezone,
+    serverFixedOffsetMinutes: a.serverFixedOffsetMinutes,
   };
 }
 
@@ -142,6 +158,16 @@ function AccountEditor({
           form.type === "PROP" && form.startDate
             ? form.startDate
             : null,
+        // Broker server clock: only the fields of the chosen mode are kept.
+        serverTimezoneMode: form.serverTimezoneMode ?? "IANA",
+        serverTimezone:
+          form.serverTimezoneMode === "IANA"
+            ? (form.serverTimezone ?? "UTC")
+            : null,
+        serverFixedOffsetMinutes:
+          form.serverTimezoneMode === "FIXED_OFFSET"
+            ? form.serverFixedOffsetMinutes
+            : null,
       };
       if (editing) {
         await update.mutateAsync({ id: editing.id, patch: payload });
@@ -167,6 +193,25 @@ function AccountEditor({
   };
 
   const isProp = form.type === "PROP";
+
+  // Broker server clock preview (recomputed on every render — the dialog
+  // re-renders on each keystroke, so the preview stays close to live).
+  const serverConfig: BrokerTimeConfig = {
+    mode: form.serverTimezoneMode ?? "IANA",
+    timezone: form.serverTimezone,
+    fixedOffsetMinutes: form.serverFixedOffsetMinutes,
+  };
+  const serverNow = brokerClock(serverConfig, new Date());
+  const serverLabel = brokerZoneLabel(serverConfig);
+  const serverTzOptions =
+    form.serverTimezone != null &&
+    !COMMON_TIMEZONES.includes(form.serverTimezone)
+      ? [form.serverTimezone, ...COMMON_TIMEZONES]
+      : COMMON_TIMEZONES;
+  const offsetHours =
+    form.serverFixedOffsetMinutes == null
+      ? ""
+      : String(form.serverFixedOffsetMinutes / 60);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -278,6 +323,89 @@ function AccountEditor({
                 onCheckedChange={(v) => set("isActive", v)}
               />
             </div>
+          </div>
+
+          {/* ── Broker server time (v2.5 M8) ── */}
+          <div className="space-y-3 rounded-lg border border-dashed p-3">
+            <p className="text-xs font-semibold text-muted-foreground">
+              {t("serverTimeSection")}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t("serverTimeHint")}
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="acc-server-mode">{t("serverTimeMode")}</Label>
+                <Select
+                  value={form.serverTimezoneMode ?? "IANA"}
+                  onValueChange={(v) =>
+                    set(
+                      "serverTimezoneMode",
+                      v as NonNullable<AccountInputBody["serverTimezoneMode"]>
+                    )
+                  }
+                >
+                  <SelectTrigger id="acc-server-mode">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="IANA">{t("serverTimeModeIana")}</SelectItem>
+                    <SelectItem value="FIXED_OFFSET">{t("serverTimeModeFixed")}</SelectItem>
+                    <SelectItem value="NY_CLOSE">{t("serverTimeModeNyClose")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.serverTimezoneMode === "IANA" ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="acc-server-tz">{t("serverTimeZone")}</Label>
+                  <Select
+                    value={form.serverTimezone ?? "UTC"}
+                    onValueChange={(v) => set("serverTimezone", v)}
+                  >
+                    <SelectTrigger id="acc-server-tz">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {serverTzOptions.map((tz) => (
+                        <SelectItem key={tz} value={tz}>
+                          {tz}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : form.serverTimezoneMode === "FIXED_OFFSET" ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="acc-server-offset">{t("serverTimeOffset")}</Label>
+                  <Input
+                    id="acc-server-offset"
+                    inputMode="decimal"
+                    value={offsetHours}
+                    onChange={(e) => {
+                      const raw = e.target.value.trim().replace(",", ".");
+                      if (raw === "" || raw === "+" || raw === "-") {
+                        set("serverFixedOffsetMinutes", null);
+                        return;
+                      }
+                      const hours = Number(raw);
+                      if (!Number.isFinite(hours)) return;
+                      const minutes = Math.round(hours * 60);
+                      set(
+                        "serverFixedOffsetMinutes",
+                        Math.max(-720, Math.min(840, minutes))
+                      );
+                    }}
+                    placeholder="+2"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    {t("serverTimeOffsetHint")}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+            <p className="text-xs text-muted-foreground tabular-nums" role="status">
+              {t("serverTimeNow", { time: serverNow, zone: serverLabel })}
+            </p>
           </div>
 
           {isProp && (

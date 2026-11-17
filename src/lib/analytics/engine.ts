@@ -75,6 +75,19 @@ export interface GroupStat<K extends string = string> {
   stats: TradeStats;
 }
 
+/**
+ * Day attribution for day-bucketed outputs (tradingDays, dailyPnl).
+ * Default: the UTC calendar date of the exit (`exitTime.slice(0, 10)`) —
+ * the historical behaviour, preserved exactly for every existing caller.
+ * Server callers pass `tradingDayOfTrade(timezone, settings)` so the
+ * buckets follow the user's trading-day definition (v2.5 Module 8).
+ */
+export interface DayKeyOptions {
+  dayOf?: (t: StatTrade) => string;
+}
+
+const defaultDayOf = (t: StatTrade): string => t.exitTime.slice(0, 10);
+
 function sum(values: Decimal[]): Decimal {
   return values.reduce((acc, v) => acc.plus(v), D0);
 }
@@ -110,8 +123,12 @@ export function computeEquityCurve(
   });
 }
 
-export function computeTradeStats(trades: StatTrade[]): TradeStats {
+export function computeTradeStats(
+  trades: StatTrade[],
+  options?: DayKeyOptions
+): TradeStats {
   const ordered = sortChronologically(trades);
+  const dayOf = options?.dayOf ?? defaultDayOf;
   const pnls = ordered.map((t) => toD(t.netPnl ?? 0));
   const rs = ordered
     .map((t) => (t.rMultiple == null ? null : toD(t.rMultiple)))
@@ -157,7 +174,7 @@ export function computeTradeStats(trades: StatTrade[]): TradeStats {
     }
   }
 
-  const days = new Set(ordered.map((t) => t.exitTime.slice(0, 10)));
+  const days = new Set(ordered.map((t) => dayOf(t)));
 
   const avg = (arr: Decimal[]): string | null =>
     arr.length === 0 ? null : sum(arr).div(arr.length).toString();
@@ -221,13 +238,17 @@ export function groupStats<T extends StatTrade>(
     .sort((a, b) => toD(b.stats.netPnl).cmp(toD(a.stats.netPnl)));
 }
 
-/** Daily net P&L list (ISO date → sum) - calendar view (v1 phase 5). */
+/** Daily net P&L list (ISO date → sum) - calendar view (v1 phase 5).
+ * The date is the TRADING day when `options.dayOf` is provided, the UTC
+ * exit date otherwise (historical default, unchanged). */
 export function dailyPnl(
-  trades: StatTrade[]
+  trades: StatTrade[],
+  options?: DayKeyOptions
 ): Array<{ date: string; netPnl: string; count: number }> {
+  const dayOf = options?.dayOf ?? defaultDayOf;
   const map = new Map<string, { pnl: Decimal; count: number }>();
   for (const t of trades) {
-    const day = t.exitTime.slice(0, 10);
+    const day = dayOf(t);
     const prev = map.get(day) ?? { pnl: D0, count: 0 };
     map.set(day, {
       pnl: prev.pnl.plus(toD(t.netPnl ?? 0)),

@@ -16,6 +16,8 @@ import {
 } from "@/lib/analytics/engine";
 import { D0, toD } from "@/lib/trading/dec";
 import type { PublicReportBreakdownRow, PublicReportPayload } from "./types";
+import { getDisplayPreferences } from "@/server/display-preferences";
+import { tradingDayOfTrade } from "@/lib/time/trading-day";
 
 export interface ReportPeriod {
   /** Inclusive YYYY-MM-DD. */
@@ -126,7 +128,16 @@ export async function buildReportPayload(
   });
 
   const trades = rows.map(toStatTrade);
-  const stats = computeTradeStats(trades);
+  // "Trading days" in the shared report follow the OWNER's trading-day
+  // setting (default MIDNIGHT_LOCAL = previous behaviour). The period
+  // boundaries themselves stay UTC — they are set by the share creator.
+  const [profile, prefs] = await Promise.all([
+    db.profile.findUnique({ where: { id: userId } }),
+    getDisplayPreferences(userId),
+  ]);
+  const stats = computeTradeStats(trades, {
+    dayOf: tradingDayOfTrade(profile?.timezone ?? "UTC", prefs.tradingDay),
+  });
 
   // Initial balance over the involved accounts (equity baseline). For
   // hidden-amounts reports the curve is later converted to % or R anyway.

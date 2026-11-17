@@ -27,6 +27,8 @@ import type { AnalyticsQuery } from "@/lib/validations/analytics";
 import type { Prisma } from "@prisma/client";
 import { parseCustomFields } from "@/lib/custom-fields/validate";
 import { activeCustomFieldDefinitions } from "@/server/custom-fields";
+import { getDisplayPreferences } from "@/server/display-preferences";
+import { getTradingDay, tradingDayOfTrade } from "@/lib/time/trading-day";
 
 const TRADE_INCLUDE = {
   instrument: true,
@@ -82,7 +84,11 @@ function localParts(
   }
 }
 
-function toAnalyticsTrade(t: Row, timezone: string): AnalyticsTrade {
+function toAnalyticsTrade(
+  t: Row,
+  timezone: string,
+  tradingDay: Parameters<typeof getTradingDay>[2]
+): AnalyticsTrade {
   const exitIso = (t.exitTime ?? t.entryTime).toISOString();
   // v2.5 M4 — a soft-deleted (trashed) strategy is excluded from breakdowns:
   // the trade itself stays, its strategy bucket reads as "none" until restore.
@@ -103,8 +109,16 @@ function toAnalyticsTrade(t: Row, timezone: string): AnalyticsTrade {
     lots: t.lots.toString(),
   };
 
-  const exitLocal = localParts(t.exitTime ?? t.entryTime, timezone);
   const entryLocal = localParts(t.entryTime, timezone);
+  // Daily attribution follows the user's TRADING day (default MIDNIGHT_LOCAL
+  // = the local calendar day, i.e. the previous behaviour). Weekday/hour
+  // breakdowns stay on the local ENTRY time — they describe WHEN the trader
+  // acts, not which day the P&L belongs to.
+  const tradingDayOfExit = getTradingDay(
+    t.exitTime ?? t.entryTime,
+    timezone,
+    tradingDay
+  );
   const durationMin =
     t.exitTime != null
       ? Math.max(
@@ -128,7 +142,7 @@ function toAnalyticsTrade(t: Row, timezone: string): AnalyticsTrade {
     commission: t.commission?.toString() ?? null,
     swap: t.swap?.toString() ?? null,
     fees: t.fees?.toString() ?? null,
-    localDate: exitLocal?.date ?? null,
+    localDate: tradingDayOfExit,
     localWeekday:
       entryLocal != null ? weekdayOfIsoDate(entryLocal.date) : null,
     localHour: entryLocal?.hour ?? null,
@@ -141,9 +155,10 @@ export async function getAnalytics(
   userId: string,
   query: AnalyticsQuery
 ): Promise<AnalyticsPayload> {
-  const [profile, accounts] = await Promise.all([
+  const [profile, accounts, prefs] = await Promise.all([
     db.profile.findUnique({ where: { id: userId } }),
     db.account.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
+    getDisplayPreferences(userId),
   ]);
 
   // Account filter must belong to the user (silent fallback to "all").
@@ -170,9 +185,11 @@ export async function getAnalytics(
   const currency =
     accountFilter?.currency ?? profile?.baseCurrency ?? "USD";
 
-  const trades = rows.map((t) => toAnalyticsTrade(t, timezone));
+  const trades = rows.map((t) => toAnalyticsTrade(t, timezone, prefs.tradingDay));
 
-  const stats = trades.length > 0 ? computeTradeStats(trades) : null;
+  const dayOf = tradingDayOfTrade(timezone, prefs.tradingDay);
+  const stats =
+    trades.length > 0 ? computeTradeStats(trades, { dayOf }) : null;
   const advanced = stats != null ? computeAdvancedStats(trades, stats) : null;
   // v2.5 Module 4 — breakdowns per usable-in-analytics custom field.
   const customDefs = (await activeCustomFieldDefinitions(userId))

@@ -9,7 +9,7 @@
  * trades closed from Nov 1 (or the goal's start date, if later) to now.
  *
  * Conventions (same as the analytics engine / calendar):
- * - Closed non-draft trades, P&L attributed to the LOCAL day of the exit
+ * - Closed non-draft trades, P&L attributed to the TRADING day of the exit
  *   time (the same convention as the P&L calendar).
  * - Win = netPnl > 0, loss = netPnl < 0, breakeven otherwise.
  * - profitFactor: grossWin / |grossLoss|, "Infinity" when there are wins
@@ -18,7 +18,12 @@
  * - Every value is a decimal string at the boundary — never a float.
  */
 import { toD, D0, type Decimal } from "@/lib/trading/dec";
-import { localDateInTz, weekdayIndex } from "@/lib/analytics/calendar";
+import { weekdayIndex } from "@/lib/analytics/calendar";
+import {
+  DEFAULT_TRADING_DAY,
+  getTradingDay,
+  type TradingDaySettings,
+} from "@/lib/time/trading-day";
 
 export const GOAL_METRICS = [
   "NET_PNL",
@@ -108,18 +113,19 @@ function yearStart(day: string): string {
 }
 
 /**
- * Evaluation window for a goal, in local days: [start, end). Rolling
- * periods anchor on the CURRENT week/month/quarter/year (in the user's
- * timezone), then clamp to the goal's own startDate / endDate. Invalid
- * timezones fall back to UTC (localDateInTz returns null → we use the UTC
- * day, which Intl-in-UTC reproduces exactly).
+ * Evaluation window for a goal, in trading days: [start, end). Rolling
+ * periods anchor on the CURRENT week/month/quarter/year, then clamp to the
+ * goal's own startDate / endDate. "Today" is the user's TRADING day
+ * (default MIDNIGHT_LOCAL = the local calendar day, i.e. the previous
+ * behaviour).
  */
 export function goalWindow(
   goal: Pick<GoalDef, "period" | "startDate" | "endDate">,
   now: Date,
-  timezone: string
+  timezone: string,
+  tradingDay: TradingDaySettings = DEFAULT_TRADING_DAY
 ): { startDay: string; endDay: string; today: string } {
-  const today = localDateInTz(now, timezone) ?? now.toISOString().slice(0, 10);
+  const today = getTradingDay(now, timezone, tradingDay);
 
   let start: string;
   let end: string;
@@ -222,21 +228,22 @@ function computeMetric(
 
 /**
  * Full progression for one goal. Trades are filtered to the window by the
- * LOCAL day of their exit time; discipline scores by their journal date.
+ * TRADING day of their exit time; discipline scores by their journal date
+ * (journal entries are keyed by trading day, so the two stay aligned).
  */
 export function computeGoalProgress(
   goal: GoalDef,
   trades: GoalTradePoint[],
   discipline: GoalDisciplinePoint[],
   now: Date,
-  timezone: string
+  timezone: string,
+  tradingDay: TradingDaySettings = DEFAULT_TRADING_DAY
 ): GoalProgress {
-  const { startDay, endDay, today } = goalWindow(goal, now, timezone);
+  const { startDay, endDay, today } = goalWindow(goal, now, timezone, tradingDay);
 
   const inWindow: GoalTradePoint[] = [];
   for (const t of trades) {
-    const local = localDateInTz(new Date(t.exitIso), timezone);
-    if (local == null) continue;
+    const local = getTradingDay(new Date(t.exitIso), timezone, tradingDay);
     if (local >= startDay && local < endDay) inWindow.push(t);
   }
   const disciplineWindow = discipline.filter(

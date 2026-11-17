@@ -18,6 +18,7 @@ import {
   sortChronologically,
   type EquityPoint,
   type GroupStat,
+  type StatTrade,
   type TradeStats,
 } from "@/lib/analytics/engine";
 import {
@@ -33,7 +34,6 @@ import {
   buildMonthGrid,
   computeMonthSummary,
   isoDayBetween,
-  localDateInTz,
   monthBounds,
   type CalendarDay,
   type MonthSummary,
@@ -58,6 +58,12 @@ import {
 } from "@/lib/metrics/evaluator";
 import type { OpenPositionDTO, TradeListItemDTO } from "@/lib/trading/dto";
 import { toTradeListItem } from "@/server/trades";
+import { getDisplayPreferences } from "@/server/display-preferences";
+import {
+  getTradingDay,
+  tradingDayOfTrade,
+  type TradingDaySettings,
+} from "@/lib/time/trading-day";
 import { getPropStatus } from "@/server/prop-status";
 import { getSyncOverview } from "@/server/broker-sync";
 import { listGoalsWithProgress } from "@/server/goals";
@@ -227,9 +233,15 @@ function localParts(
   }
 }
 
-function toDashboardTrade(t: TradeRow, timezone: string): DashboardTrade {
+function toDashboardTrade(
+  t: TradeRow,
+  timezone: string,
+  tradingDay: TradingDaySettings
+): DashboardTrade {
   const exit = t.exitTime ?? t.entryTime;
-  const exitLocal = localParts(exit, timezone);
+  // Daily attribution follows the user's TRADING day (default MIDNIGHT_LOCAL
+  // = the local calendar day). Weekday/hour stay on the local ENTRY time.
+  const tradingDayOfExit = getTradingDay(exit, timezone, tradingDay);
   const entryLocal = localParts(t.entryTime, timezone);
   return {
     id: t.id,
@@ -256,7 +268,7 @@ function toDashboardTrade(t: TradeRow, timezone: string): DashboardTrade {
     commission: t.commission?.toString() ?? null,
     swap: t.swap?.toString() ?? null,
     fees: t.fees?.toString() ?? null,
-    localDate: exitLocal?.date ?? null,
+    localDate: tradingDayOfExit,
     localWeekday:
       entryLocal != null ? weekdayOfIsoDate(entryLocal.date) : null,
     localHour: entryLocal?.hour ?? null,
@@ -353,8 +365,11 @@ function computeKpiExtras(sample: DashboardTrade[], stats: TradeStats): KpiExtra
   };
 }
 
-function computeKpiBlock(sample: DashboardTrade[]): KpiBlock {
-  const stats = computeTradeStats(sample);
+function computeKpiBlock(
+  sample: DashboardTrade[],
+  dayOf: (t: StatTrade) => string
+): KpiBlock {
+  const stats = computeTradeStats(sample, { dayOf });
   return {
     stats,
     advanced: computeAdvancedStats(sample, stats),
@@ -422,6 +437,11 @@ interface WidgetContext {
   accounts: AccountRow[];
   /** strategy name → color (strategy-table merge, same as getDashboard). */
   strategyColors: Map<string, string>;
+  /** Trading-day key function for day-bucketed widgets (KPI "trading days",
+   * P&L calendar, journal prompt). */
+  dayOf: (t: StatTrade) => string;
+  /** Today's TRADING day (journal prompt, P&L calendar month window). */
+  todayTradingDay: string;
 }
 
 async function computeWidgetData(
@@ -442,8 +462,11 @@ async function computeWidgetData(
           ? applyComparePeriod(scoped, period)
           : null;
       const data: KpiWidgetData = {
-        ...computeKpiBlock(sample),
-        compare: compareSample != null ? computeKpiBlock(compareSample) : null,
+        ...computeKpiBlock(sample, ctx.dayOf),
+        compare:
+          compareSample != null
+            ? computeKpiBlock(compareSample, ctx.dayOf)
+            : null,
         sparkline: computeSparkline(sample),
       };
       return data;
@@ -505,9 +528,7 @@ async function computeWidgetData(
         daily.set(day, bucket);
       }
 
-      const todayLocal =
-        localDateInTz(new Date(), ctx.timezone) ??
-        new Date().toISOString().slice(0, 10);
+      const todayLocal = ctx.todayTradingDay;
       let y = Number(todayLocal.slice(0, 4));
       let m = Number(todayLocal.slice(5, 7));
       for (let i = 1; i < monthCount; i++) {
@@ -647,9 +668,7 @@ async function computeWidgetData(
     }
 
     case "journal-prompt": {
-      const todayLocal =
-        localDateInTz(new Date(), ctx.timezone) ??
-        new Date().toISOString().slice(0, 10);
+      const todayLocal = ctx.todayTradingDay;
       const entry = await db.journalEntry.findFirst({
         where: { userId: ctx.userId, date: todayLocal },
         select: { id: true },
@@ -759,13 +778,14 @@ export async function getDashboardData(
   dashboardId: string,
   query: { preset: PeriodPreset; accountId: string | null }
 ): Promise<DashboardWidgetDataPayload> {
-  const [profile, accounts, dashboardRow] = await Promise.all([
+  const [profile, accounts, dashboardRow, prefs] = await Promise.all([
     db.profile.findUnique({ where: { id: userId } }),
     db.account.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
     db.dashboard.findFirst({
       where: { id: dashboardId, userId },
       include: { widgets: { orderBy: { createdAt: "asc" } } },
     }),
+    getDisplayPreferences(userId),
   ]);
   if (!dashboardRow) {
     throw new DashboardValidationError("DASHBOARD_NOT_FOUND", 404);
@@ -773,6 +793,11 @@ export async function getDashboardData(
 
   const timezone = profile?.timezone ?? "UTC";
   const currency = profile?.baseCurrency ?? "USD";
+  // Day-bucketed widgets (KPI "trading days", P&L calendar, journal prompt)
+  // follow the user's TRADING day (default MIDNIGHT_LOCAL = previous
+  // behaviour).
+  const dayOf = tradingDayOfTrade(timezone, prefs.tradingDay);
+  const todayTradingDay = getTradingDay(new Date(), timezone, prefs.tradingDay);
   const globalAccount =
     query.accountId != null
       ? (accounts.find((a) => a.id === query.accountId) ?? null)
@@ -793,7 +818,9 @@ export async function getDashboardData(
     getRequirements(userId),
   ]);
 
-  const trades = closedRows.map((t) => toDashboardTrade(t, timezone));
+  const trades = closedRows.map((t) =>
+    toDashboardTrade(t, timezone, prefs.tradingDay)
+  );
   const dto = toDashboardDTO(dashboardRow);
 
   const ctx: WidgetContext = {
@@ -802,6 +829,8 @@ export async function getDashboardData(
     timezone,
     accounts,
     strategyColors: new Map(strategyRows.map((s) => [s.name, s.color])),
+    dayOf,
+    todayTradingDay,
   };
 
   const widgets: Record<string, { data: unknown | null; error: string | null }> =
@@ -828,7 +857,9 @@ export async function getDashboardData(
       const period = resolvePeriod(
         { preset: query.preset, accountId: widget.accountOverride ?? null },
         widget.periodOverride,
-        timezone
+        timezone,
+        new Date(),
+        prefs.tradingDay
       );
       const sample = applyPeriod(scoped, period);
       widgets[widget.id] = {

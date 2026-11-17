@@ -24,6 +24,8 @@ import {
   type StatTrade,
 } from "@/lib/analytics/engine";
 import { toD } from "@/lib/trading/dec";
+import { getDisplayPreferences } from "@/server/display-preferences";
+import { tradingDayOfTrade } from "@/lib/time/trading-day";
 import type { AccessContext, AccessScope } from "@/lib/access";
 import {
   redactEquityCurve,
@@ -355,8 +357,19 @@ export async function getMentorAnalytics(
     (t) => new Date(t.exitTime).getTime() >= cutoff
   );
 
-  const kpisAllTime = statTrades.length > 0 ? computeTradeStats(statTrades) : null;
-  const kpis30d = last30.length > 0 ? computeTradeStats(last30) : null;
+  // The mentor reads the OWNER's journal: KPI "trading days" follow the
+  // owner's trading-day setting (default MIDNIGHT_LOCAL = previous
+  // behaviour), in the owner's timezone.
+  const [ownerProfile, ownerPrefs] = await Promise.all([
+    db.profile.findUnique({ where: { id: ctx.ownerId } }),
+    getDisplayPreferences(ctx.ownerId),
+  ]);
+  const ownerTimezone = ownerProfile?.timezone ?? "UTC";
+  const dayOf = tradingDayOfTrade(ownerTimezone, ownerPrefs.tradingDay);
+  const kpisAllTime =
+    statTrades.length > 0 ? computeTradeStats(statTrades, { dayOf }) : null;
+  const kpis30d =
+    last30.length > 0 ? computeTradeStats(last30, { dayOf }) : null;
 
   // Equity curve — percent-normalized when amounts are hidden.
   const sorted = [...statTrades].sort(

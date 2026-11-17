@@ -28,6 +28,22 @@ const decimalString = z
   .trim()
   .regex(/^\d+(\.\d+)?$/, "invalidDecimal");
 
+/** IANA timezone name (Intl-accepted). No import: Intl is available in
+ * browsers and Node, and this file stays dependency-free (zod only). */
+const ianaTimezone = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .refine((tz) => {
+    try {
+      new Intl.DateTimeFormat("en-CA", { timeZone: tz });
+      return true;
+    } catch {
+      return false;
+    }
+  }, "invalidTimezone");
+
 /** Signed decimal string ("-12.5", "0", "340"). */
 const signedDecimalString = z
   .string()
@@ -254,6 +270,10 @@ export const accountInputSchema = z.object({
   stopOutLevel: optionalDecimal,
   drawdownType: z.enum(["STATIC", "TRAILING"]).nullish(),
   startDate: isoDate.nullish(),
+  // v2.5 Module 8 — broker server clock (IANA | FIXED_OFFSET | NY_CLOSE).
+  serverTimezoneMode: z.enum(["IANA", "FIXED_OFFSET", "NY_CLOSE"]).nullish(),
+  serverTimezone: ianaTimezone.nullish(),
+  serverFixedOffsetMinutes: z.number().int().min(-720).max(840).nullish(),
 });
 
 export const tagInputSchema = z.object({
@@ -288,6 +308,8 @@ export const instrumentInputSchema = z.object({
   tickSize: decimalString.nullish(),
   tickValue: decimalString.nullish(),
   isActive: z.boolean().default(true),
+  // v2.5 Module 8 — market timezone (IANA) for market-time display.
+  marketTimezone: ianaTimezone.nullish(),
 });
 export const instrumentPatchSchema = instrumentInputSchema.partial();
 

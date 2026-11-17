@@ -11,6 +11,7 @@ import { db } from "@/lib/db";
 import { computeGoalProgress, type GoalDef } from "@/lib/trading/goals";
 import type { GoalDTO, GoalsPayload } from "@/lib/trading/dto";
 import type { GoalInput, GoalPatch } from "@/lib/validations/goals";
+import { getDisplayPreferences } from "@/server/display-preferences";
 
 type GoalRow = Prisma.GoalGetPayload<Record<string, never>>;
 
@@ -33,7 +34,7 @@ function toGoalDTO(g: GoalRow): GoalDTO {
 export async function listGoalsWithProgress(
   userId: string
 ): Promise<GoalsPayload> {
-  const [profile, goals, trades, journal] = await Promise.all([
+  const [profile, goals, trades, journal, prefs] = await Promise.all([
     db.profile.findUnique({ where: { id: userId } }),
     db.goal.findMany({ where: { userId }, orderBy: [{ status: "asc" }, { createdAt: "desc" }] }),
     db.trade.findMany({
@@ -44,6 +45,7 @@ export async function listGoalsWithProgress(
       where: { userId, disciplineScore: { not: null } },
       select: { date: true, disciplineScore: true },
     }),
+    getDisplayPreferences(userId),
   ]);
   const timezone = profile?.timezone ?? "UTC";
   const now = new Date();
@@ -63,7 +65,14 @@ export async function listGoalsWithProgress(
       const def = rowToDef(g);
       return {
         ...toGoalDTO(g),
-        progress: computeGoalProgress(def, tradePoints, discipline, now, timezone),
+        progress: computeGoalProgress(
+          def,
+          tradePoints,
+          discipline,
+          now,
+          timezone,
+          prefs.tradingDay
+        ),
       };
     }),
   };

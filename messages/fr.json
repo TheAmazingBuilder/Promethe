@@ -111,7 +111,9 @@
     "privacy": "Mode confidentiel",
     "privacyDesc": "Masquer ou flouter les montants",
     "accessibility": "Accessibilité",
-    "accessibilityDesc": "Taille de texte, contraste, animations"
+    "accessibilityDesc": "Taille de texte, contraste, animations",
+    "time": "Heure et fuseaux",
+    "timeDesc": "Horloges, fuseaux supplémentaires, jour de trading"
   },
   "auth": {
     "tabLogin": "Connexion",
@@ -2568,7 +2570,17 @@
       "save": "Enregistrer",
       "saving": "Enregistrement…",
       "created": "Compte créé.",
-      "updated": "Compte mis à jour."
+      "updated": "Compte mis à jour.",
+      "serverTimeSection": "Heure du serveur du courtier",
+      "serverTimeHint": "L'horloge du serveur du courtier, utilisée pour afficher l'heure serveur et interpréter les horodatages importés.",
+      "serverTimeMode": "Horloge serveur",
+      "serverTimeModeIana": "Fuseau horaire (IANA)",
+      "serverTimeModeFixed": "Décalage fixe (GMT)",
+      "serverTimeModeNyClose": "Clôture de New York (MT4/MT5)",
+      "serverTimeZone": "Fuseau du serveur",
+      "serverTimeOffset": "Décalage par rapport à UTC (heures)",
+      "serverTimeOffsetHint": "En heures, ex. +2 ou -5,5.",
+      "serverTimeNow": "Heure serveur actuelle : {time} ({zone})"
     }
   },
   "instrumentsView": {
@@ -2592,6 +2604,7 @@
     "digitsCol": "Digits",
     "contract": "Contrat",
     "pair": "Paire",
+    "marketTimezoneShort": "Marché",
     "form": {
       "createTitle": "Nouvel instrument",
       "editTitle": "Modifier l'instrument",
@@ -2611,7 +2624,10 @@
       "save": "Enregistrer",
       "saving": "Enregistrement…",
       "created": "Instrument créé.",
-      "updated": "Instrument mis à jour."
+      "updated": "Instrument mis à jour.",
+      "marketTimezone": "Fuseau horaire du marché",
+      "marketTimezoneNone": "Aucun fuseau de marché",
+      "marketTimezoneHint": "Fuseau horaire du marché où se négocie cet instrument, affiché dans la liste des instruments."
     }
   },
   "tagsView": {
@@ -3802,6 +3818,57 @@
     "optFontMono": "Monospace",
     "optFocusStandard": "Standard",
     "optFocusEnhanced": "Renforcé"
+  },
+  "time": {
+    "title": "Heure et fuseaux horaires",
+    "description": "Horloges, fuseaux supplémentaires et jour de trading utilisés partout : journal, calendrier, statistiques, règles et objectifs.",
+    "clocksTitle": "Horloges",
+    "clocksDesc": "Heure locale et vos fuseaux supplémentaires, en direct.",
+    "clockListAria": "Fuseaux horaires",
+    "localLabel": "Locale",
+    "clockAria": "Heure locale {local}. Ouvrir les réglages de l'heure.",
+    "clockAriaExtra": "Heure locale {local}, {extra}. Ouvrir les réglages de l'heure.",
+    "clockTitle": "Réglages de l'heure",
+    "mainTitle": "Fuseau horaire principal",
+    "mainDesc": "Pilote le calendrier, les statistiques journalières et le journal. Modifiable ici ou dans votre profil.",
+    "mainLabel": "Fuseau horaire",
+    "mainSaved": "Fuseau horaire enregistré.",
+    "save": "Enregistrer",
+    "saving": "Enregistrement…",
+    "saveFailed": "Enregistrement impossible. Réessayez.",
+    "extraTitle": "Fuseaux horaires supplémentaires",
+    "extraDesc": "Jusqu'à 3 horloges supplémentaires, affichées dans la barre du haut et sur cette page.",
+    "extraEmpty": "Aucun fuseau horaire supplémentaire.",
+    "extraLabel": "Libellé",
+    "extraLabelPlaceholder": "ex. New York",
+    "extraZone": "Fuseau horaire",
+    "extraAdd": "Ajouter",
+    "extraRemove": "Supprimer {label}",
+    "extraFull": "Vous avez déjà 3 fuseaux horaires supplémentaires.",
+    "formatTitle": "Format de l'heure",
+    "formatDesc": "La façon dont les heures s'affichent dans les horloges.",
+    "formatLabel": "Format",
+    "formatLocale": "Par défaut selon la langue",
+    "format24": "24 heures",
+    "format12": "12 heures (AM/PM)",
+    "tradingDayTitle": "Jour de trading",
+    "tradingDayDesc": "Définit à quel jour appartient un trade, partout : P&L journalier, calendrier, journal, règles et objectifs.",
+    "tradingDayMode": "Le jour commence à",
+    "modeMidnight": "Minuit (heure locale)",
+    "modeMidnightDesc": "Le jour de trading est le jour civil local.",
+    "modeNyClose": "Clôture de New York (17 h)",
+    "modeNyCloseDesc": "Le jour de trading se termine à 17 h heure de New York, la clôture du marché du forex.",
+    "modeCustom": "Heure personnalisée",
+    "modeCustomDesc": "Le jour de trading se termine à l'heure choisie, dans le fuseau choisi.",
+    "rolloverTime": "Heure de bascule",
+    "rolloverZone": "Fuseau de bascule",
+    "rolloverNow": "Bascule actuelle : {rollover}",
+    "brokerTitle": "Heure serveur du courtier",
+    "brokerDesc": "Heure serveur en direct de chaque compte, en lecture seule. Configurez l'horloge serveur dans l'éditeur de compte.",
+    "brokerManage": "Gérer les comptes",
+    "brokerListAria": "Heures serveur des courtiers",
+    "noAccounts": "Aucun compte pour l'instant.",
+    "noBroker": "Aucun courtier"
   },
   "searchView": {
     "title": "Recherche",
