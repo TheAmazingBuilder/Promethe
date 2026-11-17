@@ -67,6 +67,8 @@ export const VIEW_IDS = [
   // v2.5 Module 8 — privacy, accessibility & time zones
   "privacy-settings",
   "accessibility-settings",
+  // v2.5 Module 9 — Discord / Telegram integrations
+  "integrations-settings",
 ] as const;
 
 export type ViewId = (typeof VIEW_IDS)[number];
@@ -253,6 +255,10 @@ export function parseHash(hash: string): AppRoute {
   // #/reglages/raccourcis — keyboard shortcuts (v2.5 M4)
   if (view === "settings" && second === "raccourcis") {
     return withQuery({ view: "shortcuts-settings" });
+  }
+  // #/reglages/integrations — Discord / Telegram (v2.5 M9)
+  if (view === "settings" && second === "integrations") {
+    return withQuery({ view: "integrations-settings" });
   }
   // #/search — global search (v2.5 M4)
   if (head === "search") return withQuery({ view: "search" });

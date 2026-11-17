@@ -51,6 +51,7 @@ import { PrivacyView } from "@/components/settings-views/privacy-view";
 import { AccessibilityView } from "@/components/settings-views/accessibility-view";
 import { CustomFieldsView } from "@/components/settings-views/custom-fields-view";
 import { ShortcutsView } from "@/components/settings-views/shortcuts-view";
+import { IntegrationsView } from "@/components/settings-views/integrations-view";
 import { SearchView } from "@/components/search/search-view";
 import { HistoryView } from "@/components/history/history-view";
 import { TrashView } from "@/components/trash/trash-view";
@@ -97,6 +98,9 @@ export function ViewSwitch() {
       break;
     case "shortcuts-settings":
       view = <ShortcutsView />;
+      break;
+    case "integrations-settings":
+      view = <IntegrationsView />;
       break;
     case "search":
       view = <SearchView />;

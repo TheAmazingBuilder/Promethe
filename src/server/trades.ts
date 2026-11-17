@@ -39,6 +39,7 @@ import type {
   TradeListItemDTO,
 } from "@/lib/trading/dto";
 import { evaluateTradeViolations } from "@/server/rules";
+import { checkDrawdownAlerts } from "@/server/integrations/delivery";
 import { refreshTradeSearchText } from "@/server/search-index";
 import { foldText } from "@/lib/search/text";
 import {
@@ -1127,6 +1128,9 @@ export async function closeTrade(
   if (!trade) throw new TradeValidationError("INTERNAL");
   // Phase 6 — closing realizes the P&L: daily-loss rules re-evaluated.
   await evaluateTradeViolations(userId, current.id);
+  // v2.5 Module 9 — drawdown / prop alerts (best effort: a failure here
+  // must never fail the close; checkDrawdownAlerts never throws).
+  await checkDrawdownAlerts(userId, current.accountId);
   return trade;
 }
 

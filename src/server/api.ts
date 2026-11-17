@@ -19,6 +19,7 @@ import {
   ToolsTablesMissingError,
   ToolsValidationError,
 } from "@/server/tools";
+import { IntegrationValidationError } from "@/server/integrations/endpoints";
 
 type CodedError = {
   code: string;
@@ -87,6 +88,33 @@ const CODE_MESSAGES: Record<string, string> = {
   FX_RATE_DUPLICATE: "Un taux existe déjà pour cette paire.",
   EXIT_PLAN_NOT_FOUND: "Plan de sortie introuvable.",
   EXIT_PLAN_INVALID: "Les paliers doivent totaliser 100 % avec des cibles positives.",
+  // v2.5 Module 9 — Discord / Telegram integrations
+  ENCRYPTION_KEY_MISSING:
+    "La clé de chiffrement des intégrations n'est pas configurée. Définissez INTEGRATION_ENCRYPTION_KEY sur le serveur.",
+  ENCRYPTION_KEY_INVALID:
+    "INTEGRATION_ENCRYPTION_KEY est invalide (32 octets, hex ou base64).",
+  INVALID_ENDPOINT_TYPE: "Type d'intégration invalide.",
+  INVALID_LABEL: "Nom invalide (1 à 60 caractères).",
+  TOO_MANY_ENDPOINTS: "Limite de 10 intégrations atteinte.",
+  INVALID_WEBHOOK_URL:
+    "URL de webhook Discord invalide (format attendu : https://discord.com/api/webhooks/<id>/<token>).",
+  WEBHOOK_NOT_HTTPS: "L'URL du webhook doit commencer par https://.",
+  WEBHOOK_HOST_NOT_ALLOWED:
+    "Hôte non autorisé : seuls discord.com et discordapp.com sont acceptés.",
+  INVALID_TELEGRAM_TOKEN:
+    "Token de bot Telegram invalide (format attendu : <id>:<jeton>).",
+  INVALID_CHAT_ID:
+    "Identifiant de chat invalide (nombre, ou @nom de canal).",
+  INVALID_QUIET_HOURS: "Heures calmes invalides (format HH:mm).",
+  INVALID_PRIVACY_LEVEL: "Niveau de confidentialité invalide.",
+  INVALID_EVENT_TYPE: "Type d'événement invalide.",
+  INVALID_VALUE: "Valeur invalide.",
+  ENDPOINT_NOT_FOUND: "Intégration introuvable.",
+  SUBSCRIPTION_NOT_FOUND: "Abonnement introuvable.",
+  ENDPOINT_DISABLED: "Cette intégration est désactivée.",
+  TELEGRAM_API_ERROR:
+    "Telegram n'a pas répondu ou le token est invalide.",
+  TEST_FAILED: "Le message de test n'a pas pu être envoyé.",
 };
 
 function isCoded(error: unknown): error is CodedError {
@@ -102,6 +130,7 @@ function isCoded(error: unknown): error is CodedError {
     error instanceof DashboardValidationError ||
     error instanceof ToolsValidationError ||
     error instanceof ToolsTablesMissingError ||
+    error instanceof IntegrationValidationError ||
     error instanceof AccessDeniedError
   );
 }

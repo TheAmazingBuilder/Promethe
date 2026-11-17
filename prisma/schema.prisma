@@ -120,6 +120,11 @@ model User {
   traderScoreSnapshots TraderScoreSnapshot[]
   tradeAnomalies      TradeAnomaly[]
 
+  // ── v2.5 Module 9 — Discord / Telegram integrations ──
+  integrationEndpoints     IntegrationEndpoint[]
+  integrationSubscriptions IntegrationSubscription[]
+  outboundMessages         OutboundMessage[]
+
   @@map("users")
 }
 
@@ -2320,4 +2325,100 @@ model TradeAnomaly {
   @@unique([tradeId, kind])
   @@index([userId, detectedAt])
   @@map("trade_anomalies")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v2.5 Module 9 — Discord / Telegram integrations (Prompt 9)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// One outbound destination owned by a user: a Discord webhook URL or a
+/// Telegram bot token (+ chat id). The secret is stored ONLY as AES-256-GCM
+/// ciphertext (see src/lib/integrations/crypto.ts) and is never returned by
+/// any API — only secretHint (display only) ever reaches the client.
+model IntegrationEndpoint {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  /// DISCORD_WEBHOOK | TELEGRAM_BOT
+  type  String
+  label String
+  /// AES-256-GCM ciphertext, format "v1:<iv hex>:<tag hex>:<cipher hex>".
+  secretEncrypted String @map("secret_encrypted")
+  /// Display hint only: "discord.com" for Discord, last 4 chars of the
+  /// token ("••••abcd") for Telegram. Never a usable secret fragment.
+  secretHint String @map("secret_hint")
+  /// Telegram chat id (numeric id or @channelusername). Null for Discord.
+  chatId String? @map("chat_id")
+  isEnabled Boolean @default(true) @map("is_enabled")
+  /// Consecutive failed sends; the endpoint auto-disables at 5.
+  consecutiveFailures Int       @default(0) @map("consecutive_failures")
+  lastErrorAt       DateTime? @map("last_error_at")
+  lastSentAt        DateTime? @map("last_sent_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  user          User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptions IntegrationSubscription[]
+  messages      OutboundMessage[]
+
+  @@index([userId])
+  @@map("integration_endpoints")
+}
+
+/// One event a user wants on one endpoint, with its privacy level and quiet
+/// hours. Created automatically (all 3 events, FULL, enabled) when an
+/// endpoint is added; the user then tunes or disables each row.
+model IntegrationSubscription {
+  id       String @id @default(cuid())
+  userId   String @map("user_id")
+  endpointId String @map("endpoint_id")
+  /// DAILY_SUMMARY | DRAWDOWN_ALERT | PROP_ALERT
+  eventType String @map("event_type")
+  /// FULL | NO_AMOUNTS | MINIMAL
+  privacyLevel String  @default("FULL") @map("privacy_level")
+  /// HH:mm local, null = no quiet hours. Daily summaries are deferred past
+  /// quiet hours; drawdown / prop alerts always go out.
+  quietHoursStart String? @map("quiet_hours_start")
+  quietHoursEnd   String? @map("quiet_hours_end")
+  isEnabled Boolean @default(true) @map("is_enabled")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint IntegrationEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@unique([endpointId, eventType])
+  @@index([userId])
+  @@map("integration_subscriptions")
+}
+
+/// Outbox for outbound Discord / Telegram messages. The cron worker
+/// (/api/cron/integrations) drains PENDING rows; dedupeKey makes every
+/// enqueue idempotent (one daily summary per user, endpoint and day; one
+/// alert per threshold per day). payloadJson holds the structured event
+/// data + privacy level — rendering happens at send time, per endpoint type.
+model OutboundMessage {
+  id         String @id @default(cuid())
+  userId     String @map("user_id")
+  endpointId String @map("endpoint_id")
+  /// DAILY_SUMMARY | DRAWDOWN_ALERT | PROP_ALERT | TEST
+  eventType String @map("event_type")
+  /// e.g. daily-summary:<userId>:<endpointId>:2026-11-17
+  dedupeKey String @unique @map("dedupe_key")
+  /// JSON string: { eventType, privacyLevel, data }
+  payloadJson String @map("payload_json")
+  /// PENDING | SENT | FAILED | DEAD
+  status String @default("PENDING")
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
+  lastError String? @map("last_error")
+  sentAt    DateTime? @map("sent_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint IntegrationEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@index([userId, createdAt])
+  @@map("outbound_messages")
 }

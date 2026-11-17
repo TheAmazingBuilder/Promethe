@@ -1258,3 +1258,28 @@ CREATE POLICY trade_anomalies_owner ON trade_anomalies
   FOR ALL
   USING (user_id = auth.uid())
   WITH CHECK (user_id = auth.uid());
+
+-- ═════════════════════════════════════════════════════════════════════════════
+-- v2.5 Module 9 — Discord / Telegram integrations (Prompt 9)
+-- ═════════════════════════════════════════════════════════════════════════════
+
+ALTER TABLE integration_endpoints ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS integration_endpoints_owner ON integration_endpoints;
+CREATE POLICY integration_endpoints_owner ON integration_endpoints
+  FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+ALTER TABLE integration_subscriptions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS integration_subscriptions_owner ON integration_subscriptions;
+CREATE POLICY integration_subscriptions_owner ON integration_subscriptions
+  FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+ALTER TABLE outbound_messages ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS outbound_messages_owner ON outbound_messages;
+CREATE POLICY outbound_messages_owner ON outbound_messages
+  FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
