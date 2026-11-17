@@ -83,6 +83,7 @@ import {
   useRevokeConnection,
   useRotateConnection,
   useSymbolMappings,
+  useSyncOverview,
   useUpdateConnection,
   useUpsertSymbolMapping,
   type BrokerConnection,
@@ -155,8 +156,8 @@ function TokenOnceDialog({
   const appUrl =
     typeof window !== "undefined" ? window.location.origin : "";
   const eaFile = created?.connection.platform === "MT4"
-    ? "/ea/TradeJournalSync.mq4"
-    : "/ea/TradeJournalSync.mq5";
+    ? "/ea/PrometheSync.mq4"
+    : "/ea/PrometheSync.mq5";
 
   return (
     <Dialog open={created !== null} onOpenChange={(open) => !open && onClose()}>
@@ -181,7 +182,7 @@ function TokenOnceDialog({
                   className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-4"
                 >
                   <Download className="h-3 w-3" aria-hidden="true" />
-                  {created.connection.platform === "MT4" ? "TradeJournalSync.mq4" : "TradeJournalSync.mq5"}
+                  {created.connection.platform === "MT4" ? "PrometheSync.mq4" : "PrometheSync.mq5"}
                 </a>
               </li>
               <li>{t("step2")}</li>
@@ -189,6 +190,7 @@ function TokenOnceDialog({
                 {t("step3", { url: appUrl })}
               </li>
               <li>{t("step4")}</li>
+              <li>{t("step5")}</li>
             </ol>
           </div>
         )}
@@ -615,6 +617,68 @@ function MagicMappingsSection() {
   );
 }
 
+// ── Recent sync activity ───────────────────────────────────────────────────
+
+function ActivitySection() {
+  const t = useTranslations("brokerSync.activity");
+  const { data: overview, isLoading } = useSyncOverview();
+
+  const relative = (iso: string) => {
+    const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    if (minutes < 1) return "à l'instant";
+    if (minutes < 60) return `il y a ${minutes} min`;
+    if (minutes < 1440) return `il y a ${Math.round(minutes / 60)} h`;
+    return new Date(iso).toLocaleDateString("fr-FR");
+  };
+
+  const statusStyle: Record<string, string> = {
+    PROCESSED: "border-emerald-500/40 text-emerald-700 dark:text-emerald-400",
+    DUPLICATE: "border-border text-muted-foreground",
+    REJECTED: "border-red-500/40 text-red-700 dark:text-red-400",
+    FAILED: "border-red-500/40 text-red-700 dark:text-red-400",
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{t("title")}</CardTitle>
+        <CardDescription>{t("description")}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <Skeleton className="h-24 w-full" />
+        ) : !overview || overview.recentEvents.length === 0 ? (
+          <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+            {t("empty")}
+          </p>
+        ) : (
+          <ul className="divide-y rounded-lg border">
+            {overview.recentEvents.map((event) => (
+              <li
+                key={event.id}
+                className="flex flex-wrap items-center justify-between gap-2 p-3"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-mono text-sm font-medium">
+                    {event.type}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {event.connectionLabel} · {relative(event.receivedAt)}
+                    {event.errorCode ? ` · ${event.errorCode}` : ""}
+                  </p>
+                </div>
+                <Badge variant="outline" className={statusStyle[event.status] ?? statusStyle.DUPLICATE}>
+                  {t(`status.${event.status.toLowerCase()}` as "processed")}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Main view ────────────────────────────────────────────────────────────────
 
 export function BrokerSyncView() {
@@ -691,6 +755,9 @@ export function BrokerSyncView() {
           ))}
         </div>
       )}
+
+      {/* Recent activity */}
+      <ActivitySection />
 
       {/* Symbol mappings */}
       <Card>

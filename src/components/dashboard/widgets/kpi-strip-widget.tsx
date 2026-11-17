@@ -533,7 +533,10 @@ export function KpiStripWidget({
   const parsed = parseKpiStripConfig(config);
   const kpiData = asKpiData(data);
   return (
-    <div className="grid grid-cols-2 gap-2 sm:gap-3 @lg:grid-cols-3 @2xl:grid-cols-4">
+    <div
+      data-tour="kpi"
+      className="grid grid-cols-2 gap-2 sm:gap-3 @lg:grid-cols-3 @2xl:grid-cols-4"
+    >
       <KpiCards
         data={kpiData}
         kpis={parsed.kpis}

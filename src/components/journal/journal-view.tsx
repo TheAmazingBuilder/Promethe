@@ -211,7 +211,11 @@ export function JournalView({ date }: { date?: string }) {
   const isToday = day === today;
 
   return (
-    <section aria-labelledby="journal-title" className="mx-auto flex max-w-4xl flex-col gap-6">
+    <section
+      aria-labelledby="journal-title"
+      data-tour="journal"
+      className="mx-auto flex max-w-4xl flex-col gap-6"
+    >
       {/* Header + day navigation */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>

@@ -29,6 +29,7 @@ import { BrandMark } from "./brand";
 import { NavList } from "./nav-list";
 import { UserMenu } from "./user-menu";
 import { CommandMenu } from "./command-menu";
+import { TourProvider } from "@/components/tour/guided-tour";
 import { NotificationsBell } from "./notifications-bell";
 import { DeletionBanner } from "./deletion-banner";
 import { findNavItem } from "./nav";
@@ -100,7 +101,8 @@ export function AppShell({
   }, []);
 
   return (
-    <SidebarProvider defaultOpen={defaultSidebarOpen}>
+    <TourProvider>
+      <SidebarProvider defaultOpen={defaultSidebarOpen}>
       {/* ── Sidebar (black brand block + nav, collapses to an icon rail) ── */}
       <Sidebar collapsible="icon" aria-label={t("sidebarLabel")}>
         <SidebarHeader className="border-b border-sidebar-border">
@@ -110,7 +112,7 @@ export function AppShell({
             </a>
           </div>
         </SidebarHeader>
-        <SidebarContent>
+        <SidebarContent data-tour="nav">
           <NavList activeView={activeNavView} />
         </SidebarContent>
         <SidebarFooter className="border-t border-sidebar-border px-4 py-3">
@@ -234,6 +236,7 @@ export function AppShell({
       </SidebarInset>
 
       <CommandMenu open={commandOpen} onOpenChange={setCommandOpen} />
-    </SidebarProvider>
+      </SidebarProvider>
+    </TourProvider>
   );
 }

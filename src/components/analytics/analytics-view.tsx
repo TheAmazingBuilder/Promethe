@@ -19,6 +19,7 @@ import {
   DoorOpen,
   Gauge,
   Grid3x3,
+  FileText,
   Info,
   LineChart,
   ListChecks,
@@ -65,6 +66,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useA11yPrefs } from "@/components/a11y/a11y-provider";
 import { Money, Sensitive } from "@/components/privacy/money";
 import { useTradingLabels } from "@/components/trades/trade-bits";
+import { MonthlyReportDialog } from "@/components/reports/monthly-report-dialog";
 import { useSession } from "@/components/app/session-context";
 import { useI18n } from "@/i18n/i18n-provider";
 import { useAccounts, useAnalytics } from "@/hooks/use-trading";
@@ -280,6 +282,8 @@ export function AnalyticsView() {
   const { reducedMotionActive } = useA11yPrefs();
   const [period, setPeriod] = React.useState<AnalyticsPeriod>("30d");
   const [accountId, setAccountId] = React.useState<string>("all");
+  const [reportOpen, setReportOpen] = React.useState(false);
+  const tReports = useTranslations("reports");
 
   const { data: accountsData } = useAccounts();
   const accounts = accountsData ?? [];
@@ -464,7 +468,7 @@ export function AnalyticsView() {
   const showAllCta = !hasAnyTrade && period !== "all";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour="analytics">
       {/* ── Header + filters ── */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
@@ -531,6 +535,14 @@ export function AnalyticsView() {
           >
             <Grid3x3 className="h-4 w-4" aria-hidden="true" />
             {tRoot("nav.heatmaps")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setReportOpen(true)}
+          >
+            <FileText className="h-4 w-4" aria-hidden="true" />
+            {tReports("button")}
           </Button>
         </div>
       </div>
@@ -1030,6 +1042,7 @@ export function AnalyticsView() {
           </p>
         </div>
       )}
+      <MonthlyReportDialog open={reportOpen} onOpenChange={setReportOpen} />
     </div>
   );
 }

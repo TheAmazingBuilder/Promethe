@@ -856,7 +856,7 @@ export function DashboardsView() {
         <CardDescription>{tDash("emptyDesc")}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <Button onClick={() => navigate("#/trades/quick")}>
+        <Button onClick={() => navigate("#/trades/quick")} data-tour="quick-trade-alt">
           <Zap className="h-4 w-4" aria-hidden="true" />
           {tDash("emptyCtaQuick")}
         </Button>

@@ -53,6 +53,7 @@ export function QuickFab() {
     <Button
       size="icon"
       aria-label={t("fab")}
+      data-tour="quick-trade"
       // bottom-20 keeps the FAB clear of the sticky footer text on short pages.
       className="fixed bottom-20 right-5 z-40 h-14 w-14 rounded-full shadow-lg lg:hidden"
       onClick={() => navigate("#/trades/quick")}

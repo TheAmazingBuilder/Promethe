@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { PwaRegister } from "@/components/app/pwa-register";
 import { ThemeProvider } from "@/components/theme-provider";
 import { I18nProvider } from "@/i18n/i18n-provider";
 import { DEFAULT_LOCALE, type AppLocale } from "@/i18n/config";
@@ -21,9 +22,15 @@ export const metadata: Metadata = {
   title: "Promethe - Journal de trading & analytique",
   description:
     "Promethe, a multi-user trading journal for XAUUSD and Forex: pips, lots, contract sizes, strategy statistics and insights.",
+  manifest: "/manifest.webmanifest",
   icons: {
     icon: "/favicon.ico",
     apple: "/icon-180.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Promethe",
+    statusBarStyle: "black-translucent",
   },
   keywords: [
     "trading journal",
@@ -32,6 +39,10 @@ export const metadata: Metadata = {
     "analytics",
     "backtesting",
   ],
+};
+
+export const viewport: Viewport = {
+  themeColor: "#10b981",
 };
 
 /** App locale - English only since the language switcher was removed. */
@@ -63,6 +74,7 @@ export default async function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
+            <PwaRegister />
             {children}
             <Toaster />
           </ThemeProvider>

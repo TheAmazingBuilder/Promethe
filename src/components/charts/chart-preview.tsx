@@ -1002,7 +1002,7 @@ export function ChartTable({
 }) {
   if (result.chartType === "scatter") {
     return (
-      <div className="max-h-96 overflow-y-auto rounded-md border">
+      <div className="max-h-96 overflow-auto rounded-md border">
         <table className="w-full text-xs">
           <thead className="sticky top-0 bg-muted">
             <tr>
@@ -1026,7 +1026,7 @@ export function ChartTable({
   }
   if (result.chartType === "histogram") {
     return (
-      <div className="max-h-96 overflow-y-auto rounded-md border">
+      <div className="max-h-96 overflow-auto rounded-md border">
         <table className="w-full text-xs">
           <thead className="sticky top-0 bg-muted">
             <tr>
@@ -1050,7 +1050,7 @@ export function ChartTable({
   }
   const seriesKeys = result.series.map((s) => s.key);
   return (
-    <div className="max-h-96 overflow-y-auto rounded-md border">
+    <div className="max-h-96 overflow-auto rounded-md border">
       <table className="w-full text-xs">
         <thead className="sticky top-0 bg-muted">
           <tr>

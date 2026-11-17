@@ -384,7 +384,7 @@ export function TradesView() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-tour="trades">
       {/* ── Header ── */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>

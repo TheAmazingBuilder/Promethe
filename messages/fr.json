@@ -1008,6 +1008,52 @@
       "cost": "Coût des erreurs calculé (phase 4)"
     }
   },
+  "tour": {
+    "prev": "Précédent",
+    "next": "Suivant",
+    "finish": "Terminer",
+    "skip": "Passer la visite",
+    "restart": "Revoir la visite guidée",
+    "restartDesc": "Les 6 étapes pour prendre en main Promethe.",
+    "steps": {
+      "nav": {
+        "title": "Ta navigation",
+        "body": "Toutes les sections sont ici : suivi, analyse, processus, données et réglages."
+      },
+      "kpi": {
+        "title": "Tes chiffres clés",
+        "body": "P&L net, taux de réussite, facteur de profit : l'essentiel en un coup d'œil."
+      },
+      "quickTrade": {
+        "title": "Trade rapide",
+        "body": "Ce bouton journalise un trade en 20 secondes, sans passer par le formulaire complet."
+      },
+      "trades": {
+        "title": "Tes trades",
+        "body": "Tous tes trades ici, avec le formulaire complet, les exécutions et les filtres."
+      },
+      "analytics": {
+        "title": "Tes analyses",
+        "body": "Courbe d'équité, répartitions et ce qui marche vraiment dans ton trading."
+      },
+      "journal": {
+        "title": "Ton journal",
+        "body": "Humeur, discipline et leçons : c'est ici que le progrès se construit, jour après jour."
+      }
+    }
+  },
+  "reports": {
+    "title": "Rapport mensuel",
+    "description": "Export PDF du mois : chiffres clés, courbe d'équité et répartitions par instrument et par stratégie.",
+    "month": "Mois",
+    "generate": "Générer le PDF",
+    "generating": "Génération...",
+    "cancel": "Annuler",
+    "button": "Rapport PDF",
+    "empty": "Aucun trade clôturé ce mois-ci.",
+    "failed": "La génération du rapport a échoué.",
+    "generatedOn": "Généré le"
+  },
   "tools": {
     "title": "Outils de calcul",
     "subtitle": "Les mêmes moteurs décimaux que le formulaire de trade - aucune approximation flottante, conventions par instrument.",
@@ -1329,7 +1375,8 @@
       "step2": "Copiez-le dans MQL5/Experts (ou MQL4/Experts) puis compilez-le dans MetaEditor (F7).",
       "step3": "Dans MetaTrader : Outils → Options → Expert Advisors → « Autoriser WebRequest pour les URL listées » et ajoutez {url}",
       "step4": "Attachez l'EA à UN seul graphique et collez l'URL + le token dans ses paramètres. Le statut passera à « Actif » au premier heartbeat.",
-      "done": "Terminé"
+      "done": "Terminé",
+      "step5": "Pour importer aussi tes trades déjà clôturés, mets SendHistoryFromDate sur la date de début voulue dans les paramètres de l'EA (0 = pas d'historique)."
     },
     "mappings": {
       "title": "Symboles broker",
@@ -1352,7 +1399,18 @@
       "remove": "Supprimer",
       "empty": "Aucun mapping - ajoutez le magic number utilisé par votre robot."
     },
-    "actionsLabel": "Actions"
+    "actionsLabel": "Actions",
+    "activity": {
+      "title": "Activité récente",
+      "description": "Derniers événements reçus de tes terminaux MetaTrader.",
+      "empty": "Aucun événement reçu pour le moment. Attache l'EA à un graphique et attends le premier heartbeat.",
+      "status": {
+        "processed": "Traité",
+        "duplicate": "Doublon",
+        "rejected": "Rejeté",
+        "failed": "Échec"
+      }
+    }
   },
   "importWizard": {
     "title": "Importer un historique",

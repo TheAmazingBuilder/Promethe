@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
-import { Accessibility, Check, ChevronRight, EyeOff, LayoutDashboard, LayoutTemplate, Link2, Monitor, Moon, Palette, Plug, ShieldCheck, Sun, Trash2, Users } from "lucide-react";
+import { Accessibility, Check, ChevronRight, Compass, EyeOff, LayoutDashboard, LayoutTemplate, Link2, Monitor, Moon, Palette, Plug, ShieldCheck, Sun, Trash2, Users } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSession } from "@/components/app/session-context";
+import { useTour } from "@/components/tour/guided-tour";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
@@ -207,6 +208,8 @@ export function SettingsView() {
   const { theme, setTheme } = useTheme();
   const t = useTranslations("settings");
   const tNav = useTranslations("nav");
+  const tTour = useTranslations("tour");
+  const { start: startTour } = useTour();
   const { toast } = useToast();
   const [mounted, setMounted] = React.useState(false);
 
@@ -425,6 +428,21 @@ export function SettingsView() {
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       </a>
+
+      <button
+        type="button"
+        onClick={startTour}
+        className="flex w-full items-center justify-between gap-4 rounded-lg border p-4 text-left transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <Compass className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{tTour("restart")}</p>
+            <p className="text-xs text-muted-foreground">{tTour("restartDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </button>
     </div>
   );
 }

@@ -1008,6 +1008,52 @@
       "cost": "Cost of mistakes computed (phase 4)"
     }
   },
+  "tour": {
+    "prev": "Back",
+    "next": "Next",
+    "finish": "Done",
+    "skip": "Skip the tour",
+    "restart": "Replay the guided tour",
+    "restartDesc": "The 6 steps to get around Promethe.",
+    "steps": {
+      "nav": {
+        "title": "Your navigation",
+        "body": "Every section lives here: tracking, analysis, process, data and settings."
+      },
+      "kpi": {
+        "title": "Your key numbers",
+        "body": "Net P&L, win rate, profit factor: the essentials at a glance."
+      },
+      "quickTrade": {
+        "title": "Quick trade",
+        "body": "This button logs a trade in 20 seconds, without the full form."
+      },
+      "trades": {
+        "title": "Your trades",
+        "body": "All your trades here, with the full form, executions and filters."
+      },
+      "analytics": {
+        "title": "Your analytics",
+        "body": "Equity curve, breakdowns and what actually works in your trading."
+      },
+      "journal": {
+        "title": "Your journal",
+        "body": "Mood, discipline and lessons: this is where progress is built, day after day."
+      }
+    }
+  },
+  "reports": {
+    "title": "Monthly report",
+    "description": "Monthly PDF export: key numbers, equity curve and breakdowns by symbol and strategy.",
+    "month": "Month",
+    "generate": "Generate PDF",
+    "generating": "Generating...",
+    "cancel": "Cancel",
+    "button": "PDF report",
+    "empty": "No closed trades this month.",
+    "failed": "Report generation failed.",
+    "generatedOn": "Generated on"
+  },
   "tools": {
     "title": "Calculation tools",
     "subtitle": "The same decimal engines as the upcoming trade form - no floating-point approximation, per-instrument conventions.",
@@ -1329,7 +1375,8 @@
       "step2": "Copy it into MQL5/Experts (or MQL4/Experts) then compile it in MetaEditor (F7).",
       "step3": "In MetaTrader: Tools → Options → Expert Advisors → “Allow WebRequest for listed URL” and add {url}",
       "step4": "Attach the EA to ONE chart and paste the URL + token into its inputs. The status turns “Active” on the first heartbeat.",
-      "done": "Done"
+      "done": "Done",
+      "step5": "To also import already-closed trades, set SendHistoryFromDate to the start date you want in the EA inputs (0 = no history)."
     },
     "mappings": {
       "title": "Broker symbols",
@@ -1352,7 +1399,18 @@
       "remove": "Remove",
       "empty": "No mapping - add the magic number your robot uses."
     },
-    "actionsLabel": "Actions"
+    "actionsLabel": "Actions",
+    "activity": {
+      "title": "Recent activity",
+      "description": "Latest events received from your MetaTrader terminals.",
+      "empty": "No events received yet. Attach the EA to a chart and wait for the first heartbeat.",
+      "status": {
+        "processed": "Processed",
+        "duplicate": "Duplicate",
+        "rejected": "Rejected",
+        "failed": "Failed"
+      }
+    }
   },
   "importWizard": {
     "title": "Import a history file",
