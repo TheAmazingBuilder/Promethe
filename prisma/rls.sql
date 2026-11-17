@@ -1196,3 +1196,41 @@ DROP POLICY IF EXISTS gaia_versions_delete ON gaia_versions;
 CREATE POLICY gaia_versions_delete ON gaia_versions
   FOR DELETE
   USING (user_id = auth.uid());
+
+-- v2.5 Module 5 — trading tools (scoping : user_id)
+-- ═════════════════════════════════════════════════════════════════════════════
+ALTER TABLE tool_scenarios ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tool_scenarios_owner ON tool_scenarios;
+CREATE POLICY tool_scenarios_owner ON tool_scenarios
+  FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+ALTER TABLE fx_rates ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS fx_rates_owner ON fx_rates;
+CREATE POLICY fx_rates_owner ON fx_rates
+  FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+ALTER TABLE market_session_settings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS market_session_settings_owner ON market_session_settings;
+CREATE POLICY market_session_settings_owner ON market_session_settings
+  FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+ALTER TABLE exit_plans ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS exit_plans_owner ON exit_plans;
+CREATE POLICY exit_plans_owner ON exit_plans
+  FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+ALTER TABLE exposure_alert_settings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS exposure_alert_settings_owner ON exposure_alert_settings;
+CREATE POLICY exposure_alert_settings_owner ON exposure_alert_settings
+  FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+

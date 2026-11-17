@@ -437,6 +437,8 @@ export interface AccountInputBody {
   maxDailyLossPercent?: string | null;
   maxTotalDrawdownPercent?: string | null;
   profitTarget?: string | null;
+  marginCallLevel?: string | null;
+  stopOutLevel?: string | null;
   drawdownType?: "STATIC" | "TRAILING" | null;
   startDate?: string | null;
 }

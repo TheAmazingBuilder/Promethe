@@ -15,6 +15,16 @@ import {
   type TradePreview,
 } from "@/lib/trading/calculate";
 import { detectSessionSafe } from "@/lib/trading/session";
+import { resolveConversionRate, type FxRateInput } from "@/lib/tools/fx";
+import {
+  detectSessionFromSettings,
+  type MarketSessionSettingEntry,
+} from "@/lib/tools/market-hours";
+import {
+  getDetectionSettings,
+  listFxRateInputs,
+  resolveExitPlan,
+} from "@/server/tools";
 import type { InstrumentSpec } from "@/lib/trading/types";
 import type {
   CloseTradeInput,
@@ -166,6 +176,7 @@ function baseItem(t: TradeRow): TradeListItemDTO {
     followedPlan: t.followedPlan,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
+    currentPrice: s(t.currentPrice),
     tags: t.tags
       .filter((tt) => tt.tag.deletedAt == null)
       .map((tt) => tt.tag)
@@ -216,6 +227,8 @@ export function toTradeDetail(t: TradeDetailRow): TradeDetailDTO {
     checklistResults: checklist,
     accountCurrency: t.account.currency,
     accountInitialBalance: t.account.initialBalance.toString(),
+    exitPlanId: t.exitPlanId,
+    currentPrice: s(t.currentPrice),
     screenshots: t.screenshots.map((sc) => ({
       id: sc.id,
       label: sc.label,
@@ -330,6 +343,10 @@ export interface ComputeParams {
   manualNetPnl: string | null | undefined;
   entryTime: Date;
   balanceAtEntry: Decimal | null;
+  /** Stored FxRate table: default conversion when no manual rate is set. */
+  fxRates?: FxRateInput[] | null;
+  /** User DETECTION settings (null = legacy UTC defaults). */
+  detectionSettings?: MarketSessionSettingEntry[] | null;
 }
 
 export function computeDerived(p: ComputeParams) {
@@ -349,6 +366,7 @@ export function computeDerived(p: ComputeParams) {
       swap: p.swap,
       fees: p.fees,
       quoteToAccountRate: p.quoteToAccountRate ?? null,
+      fxRates: p.fxRates ?? null,
       accountCurrency: p.account.currency,
       stopLoss: p.stopLoss,
       takeProfit: p.takeProfit,
@@ -370,10 +388,20 @@ export function computeDerived(p: ComputeParams) {
         : toD(p.stopLoss).minus(toD(p.entryPrice))
       : null;
   if (stopDist && stopDist.gt(0)) {
+    // Manual rate wins; otherwise the stored FxRate table converts the
+    // risk into account currency (1 when no rate is known).
+    const effectiveRate = p.quoteToAccountRate
+      ? toD(p.quoteToAccountRate)
+      : (resolveConversionRate(
+          p.instrument.quoteCurrency ?? "",
+          p.account.currency,
+          p.fxRates ?? [],
+          null
+        ) ?? toD(1));
     riskAmount = stopDist
       .times(toD(p.lots))
       .times(toD(p.instrument.contractSize))
-      .times(p.quoteToAccountRate ? toD(p.quoteToAccountRate) : toD(1));
+      .times(effectiveRate);
     if (p.balanceAtEntry && p.balanceAtEntry.gt(0)) {
       // 6 dp: SQLite NUMERIC affinity truncates longer decimals to float64
       // on storage (e.g. "0.21983288304231124") — round to keep values exact.
@@ -411,7 +439,9 @@ export function computeDerived(p: ComputeParams) {
   const units = toD(p.lots).times(toD(p.instrument.contractSize));
 
   return {
-    session: detectSessionSafe(p.entryTime),
+    session: p.detectionSettings
+      ? detectSessionFromSettings(p.entryTime, p.detectionSettings)
+      : detectSessionSafe(p.entryTime),
     pips: preview ? preview.pips : null,
     points: preview ? preview.points : null,
     grossPnl: preview ? preview.grossPnl : null,
@@ -643,6 +673,15 @@ export async function createTrade(
     validate: !input.isDraft,
   });
 
+  // v2.5 Module 5 — stored FX rates feed calcPnL (manual rate still wins)
+  // and the user's DETECTION settings drive the session. Both are
+  // best-effort: missing tools tables fall back to no rates / defaults.
+  const [fxRates, detectionSettings] = await Promise.all([
+    listFxRateInputs(userId),
+    getDetectionSettings(userId),
+  ]);
+  await resolveExitPlan(userId, input.exitPlanId ?? null);
+
   const derived = computeDerived({
     instrument,
     account,
@@ -656,6 +695,8 @@ export async function createTrade(
     swap: input.swap,
     fees: input.fees,
     quoteToAccountRate: input.quoteToAccountRate ?? null,
+    fxRates,
+    detectionSettings,
     pnlSource: input.pnlSource,
     manualNetPnl: input.manualNetPnl ?? null,
     entryTime,
@@ -683,6 +724,8 @@ export async function createTrade(
         exitPrice: closed ? (input.exitPrice ?? null) : null,
         stopLoss: input.stopLoss ?? null,
         takeProfit: input.takeProfit ?? null,
+        exitPlanId: input.exitPlanId ?? null,
+        currentPrice: input.currentPrice ?? null,
         initialStopLoss: input.stopLoss ?? null,
         initialTakeProfit: input.takeProfit ?? null,
         mfePrice: input.mfePrice ?? null,
@@ -863,6 +906,15 @@ export async function updateTrade(
     ? await resolveInstrument(userId, patch.instrumentId)
     : current.instrument;
 
+  // v2.5 Module 5 — stored FX rates + DETECTION settings (best-effort).
+  const [fxRates, detectionSettings] = await Promise.all([
+    listFxRateInputs(userId),
+    getDetectionSettings(userId),
+  ]);
+  if (patch.exitPlanId !== undefined) {
+    await resolveExitPlan(userId, patch.exitPlanId);
+  }
+
   const derived = computeDerived({
     instrument,
     account,
@@ -876,6 +928,8 @@ export async function updateTrade(
     swap,
     fees,
     quoteToAccountRate: patch.quoteToAccountRate ?? null,
+    fxRates,
+    detectionSettings,
     pnlSource,
     manualNetPnl,
     entryTime,
@@ -909,6 +963,10 @@ export async function updateTrade(
         exitPrice: closed ? exitPrice : null,
         stopLoss,
         takeProfit,
+        exitPlanId:
+          patch.exitPlanId !== undefined ? patch.exitPlanId : undefined,
+        currentPrice:
+          patch.currentPrice !== undefined ? patch.currentPrice : undefined,
         initialStopLoss,
         initialTakeProfit,
         mfePrice: patch.mfePrice !== undefined ? patch.mfePrice : undefined,
@@ -1002,6 +1060,11 @@ export async function closeTrade(
     ? new Decimal(current.accountBalanceAtEntry)
     : await computeBalanceAt(userId, current.accountId, current.entryTime);
 
+  const [fxRates, detectionSettings] = await Promise.all([
+    listFxRateInputs(userId),
+    getDetectionSettings(userId),
+  ]);
+
   const derived = computeDerived({
     instrument: current.instrument,
     account: current.account,
@@ -1015,6 +1078,8 @@ export async function closeTrade(
     swap,
     fees,
     quoteToAccountRate: input.quoteToAccountRate ?? null,
+    fxRates,
+    detectionSettings,
     pnlSource,
     manualNetPnl: input.manualNetPnl ?? null,
     entryTime: current.entryTime,

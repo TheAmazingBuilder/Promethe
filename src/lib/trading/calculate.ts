@@ -14,6 +14,10 @@
  */
 import { D0, D1, D100, Decimal, floorToStep, toD, type DecimalInput } from "./dec";
 import type { Direction, InstrumentSpec, ResultType } from "./types";
+import {
+  resolveConversionRate,
+  type FxRateInput,
+} from "@/lib/tools/fx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Price differences, pips & points
@@ -142,6 +146,12 @@ export interface PnlInput {
   fees?: DecimalInput;
   /** quote → account conversion rate. null/1 = no conversion. */
   quoteToAccountRate?: DecimalInput | null;
+  /**
+   * Stored FxRate table (v2.5 Module 5). Used as the default conversion
+   * when no explicit `quoteToAccountRate` is given: the manual rate
+   * always wins when it is set.
+   */
+  fxRates?: FxRateInput[] | null;
   /** Account currency code, used for the isEstimate flag. */
   accountCurrency?: string | null;
 }
@@ -170,7 +180,15 @@ export function calcPnL(input: PnlInput): PnlResult {
   const units = toD(input.lots).times(toD(instrument.contractSize));
   const grossQuote = diff.times(units);
 
-  const rate = input.quoteToAccountRate == null ? null : toD(input.quoteToAccountRate);
+  const rate =
+    input.quoteToAccountRate == null
+      ? resolveConversionRate(
+          instrument.quoteCurrency ?? "",
+          input.accountCurrency ?? "",
+          input.fxRates ?? [],
+          null
+        )
+      : toD(input.quoteToAccountRate);
   const converted = rate !== null && !rate.eq(D1);
   const gross = rate ? grossQuote.times(rate) : grossQuote;
 

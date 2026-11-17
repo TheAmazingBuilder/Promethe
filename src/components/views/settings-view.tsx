@@ -28,6 +28,7 @@ import { apiFetch, ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import { COMMON_CURRENCIES } from "@/lib/trading/types";
 import { cn } from "@/lib/utils";
+import { MarketSessionsSettingsCard } from "@/components/tools/market-sessions-settings";
 
 const THEME_OPTIONS = [
   { value: "light", labelKey: "themeLight", icon: Sun },
@@ -226,6 +227,8 @@ export function SettingsView() {
       </div>
 
       <ProfileEditorCard />
+
+      <MarketSessionsSettingsCard />
 
       <Card>
         <CardHeader>

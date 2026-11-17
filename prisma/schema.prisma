@@ -98,6 +98,13 @@ model User {
   changeLogs            ChangeLog[]
   batchEntryDrafts      BatchEntryDraft[]
 
+  // ── v2.5 Module 5 — trading tools ──
+  toolScenarios        ToolScenario[]
+  fxRates              FxRate[]
+  marketSessionSettings MarketSessionSetting[]
+  exitPlans            ExitPlan[]
+  exposureAlertSetting ExposureAlertSetting?
+
   // ── v2.5 Module 8 — privacy, accessibility & time zones ──
   displayPreference     UserDisplayPreference?
 
@@ -161,6 +168,9 @@ model Account {
   currency                String    @default("USD")
   initialBalance          Decimal   @default(0) @map("initial_balance")
   leverage                Int?
+  /// v2.5 Module 5 — margin simulator defaults (null = 100 / 50).
+  marginCallLevel         Decimal? @map("margin_call_level")
+  stopOutLevel            Decimal? @map("stop_out_level")
   isActive                Boolean   @default(true) @map("is_active")
   // ── PROP firm challenge fields (addendum §11.5) ──
   maxDailyLossPercent     Decimal?  @map("max_daily_loss_percent")
@@ -390,6 +400,8 @@ model Trade {
   initialTakeProfit Decimal?  @map("initial_take_profit")
   mfePrice          Decimal?  @map("mfe_price") // max favorable excursion (price extreme)
   maePrice          Decimal?  @map("mae_price") // max adverse excursion (price extreme)
+  /// v2.5 Module 5 — current price override, edited in the exposure dashboard.
+  currentPrice      Decimal?  @map("current_price")
 
   // Size & risk
   lots                  Decimal  @default(0)
@@ -490,6 +502,10 @@ model Trade {
 
   // ── v3 ──
   modifications TradeModification[]
+
+  // ── v2.5 Module 5 — partial exit plan (nullable, plan deleted -> SetNull).
+  exitPlanId String? @map("exit_plan_id")
+  exitPlan   ExitPlan? @relation(fields: [exitPlanId], references: [id], onDelete: SetNull)
 
   @@unique([accountId, externalId])
   @@index([accountId, positionId])
@@ -1300,6 +1316,116 @@ model TradeModification {
   @@index([userId])
   @@index([tradeId, time])
   @@map("trade_modifications")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v2.5 Module 5 — trading tools
+// (Client persistence is localStorage until `prisma generate` runs on the
+// user's PC; the shapes in src/lib/tools/store.ts mirror these models.)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Saved calculator scenario (multi-TP sizing, margin what-if, ...).
+model ToolScenario {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  name      String
+  /// MULTI_TP | MARGIN
+  kind      String
+  /// JSON: calculator inputs (payload shape depends on kind).
+  payloadJson String @map("payload_json")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind])
+  @@map("tool_scenarios")
+}
+
+/// Manual / CSV-imported FX rate: 1 base = rate quote.
+model FxRate {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  baseCurrency  String   @map("base_currency")
+  quoteCurrency String   @map("quote_currency")
+  rate          Decimal
+  /// MANUAL | CSV
+  source        String   @default("MANUAL")
+  /// Date the rate applies to.
+  rateDate      DateTime @map("rate_date")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, baseCurrency, quoteCurrency])
+  @@index([userId])
+  @@map("fx_rates")
+}
+
+/// Market session setting: DISPLAY (IANA clock sessions) or DETECTION
+/// (session ranges used by detectSession, legacy UTC ranges by default).
+model MarketSessionSetting {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  name       String
+  /// DISPLAY | DETECTION
+  kind       String   @default("DISPLAY")
+  /// IANA zone (e.g. Europe/London) or "UTC".
+  timezone   String   @default("UTC")
+  /// Local "HH:MM" open / close in the session timezone.
+  openTime   String   @map("open_time")
+  closeTime  String   @map("close_time")
+  /// JSON array of ISO weekdays 1 = Monday ... 7 = Sunday.
+  activeDays String   @default("[1,2,3,4,5]") @map("active_days")
+  isEnabled  Boolean  @default(true) @map("is_enabled")
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind])
+  @@map("market_session_settings")
+}
+
+/// Partial exit plan: tiers (% + price or R target), breakeven / trailing.
+model ExitPlan {
+  id                 String   @id @default(cuid())
+  userId             String   @map("user_id")
+  name               String
+  /// JSON: ExitPlanTier[] { pct, targetType: PRICE | R, target }.
+  tiersJson          String   @map("tiers_json")
+  /// Move SL to breakeven after this tier index (0-based), null = never.
+  breakevenAfterTier Int?     @map("breakeven_after_tier")
+  /// Start trailing after this tier index (0-based), null = never.
+  trailingAfterTier  Int?     @map("trailing_after_tier")
+  notes              String?
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trades Trade[]
+
+  @@index([userId])
+  @@map("exit_plans")
+}
+
+/// Exposure alert thresholds (one row per user).
+model ExposureAlertSetting {
+  id                            String   @id @default(cuid())
+  userId                        String   @unique @map("user_id")
+  enabled                       Boolean  @default(true)
+  /// Same currency, same direction, 2+ positions, above this % of balance.
+  duplicationThresholdPercent   Decimal  @default(2) @map("duplication_threshold_percent")
+  /// One currency above this % of balance (same direction) warns.
+  maxCurrencyExposurePercent    Decimal  @default(5) @map("max_currency_exposure_percent")
+  createdAt                     DateTime @default(now()) @map("created_at")
+  updatedAt                     DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("exposure_alert_settings")
 }
 
 /// Equity curve samples fed by EA heartbeats. Retention: 15-min granularity

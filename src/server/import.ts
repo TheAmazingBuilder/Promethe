@@ -16,7 +16,8 @@ import { db } from "@/lib/db";
 import { withDeleted } from "@/lib/trash/deleted-scope";
 import { refreshTradeSearchText } from "@/server/search-index";
 import { toD } from "@/lib/trading/dec";
-import { detectSession } from "@/lib/trading/session";
+import { detectSessionFromSettings } from "@/lib/tools/market-hours";
+import { getDetectionSettings } from "@/server/tools";
 import { naiveToUtc } from "@/lib/import/primitives";
 import { resolveInstrumentForSymbol, recomputeSyncedTrade } from "@/lib/sync/process";
 import { inferExitReason } from "@/lib/sync/normalize";
@@ -147,6 +148,10 @@ export async function importChunk(
   }
 
   const result: ChunkResult = { created: 0, updated: 0, duplicates: 0, manualSkipped: 0, restored: 0, errors: [] };
+
+  // v2.5 Module 5 — the user's DETECTION settings drive the session
+  // (legacy UTC defaults when none exist or the table is missing).
+  const detectionSettings = await getDetectionSettings(userId);
 
   // ── Cash rows (dedupe by externalId) ──
   for (const [index, raw] of cashRaw.entries()) {
@@ -309,7 +314,7 @@ export async function importChunk(
           brokerComment: row.comment ?? null,
           source: "FILE_IMPORT",
           needsDetails: true,
-          session: detectSession(openTime),
+          session: detectSessionFromSettings(openTime, detectionSettings),
           reviewStatus: "NOT_REVIEWED",
           preTradeAnalysis: "",
           postTradeReview: "",

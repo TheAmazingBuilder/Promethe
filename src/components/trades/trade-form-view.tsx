@@ -86,6 +86,7 @@ import {
   type TradeTemplateData,
 } from "@/lib/trading/template";
 import { previewTrade, type TradePreview } from "@/lib/trading/calculate";
+import { PreTradeExposureCheck } from "@/components/tools/pre-trade-exposure-check";
 import { toD } from "@/lib/trading/dec";
 import {
   EMOTIONS,
@@ -1573,6 +1574,16 @@ export function TradeFormView({
               <CardTitle className="text-base">{t("previewTitle")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              <PreTradeExposureCheck
+                symbol={spec?.symbol ?? ""}
+                direction={form.direction}
+                lots={form.lots}
+                entryPrice={form.entryPrice}
+                stopLoss={form.stopLoss}
+                accountBalance={accountBalance ?? ""}
+                accountCurrency={accountCurrency}
+                excludeTradeId={mode === "edit" ? tradeId ?? null : null}
+              />
               {!preview ? (
                 <p className="text-sm text-muted-foreground">{t("previewEmpty")}</p>
               ) : (

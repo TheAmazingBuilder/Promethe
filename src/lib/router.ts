@@ -148,6 +148,33 @@ export function parseHash(hash: string): AppRoute {
     return withQuery({ view: "analytics" });
   }
 
+  // ── v2.5 Module 5 — tools sub-pages (#/outils/marge, #/outils/exposition…)
+  // Deep links map to the tools view with the matching tab (?tab=...).
+  if (view === "tools" && second) {
+    const TOOL_TAB_BY_SEGMENT: Record<string, string> = {
+      "multi-tp": "multi-tp",
+      marge: "margin",
+      margin: "margin",
+      exposition: "exposure",
+      exposure: "exposure",
+      sessions: "market-hours",
+      "market-hours": "market-hours",
+      convertisseur: "converter",
+      converter: "converter",
+      sorties: "exit-plans",
+      "exit-plans": "exit-plans",
+      taille: "sizing",
+      sizing: "sizing",
+      pnl: "pnl",
+      instruments: "instruments",
+    };
+    const tab = TOOL_TAB_BY_SEGMENT[second];
+    if (tab) {
+      return { view: "tools", query: { ...query, tab } };
+    }
+    return withQuery({ view: "tools" });
+  }
+
   // ── Settings subtree (#/reglages/templates, #/reglages/broker-sync…) ──
   if (view === "settings" && second === "templates") {
     return withQuery({ view: "templates" });

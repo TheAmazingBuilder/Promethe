@@ -68,6 +68,9 @@ export const tradeInputSchema = z.object({
   riskAmount: optionalDecimal,
   plannedRiskPercent: optionalDecimal,
   quoteToAccountRate: optionalDecimal,
+  // v2.5 Module 5 — attached exit plan + current price override.
+  exitPlanId: z.string().max(64).nullish(),
+  currentPrice: optionalDecimal,
 
   commission: signedDecimalString.default("0"),
   swap: signedDecimalString.default("0"),
@@ -246,6 +249,9 @@ export const accountInputSchema = z.object({
   maxDailyLossPercent: optionalDecimal,
   maxTotalDrawdownPercent: optionalDecimal,
   profitTarget: optionalDecimal,
+  // v2.5 Module 5 — margin call / stop-out levels in % (null = broker default).
+  marginCallLevel: optionalDecimal,
+  stopOutLevel: optionalDecimal,
   drawdownType: z.enum(["STATIC", "TRAILING"]).nullish(),
   startDate: isoDate.nullish(),
 });

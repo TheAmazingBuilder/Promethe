@@ -246,6 +246,8 @@ export function toAccountDTO(a: AccountRow): AccountDTO {
     profitTarget: a.profitTarget?.toString() ?? null,
     drawdownType: a.drawdownType,
     startDate: a.startDate?.toISOString() ?? null,
+    marginCallLevel: a.marginCallLevel?.toString() ?? null,
+    stopOutLevel: a.stopOutLevel?.toString() ?? null,
     createdAt: a.createdAt.toISOString(),
   };
 }
@@ -277,6 +279,8 @@ export async function createAccount(
       profitTarget: input.profitTarget ?? null,
       drawdownType: input.drawdownType ?? null,
       startDate: input.startDate ? new Date(input.startDate) : null,
+      marginCallLevel: input.marginCallLevel ?? null,
+      stopOutLevel: input.stopOutLevel ?? null,
     },
   });
   return toAccountDTO(created);
@@ -307,6 +311,10 @@ export async function updateAccount(
           : undefined,
       profitTarget: patch.profitTarget !== undefined ? patch.profitTarget : undefined,
       drawdownType: patch.drawdownType !== undefined ? patch.drawdownType : undefined,
+      marginCallLevel:
+        patch.marginCallLevel !== undefined ? patch.marginCallLevel : undefined,
+      stopOutLevel:
+        patch.stopOutLevel !== undefined ? patch.stopOutLevel : undefined,
       startDate:
         patch.startDate !== undefined
           ? patch.startDate

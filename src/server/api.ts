@@ -15,6 +15,10 @@ import { UserValidationError } from "@/server/users";
 import { InstrumentValidationError } from "@/server/instruments";
 import { DashboardValidationError } from "@/server/dashboards";
 import { AccessDeniedError } from "@/lib/access";
+import {
+  ToolsTablesMissingError,
+  ToolsValidationError,
+} from "@/server/tools";
 
 type CodedError = {
   code: string;
@@ -76,6 +80,13 @@ const CODE_MESSAGES: Record<string, string> = {
   METRIC_NOT_FOUND: "Custom metric not found.",
   TOO_MANY_METRICS: "Custom metric limit reached (max 50).",
   FORMULA_INVALID: "Invalid formula expression.",
+  // v2.5 Module 5 — trading tools
+  TOOLS_TABLES_MISSING:
+    "Les tables des outils n'existent pas encore en base. Lancez `npx prisma db push` sur votre PC puis rechargez la page.",
+  FX_RATE_SAME_CURRENCY: "La devise de base et la devise de cotation doivent différer.",
+  FX_RATE_DUPLICATE: "Un taux existe déjà pour cette paire.",
+  EXIT_PLAN_NOT_FOUND: "Plan de sortie introuvable.",
+  EXIT_PLAN_INVALID: "Les paliers doivent totaliser 100 % avec des cibles positives.",
 };
 
 function isCoded(error: unknown): error is CodedError {
@@ -89,6 +100,8 @@ function isCoded(error: unknown): error is CodedError {
     error instanceof UserValidationError ||
     error instanceof InstrumentValidationError ||
     error instanceof DashboardValidationError ||
+    error instanceof ToolsValidationError ||
+    error instanceof ToolsTablesMissingError ||
     error instanceof AccessDeniedError
   );
 }

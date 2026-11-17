@@ -116,6 +116,32 @@ export type {
 
 export { zodFieldErrors };
 
+// v2.5 Module 5 — trading tools
+export {
+  toolScenarioInputSchema,
+  toolScenarioPatchSchema,
+  fxRateInputSchema,
+  fxRatePatchSchema,
+  fxRatesImportSchema,
+  marketSessionSettingInputSchema,
+  marketSessionSettingPatchSchema,
+  exitPlanInputSchema,
+  exitPlanPatchSchema,
+  exposureSettingsSchema,
+} from "./tools";
+export type {
+  ToolScenarioInput,
+  ToolScenarioPatch,
+  FxRateInput,
+  FxRatePatch,
+  FxRatesImportInput,
+  MarketSessionSettingInput,
+  MarketSessionSettingPatch,
+  ExitPlanInput,
+  ExitPlanPatch,
+  ExposureSettingsInput,
+} from "./tools";
+
 // v2.5 Module 8 — privacy, accessibility & time zones
 export {
   displayPreferencesSchema,

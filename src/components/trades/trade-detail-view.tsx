@@ -97,6 +97,8 @@ import {
   newBlockId,
   useCreateGaiaNote,
 } from "@/components/gaia/gaia-shared";
+import { ExitPlanCompare } from "@/components/tools/exit-plan-compare";
+
 import {
   DirectionBadge,
   DraftBadge,
@@ -810,6 +812,16 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
               </Table>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* ── Exit plan vs real (v2.5 Module 5) ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{tRoot("tools.exitPlanCompareTitle")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ExitPlanCompare trade={trade} />
         </CardContent>
       </Card>
 

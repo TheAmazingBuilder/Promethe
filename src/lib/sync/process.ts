@@ -32,7 +32,7 @@ import {
   type ExecutionLike,
 } from "@/lib/trading/executions";
 import { classifyResult, priceDiff, stopDistance, toPips, toPoints } from "@/lib/trading/calculate";
-import { detectSession } from "@/lib/trading/session";
+import { detectSessionForUser } from "@/server/tools";
 import { findPreset } from "@/lib/trading/instruments";
 import type { InstrumentSpec } from "@/lib/trading/types";
 import { notifyInApp } from "@/server/notifications";
@@ -458,7 +458,7 @@ async function handlePositionOpened(
       brokerComment: event.comment ?? null,
       source: "EA_SYNC",
       needsDetails: true,
-      session: detectSession(entryTime),
+      session: await detectSessionForUser(connection.userId, entryTime),
       reviewStatus: "NOT_REVIEWED",
       preTradeAnalysis: "",
       postTradeReview: "",
@@ -768,7 +768,7 @@ async function applyPositionClosed(
         brokerComment: p.comment ?? null,
         source: "EA_SYNC",
         needsDetails: true,
-        session: detectSession(entryTime),
+        session: await detectSessionForUser(connection.userId, entryTime),
         reviewStatus: "NOT_REVIEWED",
         preTradeAnalysis: "",
         postTradeReview: "",

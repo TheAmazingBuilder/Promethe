@@ -73,6 +73,8 @@ export interface TradeListItemDTO {
   tags: TagDTO[];
   /** User custom-field values, keyed by definition key (null when none). */
   customFields: Record<string, unknown> | null;
+  /** Current price override (exposure dashboard), null = entry price. */
+  currentPrice: string | null;
 }
 
 export interface ScreenshotDTO {
@@ -120,6 +122,10 @@ export interface TradeDetailDTO extends TradeListItemDTO {
   checklistResults: Record<string, boolean> | null;
   accountCurrency: string;
   accountInitialBalance: string;
+  /** Attached partial exit plan (null = none). */
+  exitPlanId: string | null;
+  /** Current price override (exposure dashboard), null = entry price. */
+  currentPrice: string | null;
   screenshots: ScreenshotDTO[];
   executions: ExecutionDTO[];
   hasReview: boolean;
@@ -202,7 +208,64 @@ export interface AccountDTO {
   profitTarget: string | null;
   drawdownType: string | null;
   startDate: string | null;
+  /** Margin call level in % (null = broker default 100). */
+  marginCallLevel: string | null;
+  /** Stop-out level in % (null = broker default 50). */
+  stopOutLevel: string | null;
   createdAt: string;
+}
+
+// ── v2.5 Module 5 — trading tools ────────────────────────────────────────────
+
+export interface ToolScenarioDTO {
+  id: string;
+  name: string;
+  /** MULTI_TP | MARGIN */
+  kind: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface FxRateDTO {
+  id: string;
+  base: string;
+  quote: string;
+  /** 1 base = rate quote (exact decimal as a string). */
+  rate: string;
+  source: string;
+  /** ISO date the rate applies to. */
+  date: string;
+  createdAt: string;
+}
+
+export interface MarketSessionSettingDTO {
+  id: string;
+  name: string;
+  kind: string;
+  timezone: string;
+  openTime: string;
+  closeTime: string;
+  /** ISO weekdays 1 = Monday ... 7 = Sunday. */
+  activeDays: number[];
+  enabled: boolean;
+  sortOrder: number;
+}
+
+export interface ExitPlanDTO {
+  id: string;
+  name: string;
+  tiers: import("@/lib/tools/types").ExitPlanTier[];
+  breakevenAfterTier: number | null;
+  trailingAfterTier: number | null;
+  notes: string;
+  createdAt: string;
+}
+
+export interface ExposureAlertSettingDTO {
+  id: string;
+  enabled: boolean;
+  duplicationThresholdPercent: string;
+  maxCurrencyExposurePercent: string;
 }
 
 export interface SavedViewDTO {
