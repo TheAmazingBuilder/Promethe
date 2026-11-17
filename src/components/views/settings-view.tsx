@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
-import { Check, ChevronRight, LayoutDashboard, Monitor, Moon, Palette, ShieldCheck, Sun } from "lucide-react";
+import { Accessibility, Check, ChevronRight, EyeOff, LayoutDashboard, LayoutTemplate, Link2, Monitor, Moon, Palette, Plug, ShieldCheck, Sun, Trash2, Users } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -206,6 +206,7 @@ export function SettingsView() {
   const { session } = useSession();
   const { theme, setTheme } = useTheme();
   const t = useTranslations("settings");
+  const tNav = useTranslations("nav");
   const { toast } = useToast();
   const [mounted, setMounted] = React.useState(false);
 
@@ -322,6 +323,104 @@ export function SettingsView() {
           <div>
             <p className="text-sm font-medium">{t("dashboardsLink")}</p>
             <p className="text-xs text-muted-foreground">{t("dashboardsLinkDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </a>
+
+      <a
+        href="#/reglages/templates"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <LayoutTemplate className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{tNav("templates")}</p>
+            <p className="text-xs text-muted-foreground">{tNav("templatesDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </a>
+
+      <a
+        href="#/reglages/broker-sync"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <Plug className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{tNav("brokerSync")}</p>
+            <p className="text-xs text-muted-foreground">{tNav("brokerSyncDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </a>
+
+      <a
+        href="#/reglages/partage"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <Link2 className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{tNav("sharing")}</p>
+            <p className="text-xs text-muted-foreground">{tNav("sharingDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </a>
+
+      <a
+        href="#/reglages/mentors"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <Users className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{tNav("mentors")}</p>
+            <p className="text-xs text-muted-foreground">{tNav("mentorsDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </a>
+
+      <a
+        href="#/reglages/privacy"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <EyeOff className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{tNav("privacy")}</p>
+            <p className="text-xs text-muted-foreground">{tNav("privacyDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </a>
+
+      <a
+        href="#/reglages/accessibility"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <Accessibility className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{tNav("accessibility")}</p>
+            <p className="text-xs text-muted-foreground">{tNav("accessibilityDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </a>
+
+      <a
+        href="#/trash"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <Trash2 className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{tNav("trash")}</p>
+            <p className="text-xs text-muted-foreground">{tNav("trashDesc")}</p>
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />

@@ -18,6 +18,7 @@ import {
   Compass,
   DoorOpen,
   Gauge,
+  Grid3x3,
   Info,
   LineChart,
   ListChecks,
@@ -522,6 +523,14 @@ export function AnalyticsView() {
           >
             <LineChart className="h-4 w-4" aria-hidden="true" />
             {t("openChartBuilder")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate("#/analytics/heatmaps")}
+          >
+            <Grid3x3 className="h-4 w-4" aria-hidden="true" />
+            {tRoot("nav.heatmaps")}
           </Button>
         </div>
       </div>

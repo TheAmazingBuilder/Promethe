@@ -47,6 +47,7 @@
       "analysis": "Analysis",
       "process": "Process",
       "reference": "Reference",
+      "data": "Data",
       "app": "Application"
     },
     "dashboard": "Dashboard",
