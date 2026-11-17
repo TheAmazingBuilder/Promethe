@@ -2,9 +2,10 @@
  * Gaïa : workspace de notes, accès données côté serveur (userId-scoped).
  *
  * Réplique du service Nofy d'Euforia, adaptée aux tables Prisma de Promethe
- * (Note / NoteFolder / NoteTag / NoteTemplate / NoteVersion). Toutes les
- * méthodes commencent par le seed paresseux, sauf listRefs qui ne le fait
- * que pour le kind NOTE. L'accès inter-utilisateur est rendu comme un 404.
+ * (Note / NoteFolder / NoteTag / NoteTemplate / NoteVersion). Aucun contenu
+ * de démonstration : le workspace démarre vide, l'utilisateur crée ses
+ * propres dossiers, tags et notes. L'accès inter-utilisateur est rendu
+ * comme un 404.
  */
 import { NextResponse } from "next/server";
 import type { Note, NoteFolder, NoteTag, NoteTemplate, NoteVersion } from "@prisma/client";
@@ -27,8 +28,7 @@ import {
   type GaiaRefKind,
 } from "@/lib/gaia/content";
 import { builtInTemplates, findBuiltInTemplate, type GaiaBuiltInTemplate } from "@/lib/gaia/templates";
-import { ensureGaiaSeed } from "@/lib/gaia/seed";
-import { listRefs as listRefsRaw, resolveNoteRefs, GAIA_REF_KINDS, type GaiaRefHit } from "@/lib/gaia/refs";
+import { listRefs as listRefsRaw, resolveNoteRefs, type GaiaRefHit } from "@/lib/gaia/refs";
 import {
   shouldSnapshot,
   sortVersionsNewestFirst,
@@ -419,7 +419,6 @@ export async function listNotes(
   userId: string,
   query: GaiaListQuery,
 ): Promise<{ notes: GaiaNoteRow[]; total: number }> {
-  await ensureGaiaSeed(userId);
   const [folders, tags, all] = await Promise.all([
     loadFolders(userId),
     loadTags(userId),
@@ -492,7 +491,6 @@ export async function getNote(
   userId: string,
   noteId: string,
 ): Promise<GaiaNoteResponse> {
-  await ensureGaiaSeed(userId);
   const note = await findActiveNote(userId, noteId);
   if (!note) throw NOTE_NOT_FOUND();
   const now = new Date();
@@ -510,7 +508,6 @@ export async function createNote(
   userId: string,
   input: unknown,
 ): Promise<GaiaNoteResponse> {
-  await ensureGaiaSeed(userId);
   const parsed = parseOrThrow(noteCreateInputSchema, input);
 
   let folderId: string | null = parsed.folderId ?? null;
@@ -562,7 +559,6 @@ export async function updateNote(
   noteId: string,
   input: unknown,
 ): Promise<GaiaNoteResponse> {
-  await ensureGaiaSeed(userId);
   const parsed = parseOrThrow(noteUpdateInputSchema, input);
   const note = await findActiveNote(userId, noteId);
   if (!note) throw NOTE_NOT_FOUND();
@@ -620,7 +616,6 @@ export async function updateNote(
 }
 
 export async function trashNote(userId: string, noteId: string): Promise<{ ok: true }> {
-  await ensureGaiaSeed(userId);
   const note = await findActiveNote(userId, noteId);
   if (!note) throw NOTE_NOT_FOUND();
   await db.note.update({ where: { id: note.id }, data: { deletedAt: new Date() } });
@@ -628,7 +623,6 @@ export async function trashNote(userId: string, noteId: string): Promise<{ ok: t
 }
 
 export async function restoreNote(userId: string, noteId: string): Promise<{ ok: true }> {
-  await ensureGaiaSeed(userId);
   const note = await findNoteAnyState(userId, noteId);
   if (!note || note.deletedAt === null) throw NOTE_NOT_FOUND();
   await db.note.update({
@@ -639,7 +633,6 @@ export async function restoreNote(userId: string, noteId: string): Promise<{ ok:
 }
 
 export async function purgeNote(userId: string, noteId: string): Promise<{ ok: true }> {
-  await ensureGaiaSeed(userId);
   const note = await findNoteAnyState(userId, noteId);
   if (!note || note.deletedAt === null) throw NOTE_NOT_FOUND();
   await db.noteVersion.deleteMany({ where: { userId, noteId: note.id } });
@@ -652,7 +645,6 @@ export async function duplicateNote(
   noteId: string,
   input: unknown,
 ): Promise<GaiaNoteResponse> {
-  await ensureGaiaSeed(userId);
   const parsed = parseOrThrow(noteDuplicateInputSchema, input ?? {});
   const source = await findActiveNote(userId, noteId);
   if (!source) throw NOTE_NOT_FOUND();
@@ -686,7 +678,6 @@ export async function listVersions(
   userId: string,
   noteId: string,
 ): Promise<{ versions: GaiaVersionSummary[] }> {
-  await ensureGaiaSeed(userId);
   const versions = await versionsOf(userId, noteId);
   return {
     versions: versions.map((v) => ({
@@ -703,7 +694,6 @@ export async function getVersion(
   noteId: string,
   versionId: string,
 ): Promise<{ version: GaiaVersionDetail }> {
-  await ensureGaiaSeed(userId);
   const version = await db.noteVersion.findFirst({
     where: { userId, noteId, id: versionId },
   });
@@ -723,7 +713,6 @@ export async function restoreVersion(
   noteId: string,
   versionId: string,
 ): Promise<GaiaNoteResponse> {
-  await ensureGaiaSeed(userId);
   const note = await findActiveNote(userId, noteId);
   if (!note) throw NOTE_NOT_FOUND();
   const version = await db.noteVersion.findFirst({
@@ -746,7 +735,6 @@ export async function restoreVersion(
 /* ── Dossiers ────────────────────────────────────────────────────────── */
 
 export async function listFolders(userId: string): Promise<{ folders: GaiaFolderDTO[] }> {
-  await ensureGaiaSeed(userId);
   const [folders, notes] = await Promise.all([
     loadFolders(userId),
     db.note.findMany({ where: { userId, deletedAt: null } }),
@@ -760,7 +748,6 @@ export async function listFolders(userId: string): Promise<{ folders: GaiaFolder
 }
 
 export async function createFolder(userId: string, input: unknown): Promise<GaiaFolderDTO> {
-  await ensureGaiaSeed(userId);
   const parsed = parseOrThrow(folderInputSchema, input);
   const name = parsed.name.trim();
   if (name === "") {
@@ -781,7 +768,6 @@ export async function updateFolder(
   folderId: string,
   input: unknown,
 ): Promise<GaiaFolderDTO> {
-  await ensureGaiaSeed(userId);
   const parsed = parseOrThrow(folderInputSchema, input);
   const name = parsed.name.trim();
   if (name === "") {
@@ -805,7 +791,6 @@ export async function updateFolder(
 }
 
 export async function deleteFolder(userId: string, folderId: string): Promise<{ ok: true }> {
-  await ensureGaiaSeed(userId);
   const folder = await db.noteFolder.findFirst({ where: { userId, id: folderId } });
   if (!folder) throw FOLDER_NOT_FOUND();
   await db.note.updateMany({
@@ -819,7 +804,6 @@ export async function deleteFolder(userId: string, folderId: string): Promise<{ 
 /* ── Tags ────────────────────────────────────────────────────────────── */
 
 export async function listTags(userId: string): Promise<{ tags: GaiaTagDTO[] }> {
-  await ensureGaiaSeed(userId);
   const [tags, notes] = await Promise.all([
     loadTags(userId),
     db.note.findMany({ where: { userId, deletedAt: null } }),
@@ -833,7 +817,6 @@ export async function listTags(userId: string): Promise<{ tags: GaiaTagDTO[] }> 
 }
 
 export async function createTag(userId: string, input: unknown): Promise<GaiaTagDTO> {
-  await ensureGaiaSeed(userId);
   const parsed = parseOrThrow(tagInputSchema, input);
   const name = normalizeTagName(parsed.name);
   if (name === "") {
@@ -891,7 +874,6 @@ async function findUserTemplate(
 }
 
 export async function listTemplates(userId: string): Promise<{ templates: GaiaTemplateDTO[] }> {
-  await ensureGaiaSeed(userId);
   const userTemplates = await db.noteTemplate.findMany({
     where: { userId },
     orderBy: { createdAt: "asc" },
@@ -908,7 +890,6 @@ export async function createTemplate(
   userId: string,
   input: unknown,
 ): Promise<GaiaTemplateDTO> {
-  await ensureGaiaSeed(userId);
   const parsed = parseOrThrow(templateCreateInputSchema, input);
   let blocks: GaiaBlock[];
   if (parsed.blocks !== undefined) {
@@ -938,7 +919,6 @@ export async function instantiateTemplate(
   userId: string,
   input: unknown,
 ): Promise<GaiaNoteResponse> {
-  await ensureGaiaSeed(userId);
   const parsed = parseOrThrow(templateInstantiateInputSchema, input);
   const template =
     findBuiltInTemplate(parsed.templateId) ??
@@ -963,7 +943,6 @@ function startOfWeekMondayUTC(now: Date): Date {
 }
 
 export async function getOverview(userId: string): Promise<GaiaOverviewResponse> {
-  await ensureGaiaSeed(userId);
   const [folders, tags, allNotes] = await Promise.all([
     loadFolders(userId),
     loadTags(userId),
@@ -1053,7 +1032,6 @@ export async function searchNotes(
   userId: string,
   q: string,
 ): Promise<{ results: (GaiaNoteRow & { snippet: string })[]; total: number }> {
-  await ensureGaiaSeed(userId);
   const query = q.trim().toLowerCase();
   if (query === "") return { results: [], total: 0 };
   const [folders, tags, notes] = await Promise.all([
@@ -1090,13 +1068,6 @@ export async function listGaiaRefs(
   q: string,
   kind?: string,
 ): Promise<{ refs: GaiaRefHit[] }> {
-  if (
-    kind === "NOTE" ||
-    kind === undefined ||
-    !(GAIA_REF_KINDS as readonly string[]).includes(kind)
-  ) {
-    await ensureGaiaSeed(userId);
-  }
   const refs = await listRefsRaw(userId, q, kind);
   return { refs };
 }

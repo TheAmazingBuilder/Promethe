@@ -3,7 +3,7 @@
  *
  * Ils ne sont jamais persistés en base et ne sont jamais modifiables par
  * l'utilisateur. Une seule source de vérité : cette fonction sert à la fois
- * la liste des modèles, l'instanciation et le seed.
+ * la liste des modèles et l'instanciation.
  * Ids stables en slug (tpl-...), createdAt fixe.
  */
 import { newBlockId, type GaiaBlock } from "./content";
