@@ -5,6 +5,8 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { refreshStrategySearchText } from "@/server/search-index";
+import { createVersion } from "@/server/strategy-versions";
+import { touchesDefinition } from "@/lib/validations/playbook";
 import type {
   AccountDTO,
   SavedViewDTO,
@@ -32,6 +34,33 @@ function parseStringArray(json: string | null): string[] {
   }
 }
 
+function parseJsonObject<T>(json: string | null | undefined): T | null {
+  if (!json) return null;
+  try {
+    const parsed: unknown = JSON.parse(json);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as T)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseJsonArray<T>(json: string | null | undefined): T[] {
+  if (!json) return [];
+  try {
+    const parsed: unknown = JSON.parse(json);
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+const jsonOrNull = (v: unknown): string | null =>
+  v === undefined || v === null ? null : JSON.stringify(v);
+const jsonArrayOrNull = (v: unknown[] | undefined): string | null =>
+  v === undefined ? null : JSON.stringify(v);
+
 type StrategyRow = Prisma.StrategyGetPayload<{
   include: { checklistItems: { orderBy: { order: "asc" } } };
 }>;
@@ -44,6 +73,8 @@ export function toStrategyDTO(s: StrategyRow): StrategyDTO {
     color: s.color,
     status: s.status,
     timeframes: parseStringArray(s.timeframesJson),
+    instruments: parseStringArray(s.instrumentsJson),
+    sessions: parseStringArray(s.sessionsJson),
     defaultRiskPercent: s.defaultRiskPercent?.toString() ?? null,
     targetRR: s.targetRR?.toString() ?? null,
     entryRules: s.entryRules,
@@ -57,6 +88,18 @@ export function toStrategyDTO(s: StrategyRow): StrategyDTO {
       isRequired: c.isRequired,
     })),
     createdAt: s.createdAt.toISOString(),
+    version: s.version,
+    grade: s.grade,
+    detailedDescription: s.detailedDescription,
+    tags: parseStringArray(s.tagsJson),
+    marketProfile: parseJsonObject(s.marketProfileJson),
+    marketConditions: parseStringArray(s.marketConditionsJson),
+    entryConditions: parseJsonArray(s.entryConditionsJson),
+    confirmations: parseJsonArray(s.confirmationsJson),
+    invalidations: parseStringArray(s.invalidationsJson),
+    risk: parseJsonObject(s.riskJson),
+    tradeManagement: parseJsonArray(s.tradeManagementJson),
+    exitPlan: parseJsonArray(s.exitPlanJson),
   };
 }
 
@@ -82,11 +125,24 @@ export async function createStrategy(
       color: input.color,
       status: input.status,
       timeframesJson: JSON.stringify(input.timeframes ?? []),
+      instrumentsJson: jsonArrayOrNull(input.instruments),
+      sessionsJson: jsonArrayOrNull(input.sessions),
       defaultRiskPercent: input.defaultRiskPercent ?? null,
       targetRR: input.targetRR ?? null,
       entryRules: input.entryRules ?? null,
       exitRules: input.exitRules ?? null,
       riskRules: input.riskRules ?? null,
+      grade: input.grade ?? null,
+      detailedDescription: input.detailedDescription ?? null,
+      tagsJson: jsonArrayOrNull(input.tags),
+      marketProfileJson: jsonOrNull(input.marketProfile),
+      marketConditionsJson: jsonArrayOrNull(input.marketConditions),
+      entryConditionsJson: jsonArrayOrNull(input.entryConditions),
+      confirmationsJson: jsonArrayOrNull(input.confirmations),
+      invalidationsJson: jsonArrayOrNull(input.invalidations),
+      riskJson: jsonOrNull(input.risk),
+      tradeManagementJson: jsonArrayOrNull(input.tradeManagement),
+      exitPlanJson: jsonArrayOrNull(input.exitPlan),
       ...(input.checklistItems != null
         ? {
             checklistItems: {
@@ -115,12 +171,24 @@ export async function updateStrategy(
   const existing = await db.strategy.findFirst({ where: { id, userId } });
   if (!existing) return null;
 
+  // Playbook (Euforia §17) — a PATCH touching one of the 13 definition
+  // fields freezes the CURRENT definition into an AUTO snapshot BEFORE the
+  // mutation, then bumps Strategy.version. Presentation fields (name,
+  // status, grade, color, tags) and the checklist mutate in place.
+  const definitionTouched = touchesDefinition(
+    patch as Record<string, unknown>,
+  );
+  if (definitionTouched) {
+    await createVersion(userId, existing.id, "Edited in the Playbook", "AUTO");
+  }
+
   // Checklist replace-all (v1 phase 5): delete + recreate inside the same
   // transaction as the strategy update. Omitted on PATCH → untouched.
   const [updated] = await db.$transaction([
     db.strategy.update({
       where: { id: existing.id },
       data: {
+        version: definitionTouched ? existing.version + 1 : undefined,
         name: patch.name ?? undefined,
         description: patch.description !== undefined ? patch.description : undefined,
         color: patch.color ?? undefined,
@@ -129,12 +197,57 @@ export async function updateStrategy(
           patch.timeframes !== undefined
             ? JSON.stringify(patch.timeframes)
             : undefined,
+        instrumentsJson:
+          patch.instruments !== undefined
+            ? JSON.stringify(patch.instruments)
+            : undefined,
+        sessionsJson:
+          patch.sessions !== undefined
+            ? JSON.stringify(patch.sessions)
+            : undefined,
         defaultRiskPercent:
           patch.defaultRiskPercent !== undefined ? patch.defaultRiskPercent : undefined,
         targetRR: patch.targetRR !== undefined ? patch.targetRR : undefined,
         entryRules: patch.entryRules !== undefined ? patch.entryRules : undefined,
         exitRules: patch.exitRules !== undefined ? patch.exitRules : undefined,
         riskRules: patch.riskRules !== undefined ? patch.riskRules : undefined,
+        grade: patch.grade !== undefined ? patch.grade : undefined,
+        detailedDescription:
+          patch.detailedDescription !== undefined
+            ? patch.detailedDescription
+            : undefined,
+        tagsJson:
+          patch.tags !== undefined ? JSON.stringify(patch.tags) : undefined,
+        marketProfileJson:
+          patch.marketProfile !== undefined
+            ? jsonOrNull(patch.marketProfile)
+            : undefined,
+        marketConditionsJson:
+          patch.marketConditions !== undefined
+            ? JSON.stringify(patch.marketConditions)
+            : undefined,
+        entryConditionsJson:
+          patch.entryConditions !== undefined
+            ? JSON.stringify(patch.entryConditions)
+            : undefined,
+        confirmationsJson:
+          patch.confirmations !== undefined
+            ? JSON.stringify(patch.confirmations)
+            : undefined,
+        invalidationsJson:
+          patch.invalidations !== undefined
+            ? JSON.stringify(patch.invalidations)
+            : undefined,
+        riskJson:
+          patch.risk !== undefined ? jsonOrNull(patch.risk) : undefined,
+        tradeManagementJson:
+          patch.tradeManagement !== undefined
+            ? JSON.stringify(patch.tradeManagement)
+            : undefined,
+        exitPlanJson:
+          patch.exitPlan !== undefined
+            ? JSON.stringify(patch.exitPlan)
+            : undefined,
       },
     }),
     ...(patch.checklistItems != null

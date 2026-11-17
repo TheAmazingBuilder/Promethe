@@ -99,7 +99,7 @@ type TradeDetailRow = Omit<
 > & {
   modifications?: TradeFullRow["modifications"];
   eventLinks?: TradeFullRow["eventLinks"];
-  review: { id: string } | null;
+  review: { id: string; playbookMatch: string | null } | null;
 };
 
 /** Shared include for every TradeDetailDTO mapper call site. */
@@ -110,7 +110,7 @@ const DETAIL_INCLUDE = {
   tags: { include: { tag: true } },
   screenshots: { orderBy: { createdAt: "asc" } },
   executions: { orderBy: { time: "asc" } },
-  review: { select: { id: true } },
+  review: { select: { id: true, playbookMatch: true } },
   // v2.5 M2 — price chart overlay sources
   modifications: { orderBy: { time: "asc" } },
   eventLinks: { include: { event: true } },
@@ -156,6 +156,8 @@ function baseItem(t: TradeRow): TradeListItemDTO {
     timeframe: t.timeframe,
     session: t.session,
     setupType: t.setupType,
+    setupId: t.setupId,
+    strategyVersion: t.strategyVersion,
     entryTime: t.entryTime.toISOString(),
     exitTime: t.exitTime?.toISOString() ?? null,
     entryPrice: t.entryPrice.toString(),
@@ -229,6 +231,7 @@ export function toTradeDetail(t: TradeDetailRow): TradeDetailDTO {
     accountCurrency: t.account.currency,
     accountInitialBalance: t.account.initialBalance.toString(),
     exitPlanId: t.exitPlanId,
+    playbookMatch: t.review?.playbookMatch ?? null,
     currentPrice: s(t.currentPrice),
     screenshots: t.screenshots.map((sc) => ({
       id: sc.id,
@@ -287,6 +290,21 @@ async function resolveStrategy(userId: string, strategyId: string | null | undef
   const strategy = await db.strategy.findFirst({ where: { id: strategyId, userId } });
   if (!strategy) throw new TradeValidationError("STRATEGY_NOT_FOUND", 422);
   return strategy;
+}
+
+/** Playbook setup, owned by the user and attached to the given strategy. */
+async function resolveSetup(
+  userId: string,
+  setupId: string | null | undefined,
+  strategyId: string | null | undefined,
+) {
+  if (!setupId) return null;
+  const setup = await db.setup.findFirst({ where: { id: setupId, userId } });
+  if (!setup) throw new TradeValidationError("SETUP_NOT_FOUND", 422);
+  if (strategyId != null && setup.strategyId !== strategyId) {
+    throw new TradeValidationError("SETUP_STRATEGY_MISMATCH", 422);
+  }
+  return setup;
 }
 
 async function filterOwnTags(userId: string, tagIds: string[]): Promise<string[]> {
@@ -655,6 +673,14 @@ export async function createTrade(
   ]);
   const tagIds = await filterOwnTags(userId, input.tagIds);
 
+  // Playbook — the setup must belong to the chosen strategy, and the trade
+  // freezes the strategy's current definition version at entry.
+  const setup = await resolveSetup(
+    userId,
+    input.setupId ?? null,
+    input.strategyId ?? null,
+  );
+
   const entryTime = new Date(input.entryTime);
   if (Number.isNaN(entryTime.getTime())) {
     throw new TradeValidationError("INVALID_DATE");
@@ -710,6 +736,8 @@ export async function createTrade(
         userId,
         accountId: input.accountId,
         strategyId: strategy?.id ?? null,
+        setupId: setup?.id ?? null,
+        strategyVersion: strategy?.version ?? null,
         instrumentId: input.instrumentId,
         externalId: null,
         direction: input.direction,
@@ -877,8 +905,17 @@ export async function updateTrade(
   if (patch.accountId && patch.accountId !== current.accountId) {
     await resolveAccount(userId, patch.accountId);
   }
+  // Changing strategy re-freezes the definition version at the new
+  // strategy's current version; clearing it clears the frozen version.
+  let frozenVersion: number | null | undefined;
   if (patch.strategyId !== undefined) {
-    await resolveStrategy(userId, patch.strategyId ?? null);
+    const nextStrategy = await resolveStrategy(userId, patch.strategyId ?? null);
+    frozenVersion = nextStrategy?.version ?? null;
+  }
+  if (patch.setupId !== undefined) {
+    const effectiveStrategyId =
+      patch.strategyId !== undefined ? patch.strategyId : current.strategyId;
+    await resolveSetup(userId, patch.setupId ?? null, effectiveStrategyId);
   }
   if (patch.instrumentId && patch.instrumentId !== current.instrumentId) {
     await resolveInstrument(userId, patch.instrumentId);
@@ -949,6 +986,8 @@ export async function updateTrade(
       data: {
         accountId: patch.accountId ?? undefined,
         strategyId: patch.strategyId !== undefined ? patch.strategyId : undefined,
+        setupId: patch.setupId !== undefined ? patch.setupId : undefined,
+        strategyVersion: frozenVersion,
         instrumentId: patch.instrumentId ?? undefined,
         direction,
         orderType: patch.orderType ?? undefined,

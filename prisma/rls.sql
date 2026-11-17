@@ -1283,3 +1283,29 @@ CREATE POLICY outbound_messages_owner ON outbound_messages
   FOR ALL
   USING (user_id = auth.uid())
   WITH CHECK (user_id = auth.uid());
+
+-- ═════════════════════════════════════════════════════════════════════════════
+-- Phase 2 — Playbook (setups, playbook rules, checklist templates)
+-- ═════════════════════════════════════════════════════════════════════════════
+-- All three tables carry user_id directly (same pattern as strategies).
+
+ALTER TABLE setups ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS setups_owner ON setups;
+CREATE POLICY setups_owner ON setups
+  FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+ALTER TABLE playbook_rules ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS playbook_rules_owner ON playbook_rules;
+CREATE POLICY playbook_rules_owner ON playbook_rules
+  FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+ALTER TABLE checklist_templates ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS checklist_templates_owner ON checklist_templates;
+CREATE POLICY checklist_templates_owner ON checklist_templates
+  FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());

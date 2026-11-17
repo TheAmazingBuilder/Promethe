@@ -69,6 +69,7 @@ import {
   useUpdateTrade,
   type MutationResult,
 } from "@/hooks/use-trading";
+import { useSetups } from "@/hooks/use-playbook";
 import type { TemplateDTO } from "@/lib/trading/dto";
 import { useToast } from "@/hooks/use-toast";
 import { useCustomFields } from "@/hooks/use-productivity";
@@ -159,6 +160,8 @@ interface TradeFormState {
   timeframe: string;
   session: string; // "" | "auto" | TradingSession
   setupType: string;
+  /** Playbook setup id ("" = none, "custom" = free-text setupType). */
+  setupId: string;
   marketCondition: string;
   entryTime: string; // ISO ("" = cleared → now on submit)
   exitTime: string; // ISO ("" = null)
@@ -209,6 +212,7 @@ function emptyForm(): TradeFormState {
     timeframe: "",
     session: "auto",
     setupType: "",
+    setupId: "",
     marketCondition: "",
     entryTime: nowIso(),
     exitTime: "",
@@ -287,6 +291,7 @@ export function TradeFormView({
   tradeId?: string;
 }) {
   const t = useTranslations("trades.form");
+  const tp = useTranslations("playbook.tradeForm");
   const td = useTranslations("trades.detail");
   const tc = useTranslations("common");
   const tRoot = useTranslations();
@@ -339,6 +344,26 @@ export function TradeFormView({
   const { data: instruments } = useInstruments();
   const { data: strategies } = useStrategies();
   const { data: tags } = useTags();
+  // Playbook setups for the chosen strategy (selector; free text stays
+  // available as "Custom" for older trades and one-off labels).
+  const { data: allSetups } = useSetups(form.strategyId || null);
+  const strategySetups = React.useMemo(
+    () => (allSetups ?? []).filter((s) => s.strategyId === form.strategyId),
+    [allSetups, form.strategyId],
+  );
+
+  // Changing strategy drops a setup that belongs to another strategy.
+  React.useEffect(() => {
+    if (
+      form.setupId &&
+      form.setupId !== "custom" &&
+      !strategySetups.some((s) => s.id === form.setupId)
+    ) {
+      setForm((f) => ({ ...f, setupId: "" }));
+    }
+    // Only the strategy change matters here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.strategyId]);
   const { data: templates } = useTemplates();
 
   const createTrade = useCreateTrade();
@@ -361,6 +386,7 @@ export function TradeFormView({
       timeframe: trade.timeframe ?? "",
       session: trade.session ?? "auto",
       setupType: trade.setupType ?? "",
+      setupId: trade.setupId ?? (trade.setupType ? "custom" : ""),
       marketCondition: trade.marketCondition ?? "",
       entryTime: trade.entryTime,
       exitTime: trade.exitTime ?? "",
@@ -572,6 +598,8 @@ export function TradeFormView({
           ? (form.session as TradingSession)
           : null,
       setupType: nul(form.setupType),
+      setupId:
+        form.setupId && form.setupId !== "custom" ? form.setupId : null,
       marketCondition: (form.marketCondition || null) as MarketCondition | null,
       entryTime: form.entryTime || nowIso(),
       exitTime: nul(form.exitTime),
@@ -913,14 +941,36 @@ export function TradeFormView({
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label={t("setupType")} htmlFor="tf-setup-type">
-                <Input
-                  id="tf-setup-type"
-                  value={form.setupType}
-                  placeholder={t("setupPlaceholder")}
-                  maxLength={60}
-                  onChange={(e) => set("setupType", e.target.value)}
-                />
+              <Field label={tp("setup")} htmlFor="tf-setup">
+                <Select
+                  value={form.setupId || "none"}
+                  onValueChange={(v) => set("setupId", v === "none" ? "" : v)}
+                  disabled={!form.strategyId}
+                >
+                  <SelectTrigger id="tf-setup" className="w-full">
+                    <SelectValue placeholder={tp("setupHint")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{tp("setupNone")}</SelectItem>
+                    {strategySetups.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="custom">{tp("setupCustom")}</SelectItem>
+                  </SelectContent>
+                </Select>
+                {form.setupId === "custom" ? (
+                  <Input
+                    id="tf-setup-type"
+                    value={form.setupType}
+                    placeholder={t("setupPlaceholder")}
+                    maxLength={60}
+                    className="mt-2"
+                    onChange={(e) => set("setupType", e.target.value)}
+                  />
+                ) : null}
+                <p className="mt-1 text-[11px] text-muted-foreground">{tp("setupHint")}</p>
               </Field>
               <Field label={t("marketCondition")} htmlFor="tf-market-condition">
                 <Select

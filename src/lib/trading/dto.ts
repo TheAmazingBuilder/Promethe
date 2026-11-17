@@ -51,6 +51,10 @@ export interface TradeListItemDTO {
   timeframe: string | null;
   session: string | null;
   setupType: string | null;
+  /** Playbook setup used (null = free-text setupType only, or none). */
+  setupId: string | null;
+  /** Strategy definition version frozen at entry (null = before Playbook). */
+  strategyVersion: number | null;
   entryTime: string;
   exitTime: string | null;
   entryPrice: string;
@@ -126,6 +130,8 @@ export interface TradeDetailDTO extends TradeListItemDTO {
   accountInitialBalance: string;
   /** Attached partial exit plan (null = none). */
   exitPlanId: string | null;
+  /** Playbook match declared at review time (null = not declared). */
+  playbookMatch: string | null;
   /** Current price override (exposure dashboard), null = entry price. */
   currentPrice: string | null;
   screenshots: ScreenshotDTO[];
@@ -181,6 +187,8 @@ export interface StrategyDTO {
   color: string;
   status: string;
   timeframes: string[];
+  instruments: string[];
+  sessions: string[];
   defaultRiskPercent: string | null;
   targetRR: string | null;
   entryRules: string | null;
@@ -194,6 +202,210 @@ export interface StrategyDTO {
     isRequired: boolean;
   }>;
   createdAt: string;
+  /** Playbook (Phase 2) — definition revision, bumped on definition edits. */
+  version: number;
+  /** Presentation grade (A+ | A | B | C), no version bump. */
+  grade: string | null;
+  detailedDescription: string | null;
+  tags: string[];
+  marketProfile: PlaybookMarketProfile | null;
+  marketConditions: string[];
+  entryConditions: PlaybookEntryCondition[];
+  confirmations: PlaybookConfirmation[];
+  invalidations: string[];
+  risk: PlaybookRisk | null;
+  tradeManagement: PlaybookManagementRule[];
+  exitPlan: PlaybookExitRule[];
+  /** Attached setups (Playbook page; empty on the selector list). */
+  setups?: SetupDTO[];
+  /** Open-trade warning on delete: trades still attached. */
+  tradeCount?: number;
+}
+
+export interface PlaybookMarketProfile {
+  assetClass: string | null;
+  symbols: string[];
+  market: string | null;
+  accountLabel: string | null;
+  timeframe: string | null;
+  tradingStyle: string | null;
+  sessions: string[];
+  tradingDays: string[];
+}
+
+export interface PlaybookEntryCondition {
+  id: string;
+  category: string;
+  text: string;
+  group: string | null;
+}
+
+export interface PlaybookConfirmation {
+  id: string;
+  type: string;
+  note: string | null;
+}
+
+export interface PlaybookManagementRule {
+  id: string;
+  trigger: string;
+  action: string;
+  condition: string | null;
+}
+
+export interface PlaybookExitRule {
+  id: string;
+  type: string;
+  rule: string;
+}
+
+export interface PlaybookRisk {
+  defaultRiskPct: number | null;
+  maxRiskPct: number | null;
+  fixedRiskAmount: string | null;
+  stopMethodology: string | null;
+  targetMethodology: string | null;
+  minRR: number | null;
+  maxConcurrentTrades: number | null;
+  maxCorrelatedExposure: number | null;
+  dailyRiskRestriction: string | null;
+  newsRestriction: string | null;
+}
+
+export interface SetupDTO {
+  id: string;
+  strategyId: string;
+  strategyName: string | null;
+  name: string;
+  description: string | null;
+  status: string;
+  context: string | null;
+  marketCondition: string | null;
+  trigger: string | null;
+  confirmation: string | null;
+  entryModel: string | null;
+  stopModel: string | null;
+  targetModel: string | null;
+  invalidation: string;
+  notes: string | null;
+  tags: string[];
+  tradeCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlaybookRuleDTO {
+  id: string;
+  title: string;
+  detail: string;
+  category: string;
+  scope: string;
+  strategyId: string | null;
+  strategyName: string | null;
+  evaluatable: boolean;
+  evaluationHint: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChecklistTemplateDTO {
+  id: string;
+  strategyId: string | null;
+  strategyName: string | null;
+  name: string;
+  items: Array<{ label: string; required: boolean; category: string }>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type StrategyHealthFlag =
+  | "DRAFT"
+  | "ARCHIVED"
+  | "NO_RECENT_TRADES"
+  | "MISSING_RISK"
+  | "MISSING_ENTRY_CONDITIONS"
+  | "MISSING_INVALIDATION"
+  | "MISSING_CHECKLIST";
+
+export interface StrategyHealthDTO {
+  strategyId: string;
+  flags: StrategyHealthFlag[];
+}
+
+export interface PlaybookComplianceDTO {
+  windowSize: number;
+  reviewed: number;
+  matched: number;
+  partial: number;
+  offPlaybook: number;
+  unreviewed: number;
+  /** matched / reviewed x 100, null when nothing was reviewed. */
+  scorePct: number | null;
+}
+
+export interface PlaybookOverviewDTO {
+  counts: {
+    totalStrategies: number;
+    active: number;
+    draft: number;
+    paused: number;
+    archived: number;
+    testing: number;
+    totalSetups: number;
+    totalRules: number;
+    totalChecklists: number;
+  };
+  recentlyUpdated: Array<{
+    strategyId: string;
+    name: string;
+    status: string;
+    color: string;
+    version: number;
+    updatedAt: string;
+  }>;
+  recentlyUsed: Array<{
+    strategyId: string;
+    name: string;
+    color: string;
+    lastTradeAt: string | null;
+    tradesCount: number;
+  }>;
+  compliance: PlaybookComplianceDTO;
+  health: StrategyHealthDTO[];
+  /** Worst strategy by expectancy over the last 20 closed trades, when it is
+   *  negative with n >= 5 — the underperformance banner source. */
+  underperforming: {
+    strategyId: string;
+    name: string;
+    expectancyR20: string;
+    trades20: number;
+  } | null;
+}
+
+export interface SetupInsightDTO {
+  setupId: string;
+  strategyId: string;
+  setupName: string;
+  windowDays: 90;
+  trades: number;
+  wins: number;
+  winRatePct: number | null;
+  totalR: number | null;
+  expectancyR: number | null;
+  topInstrument: string | null;
+  topInstrumentId: string | null;
+  topSession: string | null;
+  smallSample: boolean;
+}
+
+export interface PlaybookTemplateCardDTO {
+  key: string;
+  name: string;
+  description: string;
+  tradingStyle: string;
+  marketConditions: string[];
+  tags: string[];
 }
 
 export interface AccountDTO {
@@ -530,6 +742,8 @@ export interface StrategyVersionDTO {
   id: string;
   version: number;
   note: string | null;
+  /** MANUAL = saved by hand; AUTO = frozen before a definition edit. */
+  origin: string;
   createdAt: string;
   /** Parsed snapshot: the strategy + checklist as saved. */
   snapshot: {
@@ -549,6 +763,8 @@ export interface StrategyVersionDTO {
       order: number;
       isRequired: boolean;
     }>;
+    /** Strategy definition version frozen in this snapshot. */
+    strategyVersion: number;
   };
 }
 
@@ -558,6 +774,14 @@ export interface StrategyStatsDTO {
   color: string;
   status: string;
   stats: TradeStatsDTO;
+  /** Cumulative R curve (oldest first, max 60 points) for the sparkline. */
+  sparklineR: number[];
+  /** Expectancy over the last 20 closed trades (null when none). */
+  expectancyR20: string | null;
+  /** Trades counted in expectancyR20. */
+  trades20: number;
+  /** Worst strategy with expectancyR20 < 0 and trades20 >= 5. */
+  underperforming: boolean;
 }
 
 export interface StrategyDetailPayload {

@@ -33,6 +33,9 @@ model User {
   cashTransactions CashTransaction[]
   instruments      Instrument[]
   strategies       Strategy[]
+  setups           Setup[]
+  playbookRules    PlaybookRule[]
+  checklistTemplates ChecklistTemplate[]
   trades           Trade[]
   tags             Tag[]
   screenshots      TradeScreenshot[]
@@ -288,7 +291,7 @@ model Strategy {
   name               String
   description        String?
   color              String   @default("#10b981")
-  status             String   @default("ACTIVE") // ACTIVE | TESTING | ARCHIVED
+  status             String   @default("ACTIVE") // ACTIVE | TESTING | DRAFT | PAUSED | ARCHIVED
   timeframesJson     String?  @map("timeframes_json") // JSON string[]
   instrumentsJson    String?  @map("instruments_json") // JSON string[] (symbols)
   sessionsJson       String?  @map("sessions_json") // JSON string[]
@@ -297,6 +300,22 @@ model Strategy {
   riskRules          String?  @map("risk_rules") // markdown
   defaultRiskPercent Decimal? @map("default_risk_percent")
   targetRR           Decimal? @map("target_rr")
+  // ── Playbook (Phase 2) — definition revision counter, bumped by the
+  // server whenever a PATCH touches one of the 13 definition fields
+  // (Euforia §17); presentation fields (name, status, grade, color, tags)
+  // mutate in place. Trades freeze this value at entry (Trade.strategyVersion).
+  version             Int      @default(1)
+  grade               String? // A+ | A | B | C (presentation, no version bump)
+  detailedDescription String?  @map("detailed_description") // markdown, ≤ 8000
+  tagsJson            String?  @map("tags_json") // JSON string[] (presentation)
+  marketProfileJson   String?  @map("market_profile_json") // JSON PlaybookMarketProfile
+  marketConditionsJson String? @map("market_conditions_json") // JSON MarketCondition[]
+  entryConditionsJson String?  @map("entry_conditions_json") // JSON PlaybookEntryCondition[] (AND, group = OR)
+  confirmationsJson   String?  @map("confirmations_json") // JSON PlaybookConfirmation[]
+  invalidationsJson   String?  @map("invalidations_json") // JSON string[]
+  riskJson             String? @map("risk_json") // JSON PlaybookRisk
+  tradeManagementJson String?  @map("trade_management_json") // JSON PlaybookManagementRule[]
+  exitPlanJson        String?  @map("exit_plan_json") // JSON PlaybookExitRule[]
   // ── v2.5 Module 4 — soft delete (trash) + global search ──
   deletedAt  DateTime? @map("deleted_at")
   deletedBy String?   @map("deleted_by") // userId snapshot (no FK — metadata only)
@@ -309,9 +328,89 @@ model Strategy {
   checklistItems StrategyChecklistItem[]
   versions       StrategyVersion[]
   templates      TradeTemplate[]
+  setups         Setup[]
+  playbookRules  PlaybookRule[]
+  checklistTemplates ChecklistTemplate[]
 
   @@index([userId])
   @@map("strategies")
+}
+
+/// Playbook setup (Phase 2) — one named way to trade a strategy. The
+/// invalidation is mandatory: it states when the setup is no longer valid.
+/// Trades point at a setup (Trade.setupId, SetNull on delete).
+model Setup {
+  id               String   @id @default(cuid())
+  userId           String   @map("user_id")
+  strategyId       String   @map("strategy_id")
+  name             String
+  description      String?
+  status           String   @default("ACTIVE") // ACTIVE | TESTING | DRAFT | PAUSED | ARCHIVED
+  context          String? // markdown — when this setup applies
+  marketCondition  String?  @map("market_condition") // TRENDING | RANGING | HIGH_VOLATILITY | LOW_VOLATILITY | EXPANSION | COMPRESSION | BULLISH_STRUCTURE | BEARISH_STRUCTURE | NEUTRAL_STRUCTURE
+  trigger          String?
+  confirmation     String?
+  entryModel       String?  @map("entry_model")
+  stopModel        String?  @map("stop_model")
+  targetModel      String?  @map("target_model")
+  /// When the setup is no longer valid — critical, never optional.
+  invalidation     String
+  notes            String? // markdown
+  tagsJson         String?  @map("tags_json") // JSON string[]
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  strategy Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  trades   Trade[]
+
+  @@index([userId])
+  @@index([strategyId])
+  @@map("setups")
+}
+
+/// Playbook operating rule (Phase 2, Euforia §24) — a written rule of the
+/// playbook, global or scoped to one strategy. `evaluatable` is declarative:
+/// true when the rule could be checked against market data or the calendar.
+model PlaybookRule {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  title          String
+  detail         String   @default("")
+  category       String // RISK | SESSION | NEWS | BEHAVIOR | EXECUTION | CUSTOM
+  scope          String   @default("GLOBAL") // GLOBAL | STRATEGY
+  strategyId     String?  @map("strategy_id")
+  evaluatable    Boolean  @default(false)
+  evaluationHint String?  @map("evaluation_hint")
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  strategy Strategy? @relation(fields: [strategyId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([strategyId])
+  @@map("playbook_rules")
+}
+
+/// Playbook checklist template (Phase 2, Euforia §16) — a reusable
+/// pre-trade checklist. strategyId null = global, usable with any strategy.
+model ChecklistTemplate {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  strategyId String?  @map("strategy_id")
+  name       String
+  itemsJson  String   @map("items_json") // JSON: [{ label, required, category? }] (max 24)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  strategy Strategy? @relation(fields: [strategyId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([strategyId])
+  @@map("checklist_templates")
 }
 
 model StrategyChecklistItem {
@@ -330,12 +429,16 @@ model StrategyChecklistItem {
 
 /// Immutable snapshot of a strategy at version N (addendum §11.3).
 /// Snapshots are JSON strings (SQLite parity), never mutated after creation.
+/// origin MANUAL = saved by hand from the versions dialog; AUTO = frozen by
+/// the server before a definition edit (Euforia §17). AUTO snapshots are
+/// never deletable.
 model StrategyVersion {
   id         String   @id @default(cuid())
   strategyId String   @map("strategy_id")
   version    Int
   snapshot   String // JSON: full strategy + checklist at save time
   note       String?
+  origin     String   @default("MANUAL") // MANUAL | AUTO
   createdAt  DateTime @default(now()) @map("created_at")
 
   strategy Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
@@ -397,6 +500,10 @@ model Trade {
   timeframe       String?
   session         String? // ASIAN | LONDON | NEW_YORK | OVERLAP | OTHER (from entry time UTC)
   setupType       String? @map("setup_type")
+  /// Playbook setup used (nullable; free-text setupType kept for back-compat).
+  setupId         String? @map("setup_id")
+  /// Strategy definition version frozen at entry (Strategy.version).
+  strategyVersion Int?    @map("strategy_version")
   marketCondition String? @map("market_condition") // TRENDING | RANGING | VOLATILE | NEWS | OTHER
 
   // Entry / exit (stored UTC, displayed in user timezone)
@@ -499,6 +606,7 @@ model Trade {
   user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   account        Account              @relation(fields: [accountId], references: [id], onDelete: Cascade)
   strategy       Strategy?            @relation(fields: [strategyId], references: [id], onDelete: SetNull)
+  setup          Setup?               @relation(fields: [setupId], references: [id], onDelete: SetNull)
   instrument     Instrument           @relation(fields: [instrumentId], references: [id])
   executions     TradeExecution[]
   tags           TradeTag[]
@@ -523,6 +631,7 @@ model Trade {
   @@index([accountId, positionId])
   @@index([userId, entryTime])
   @@index([userId, strategyId])
+  @@index([userId, setupId])
   @@index([userId, instrumentId])
   @@index([userId, status])
   @@index([userId, isDraft])
@@ -823,16 +932,21 @@ model TradeReview {
   id                    String   @id @default(cuid())
   tradeId               String   @unique @map("trade_id")
   userId                String   @map("user_id")
-  followedPlan          Boolean
+  /// Playbook match, declared at review time only — never derived from
+  /// followedPlan (Euforia §20). MATCHED | PARTIAL | OFF_PLAYBOOK.
+  playbookMatch         String?  @map("playbook_match")
+  /// Score fields are nullable: a review may exist only to declare the
+  /// playbook match, without scored answers (no invented scores).
+  followedPlan          Boolean?
   /// 1-5
-  planAdherenceScore    Int      @map("plan_adherence_score")
-  executionQuality      Int      @map("execution_quality")
-  entryQuality          Int      @map("entry_quality")
-  exitQuality           Int      @map("exit_quality")
-  riskManagementScore   Int      @map("risk_management_score")
-  emotionalControlScore Int      @map("emotional_control_score")
+  planAdherenceScore    Int?     @map("plan_adherence_score")
+  executionQuality      Int?     @map("execution_quality")
+  entryQuality          Int?     @map("entry_quality")
+  exitQuality           Int?     @map("exit_quality")
+  riskManagementScore   Int?     @map("risk_management_score")
+  emotionalControlScore Int?     @map("emotional_control_score")
   /// YES | NO | MAYBE
-  wouldTakeAgain        String   @map("would_take_again")
+  wouldTakeAgain        String?  @map("would_take_again")
   mainLesson            String?  @map("main_lesson")
   whatWentWell          String?  @map("what_went_well")
   whatToImprove         String?  @map("what_to_improve")

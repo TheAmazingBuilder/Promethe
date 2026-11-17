@@ -15,9 +15,9 @@ import type {
   CalendarPayload,
   JournalEntryDTO,
   StrategyDTO,
+  StrategyStatsDTO,
   StrategyVersionDTO,
   PropStatusPayload,
-  TradeStatsDTO,
 } from "@/lib/trading/dto";
 import type { JournalEntryInput } from "@/lib/validations/journal";
 
@@ -169,13 +169,7 @@ export function useStrategiesWithStats() {
     queryFn: async () =>
       (
         await apiFetch<{
-          stats: Array<{
-            key: string;
-            name: string;
-            color: string;
-            status: string;
-            stats: TradeStatsDTO;
-          }>;
+          stats: StrategyStatsDTO[];
         }>("/api/strategies?withStats=1")
       ).stats,
     staleTime: 60 * 1000,

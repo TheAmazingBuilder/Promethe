@@ -9,10 +9,9 @@
  * Mapping Promethe :
  * - TRADE : trade + instrument (symbole) ;
  * - STRATEGY : stratégie du playbook ;
- * - SETUP : le setupType est un champ de Trade, pas une entité. On résout
- *   vers les trades de ce setup (label = nom du setup) ; aucun trade avec
- *   ce setupType : null ;
- * - RULE : règle de trading (TradingRule) ;
+ * - SETUP : Playbook setup entity (Phase 2). Legacy fallback: a free-text
+ *   setupType still resolves to the trades that carry it ;
+ * - RULE : Playbook rule first, then the legacy numeric TradingRule ;
  * - LESSON : pas d'équivalent dans Promethe (pas d'Academy) : toujours null ;
  * - EVENT : pas d'équivalent branché (les événements économiques vivent
  *   hors du périmètre Gaïa) : toujours null, comme Euforia ;
@@ -78,6 +77,24 @@ async function resolveStrategy(userId: string, id: string): Promise<GaiaRefHit |
 }
 
 async function resolveSetup(userId: string, id: string): Promise<GaiaRefHit | null> {
+  // Playbook setup entity (Phase 2) first.
+  const setup = await db.setup.findFirst({
+    where: { userId, id },
+    include: { strategy: { select: { name: true } } },
+  });
+  if (setup) {
+    const tradeCount = await db.trade.count({
+      where: { userId, setupId: setup.id },
+    });
+    return {
+      kind: "SETUP",
+      id: setup.id,
+      label: setup.name,
+      meta: `Playbook setup · ${setup.strategy.name} · ${tradeCount} trade${tradeCount === 1 ? "" : "s"}`,
+      href: "#/playbook?tab=setups",
+    };
+  }
+  // Legacy fallback: free-text setupType on trades.
   const trades = await db.trade.findMany({
     where: { userId, setupType: id },
     select: { id: true },
@@ -96,6 +113,19 @@ async function resolveSetup(userId: string, id: string): Promise<GaiaRefHit | nu
 }
 
 async function resolveRule(userId: string, id: string): Promise<GaiaRefHit | null> {
+  // Playbook rule (Phase 2) first.
+  const playbookRule = await db.playbookRule.findFirst({
+    where: { userId, id },
+  });
+  if (playbookRule) {
+    return {
+      kind: "RULE",
+      id: playbookRule.id,
+      label: playbookRule.title,
+      meta: "Playbook rule",
+      href: "#/playbook?tab=rules",
+    };
+  }
   const rule = await db.tradingRule.findFirst({ where: { userId, id } });
   if (!rule) return null;
   return {
@@ -248,6 +278,12 @@ export async function listRefs(
   }
 
   if (wanted.includes("SETUP")) {
+    // Playbook setups (Phase 2) first, then legacy free-text setupTypes.
+    const setups = await db.setup.findMany({ where: { userId } });
+    for (const setup of setups) {
+      const hit = await resolveSetup(userId, setup.id);
+      if (hit) hits.push(hit);
+    }
     const trades = await db.trade.findMany({
       where: { userId, setupType: { not: null } },
       select: { setupType: true },
@@ -264,6 +300,11 @@ export async function listRefs(
   }
 
   if (wanted.includes("RULE")) {
+    const playbookRules = await db.playbookRule.findMany({ where: { userId } });
+    for (const rule of playbookRules) {
+      const hit = await resolveRule(userId, rule.id);
+      if (hit) hits.push(hit);
+    }
     const rules = await db.tradingRule.findMany({ where: { userId } });
     for (const rule of rules) {
       const hit = await resolveRule(userId, rule.id);

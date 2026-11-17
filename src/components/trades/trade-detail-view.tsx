@@ -109,6 +109,7 @@ import {
   toSpec,
   useTradingLabels,
 } from "@/components/trades/trade-bits";
+import { useSetPlaybookMatch } from "@/hooks/use-playbook";
 import { useToast } from "@/hooks/use-toast";
 import {
   useCloseTrade,
@@ -148,6 +149,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
     "overview" | "chart" | "replay"
   >("overview");
   const t = useTranslations("trades.detail");
+  const tPlaybook = useTranslations("playbook.tradeDetail");
   const tForm = useTranslations("trades.form");
   const tCommon = useTranslations("common");
   const tRoot = useTranslations();
@@ -160,6 +162,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
   const tradeQuery = useTrade(tradeId || null);
   const instruments = useInstruments();
   const updateTrade = useUpdateTrade();
+  const setPlaybookMatch = useSetPlaybookMatch();
   const deleteTrade = useDeleteTrade();
   const closeTrade = useCloseTrade();
   const uploadScreenshot = useUploadScreenshot();
@@ -281,6 +284,20 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
         onSuccess: () => toast({ title: t("reviewToast") }),
         onError: mutationErrorToast,
       }
+    );
+  };
+
+  // Playbook match — declared at review time, never derived from
+  // followedPlan. The select shows the stored declaration (or "not declared").
+  const onPlaybookMatch = (value: string) => {
+    if (!trade) return;
+    if (value !== "MATCHED" && value !== "PARTIAL" && value !== "OFF_PLAYBOOK") return;
+    setPlaybookMatch.mutate(
+      { tradeId: trade.id, playbookMatch: value },
+      {
+        onSuccess: () => toast({ title: tPlaybook("matchSaved") }),
+        onError: mutationErrorToast,
+      },
     );
   };
 
@@ -576,6 +593,25 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
               ? t("reviewUnmark")
               : t("reviewMark")}
           </Button>
+          <Select
+            value={trade.playbookMatch ?? "none"}
+            onValueChange={onPlaybookMatch}
+            disabled={setPlaybookMatch.isPending}
+          >
+            <SelectTrigger
+              className="w-[190px]"
+              aria-label={tPlaybook("playbookMatch")}
+              title={tPlaybook("playbookMatchHint")}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">{tPlaybook("notDeclared")}</SelectItem>
+              <SelectItem value="MATCHED">{tPlaybook("MATCHED")}</SelectItem>
+              <SelectItem value="PARTIAL">{tPlaybook("PARTIAL")}</SelectItem>
+              <SelectItem value="OFF_PLAYBOOK">{tPlaybook("OFF_PLAYBOOK")}</SelectItem>
+            </SelectContent>
+          </Select>
           <Button
             variant="outline"
             onClick={() => navigate(`#/trades/${trade.id}/edit`)}

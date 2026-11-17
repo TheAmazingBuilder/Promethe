@@ -12,6 +12,7 @@ import { CalendarView } from "@/components/calendar/calendar-view";
 import { JournalView } from "@/components/journal/journal-view";
 import { GaiaView } from "@/components/gaia/gaia-view";
 import { StrategiesView } from "@/components/strategies/strategies-view";
+import { PlaybookView } from "@/components/playbook/playbook-view";
 import { RulesView } from "@/components/rules/rules-view";
 import { AccountsView } from "@/components/settings-views/accounts-view";
 import { InstrumentsView } from "@/components/settings-views/instruments-view";
@@ -162,6 +163,9 @@ export function ViewSwitch() {
       break;
     case "strategies":
       view = <StrategiesView />;
+      break;
+    case "playbook":
+      view = <PlaybookView />;
       break;
     case "rules":
       view = <RulesView />;

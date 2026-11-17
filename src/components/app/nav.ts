@@ -11,6 +11,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
+  BookOpen,
   Calculator,
   CalendarDays,
   CandlestickChart,
@@ -125,6 +126,15 @@ export const NAV_GROUPS: NavGroup[] = [
         path: "#/strategies",
         view: "strategies",
         icon: Target,
+        phase: null,
+        ready: true,
+      },
+      {
+        labelKey: "nav.playbook",
+        descriptionKey: "nav.playbookDesc",
+        path: "#/playbook",
+        view: "playbook",
+        icon: BookOpen,
         phase: null,
         ready: true,
       },

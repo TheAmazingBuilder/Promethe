@@ -19,6 +19,17 @@ import {
   EMOTIONS,
   MARKET_CONDITIONS,
 } from "@/lib/trading/types";
+import {
+  confirmationSchema,
+  entryConditionSchema,
+  exitRuleSchema,
+  managementRuleSchema,
+  marketProfileSchema,
+  strategyRiskSchema,
+  MARKET_CONDITIONS_PLAYBOOK,
+  STRATEGY_GRADES,
+  STRATEGY_STATUSES,
+} from "@/lib/validations/playbook";
 
 // ── Primitives ───────────────────────────────────────────────────────────────
 
@@ -68,6 +79,9 @@ export const tradeInputSchema = z.object({
   timeframe: z.enum(TIMEFRAMES).nullish(),
   session: z.enum(TRADING_SESSIONS).nullish(), // auto-detected server-side when null
   setupType: z.string().trim().max(60).nullish(),
+  /// Playbook setup (Phase 2). When set, setupType is kept as a free-text
+  /// fallback for older trades; new trades prefer setupId.
+  setupId: z.string().nullish(),
   marketCondition: z.enum(MARKET_CONDITIONS).nullish(),
 
   entryTime: isoDate,
@@ -233,13 +247,31 @@ export const strategyInputSchema = z.object({
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/, "invalidColor")
     .default("#10b981"),
-  status: z.enum(["ACTIVE", "TESTING", "ARCHIVED"]).default("ACTIVE"),
+  status: z.enum(STRATEGY_STATUSES).default("ACTIVE"),
   timeframes: z.array(z.enum(TIMEFRAMES)).max(9).default([]),
+  instruments: z.array(z.string().trim().max(24)).max(30).optional(),
+  sessions: z.array(z.string().trim().max(40)).max(10).optional(),
   defaultRiskPercent: optionalDecimal,
   targetRR: optionalDecimal,
   entryRules: z.string().max(20000).nullish(),
   exitRules: z.string().max(20000).nullish(),
   riskRules: z.string().max(20000).nullish(),
+  // ── Playbook (Phase 2) — grade/tags are presentation (no version bump);
+  // the rest are definition fields (Euforia §17: freeze before mutation).
+  grade: z.enum(STRATEGY_GRADES).nullish(),
+  detailedDescription: z.string().max(8000).nullish(),
+  tags: z.array(z.string().trim().max(24)).max(24).optional(),
+  marketProfile: marketProfileSchema.nullish(),
+  marketConditions: z
+    .array(z.enum(MARKET_CONDITIONS_PLAYBOOK))
+    .max(24)
+    .optional(),
+  entryConditions: z.array(entryConditionSchema).max(24).optional(),
+  confirmations: z.array(confirmationSchema).max(24).optional(),
+  invalidations: z.array(z.string().trim().max(400)).max(24).optional(),
+  risk: strategyRiskSchema.nullish(),
+  tradeManagement: z.array(managementRuleSchema).max(24).optional(),
+  exitPlan: z.array(exitRuleSchema).max(24).optional(),
   /**
    * Replace-all semantics (v1 phase 5): the client sends the FULL list on
    * every write; the server rewrites the rows in a transaction. Omitted on
