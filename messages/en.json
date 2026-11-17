@@ -2918,7 +2918,9 @@
       "minSampleValue": "{count, plural, one {# trade} other {# trades}}",
       "minSampleHint": "Cells below this sample size are hatched and excluded from the color scale.",
       "noSettings": "This widget has no settings.",
-      "save": "Save"
+      "save": "Save",
+      "dragKpi": "Drag to reorder {name}",
+      "dragHint": "Drag the handle to reorder, or use the up and down buttons."
     },
     "charts": {
       "noChart": "No chart selected",
@@ -3471,11 +3473,18 @@
       "delete": "Delete",
       "copySuffix": "copy",
       "updated": "Updated {date}",
-      "brokenConfig": "This saved chart has an invalid configuration."
+      "brokenConfig": "This saved chart has an invalid configuration.",
+      "addToDashboard": "Add to dashboard",
+      "addToDashboardHint": "Add this chart to a dashboard"
     },
     "toast": {
       "saved": "Chart saved.",
-      "deleted": "Chart deleted."
+      "deleted": "Chart deleted.",
+      "addedToDashboard": "Chart added to {dashboard}.",
+      "viewDashboard": "View dashboard",
+      "addError": "Could not add the chart to the dashboard.",
+      "noDashboard": "No dashboard available.",
+      "dashboardFull": "This dashboard already has the maximum number of widgets."
     },
     "errors": {
       "histogramRequiresNumericX": "Histograms need a numeric measure on X.",
@@ -3721,6 +3730,13 @@
       "createdToast": "Annotation created.",
       "updatedToast": "Annotation updated.",
       "deletedToast": "Annotation deleted."
+    },
+    "addToDashboard": {
+      "title": "Add to dashboard",
+      "description": "Choose the dashboard that will show {name}.",
+      "dashboard": "Dashboard",
+      "add": "Add to dashboard",
+      "full": "full"
     }
   },
   "trashView": {

@@ -2918,7 +2918,9 @@
       "minSampleValue": "{count, plural, one {# trade} other {# trades}}",
       "minSampleHint": "Les cellules sous ce seuil sont hachurées et exclues de l'échelle de couleur.",
       "noSettings": "Ce widget n'a pas de réglages.",
-      "save": "Enregistrer"
+      "save": "Enregistrer",
+      "dragKpi": "Glisser pour déplacer {name}",
+      "dragHint": "Glissez la poignée pour réordonner, ou utilisez les boutons monter et descendre."
     },
     "charts": {
       "noChart": "Aucun graphique sélectionné",
@@ -3471,11 +3473,18 @@
       "delete": "Supprimer",
       "copySuffix": "copie",
       "updated": "Mis à jour le {date}",
-      "brokenConfig": "Ce graphique enregistré a une configuration invalide."
+      "brokenConfig": "Ce graphique enregistré a une configuration invalide.",
+      "addToDashboard": "Ajouter au tableau de bord",
+      "addToDashboardHint": "Ajouter ce graphique à un tableau de bord"
     },
     "toast": {
       "saved": "Graphique enregistré.",
-      "deleted": "Graphique supprimé."
+      "deleted": "Graphique supprimé.",
+      "addedToDashboard": "Graphique ajouté à {dashboard}.",
+      "viewDashboard": "Voir le tableau de bord",
+      "addError": "Impossible d'ajouter le graphique au tableau de bord.",
+      "noDashboard": "Aucun tableau de bord disponible.",
+      "dashboardFull": "Ce tableau de bord a déjà atteint le nombre maximal de widgets."
     },
     "errors": {
       "histogramRequiresNumericX": "Les histogrammes exigent une mesure numérique en X.",
@@ -3721,6 +3730,13 @@
       "createdToast": "Annotation créée.",
       "updatedToast": "Annotation mise à jour.",
       "deletedToast": "Annotation supprimée."
+    },
+    "addToDashboard": {
+      "title": "Ajouter au tableau de bord",
+      "description": "Choisissez le tableau de bord qui affichera {name}.",
+      "dashboard": "Tableau de bord",
+      "add": "Ajouter au tableau de bord",
+      "full": "complet"
     }
   },
   "trashView": {
