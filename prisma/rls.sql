@@ -1234,3 +1234,27 @@ CREATE POLICY exposure_alert_settings_owner ON exposure_alert_settings
   USING (user_id = auth.uid())
   WITH CHECK (user_id = auth.uid());
 
+-- ═════════════════════════════════════════════════════════════════════════════
+-- v2.5 Module 6 — advanced analytics (Prompt 6)
+-- ═════════════════════════════════════════════════════════════════════════════
+
+ALTER TABLE trade_lifecycle_stats ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS trade_lifecycle_stats_owner ON trade_lifecycle_stats;
+CREATE POLICY trade_lifecycle_stats_owner ON trade_lifecycle_stats
+  FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+ALTER TABLE trader_score_snapshots ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS trader_score_snapshots_owner ON trader_score_snapshots;
+CREATE POLICY trader_score_snapshots_owner ON trader_score_snapshots
+  FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+ALTER TABLE trade_anomalies ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS trade_anomalies_owner ON trade_anomalies;
+CREATE POLICY trade_anomalies_owner ON trade_anomalies
+  FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());

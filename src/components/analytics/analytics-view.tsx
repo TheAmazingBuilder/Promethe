@@ -276,6 +276,7 @@ function BreakdownCard({
 export function AnalyticsView() {
   const { session } = useSession();
   const t = useTranslations("analytics");
+  const tAdv = useTranslations("analytics.advanced");
   const tRoot = useTranslations();
   const labels = useTradingLabels();
   const { locale } = useI18n();
@@ -547,6 +548,29 @@ export function AnalyticsView() {
             <FileText className="h-4 w-4" aria-hidden="true" />
             {tReports("button")}
           </Button>
+        </div>
+        {/* v2.5 M6 — advanced analytics tabs */}
+        <div className="flex flex-wrap items-center gap-2">
+          {(
+            [
+              "lifecycle",
+              "exits",
+              "quality",
+              "setups",
+              "sequences",
+              "seasonality",
+              "anomalies",
+            ] as const
+          ).map((tab) => (
+            <Button
+              key={tab}
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`#/analytics/${tab}`)}
+            >
+              {tAdv(`tabs.${tab}`)}
+            </Button>
+          ))}
         </div>
       </div>
 

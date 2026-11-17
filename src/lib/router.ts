@@ -50,6 +50,14 @@ export const VIEW_IDS = [
   "analytics-heatmaps",
   "analytics-benchmark",
   "analytics-annotations",
+  // v2.5 Module 6 — advanced analytics
+  "analytics-lifecycle",
+  "analytics-exits",
+  "analytics-quality",
+  "analytics-setups",
+  "analytics-sequences",
+  "analytics-seasonality",
+  "analytics-anomalies",
   // v2.5 Module 4 — productivity & ergonomics
   "trash",
   "search",
@@ -136,6 +144,7 @@ export function parseHash(hash: string): AppRoute {
   }
 
   // ── v2.5 Module 2 — analytics sub-pages (#/analytics/charts…) ──
+  // ── v2.5 Module 6 — advanced analytics sub-pages (#/analytics/lifecycle…) ──
   if (view === "analytics") {
     if (second === "charts") return withQuery({ view: "analytics-charts" });
     if (second === "heatmaps") return withQuery({ view: "analytics-heatmaps" });
@@ -144,6 +153,27 @@ export function parseHash(hash: string): AppRoute {
     }
     if (second === "annotations") {
       return withQuery({ view: "analytics-annotations" });
+    }
+    if (second === "lifecycle") {
+      return withQuery({ view: "analytics-lifecycle" });
+    }
+    if (second === "exits") {
+      return withQuery({ view: "analytics-exits" });
+    }
+    if (second === "quality") {
+      return withQuery({ view: "analytics-quality" });
+    }
+    if (second === "setups") {
+      return withQuery({ view: "analytics-setups" });
+    }
+    if (second === "sequences") {
+      return withQuery({ view: "analytics-sequences" });
+    }
+    if (second === "seasonality") {
+      return withQuery({ view: "analytics-seasonality" });
+    }
+    if (second === "anomalies") {
+      return withQuery({ view: "analytics-anomalies" });
     }
     return withQuery({ view: "analytics" });
   }

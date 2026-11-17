@@ -17,6 +17,13 @@ import { AccountsView } from "@/components/settings-views/accounts-view";
 import { InstrumentsView } from "@/components/settings-views/instruments-view";
 import { TagsView } from "@/components/settings-views/tags-view";
 import { AnalyticsView } from "@/components/analytics/analytics-view";
+import { LifecycleView } from "@/components/analytics/lifecycle-view";
+import { ExitsView } from "@/components/analytics/exits-view";
+import { QualityView } from "@/components/analytics/quality-view";
+import { SetupsView } from "@/components/analytics/setups-view";
+import { SequencesView } from "@/components/analytics/sequences-view";
+import { SeasonalityView } from "@/components/analytics/seasonality-view";
+import { AnomaliesView } from "@/components/analytics/anomalies-view";
 import { ChartBuilderView } from "@/components/charts/chart-builder-view";
 import { HeatmapsView } from "@/components/charts/heatmap-view";
 import { BenchmarkView } from "@/components/charts/benchmark-view";
@@ -102,6 +109,27 @@ export function ViewSwitch() {
       break;
     case "analytics":
       view = <AnalyticsView />;
+      break;
+    case "analytics-lifecycle":
+      view = <LifecycleView />;
+      break;
+    case "analytics-exits":
+      view = <ExitsView />;
+      break;
+    case "analytics-quality":
+      view = <QualityView />;
+      break;
+    case "analytics-setups":
+      view = <SetupsView />;
+      break;
+    case "analytics-sequences":
+      view = <SequencesView />;
+      break;
+    case "analytics-seasonality":
+      view = <SeasonalityView />;
+      break;
+    case "analytics-anomalies":
+      view = <AnomaliesView />;
       break;
     case "analytics-charts":
       view = <ChartBuilderView />;

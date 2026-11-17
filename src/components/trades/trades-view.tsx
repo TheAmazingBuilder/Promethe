@@ -4,6 +4,7 @@ import * as React from "react";
 import { useTranslations } from "next-intl";
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
@@ -95,6 +96,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import {
   useAccounts,
+  useAdvancedAnalytics,
   useCreateSavedView,
   useDeleteSavedView,
   useDeleteTrade,
@@ -173,6 +175,8 @@ const TRADE_COLUMNS: TradeColumnDef[] = [
   { id: "session", labelKey: "colSession", className: "hidden xl:table-cell", cellClassName: "text-muted-foreground" },
   { id: "timeframe", labelKey: "colTimeframe", className: "hidden xl:table-cell" },
   { id: "review", labelKey: "colReview", className: "hidden lg:table-cell" },
+  // v2.5 M6 — anomaly badge (robust MAD z-score, see #/analytics/anomalies).
+  { id: "anomaly", labelKey: "colAnomaly", className: "hidden md:table-cell" },
 ];
 
 /** v2.5 M2 - chart drill-down: apply #/trades?… filters once on mount. */
@@ -258,6 +262,23 @@ export function TradesView() {
   }, [drillApplied]);
 
   const trades = useTradesList(query);
+  // v2.5 M6 — anomaly flags (all-time, cached 60 s) for the badge column.
+  const tAnomalies = useTranslations("analytics.advanced.anomalies");
+  const { data: advancedData } = useAdvancedAnalytics({ period: "all" });
+  const anomalyByTrade = React.useMemo(() => {
+    const map = new Map<
+      string,
+      { severity: string; kind: string; zScore: number }
+    >();
+    for (const a of advancedData?.advanced.anomalies.anomalies ?? []) {
+      map.set(a.tradeId, {
+        severity: a.severity,
+        kind: a.kind,
+        zScore: a.zScore,
+      });
+    }
+    return map;
+  }, [advancedData]);
   const accounts = useAccounts();
   const strategies = useStrategies();
   const tags = useTags();
@@ -886,6 +907,44 @@ export function TradesView() {
             </span>
           </TableCell>
         );
+      case "anomaly": {
+        const flag = anomalyByTrade.get(trade.id);
+        if (!flag) {
+          return (
+            <TableCell key={col.id} className="hidden md:table-cell">
+              -
+            </TableCell>
+          );
+        }
+        const kindLabel =
+          flag.kind === "R_OUTLIER"
+            ? tAnomalies("kindROutlier")
+            : tAnomalies("kindDurationOutlier");
+        const sevLabel =
+          flag.severity === "high"
+            ? tAnomalies("sevHigh")
+            : tAnomalies("sevModerate");
+        return (
+          <TableCell key={col.id} className="hidden md:table-cell">
+            <span
+              className="inline-flex"
+              title={`${kindLabel} - ${sevLabel} (z ${flag.zScore})`}
+            >
+              <AlertTriangle
+                className={
+                  flag.severity === "high"
+                    ? "h-4 w-4 text-destructive"
+                    : "h-4 w-4 text-amber-500"
+                }
+                aria-hidden="true"
+              />
+              <span className="sr-only">
+                {kindLabel} - {sevLabel}
+              </span>
+            </span>
+          </TableCell>
+        );
+      }
       default: {
         // Custom-field column ("cf:<key>").
         const def = customFieldDefs.find((d) => `cf:${d.key}` === col.id);

@@ -454,6 +454,19 @@ export interface AnalyticsPayload {
   insights: Insight[];
 }
 
+// ── Advanced analytics payload (v2.5 Module 6) ─────────────────────────────
+
+import type { AdvancedAnalytics } from "@/lib/analytics/advanced";
+
+export interface AdvancedAnalyticsPayload {
+  period: AnalyticsPeriod;
+  /** Active account filter (null = all accounts). */
+  accountId: string | null;
+  currency: string;
+  timezone: string;
+  advanced: AdvancedAnalytics;
+}
+
 // ── Journal & calendar (v1 Phase 5) ─────────────────────────────────────────
 
 export interface JournalEntryDTO {

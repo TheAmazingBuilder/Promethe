@@ -115,6 +115,11 @@ model User {
   gaiaTemplates NoteTemplate[]
   gaiaVersions  NoteVersion[]
 
+  // ── v2.5 Module 6 — advanced analytics ──
+  lifecycleStats      TradeLifecycleStats[]
+  traderScoreSnapshots TraderScoreSnapshot[]
+  tradeAnomalies      TradeAnomaly[]
+
   @@map("users")
 }
 
@@ -494,6 +499,8 @@ model Trade {
   tags           TradeTag[]
   screenshots    TradeScreenshot[]
   ruleViolations TradeRuleViolation[]
+  lifecycleStats TradeLifecycleStats?
+  anomalies      TradeAnomaly[]
 
   // ── v2 ──
   review        TradeReview?
@@ -2233,4 +2240,84 @@ model NoteVersion {
   @@index([userId, noteId])
   @@index([noteId, savedAt])
   @@map("gaia_versions")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// v2.5 Module 6 — advanced analytics (Prompt 6)
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Per-trade lifecycle stats, persisted by GET /api/analytics/advanced
+/// (idempotent upsert from the stored MFE/MAE prices and, when stored
+/// candles cover the trade window, from the price path). timeInProfitMin /
+/// timeInLossMin stay null without candle coverage — never invented.
+model TradeLifecycleStats {
+  id              String   @id @default(cuid())
+  tradeId         String   @unique @map("trade_id")
+  userId          String   @map("user_id")
+  /// MFE in R (from mfePrice + initial SL), null when not computable.
+  mfeR            Decimal? @map("mfe_r")
+  /// MAE in R (adverse distance), null when not computable.
+  maeR            Decimal? @map("mae_r")
+  /// Minutes spent in profit / in loss (candle closes vs entry price).
+  timeInProfitMin Int?     @map("time_in_profit_min")
+  timeInLossMin   Int?     @map("time_in_loss_min")
+  /// Price came within 90 % of the planned RR target without touching TP.
+  almostTp        Boolean  @default(false) @map("almost_tp")
+  computedAt      DateTime @default(now()) @map("computed_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  trade Trade @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, computedAt])
+  @@map("trade_lifecycle_stats")
+}
+
+/// Daily trader quality score snapshot (0-100) with its four components.
+/// Written by the daily cron (all users) and by GET /api/analytics/advanced
+/// (today's row, idempotent upsert). History in the UI is a deterministic
+/// month-end replay over closed trades — snapshots only freeze the value.
+model TraderScoreSnapshot {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  /// Day (UTC midnight) the snapshot describes.
+  date        DateTime @map("date")
+  /// Composite score 0-100.
+  score       Int
+  /// Components, each 0-25.
+  discipline  Int
+  edge        Int
+  consistency Int
+  risk        Int
+  /// Closed trades the score is based on.
+  tradeCount  Int      @map("trade_count")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("trader_score_snapshots")
+}
+
+/// Detected trade anomaly (robust MAD z-score on R or on log-duration).
+/// Recomputed by GET /api/analytics/advanced (idempotent refresh for the
+/// trades in scope). No entry-time alerts are ever raised from these rows.
+model TradeAnomaly {
+  id         String   @id @default(cuid())
+  tradeId    String   @map("trade_id")
+  userId     String   @map("user_id")
+  /// R_OUTLIER | DURATION_OUTLIER
+  kind       String
+  /// high (|z| >= 3) | moderate (|z| >= 2)
+  severity   String
+  zScore     Decimal  @map("z_score")
+  detectedAt DateTime @default(now()) @map("detected_at")
+
+  trade Trade @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tradeId, kind])
+  @@index([userId, detectedAt])
+  @@map("trade_anomalies")
 }

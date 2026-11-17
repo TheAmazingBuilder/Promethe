@@ -23,6 +23,7 @@ import type {
   TradeListItemDTO,
   DashboardPayload,
   AnalyticsPayload,
+  AdvancedAnalyticsPayload,
 } from "@/lib/trading/dto";
 import type {
   CloseTradeInput,
@@ -291,6 +292,20 @@ export function useAnalytics(filters: AnalyticsFilters) {
   return useQuery({
     queryKey: ["analytics", filters.period, filters.account ?? "all"],
     queryFn: async () => apiFetch<AnalyticsPayload>(`/api/analytics?${qs}`),
+    staleTime: 60 * 1000,
+  });
+}
+
+// ── Advanced analytics (v2.5 Module 6) ───────────────────────────────────────
+
+export function useAdvancedAnalytics(filters: AnalyticsFilters) {
+  const params = new URLSearchParams({ period: filters.period });
+  if (filters.account) params.set("account", filters.account);
+  const qs = params.toString();
+  return useQuery({
+    queryKey: ["analytics-advanced", filters.period, filters.account ?? "all"],
+    queryFn: async () =>
+      apiFetch<AdvancedAnalyticsPayload>(`/api/analytics/advanced?${qs}`),
     staleTime: 60 * 1000,
   });
 }
