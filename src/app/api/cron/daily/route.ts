@@ -22,7 +22,7 @@ function authorized(req: Request): boolean {
 async function handle(req: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || secret.length < 16) {
-    console.error("[cron/daily] CRON_SECRET is missing or too short — refusing to run.");
+    console.error("[cron/daily] CRON_SECRET is missing or too short - refusing to run.");
     return NextResponse.json(
       { error: "CRON_SECRET_UNSET", message: "CRON_SECRET manquant ou trop court." },
       { status: 503 }

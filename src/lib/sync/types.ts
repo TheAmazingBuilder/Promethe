@@ -96,7 +96,7 @@ export interface MtPositionClosedEvent extends MtEventBase {
   commission?: string | null;
   swap?: string | null;
   fees?: string | null;
-  /** Gross profit (quote currency) — broker truth, overrides estimates. */
+  /** Gross profit (quote currency) - broker truth, overrides estimates. */
   profit: string;
   magic?: string | null;
   comment?: string | null;
@@ -180,7 +180,7 @@ export interface MtIngestPayload {
   currency?: string | null;
   leverage?: string | null;
   serverGmtOffsetSeconds: number;
-  /** Unix seconds — replay protection (max 10 min skew). */
+  /** Unix seconds - replay protection (max 10 min skew). */
   sentAt: number;
   events: MtEvent[];
 }

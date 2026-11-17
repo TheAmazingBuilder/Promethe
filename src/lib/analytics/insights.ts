@@ -34,11 +34,11 @@ export interface AnalyticsTrade extends StatTrade {
   commission: string | null;
   swap: string | null;
   fees: string | null;
-  /** Local calendar date (YYYY-MM-DD) of the EXIT — P&L attribution. */
+  /** Local calendar date (YYYY-MM-DD) of the EXIT - P&L attribution. */
   localDate: string | null;
-  /** Local weekday of the ENTRY 1 (Monday) → 7 (Sunday) — decision dimension. */
+  /** Local weekday of the ENTRY 1 (Monday) → 7 (Sunday) - decision dimension. */
   localWeekday: number | null;
-  /** Local entry hour 0-23 — decision dimension. */
+  /** Local entry hour 0-23 - decision dimension. */
   localHour: number | null;
   /** Trade duration in minutes (exit − entry), null while open. */
   durationMin: number | null;
@@ -55,7 +55,7 @@ export interface AdvancedStats {
   sortino: string | null;
   /** net P&L / max drawdown (> 0 means the curve recovered). */
   recoveryFactor: string | null;
-  /** avgWin / avgLoss — null when one side is missing. */
+  /** avgWin / avgLoss - null when one side is missing. */
   payoffRatio: string | null;
   /** Mean trade duration in minutes. */
   avgDurationMin: number | null;
@@ -165,7 +165,7 @@ export function computeAdvancedStats(
 // ── R-multiple distribution ──────────────────────────────────────────────────
 
 export interface RDistBucket {
-  /** Stable bucket id — labels are i18n keys (analytics.rdist.{id}). */
+  /** Stable bucket id - labels are i18n keys (analytics.rdist.{id}). */
   id: string;
   /** Inclusive lower bound, null = -∞. */
   from: number | null;
@@ -226,7 +226,7 @@ export interface Breakdowns {
   setup: GroupStat[];
   exit: GroupStat[];
   emotion: GroupStat[];
-  /** Followed the plan — keys "yes" / "no". */
+  /** Followed the plan - keys "yes" / "no". */
   plan: GroupStat[];
 }
 
@@ -263,10 +263,10 @@ export function computeBreakdowns(trades: AnalyticsTrade[]): Breakdowns {
 export type InsightTone = "good" | "bad" | "info";
 
 export interface Insight {
-  /** i18n key suffix — analytics.insights.{rule}. */
+  /** i18n key suffix - analytics.insights.{rule}. */
   rule: string;
   tone: InsightTone;
-  /** Interpolation params (raw values — formatted by the view). */
+  /** Interpolation params (raw values - formatted by the view). */
   params: Record<string, string | number>;
   /** Sort weight, higher first within a tone. */
   weight: number;
@@ -298,8 +298,8 @@ function dimParams(g: GroupStat): Record<string, string | number> {
   return {
     count: g.stats.tradeCount,
     netPnl: g.stats.netPnl,
-    winRate: g.stats.winRate ?? "—",
-    avgR: g.stats.avgR ?? "—",
+    winRate: g.stats.winRate ?? "-",
+    avgR: g.stats.avgR ?? "-",
   };
 }
 

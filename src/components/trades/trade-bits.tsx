@@ -41,7 +41,7 @@ export function useTradingLabels() {
   const tRoot = useTranslations();
   return React.useMemo(() => {
     const pick = (path: string, v: string | null | undefined): string =>
-      v ? tRoot(`${path}.${v}` as Parameters<typeof tRoot>[0]) : "—";
+      v ? tRoot(`${path}.${v}` as Parameters<typeof tRoot>[0]) : "-";
     return {
       direction: (v: string | null | undefined) => pick("trading.direction", v),
       orderType: (v: string | null | undefined) => pick("trading.orderType", v),
@@ -189,7 +189,7 @@ export function TagsBadges({
 
 // ── Instruments ──────────────────────────────────────────────────────────────
 
-/** API DTO → engine spec (structurally compatible — explicit for clarity). */
+/** API DTO → engine spec (structurally compatible - explicit for clarity). */
 export function toSpec(dto: InstrumentApiDTO): InstrumentSpec & { id: string } {
   return {
     id: dto.id,

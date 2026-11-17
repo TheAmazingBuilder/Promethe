@@ -71,7 +71,7 @@ export async function getSession(): Promise<SessionPayload | null> {
   return toSessionPayload(session.user, session.user.profile);
 }
 
-/** Like getSession but throws UnauthorizedError — for data-access helpers. */
+/** Like getSession but throws UnauthorizedError - for data-access helpers. */
 export async function requireUser(): Promise<SessionPayload> {
   const session = await getSession();
   if (!session) throw new UnauthorizedError();

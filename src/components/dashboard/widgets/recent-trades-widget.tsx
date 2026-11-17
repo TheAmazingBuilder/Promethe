@@ -1,6 +1,6 @@
 "use client";
 
-/** recent-trades widget — the recent trades table ported from the old view. */
+/** recent-trades widget - the recent trades table ported from the old view. */
 import { useTranslations } from "next-intl";
 import {
   Table,
@@ -95,7 +95,7 @@ export function RecentTradesWidget({
                 {trade.resultType ? (
                   <ResultBadge result={trade.resultType} />
                 ) : (
-                  <span className="text-muted-foreground">—</span>
+                  <span className="text-muted-foreground">-</span>
                 )}
               </TableCell>
             </TableRow>

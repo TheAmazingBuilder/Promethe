@@ -29,7 +29,7 @@ export type ExportRequestResult =
   | { ok: true; bytes: Uint8Array; fileName: string; sizeBytes: number }
   | { ok: false; code: "USER_NOT_FOUND" | "RATE_LIMITED"; retryAfterMs?: number };
 
-/** Rounds dates to ISO strings, decimals to strings — JSON-safe snapshot. */
+/** Rounds dates to ISO strings, decimals to strings - JSON-safe snapshot. */
 function plain<T>(rows: T): unknown {
   return JSON.parse(JSON.stringify(rows));
 }
@@ -306,16 +306,16 @@ export async function buildUserExport(userId: string): Promise<{
     missingScreenshotFiles: missingFiles,
     // Transparency: what is NOT in the archive and why (art. 12 RGPD).
     excluded: [
-      "passwordHash — one-way scrypt hash, never disclosed",
-      "tokenHash (broker connections, share links, mentor invitations) — server-side HMAC digests, useless without the pepper",
-      "authSession ids — live bearer credentials",
-      "raw tokens of any kind — never stored by the app",
+      "passwordHash - one-way scrypt hash, never disclosed",
+      "tokenHash (broker connections, share links, mentor invitations) - server-side HMAC digests, useless without the pepper",
+      "authSession ids - live bearer credentials",
+      "raw tokens of any kind - never stored by the app",
     ],
   };
 
   const readme = [
-    "Promethe — Export complet de vos donnees (RGPD art. 20)",
-    "Promethe — Full export of your data (GDPR art. 20)",
+    "Promethe - Export complet de vos donnees (RGPD art. 20)",
+    "Promethe - Full export of your data (GDPR art. 20)",
     "",
     `Genere le / Generated: ${exportedAt.toISOString()}`,
     `Version du format / Schema version: ${EXPORT_SCHEMA_VERSION}`,
@@ -356,7 +356,7 @@ export async function buildUserExport(userId: string): Promise<{
     "",
     "Exclusions de secrets / Excluded secrets: voir manifest.json.",
     "Les montants sont des chaines decimales exactes / Amounts are exact",
-    "decimal strings — never floating point.",
+    "decimal strings - never floating point.",
   ].join("\n");
 
   // ── Assemble the ZIP ──────────────────────────────────────────────────────

@@ -8,7 +8,7 @@ export interface SessionUser {
   email: string;
 }
 
-/** Quick-entry smart defaults (v2 §4.1) — persisted in Profile.preferencesJson. */
+/** Quick-entry smart defaults (v2 §4.1) - persisted in Profile.preferencesJson. */
 export interface ProfilePreferences {
   /** Last used account (pre-selected in the quick form). */
   lastAccountId?: string | null;
@@ -32,9 +32,9 @@ export interface SessionProfile {
   theme: string;
   defaultAccountId: string | null;
   preferences: ProfilePreferences;
-  /** v3 — mentoring handle (null until the user picks one). */
+  /** v3 - mentoring handle (null until the user picks one). */
   handle: string | null;
-  /** v3 — name shown to mentors (falls back to displayName). */
+  /** v3 - name shown to mentors (falls back to displayName). */
   publicDisplayName: string | null;
 }
 
@@ -43,7 +43,7 @@ export interface SessionPayload {
   profile: SessionProfile;
 }
 
-/** Typed API error envelope — Prisma/internal errors are never exposed. */
+/** Typed API error envelope - Prisma/internal errors are never exposed. */
 export interface ApiErrorBody {
   error: string;
   message: string;

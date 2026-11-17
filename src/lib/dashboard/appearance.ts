@@ -7,7 +7,7 @@
  * source of truth for rendering; these maps exist for previews and layout math.
  */
 
-/** Palette keys — must match appearanceInputSchema's enum. */
+/** Palette keys - must match appearanceInputSchema's enum. */
 export const PALETTE_KEYS = [
   "default",
   "colorblind",
@@ -24,7 +24,7 @@ export function isPaletteKey(value: string): value is PaletteKey {
   return (PALETTE_KEYS as readonly string[]).includes(value);
 }
 
-/** Density keys — must match appearanceInputSchema's enum. */
+/** Density keys - must match appearanceInputSchema's enum. */
 export const DENSITY_KEYS = ["COMPACT", "COMFORTABLE", "SPACIOUS"] as const;
 
 export type DensityKey = (typeof DENSITY_KEYS)[number];
@@ -43,7 +43,7 @@ export const DENSITY_GRID: Record<
   SPACIOUS: { rowHeight: 46, gap: 16 },
 };
 
-/** Chart palette keys — must match appearanceInputSchema's enum. */
+/** Chart palette keys - must match appearanceInputSchema's enum. */
 export const CHART_PALETTE_KEYS = [
   "default",
   "colorblind",
@@ -85,7 +85,7 @@ export const CHART_PALETTE_PREVIEW: Record<
   vivid: ["#e63329", "#1fb45b", "#7b3fe4", "#e8b90f", "#d6339a"],
 };
 
-/** Focus-mode block ids — must match appearanceInputSchema's enum. */
+/** Focus-mode block ids - must match appearanceInputSchema's enum. */
 export const FOCUS_BLOCKS = [
   "rules",
   "risk",

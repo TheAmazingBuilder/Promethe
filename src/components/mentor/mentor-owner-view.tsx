@@ -318,7 +318,7 @@ function MentorAnalyticsCard({ ownerId }: { ownerId: string }) {
   const kpis = (data.kpisAllTime ?? {}) as Record<string, unknown>;
   const stat = (key: string): string => {
     const value = kpis[key];
-    return value === undefined || value === null ? "—" : String(value);
+    return value === undefined || value === null ? "-" : String(value);
   };
 
   const width = 640;
@@ -348,7 +348,7 @@ function MentorAnalyticsCard({ ownerId }: { ownerId: string }) {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">
-              Equity — {data.equityUnit === "PERCENT" ? "%" : data.equityUnit}
+              Equity - {data.equityUnit === "PERCENT" ? "%" : data.equityUnit}
             </CardTitle>
           </CardHeader>
           <CardContent>

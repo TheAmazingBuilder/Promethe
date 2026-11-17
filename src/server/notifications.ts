@@ -30,7 +30,7 @@ export interface NotifyInput {
 
 const DEFAULT_DEDUPE_MS = 10 * 60 * 1000;
 
-/** Creates an in-app notification (deduped). Never throws — best effort. */
+/** Creates an in-app notification (deduped). Never throws - best effort. */
 export async function notifyInApp(input: NotifyInput): Promise<void> {
   try {
     // v2.5 Module 8 — when hideAmountsInNotifications is on, amounts never

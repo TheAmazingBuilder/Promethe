@@ -1,6 +1,6 @@
 "use client";
 
-/** quick-actions widget — ported QuickActionsCard + new trade shortcuts. */
+/** quick-actions widget - ported QuickActionsCard + new trade shortcuts. */
 import { ArrowRight, Calculator, LayoutTemplate, Plus, Settings, Zap } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";

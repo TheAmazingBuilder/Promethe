@@ -96,7 +96,7 @@ export function CalendarView() {
         {/* a11y (M8 Phase 5): wraps at 200 % text / narrow viewports (WCAG 1.4.10). */}
         <div className="flex flex-wrap items-center gap-2">
           {/* v2.5 M2 — month / year mode toggle. a11y (M8 Phase 5): a
-              segmented ToggleGroup, NOT Tabs — a tabset without panels dangles
+              segmented ToggleGroup, NOT Tabs - a tabset without panels dangles
               aria-controls (aria-valid-attr-value). */}
           <ToggleGroup
             type="single"
@@ -216,7 +216,7 @@ export function CalendarView() {
                           `${monthNames[Number(cell.date.slice(5, 7)) - 1]} ${cell.date.slice(0, 4)}`,
                         ]
                           .filter(Boolean)
-                          .join(" — ")}
+                          .join(" - ")}
                         className={[
                           "relative flex min-h-[64px] flex-col justify-between rounded-lg border p-1.5 text-left transition-colors",
                           // a11y (M8 Phase 5): AA-safe dimming — a dashed border
@@ -240,7 +240,7 @@ export function CalendarView() {
                               className={`text-xs font-semibold ${pnlClass(day.netPnl)}`}
                             />
                             {/* a11y (M8 Phase 5): axe concatenates span text
-                                without element boundaries — "USD" + "1 trade"
+                                without element boundaries - "USD" + "1 trade"
                                 would mash into "USD1" and break the label
                                 token match. A real space text node keeps the
                                 tokens separate (visually nil in flex gap). */}
@@ -301,7 +301,7 @@ export function CalendarView() {
               <div>
                 <p className="text-xs text-muted-foreground">{t("summary.tradingDays")}</p>
                 <p className="font-semibold tabular-nums">
-                  {summary?.tradingDays ?? "—"}
+                  {summary?.tradingDays ?? "-"}
                 </p>
               </div>
               <div>
@@ -309,7 +309,7 @@ export function CalendarView() {
                 <p className="font-semibold tabular-nums">
                   {summary?.greenRate != null
                     ? fmt.pct(summary.greenRate, 0)
-                    : "—"}
+                    : "-"}
                 </p>
               </div>
               <div>
@@ -323,7 +323,7 @@ export function CalendarView() {
                       currency={currency}
                     />
                   ) : (
-                    "—"
+                    "-"
                   )}
                 </p>
               </div>
@@ -338,7 +338,7 @@ export function CalendarView() {
                       currency={currency}
                     />
                   ) : (
-                    "—"
+                    "-"
                   )}
                 </p>
               </div>
@@ -350,7 +350,7 @@ export function CalendarView() {
               <CardTitle className="text-base">{t("streaks.title")}</CardTitle>
               <CardDescription className="tabular-nums">
                 {streaks == null
-                  ? "—"
+                  ? "-"
                   : streaks.current > 0
                     ? t("streaks.currentWin", { count: streaks.current })
                     : streaks.current < 0
@@ -362,13 +362,13 @@ export function CalendarView() {
               <div>
                 <p className="text-xs text-muted-foreground">{t("streaks.longestWin")}</p>
                 <p className="font-semibold text-gain tabular-nums">
-                  {streaks ? t("streaks.days", { count: streaks.longestWin }) : "—"}
+                  {streaks ? t("streaks.days", { count: streaks.longestWin }) : "-"}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">{t("streaks.longestLoss")}</p>
                 <p className="font-semibold text-loss tabular-nums">
-                  {streaks ? t("streaks.days", { count: streaks.longestLoss }) : "—"}
+                  {streaks ? t("streaks.days", { count: streaks.longestLoss }) : "-"}
                 </p>
               </div>
             </CardContent>
@@ -378,7 +378,7 @@ export function CalendarView() {
           data.summary.tradingDays === 0 &&
           Object.keys(data.days).length === 0 ? (
             <p className="text-center text-sm text-muted-foreground">
-              {t("emptyTitle")} — {t("emptyDesc")}
+              {t("emptyTitle")} - {t("emptyDesc")}
             </p>
           ) : null}
         </div>

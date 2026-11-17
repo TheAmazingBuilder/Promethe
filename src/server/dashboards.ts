@@ -45,7 +45,7 @@ import {
 // safeParseWidgetConfig call — idempotent side-effect import.
 import "@/lib/dashboard/register-chart-widgets";
 
-/** Domain errors — mapped to typed API responses by apiError(). */
+/** Domain errors - mapped to typed API responses by apiError(). */
 export class DashboardValidationError extends Error {
   readonly code: string;
   readonly status: number;
@@ -225,7 +225,7 @@ function buildExportPayload(row: DashboardRow): DashboardExportPayload {
 
 // ── Internal helpers ─────────────────────────────────────────────────────────
 
-/** Widget blueprint — normalized across built-in templates and import files. */
+/** Widget blueprint - normalized across built-in templates and import files. */
 interface WidgetBlueprint {
   type: string;
   title?: string | null;

@@ -249,7 +249,7 @@ export async function createComment(
   if (!rl.allowed) {
     throw new CommentValidationError(
       "COMMENT_RATE_LIMITED",
-      "Trop de commentaires — patientez quelques instants.",
+      "Trop de commentaires - patientez quelques instants.",
       429
     );
   }
@@ -273,7 +273,7 @@ export async function createComment(
     if (parent.parentId) {
       throw new CommentValidationError(
         "PARENT_INVALID",
-        "Un seul niveau de réponse — répondez au commentaire d'origine."
+        "Un seul niveau de réponse - répondez au commentaire d'origine."
       );
     }
   }
@@ -558,7 +558,7 @@ export async function unreadCommentsForOwner(
   return unread;
 }
 
-/** Mentors currently watching the owner's journal — count of live accesses. */
+/** Mentors currently watching the owner's journal - count of live accesses. */
 export async function watchingMentorsCount(ownerId: string): Promise<number> {
   return db.mentorAccess.count({
     where: {

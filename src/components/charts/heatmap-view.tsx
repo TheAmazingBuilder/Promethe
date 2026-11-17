@@ -322,7 +322,7 @@ export function HeatmapsView() {
         <CardHeader className="flex-row items-start justify-between space-y-0">
           <div className="space-y-1.5">
             <CardTitle className="text-base">
-              {t(`dimensions.${rowDim}` as never)} × {t(`dimensions.${colDim}` as never)} —{" "}
+              {t(`dimensions.${rowDim}` as never)} × {t(`dimensions.${colDim}` as never)} -{" "}
               {t(`measures.${metric === "expectancyR" ? "expectancy" : metric === "avgR" ? "rMultiple" : metric}` as never)}
             </CardTitle>
             <CardDescription>{tHeat("matrixDesc", { minSample })}</CardDescription>
@@ -425,7 +425,7 @@ function HeatmapTable({
   tHeat: (k: string) => string;
 }) {
   const fmt = (v: number | null) => {
-    if (v == null) return "—";
+    if (v == null) return "-";
     switch (format) {
       case "CURRENCY":
         return new Intl.NumberFormat(locale, {
@@ -472,7 +472,7 @@ function HeatmapTable({
                         : "text-loss"
                   }`}
                 >
-                  {c.n === 0 ? "—" : `${fmt(c.value)} (${c.n}${c.lowSample ? "⚠" : ""})`}
+                  {c.n === 0 ? "-" : `${fmt(c.value)} (${c.n}${c.lowSample ? "⚠" : ""})`}
                 </td>
               ))}
               <td className="px-3 py-1.5 text-right font-mono">

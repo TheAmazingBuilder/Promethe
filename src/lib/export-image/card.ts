@@ -71,9 +71,9 @@ function fmtNum(value: string | null | undefined, digits = 2, signed = false): s
 }
 
 function fmtDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   return d.toISOString().slice(0, 10);
 }
 
@@ -235,7 +235,7 @@ export function renderTradeCardCanvas(
   // Footer — watermark
   text(ctx, "Promethe", M, H - 34, { size: 18, color: C.muted, weight: "600" });
   const footerRight = anonymous
-    ? "Montants masqués — pips & R seulement"
+    ? "Montants masqués - pips & R seulement"
     : "promethe";
   text(ctx, footerRight, W - M, H - 34, { size: 16, color: C.muted, align: "right" });
 

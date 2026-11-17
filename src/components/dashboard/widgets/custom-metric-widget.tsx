@@ -1,6 +1,6 @@
 "use client";
 
-/** custom-metric widget — name, big formatted value, sample size, low-sample warning. */
+/** custom-metric widget - name, big formatted value, sample size, low-sample warning. */
 import { AlertTriangle } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { toD } from "@/lib/trading/dec";
@@ -9,7 +9,7 @@ import { asCustomMetricData } from "./types";
 
 function formatByFormat(value: string, format: string): string {
   const d = toD(value);
-  if (!d.isFinite()) return "—";
+  if (!d.isFinite()) return "-";
   switch (format) {
     case "CURRENCY":
       return fmtNum(value);
@@ -46,7 +46,7 @@ export function CustomMetricWidget({ data }: { data: unknown }) {
       <p className="text-2xl font-bold tabular-nums">
         {metric.value != null
           ? formatByFormat(metric.value, metric.format)
-          : "—"}
+          : "-"}
       </p>
       <p className="text-xs text-muted-foreground">
         {t("metricSample", { count: metric.sampleSize })}

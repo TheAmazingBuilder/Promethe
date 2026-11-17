@@ -48,7 +48,7 @@ export function contrastRatio(hexA: string, hexB: string): number | null {
 }
 
 export interface ContrastCheckOptions {
-  /** Large text (≥ 18pt / 14pt bold) — AA threshold drops to 3:1. */
+  /** Large text (≥ 18pt / 14pt bold) - AA threshold drops to 3:1. */
   large?: boolean;
   /** AAA thresholds (7:1 / 4.5:1) instead of AA. */
   level?: "AA" | "AAA";

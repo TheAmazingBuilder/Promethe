@@ -57,7 +57,7 @@ export function TradeViolationsSection({ tradeId }: { tradeId: string }) {
                 {tRules(`kind.${v.kind}`)}
                 {v.description ? (
                   <span className="ml-1.5 font-normal text-muted-foreground">
-                    — {v.description}
+                    - {v.description}
                   </span>
                 ) : null}
               </span>

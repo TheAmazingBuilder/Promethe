@@ -29,7 +29,7 @@ export interface ConsentDTO {
   createdAt: string;
 }
 
-/** Records a consent (or refusal — granted=false is also proof). */
+/** Records a consent (or refusal - granted=false is also proof). */
 export async function recordConsent(
   userId: string,
   type: ConsentType,

@@ -20,7 +20,7 @@ import {
 
 export * from "./types";
 
-/** Full-access owner context — requireUser() wraps this (session-based). */
+/** Full-access owner context - requireUser() wraps this (session-based). */
 export function ownerContext(userId: string): AccessContext {
   return {
     viewerId: userId,

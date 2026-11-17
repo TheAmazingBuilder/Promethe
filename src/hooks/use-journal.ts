@@ -162,7 +162,7 @@ export function useDeleteStrategyVersion() {
 
 // ── Strategy CRUD (with checklist, phase 5) ─────────────────────────────────
 
-/** Per-strategy stats (phase 5 view) — separate query key from the selector list. */
+/** Per-strategy stats (phase 5 view) - separate query key from the selector list. */
 export function useStrategiesWithStats() {
   return useQuery({
     queryKey: ["strategies", "stats"],
@@ -193,7 +193,7 @@ export interface StrategyInputBody {
   entryRules?: string | null;
   exitRules?: string | null;
   riskRules?: string | null;
-  /** Replace-all semantics — the FULL list is sent on every write. */
+  /** Replace-all semantics - the FULL list is sent on every write. */
   checklistItems?: Array<{
     label: string;
     category: "ENTRY" | "EXIT" | "RISK" | "CONTEXT";

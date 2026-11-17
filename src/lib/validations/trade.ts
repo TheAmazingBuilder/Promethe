@@ -192,7 +192,7 @@ export const CHECKLIST_CATEGORIES = [
   "CONTEXT",
 ] as const;
 
-/** Checklist item as sent by the client (id omitted — server assigns). */
+/** Checklist item as sent by the client (id omitted - server assigns). */
 export const checklistItemSchema = z.object({
   label: z.string().trim().min(1, "required").max(200),
   category: z.enum(CHECKLIST_CATEGORIES).default("ENTRY"),
@@ -222,7 +222,7 @@ export const strategyInputSchema = z.object({
   checklistItems: z.array(checklistItemSchema).max(60).optional(),
 });
 
-/** POST /api/strategies/[id]/versions — snapshot the current definition. */
+/** POST /api/strategies/[id]/versions - snapshot the current definition. */
 export const strategyVersionSchema = z.object({
   note: z.string().trim().max(500).nullish(),
 });
@@ -268,7 +268,7 @@ export const instrumentInputSchema = z.object({
   baseCurrency: z.enum(COMMON_CURRENCIES).nullish(),
   quoteCurrency: z.enum(COMMON_CURRENCIES).default("USD"),
   digits: z.number().int().min(0).max(10).default(5),
-  /** Positive decimals — exact strings, never floats. */
+  /** Positive decimals - exact strings, never floats. */
   pipSize: decimalString.default("0.0001"),
   pointSize: decimalString.default("0.00001"),
   contractSize: decimalString.default("100000"),

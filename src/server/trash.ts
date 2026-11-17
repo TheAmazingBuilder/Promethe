@@ -27,9 +27,9 @@ import { UPLOAD_ROOT } from "@/server/uploads";
 export interface TrashItemDTO {
   id: string;
   entity: TrashEntity;
-  /** Display label — symbol+direction for trades, name for the rest. */
+  /** Display label - symbol+direction for trades, name for the rest. */
   title: string;
-  /** Secondary line — date, strategy… (nullable). */
+  /** Secondary line - date, strategy… (nullable). */
   subtitle: string | null;
   deletedAt: string;
   /** Whole days left before the daily cron purges the item. */

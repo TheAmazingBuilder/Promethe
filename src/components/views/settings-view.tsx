@@ -34,7 +34,7 @@ const THEME_OPTIONS = [
   { value: "system", labelKey: "themeSystem", icon: Monitor },
 ] as const;
 
-/** Common IANA timezones — the current profile tz is always offered. */
+/** Common IANA timezones - the current profile tz is always offered. */
 const TIMEZONES = [
   "UTC",
   "America/Toronto",
@@ -66,7 +66,7 @@ const TIMEZONES = [
   "Pacific/Auckland",
 ];
 
-/** Profile editor — PATCH /api/profile, then refresh the global session. */
+/** Profile editor - PATCH /api/profile, then refresh the global session. */
 function ProfileEditorCard() {
   const { session, setSession } = useSession();
   const t = useTranslations("settings");

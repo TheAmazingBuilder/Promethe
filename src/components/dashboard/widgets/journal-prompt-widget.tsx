@@ -1,6 +1,6 @@
 "use client";
 
-/** journal-prompt widget — daily prompt + "Open journal" CTA + entry check. */
+/** journal-prompt widget - daily prompt + "Open journal" CTA + entry check. */
 import { BookOpen, CheckCircle2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";

@@ -67,7 +67,7 @@ export interface MatrixResult {
   colTotalsN: number[];
   /** Grand totals. */
   grand: { value: number | null; n: number };
-  /** Max |value| over VALID cells (color scale bound) — null when no data. */
+  /** Max |value| over VALID cells (color scale bound) - null when no data. */
   maxAbs: number | null;
   excludedCount: number;
   warnings: string[];

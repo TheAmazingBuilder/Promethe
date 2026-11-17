@@ -3,7 +3,7 @@ import { requireUser } from "@/server/session";
 import { apiError } from "@/server/api";
 import { deleteBenchmark } from "@/server/charts";
 
-/** DELETE /api/charts/benchmarks/[id] — remove (404 when not owned). */
+/** DELETE /api/charts/benchmarks/[id] - remove (404 when not owned). */
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function DELETE(_req: Request, ctx: Ctx) {

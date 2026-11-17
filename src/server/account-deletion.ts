@@ -132,7 +132,7 @@ export async function cancelAccountDeletion(userId: string): Promise<boolean> {
 
 export interface DeletionExecutionReport {
   executed: number;
-  /** Tombstone ids created (HMAC of user ids — audit trail). */
+  /** Tombstone ids created (HMAC of user ids - audit trail). */
   tombstones: string[];
 }
 

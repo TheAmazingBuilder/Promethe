@@ -1,6 +1,6 @@
 "use client";
 
-/** streak widget — current streak big + max win / max loss streaks. */
+/** streak widget - current streak big + max win / max loss streaks. */
 import { Flame, Snowflake } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { fmtNum } from "@/lib/format";

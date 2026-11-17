@@ -112,7 +112,7 @@ export interface ChunkResult {
   duplicates: number;
   /** Manual trades left untouched (reconciliation will propose merges). */
   manualSkipped: number;
-  /** v2.5 M4 — trashed rows brought back by re-import (also counted in `updated`). */
+  /** v2.5 M4 - trashed rows brought back by re-import (also counted in `updated`). */
   restored: number;
   errors: { row: number; externalId?: string; code: string; detail?: string }[];
 }

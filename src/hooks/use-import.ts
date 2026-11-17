@@ -78,7 +78,7 @@ function parseInWorker(worker: Worker, content: ImportFileContent): Promise<Pars
     const id = Date.now();
     const timeout = setTimeout(() => {
       worker.terminate();
-      reject(new Error("Analyse trop longue — fichier trop volumineux ?"));
+      reject(new Error("Analyse trop longue - fichier trop volumineux ?"));
     }, 60_000);
 
     worker.addEventListener("message", (event: MessageEvent<WorkerResponse>) => {

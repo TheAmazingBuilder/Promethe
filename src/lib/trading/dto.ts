@@ -11,14 +11,14 @@ export interface TagDTO {
   name: string;
   color: string;
   kind: string;
-  /** True for global presets (userId = null) — read-only in the UI. */
+  /** True for global presets (userId = null) - read-only in the UI. */
   isPreset?: boolean;
 }
 
-/** Custom instrument (user-owned) — presets have isPreset = true. */
+/** Custom instrument (user-owned) - presets have isPreset = true. */
 export interface InstrumentDTO {
   id: string;
-  /** True for global presets (userId = null) — read-only in the UI. */
+  /** True for global presets (userId = null) - read-only in the UI. */
   isPreset: boolean;
   symbol: string;
   name: string;

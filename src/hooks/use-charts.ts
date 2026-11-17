@@ -99,7 +99,7 @@ export function useDeleteSavedChart() {
   });
 }
 
-/** Parse a saved chart's stored config (defensive — old/broken rows → null). */
+/** Parse a saved chart's stored config (defensive - old/broken rows → null). */
 export function parseSavedConfig(config: unknown): ChartConfig | null {
   if (config == null || typeof config !== "object") return null;
   return config as ChartConfig;

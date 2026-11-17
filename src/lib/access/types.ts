@@ -29,7 +29,7 @@ export interface AccessContext {
   ownerId: string;
   role: AccessRole;
   scope: AccessScope;
-  /** Mentors are ALWAYS read-only — enforced server-side, not just hidden UI. */
+  /** Mentors are ALWAYS read-only - enforced server-side, not just hidden UI. */
   readOnly: boolean;
 }
 
@@ -43,7 +43,7 @@ export const OWNER_SCOPE: AccessScope = {
   canComment: true,
 };
 
-/** Typed 403 — mapped by apiError() into a consistent envelope. */
+/** Typed 403 - mapped by apiError() into a consistent envelope. */
 export class AccessDeniedError extends Error {
   code = "ACCESS_DENIED";
   status = 403;

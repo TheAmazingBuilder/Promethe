@@ -358,7 +358,7 @@ export function BenchmarkView() {
                   value={
                     comparison.gapAtEnd != null
                       ? `${comparison.gapAtEnd >= 0 ? "+" : ""}${fmtNum(comparison.gapAtEnd, 1)}`
-                      : "—"
+                      : "-"
                   }
                   tone={
                     comparison.gapAtEnd == null
@@ -373,7 +373,7 @@ export function BenchmarkView() {
                   value={
                     comparison.beatRate != null
                       ? fmt.pct(comparison.beatRate, 0)
-                      : "—"
+                      : "-"
                   }
                 />
                 <StatCell

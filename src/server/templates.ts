@@ -183,7 +183,7 @@ export async function updateTemplate(
   return row ? toTemplateDTO(row) : null;
 }
 
-/** Record a usage (applied to a form) — usage count + lastUsedAt. */
+/** Record a usage (applied to a form) - usage count + lastUsedAt. */
 export async function recordTemplateUse(
   userId: string,
   id: string

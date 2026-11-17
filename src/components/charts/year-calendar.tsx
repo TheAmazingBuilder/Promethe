@@ -294,7 +294,7 @@ export function YearCalendar({
                       >
                         <title>
                           {cell.inYear
-                            ? `${cell.date} — ${formatDay(cell)}`
+                            ? `${cell.date} - ${formatDay(cell)}`
                             : ""}
                         </title>
                       </rect>
@@ -349,7 +349,7 @@ export function YearCalendar({
             {/* Focus info (accessible) */}
             <div className="min-h-5 text-xs text-muted-foreground" aria-live="polite">
               {focusCell?.inYear
-                ? `${focusCell.date} — ${formatDay(focusCell)}`
+                ? `${focusCell.date} - ${formatDay(focusCell)}`
                 : t("hoverHint")}
             </div>
             <p className="text-xs text-muted-foreground">{t("clickHint")}</p>

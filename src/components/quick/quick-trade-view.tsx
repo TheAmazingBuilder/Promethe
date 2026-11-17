@@ -548,7 +548,7 @@ export function QuickTradeView() {
             <Select
               value={templateId}
               onValueChange={(id) => {
-                if (!id) return; // spurious Radix empty sync — ignore
+                if (!id) return; // spurious Radix empty sync - ignore
                 const tpl = templates?.find((x) => x.id === id);
                 if (tpl) applyTemplate(tpl);
               }}
@@ -759,7 +759,7 @@ export function QuickTradeView() {
                     className="min-h-10"
                     aria-label={t("riskAmountAria")}
                   >
-                    {accountCurrency || "—"}
+                    {accountCurrency || "-"}
                   </ToggleGroupItem>
                   <ToggleGroupItem
                     value="lots"
@@ -878,7 +878,7 @@ export function QuickTradeView() {
                           currency={accountCurrency}
                         />
                       ) : (
-                        "—"
+                        "-"
                       )}
                     </dd>
                   </div>
@@ -889,7 +889,7 @@ export function QuickTradeView() {
                     <dd className="font-semibold tabular-nums">
                       {preview?.plannedRR
                         ? `1 : ${fmtNum(preview.plannedRR, 2)}`
-                        : "—"}
+                        : "-"}
                     </dd>
                   </div>
                 </dl>

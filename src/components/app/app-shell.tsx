@@ -105,7 +105,7 @@ export function AppShell({
       <Sidebar collapsible="icon" aria-label={t("sidebarLabel")}>
         <SidebarHeader className="border-b border-sidebar-border">
           <div className="flex h-14 items-center px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
-            <a href="#/" aria-label="Promethe — Home" className="min-w-0">
+            <a href="#/" aria-label="Promethe - Home" className="min-w-0">
               <BrandMark />
             </a>
           </div>
@@ -179,7 +179,7 @@ export function AppShell({
               >
                 <Search className="h-4 w-4" aria-hidden="true" />
                 <span className="hidden text-xs sm:inline">{t("search")}</span>
-                <span className="sr-only">— {t("openCommandMenu")}</span>
+                <span className="sr-only">- {t("openCommandMenu")}</span>
                 <kbd className="hidden rounded border bg-muted px-1.5 font-mono text-[10px] sm:inline" aria-hidden="true">
                   ⌘K
                 </kbd>

@@ -146,7 +146,7 @@ export function PropStatusCard() {
           ) : (
             <CheckCircle2 className="h-4 w-4 text-gain" aria-hidden="true" />
           )}
-          {t("title")} — <Sensitive kind="account">{account.name}</Sensitive>
+          {t("title")} - <Sensitive kind="account">{account.name}</Sensitive>
           <Badge
             variant="secondary"
             className={`ml-auto ${toneOf(status.overall)}`}

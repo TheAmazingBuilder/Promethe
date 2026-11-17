@@ -1,6 +1,6 @@
 "use client";
 
-/** single-kpi widget — one KPI card from the KPI catalog. */
+/** single-kpi widget - one KPI card from the KPI catalog. */
 import { useTranslations } from "next-intl";
 import { singleKpiConfigSchema } from "@/lib/dashboard/registry";
 import type { KpiKey } from "@/lib/dashboard/types";

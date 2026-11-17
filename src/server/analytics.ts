@@ -34,7 +34,7 @@ const TRADE_INCLUDE = {
 
 type Row = Prisma.TradeGetPayload<{ include: typeof TRADE_INCLUDE }>;
 
-/** Period start (UTC Date) — null for "all". */
+/** Period start (UTC Date) - null for "all". */
 function periodCutoff(period: AnalyticsQuery["period"]): Date | null {
   const now = new Date();
   switch (period) {

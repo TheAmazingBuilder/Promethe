@@ -27,7 +27,7 @@ function usePrivacySnapshot() {
 
 export interface PrivateImageProps
   extends React.ImgHTMLAttributes<HTMLImageElement> {
-  /** Alt text — always provided (accessibility), never blurred semantically. */
+  /** Alt text - always provided (accessibility), never blurred semantically. */
   alt: string;
 }
 

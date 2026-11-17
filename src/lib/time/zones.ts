@@ -126,7 +126,7 @@ export function nyCloseBrokerOffsetMinutes(instant: Date): number {
   return offsetMinutesOfTz(instant, "America/New_York") + 420;
 }
 
-/** "GMT+3", "GMT−5:30" — human label for a fixed offset in minutes. */
+/** "GMT+3", "GMT−5:30" - human label for a fixed offset in minutes. */
 export function formatOffsetLabel(offsetMinutes: number): string {
   const sign = offsetMinutes < 0 ? "−" : "+";
   const abs = Math.abs(offsetMinutes);

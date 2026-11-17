@@ -203,7 +203,7 @@ export function ReplayPlayerSection({ trade }: { trade: TradeDetailDTO }) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">{t("title")} — {trade.symbol}</CardTitle>
+          <CardTitle className="text-base">{t("title")} - {trade.symbol}</CardTitle>
         </CardHeader>
         <CardContent>
           <Skeleton className="h-96 w-full" />
@@ -216,7 +216,7 @@ export function ReplayPlayerSection({ trade }: { trade: TradeDetailDTO }) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">{t("title")} — {trade.symbol}</CardTitle>
+          <CardTitle className="text-base">{t("title")} - {trade.symbol}</CardTitle>
           <CardDescription>{t("needCandles")}</CardDescription>
         </CardHeader>
         <CardContent>
@@ -256,7 +256,7 @@ export function ReplayPlayerSection({ trade }: { trade: TradeDetailDTO }) {
       <CardHeader className="flex-row flex-wrap items-start justify-between gap-2 space-y-0">
         <div className="space-y-1.5">
           <CardTitle className="text-base">
-            {t("title")} — {trade.symbol}
+            {t("title")} - {trade.symbol}
           </CardTitle>
           <CardDescription>{t("description")}</CardDescription>
         </div>
@@ -492,7 +492,7 @@ export function ReplayPlayerSection({ trade }: { trade: TradeDetailDTO }) {
               </p>
             ) : (
               <p className="mt-0.5 text-sm text-muted-foreground">
-                {snap.preEntry ? t("preEntryActive") : "—"}
+                {snap.preEntry ? t("preEntryActive") : "-"}
               </p>
             )}
           </div>
@@ -504,24 +504,24 @@ export function ReplayPlayerSection({ trade }: { trade: TradeDetailDTO }) {
                 <span className="text-loss">−{pos.maeR} R</span>
               </p>
             ) : (
-              <p className="mt-0.5 text-sm text-muted-foreground">—</p>
+              <p className="mt-0.5 text-sm text-muted-foreground">-</p>
             )}
           </div>
           <div>
             <p className="text-xs text-muted-foreground">{t("distances")}</p>
             {pos ? (
               <p className="mt-0.5 font-mono text-sm">
-                SL {pos.distanceToSlPips ?? "—"} pips · TP{" "}
-                {pos.distanceToTpPips ?? "—"} pips
+                SL {pos.distanceToSlPips ?? "-"} pips · TP{" "}
+                {pos.distanceToTpPips ?? "-"} pips
               </p>
             ) : (
-              <p className="mt-0.5 text-sm text-muted-foreground">—</p>
+              <p className="mt-0.5 text-sm text-muted-foreground">-</p>
             )}
           </div>
           <div>
             <p className="text-xs text-muted-foreground">{t("timeInTrade")}</p>
             <p className="mt-0.5 font-mono text-sm">
-              {snap.preEntry ? "—" : fmtDur(snap.timeInTradeSec)}
+              {snap.preEntry ? "-" : fmtDur(snap.timeInTradeSec)}
               {snap.closed ? ` · ${t("closedLabel")}` : ""}
             </p>
           </div>
@@ -530,7 +530,7 @@ export function ReplayPlayerSection({ trade }: { trade: TradeDetailDTO }) {
             <p className="text-xs text-muted-foreground">{t("events")}</p>
             <div className="mt-1 flex flex-wrap gap-1.5">
               {snap.events.length === 0 ? (
-                <span className="text-sm text-muted-foreground">—</span>
+                <span className="text-sm text-muted-foreground">-</span>
               ) : (
                 snap.events.map((e, i) => (
                   <span

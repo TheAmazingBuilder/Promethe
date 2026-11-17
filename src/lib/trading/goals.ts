@@ -72,7 +72,7 @@ export interface GoalProgress {
   windowStartDay: string;
   /** Exclusive local end day (day AFTER the last day of the window). */
   windowEndDay: string;
-  /** Current metric value — null when the metric has no data yet. */
+  /** Current metric value - null when the metric has no data yet. */
   currentValue: string | null;
   targetValue: string;
   /** 0-100, clamped; 0 when there is no data. */

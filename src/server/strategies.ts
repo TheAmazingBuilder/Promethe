@@ -48,7 +48,7 @@ function toVersionDTO(v: VersionRow): StrategyVersionDTO {
     snapshot = null;
   }
   const safe = snapshot ?? {
-    name: "—",
+    name: "-",
     description: null,
     color: "#10b981",
     status: "ACTIVE",

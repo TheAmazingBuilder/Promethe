@@ -62,7 +62,7 @@ interface MergeLogDTO {
 }
 
 function formatTime(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   return new Date(iso).toLocaleString("fr-FR", {
     dateStyle: "short",
     timeStyle: "short",
@@ -136,16 +136,16 @@ function TradeColumn({
     [t("entryTime"), formatTime(trade.entryTime)],
     [t("entryPrice"), trade.entryPrice],
     [t("exitTime"), formatTime(trade.exitTime)],
-    [t("exitPrice"), trade.exitPrice ?? "—"],
+    [t("exitPrice"), trade.exitPrice ?? "-"],
     [t("lots"), trade.lots],
   ];
   if ("netPnl" in trade) {
-    rows.push([t("netPnl"), trade.netPnl ?? "—"]);
-    rows.push([t("pips"), trade.pips ?? "—"]);
+    rows.push([t("netPnl"), trade.netPnl ?? "-"]);
+    rows.push([t("pips"), trade.pips ?? "-"]);
     rows.push([t("source"), trade.source === "EA_SYNC" ? "EA" : "Import"]);
   } else {
-    rows.push([t("strategy"), trade.strategyName ?? "—"]);
-    rows.push([t("journal"), trade.hasNotes ? "✓" : "—"]);
+    rows.push([t("strategy"), trade.strategyName ?? "-"]);
+    rows.push([t("journal"), trade.hasNotes ? "✓" : "-"]);
     rows.push([t("screenshots"), String(trade.screenshotCount)]);
   }
 

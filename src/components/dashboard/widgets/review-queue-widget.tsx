@@ -1,6 +1,6 @@
 "use client";
 
-/** review-queue widget — to-review / drafts counts with a CTA to the trades list. */
+/** review-queue widget - to-review / drafts counts with a CTA to the trades list. */
 import { ArrowRight, ClipboardCheck, FileEdit } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";

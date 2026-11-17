@@ -521,7 +521,7 @@ export function AccountsView() {
                       <dd className="font-medium tabular-nums">
                         {a.maxDailyLossPercent
                           ? `−${a.maxDailyLossPercent}%`
-                          : "—"}
+                          : "-"}
                       </dd>
                     </div>
                     <div>
@@ -531,7 +531,7 @@ export function AccountsView() {
                           ? `−${a.maxTotalDrawdownPercent}%${
                               a.drawdownType === "TRAILING" ? " ↗" : ""
                             }`
-                          : "—"}
+                          : "-"}
                       </dd>
                     </div>
                     <div>
@@ -542,14 +542,14 @@ export function AccountsView() {
                         {a.profitTarget ? (
                           <Money value={a.profitTarget} currency={a.currency} />
                         ) : (
-                          "—"
+                          "-"
                         )}
                       </dd>
                     </div>
                     <div>
                       <dt className="text-muted-foreground">{t("propStart")}</dt>
                       <dd className="font-medium tabular-nums">
-                        {a.startDate ? a.startDate.slice(0, 10) : "—"}
+                        {a.startDate ? a.startDate.slice(0, 10) : "-"}
                       </dd>
                     </div>
                   </dl>

@@ -845,7 +845,7 @@ export function ChartBuilderView() {
             <div className="space-y-1.5">
               <CardTitle className="text-base">
                 {t("preview.title")}
-                {yDef ? ` — ${t(`measures.${draft.y}` as never)}` : ""}
+                {yDef ? ` - ${t(`measures.${draft.y}` as never)}` : ""}
               </CardTitle>
               <CardDescription>
                 {draft.chartType === "scatter"
@@ -945,7 +945,7 @@ export function ChartBuilderView() {
                 <div
                   ref={previewRef}
                   role="img"
-                  aria-label={`${t("preview.title")} — ${t(`dimensions.${draft.x}` as never)}`}
+                  aria-label={`${t("preview.title")} - ${t(`dimensions.${draft.x}` as never)}`}
                 >
                   <ChartPreview
                     result={result}

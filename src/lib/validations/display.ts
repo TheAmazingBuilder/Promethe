@@ -74,7 +74,7 @@ export const displayPreferencesSchema = z.object({
   tradingDay: tradingDaySettingsSchema,
 });
 
-/** PATCH body — every field optional; JSON sub-objects replace their slice. */
+/** PATCH body - every field optional; JSON sub-objects replace their slice. */
 export const displayPreferencesInputSchema = z.object({
   privacyMode: z.enum(["OFF", "HIDE", "BLUR"]).optional(),
   privacyScope: privacyScopeSchema.partial().optional(),

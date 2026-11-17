@@ -226,7 +226,7 @@ function InstrumentEditor({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">—</SelectItem>
+                  <SelectItem value="none">-</SelectItem>
                   {COMMON_CURRENCIES.map((c) => (
                     <SelectItem key={c} value={c}>
                       {c}

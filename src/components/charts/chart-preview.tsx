@@ -149,7 +149,7 @@ export function formatMeasureValue(
   format: MeasureFormatKind,
   currency?: string
 ): string {
-  if (v == null || !Number.isFinite(v)) return "—";
+  if (v == null || !Number.isFinite(v)) return "-";
   switch (format) {
     case "CURRENCY":
       return new Intl.NumberFormat(undefined, {
@@ -231,7 +231,7 @@ function ChartTooltip({
       ))}
       <p className="mt-1 border-t pt-1 text-muted-foreground">
         {t("sampleSize")}: {datum.total}
-        {datum.lowSample ? ` — ${t("lowSample")}` : ""}
+        {datum.lowSample ? ` - ${t("lowSample")}` : ""}
       </p>
     </div>
   );
@@ -280,7 +280,7 @@ export interface ChartPreviewProps {
   yFormat: MeasureFormatKind;
   y2Format: MeasureFormatKind;
   onDrill?: (drill: { dimension: XDimension; value: string }) => void;
-  /** Chart body height in px — defaults to 340 (builder page size).
+  /** Chart body height in px - defaults to 340 (builder page size).
    *  Dashboard widgets pass their grid-derived height. */
   height?: number;
 }
@@ -751,7 +751,7 @@ function HistogramPreview({
                   {fmtNum(bin.from, 2)} → {fmtNum(bin.to, 2)}
                 </p>
                 <p className="text-muted-foreground">
-                  {bin.count} ({fmtNum(pct, 1)} %) — {formatMeasureValue(bin.from, xFormat)}
+                  {bin.count} ({fmtNum(pct, 1)} %) - {formatMeasureValue(bin.from, xFormat)}
                 </p>
                 <p className="text-muted-foreground">{t("tradesInBin")}</p>
               </div>

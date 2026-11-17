@@ -20,7 +20,7 @@ import { navigate } from "@/lib/router";
 import { useToast } from "@/hooks/use-toast";
 import { usePrivacyPreferences } from "@/components/privacy/privacy-provider";
 
-/** ⌘K / Ctrl+K command palette — navigation + quick actions. */
+/** ⌘K / Ctrl+K command palette - navigation + quick actions. */
 export function CommandMenu({
   open,
   onOpenChange,

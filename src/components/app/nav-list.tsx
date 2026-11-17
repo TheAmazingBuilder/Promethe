@@ -21,7 +21,7 @@ interface MentorHomePayload {
   isMentor: boolean;
 }
 
-/** Shared query — identical key AND queryFn everywhere (cache coherent). */
+/** Shared query - identical key AND queryFn everywhere (cache coherent). */
 export function useMentorHome() {
   return useQuery({
     queryKey: ["mentor-space"],

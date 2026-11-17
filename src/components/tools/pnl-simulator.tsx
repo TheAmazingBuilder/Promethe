@@ -78,7 +78,7 @@ export function PnlSimulator() {
   const min = validLevels.length ? Math.min(...validLevels.map((l) => l.price)) : 0;
   const max = validLevels.length ? Math.max(...validLevels.map((l) => l.price)) : 0;
   const span = max - min || 1;
-  const pos = (p: number) => ((p - min) / span) * 80 + 10; // 10–90 % padding
+  const pos = (p: number) => ((p - min) / span) * 80 + 10; // 10-90 % padding
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -260,23 +260,23 @@ export function PnlSimulator() {
           />
           <MiniStat
             label={t("rMultiple")}
-            value={preview.rMultiple ? `${fmtNum(preview.rMultiple, 2)} R` : "—"}
+            value={preview.rMultiple ? `${fmtNum(preview.rMultiple, 2)} R` : "-"}
             valueClass={pnlClass(preview.rMultiple)}
           />
           <MiniStat
             label={t("plannedRR")}
-            value={preview.plannedRR ? `1 : ${fmtNum(preview.plannedRR, 2)}` : "—"}
+            value={preview.plannedRR ? `1 : ${fmtNum(preview.plannedRR, 2)}` : "-"}
           />
           <MiniStat
             label={t("realizedRR")}
-            value={preview.realizedRR ? `${fmtNum(preview.realizedRR, 2)} R` : "—"}
+            value={preview.realizedRR ? `${fmtNum(preview.realizedRR, 2)} R` : "-"}
             valueClass={pnlClass(preview.realizedRR)}
           />
           <MiniStat
             label={t("pnlPerPip")}
             value={
               preview.pips.isZero() ? (
-                "—"
+                "-"
               ) : (
                 <Money
                   value={preview.grossPnl.div(preview.pips)}

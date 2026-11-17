@@ -144,7 +144,7 @@ export async function buildReportPayload(
   const byStrategy = breakdown(
     groupStats(trades, (t) => t.strategyId ?? "__none__"),
     (key) => {
-      if (key === "__none__") return "—";
+      if (key === "__none__") return "-";
       return trades.find((t) => t.strategyId === key)?.strategyName ?? key;
     }
   );

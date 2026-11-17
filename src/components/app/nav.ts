@@ -44,10 +44,10 @@ export interface NavItem {
   path: string;
   view: ViewId;
   icon: LucideIcon;
-  /** Roadmap phase (README) — null when the section is already live. */
+  /** Roadmap phase (README) - null when the section is already live. */
   phase: number | null;
   ready: boolean;
-  /** v3 Phase 5 — only shown when the user mentors at least one trader. */
+  /** v3 Phase 5 - only shown when the user mentors at least one trader. */
   mentorOnly?: boolean;
 }
 

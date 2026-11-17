@@ -133,7 +133,7 @@ function RulesBlock() {
                 {rule.description ? (
                   <span className="text-muted-foreground">
                     {" "}
-                    — {rule.description}
+                    - {rule.description}
                   </span>
                 ) : null}
               </span>

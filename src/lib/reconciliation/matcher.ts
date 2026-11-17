@@ -29,7 +29,7 @@ export interface MatcherConfig {
   minScore: number;
   /** High-confidence threshold (bulk/auto merge). */
   autoMergeScore: number;
-  /** Entry price tolerance in PIPS (stricter forex, wider gold — the caller
+  /** Entry price tolerance in PIPS (stricter forex, wider gold - the caller
    *  passes per-instrument pipSize and a suitable tolerance). */
   entryTolerancePips: number;
   /** Absolute lots epsilon. */

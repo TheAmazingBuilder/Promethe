@@ -71,7 +71,7 @@ export interface ReceivedInvitationDTO {
   expiresAt: string;
 }
 
-/** Comment author — public name only, never the email. */
+/** Comment author - public name only, never the email. */
 export interface CommentAuthorDTO {
   id: string;
   handle: string | null;
@@ -86,7 +86,7 @@ export interface TradeCommentDTO {
   author: CommentAuthorDTO;
   /** Restricted markdown (rendered client-side, raw HTML escaped). */
   body: string;
-  /** Mentioned user ids — targets validated server-side at creation. */
+  /** Mentioned user ids - targets validated server-side at creation. */
   mentions: string[];
   createdAt: string;
   editedAt: string | null;

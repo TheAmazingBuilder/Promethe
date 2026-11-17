@@ -21,7 +21,7 @@ export type ImportFormat =
 
 /** A closed (or single-row open→close) broker trade, normalized. */
 export interface NormalizedTradeRow {
-  /** Broker position/ticket id — import dedupe key. */
+  /** Broker position/ticket id - import dedupe key. */
   externalId: string;
   symbol: string;
   direction: "LONG" | "SHORT";
@@ -66,7 +66,7 @@ export interface ParseResult {
   trades: NormalizedTradeRow[];
   cash: NormalizedCashRow[];
   warnings: ImportParseWarning[];
-  /** Column mapping used (generic CSV) — for the preview UI. */
+  /** Column mapping used (generic CSV) - for the preview UI. */
   columns?: Record<string, string>;
   /** Rows skipped as summary/aggregate lines (count only). */
   skippedRows: number;

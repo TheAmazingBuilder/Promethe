@@ -176,7 +176,7 @@ function RDistTooltipContent({
   );
 }
 
-/** One breakdown dimension — compact rows with a proportional net P&L bar. */
+/** One breakdown dimension - compact rows with a proportional net P&L bar. */
 function BreakdownCard({
   title,
   description,
@@ -241,7 +241,7 @@ function BreakdownCard({
                     <span className="hidden w-16 whitespace-nowrap text-right text-xs text-muted-foreground sm:inline">
                       {e.stats.winRate != null
                         ? fmt.pct(e.stats.winRate)
-                        : "—"}
+                        : "-"}
                     </span>
                     <Money
                       signed
@@ -338,7 +338,7 @@ export function AnalyticsView() {
     const h = Number(key);
     if (!Number.isFinite(h)) return key;
     const two = (n: number) => String(n).padStart(2, "0");
-    return `${two(h)}:00–${two(h + 1)}:59`;
+    return `${two(h)}:00-${two(h + 1)}:59`;
   }, []);
 
   /** Formats raw insight params for i18n interpolation (money, R, labels…). */
@@ -397,10 +397,10 @@ export function AnalyticsView() {
     const streak = s?.currentStreak ?? 0;
     return {
       netPnlTone: s ? pnlClass(s.netPnl) : "text-muted-foreground",
-      winRate: s?.winRate != null ? fmt.pct(s.winRate) : "—",
+      winRate: s?.winRate != null ? fmt.pct(s.winRate) : "-",
       profitFactor:
         pfNum == null
-          ? "—"
+          ? "-"
           : Number.isFinite(pfNum)
             ? fmtNum(pfNum)
             : "∞",
@@ -412,12 +412,12 @@ export function AnalyticsView() {
             : pfNum < 1
               ? ROSE
               : "",
-      expectancy: s?.expectancyR != null ? `${fmtSigned(s.expectancyR)} R` : "—",
+      expectancy: s?.expectancyR != null ? `${fmtSigned(s.expectancyR)} R` : "-",
       expectancyTone:
         s?.expectancyR != null ? pnlClass(s.expectancyR) : "text-muted-foreground",
-      totalR: s?.totalR != null ? `${fmtSigned(s.totalR)} R` : "—",
+      totalR: s?.totalR != null ? `${fmtSigned(s.totalR)} R` : "-",
       maxDrawdownTone: s?.maxDrawdown != null ? ROSE : "",
-      sqn: advanced?.sqn != null ? fmtNum(advanced.sqn) : "—",
+      sqn: advanced?.sqn != null ? fmtNum(advanced.sqn) : "-",
       sqnTone:
         advanced?.sqn == null
           ? ""
@@ -426,15 +426,15 @@ export function AnalyticsView() {
             : Number(advanced.sqn) < 1
               ? ROSE
               : "",
-      tradeCount: s ? fmtNum(s.tradeCount, 0) : "—",
+      tradeCount: s ? fmtNum(s.tradeCount, 0) : "-",
       winsLosses: s
         ? t("kpiWinsLosses", { wins: s.wins, losses: s.losses, be: s.breakevens })
         : null,
-      sharpe: advanced?.sharpe != null ? fmtNum(advanced.sharpe) : "—",
-      sortino: advanced?.sortino != null ? fmtNum(advanced.sortino) : "—",
+      sharpe: advanced?.sharpe != null ? fmtNum(advanced.sharpe) : "-",
+      sortino: advanced?.sortino != null ? fmtNum(advanced.sortino) : "-",
       recovery:
-        advanced?.recoveryFactor != null ? fmtNum(advanced.recoveryFactor) : "—",
-      payoff: advanced?.payoffRatio != null ? fmtNum(advanced.payoffRatio) : "—",
+        advanced?.recoveryFactor != null ? fmtNum(advanced.recoveryFactor) : "-",
+      payoff: advanced?.payoffRatio != null ? fmtNum(advanced.payoffRatio) : "-",
       avgDuration:
         advanced?.avgDurationMin != null
           ? advanced.avgDurationMin >= 60
@@ -443,16 +443,16 @@ export function AnalyticsView() {
                 m: advanced.avgDurationMin % 60,
               })
             : t("durationM", { m: advanced.avgDurationMin })
-          : "—",
-      rCoverage: advanced?.rCoverage != null ? fmt.pct(advanced.rCoverage) : "—",
-      maxWinStreak: s ? fmtNum(s.maxWinStreak, 0) : "—",
-      maxLossStreak: s ? fmtNum(s.maxLossStreak, 0) : "—",
+          : "-",
+      rCoverage: advanced?.rCoverage != null ? fmt.pct(advanced.rCoverage) : "-",
+      maxWinStreak: s ? fmtNum(s.maxWinStreak, 0) : "-",
+      maxLossStreak: s ? fmtNum(s.maxLossStreak, 0) : "-",
       streakText:
         streak > 0
           ? t("streakWin", { count: streak })
           : streak < 0
             ? t("streakLoss", { count: Math.abs(streak) })
-            : "—",
+            : "-",
       streakTone: streak > 0 ? EMERALD : streak < 0 ? ROSE : "",
     };
   }, [stats, advanced, currency, t, fmt]);
@@ -592,7 +592,7 @@ export function AnalyticsView() {
                   stats ? (
                     <Money signed value={stats.netPnl} currency={currency} />
                   ) : (
-                    "—"
+                    "-"
                   )
                 }
                 valueClassName={kpi.netPnlTone}
@@ -623,7 +623,7 @@ export function AnalyticsView() {
                   stats?.maxDrawdown != null ? (
                     <Money value={stats.maxDrawdown} currency={currency} />
                   ) : (
-                    "—"
+                    "-"
                   )
                 }
                 valueClassName={kpi.maxDrawdownTone}
@@ -645,7 +645,7 @@ export function AnalyticsView() {
               <KpiCard
                 compact
                 label={t("kpiStreaks")}
-                value={kpi.streakText || "—"}
+                value={kpi.streakText || "-"}
                 valueClassName={kpi.streakTone}
                 sub={t("streaksMax", {
                   wins: kpi.maxWinStreak,
@@ -663,7 +663,7 @@ export function AnalyticsView() {
                   advanced != null ? (
                     <Money value={advanced.totalFees} currency={currency} />
                   ) : (
-                    "—"
+                    "-"
                   )
                 }
               />

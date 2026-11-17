@@ -126,7 +126,7 @@ const DEFAULT_QUERY: TradeListQuery = {
 
 type SortKey = "entryTime" | "exitTime" | "netPnl" | "rMultiple";
 
-/** v2.5 M2 — chart drill-down: apply #/trades?… filters once on mount. */
+/** v2.5 M2 - chart drill-down: apply #/trades?… filters once on mount. */
 function drillFiltersFromHash(): Partial<TradeListQuery> | null {
   if (typeof window === "undefined") return null;
   const route = parseHash(window.location.hash);
@@ -160,7 +160,7 @@ function drillFiltersFromHash(): Partial<TradeListQuery> | null {
   return any ? patch : null;
 }
 
-/** Trades journal — server-side filters, saved views, sortable paginated table. */
+/** Trades journal - server-side filters, saved views, sortable paginated table. */
 export function TradesView() {
   const t = useTranslations("trades.list");
   const tCommon = useTranslations("common");
@@ -330,7 +330,7 @@ export function TradesView() {
   const views = savedViews.data ?? [];
   const loading = trades.isLoading;
 
-  /** CSV export of the CURRENT filters (phase 6) — same where-clause server-side.
+  /** CSV export of the CURRENT filters (phase 6) - same where-clause server-side.
    * v2.5 Module 8: privacy mode is display-only, so the export still contains
    * REAL values — the user gets a clear warning before downloading (§3.1). */
   const [exporting, setExporting] = React.useState(false);
@@ -904,7 +904,7 @@ export function TradesView() {
                     {trade.resultType ? (
                       <ResultBadge result={trade.resultType} />
                     ) : (
-                      "—"
+                      "-"
                     )}
                   </TableCell>
                   <TableCell>
@@ -917,13 +917,13 @@ export function TradesView() {
                     <Sensitive kind="account">{trade.accountName}</Sensitive>
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground lg:table-cell">
-                    {trade.strategyName ?? "—"}
+                    {trade.strategyName ?? "-"}
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground xl:table-cell">
                     {labels.session(trade.session)}
                   </TableCell>
                   <TableCell className="hidden tabular-nums xl:table-cell">
-                    {trade.timeframe ?? "—"}
+                    {trade.timeframe ?? "-"}
                   </TableCell>
                   <TableCell className="hidden lg:table-cell">
                     <span

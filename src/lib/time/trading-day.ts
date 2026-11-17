@@ -25,9 +25,9 @@ export type TradingDayRolloverMode =
 
 export interface TradingDaySettings {
   mode: TradingDayRolloverMode;
-  /** "HH:MM" — required for CUSTOM, ignored otherwise. */
+  /** "HH:MM" - required for CUSTOM, ignored otherwise. */
   rolloverTime?: string | null;
-  /** IANA zone — required for CUSTOM, ignored otherwise. */
+  /** IANA zone - required for CUSTOM, ignored otherwise. */
   rolloverTimezone?: string | null;
 }
 
@@ -50,7 +50,7 @@ export function parseClock(value: string | null | undefined): number | null {
   return h * 60 + m;
 }
 
-/** Adds `days` to a YYYY-MM-DD key (UTC arithmetic — zones never matter here). */
+/** Adds `days` to a YYYY-MM-DD key (UTC arithmetic - zones never matter here). */
 export function addDaysToDayKey(dayKey: string, days: number): string {
   const [y, m, d] = dayKey.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d + days));

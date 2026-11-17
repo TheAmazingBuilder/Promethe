@@ -93,7 +93,7 @@ export function PerformanceChartWidget({
       const h = Number(key);
       if (!Number.isFinite(h)) return key;
       const two = (n: number) => String(n).padStart(2, "0");
-      return `${two(h)}–${two(h + 2)}h`;
+      return `${two(h)}-${two(h + 2)}h`;
     },
     [dimension, labels, locale]
   );

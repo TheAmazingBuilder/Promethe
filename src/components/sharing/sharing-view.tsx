@@ -72,9 +72,9 @@ function statusIcon(status: ShareLink["status"]) {
 }
 
 function fmtDateTime(locale: string, iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   return new Intl.DateTimeFormat(locale === "fr" ? "fr-CA" : "en-CA", {
     dateStyle: "medium",
     timeStyle: "short",

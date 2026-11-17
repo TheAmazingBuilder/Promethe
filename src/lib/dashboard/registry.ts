@@ -99,7 +99,7 @@ export type WidgetRequirement =
   | "sync" // broker connections
   | "goals" // goals or rules configured
   | "metrics" // at least one custom metric saved
-  | "savedCharts"; // v2.5 M2 — at least one saved chart
+  | "savedCharts"; // v2.5 M2 - at least one saved chart
 
 export interface WidgetDefinition {
   type: WidgetType;
@@ -114,7 +114,7 @@ export interface WidgetDefinition {
   maxSize: { w: number; h: number };
   configSchema: z.ZodType;
   defaultConfig: unknown;
-  /** Feature prerequisites — catalog disables the widget with a reason. */
+  /** Feature prerequisites - catalog disables the widget with a reason. */
   requires?: readonly WidgetRequirement[];
   /** false for purely static widgets (no loader call, no data payload). */
   hasLoader: boolean;
@@ -474,7 +474,7 @@ const REGISTRY = new Map<WidgetType, WidgetDefinition>(
   BUILT_INS.map((d) => [d.type, d])
 );
 
-/** Extension point — later modules add widgets without touching the core. */
+/** Extension point - later modules add widgets without touching the core. */
 export function registerWidget(definition: WidgetDefinition): void {
   REGISTRY.set(definition.type, definition);
 }

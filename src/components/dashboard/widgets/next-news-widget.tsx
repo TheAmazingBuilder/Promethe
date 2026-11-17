@@ -1,6 +1,6 @@
 "use client";
 
-/** next-news widget — upcoming high-impact economic events. */
+/** next-news widget - upcoming high-impact economic events. */
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { fmtDateTimeInTz } from "@/lib/format";

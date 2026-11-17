@@ -723,7 +723,7 @@ export function StrategiesView() {
                       <div>
                         <p className="text-[11px] text-muted-foreground">{t("stats.winRate")}</p>
                         <p className="font-semibold tabular-nums">
-                          {st.winRate != null ? `${Number(st.winRate).toFixed(0)} %` : "—"}
+                          {st.winRate != null ? `${Number(st.winRate).toFixed(0)} %` : "-"}
                         </p>
                       </div>
                     </div>

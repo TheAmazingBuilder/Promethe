@@ -84,7 +84,7 @@ function toDTO(row: ShareLink): ShareLinkDTO {
 
 // ── create ───────────────────────────────────────────────────────────────────
 
-/** Stored LIVE spec — where the read-time rebuild finds its parameters. */
+/** Stored LIVE spec - where the read-time rebuild finds its parameters. */
 interface LiveSpec {
   live: true;
   period?: ReportPeriod;
@@ -216,7 +216,7 @@ function stringProbesOnly(
 }
 
 export interface ResolveOptions {
-  /** Count a view (public page) — false for OG images and media proxy. */
+  /** Count a view (public page) - false for OG images and media proxy. */
   countView: boolean;
 }
 

@@ -48,11 +48,11 @@ export interface RuleTradeContext {
   isDraft: boolean;
   /** Local calendar day (YYYY-MM-DD, user TZ) of the ENTRY time. */
   entryLocalDay: string;
-  /** Local calendar day of the EXIT time — null while the trade is open. */
+  /** Local calendar day of the EXIT time - null while the trade is open. */
   exitLocalDay: string | null;
-  /** Risk at entry (account currency) — null when unknown. */
+  /** Risk at entry (account currency) - null when unknown. */
   riskAmount: string | null;
-  /** Realized net P&L — null while open. */
+  /** Realized net P&L - null while open. */
   netPnl: string | null;
 }
 

@@ -44,7 +44,7 @@ export interface WidgetRendererProps {
   type: string;
   /** The widget's entry from the batched data payload (may be null). */
   data: unknown;
-  /** Raw widget config (unknown) — each family parses with its schema. */
+  /** Raw widget config (unknown) - each family parses with its schema. */
   config: unknown;
   currency: string;
   timezone: string;

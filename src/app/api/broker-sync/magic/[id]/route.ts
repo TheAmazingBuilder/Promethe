@@ -1,4 +1,4 @@
-/** DELETE /api/broker-sync/magic/[id] — remove a magic mapping. */
+/** DELETE /api/broker-sync/magic/[id] - remove a magic mapping. */
 import { NextResponse } from "next/server";
 import { requireUser } from "@/server/session";
 import { apiError } from "@/server/api";

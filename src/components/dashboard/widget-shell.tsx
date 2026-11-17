@@ -349,7 +349,7 @@ export function WidgetShell({
             <button
               type="button"
               className="shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label={`${chipLabel} — ${t("periods.editAria", { name: title })}`}
+              aria-label={`${chipLabel} - ${t("periods.editAria", { name: title })}`}
             >
               <Badge
                 variant="outline"

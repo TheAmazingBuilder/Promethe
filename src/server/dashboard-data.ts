@@ -188,7 +188,7 @@ type AccountRow = Prisma.AccountGetPayload<Record<string, never>>;
  * list-item DTOs.
  */
 interface DashboardTrade extends AnalyticsTrade {
-  /** Narrowed from StatTrade's optional — always set by the mapper below. */
+  /** Narrowed from StatTrade's optional - always set by the mapper below. */
   strategyName: string | null;
   pips: string | null;
   riskPercent: string | null;
@@ -196,7 +196,7 @@ interface DashboardTrade extends AnalyticsTrade {
   row: TradeRow;
 }
 
-/** Local calendar parts in `timezone` — null on invalid TZ (same as analytics). */
+/** Local calendar parts in `timezone` - null on invalid TZ (same as analytics). */
 function localParts(
   date: Date,
   timezone: string

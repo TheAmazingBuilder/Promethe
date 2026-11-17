@@ -36,7 +36,7 @@ export interface AppearanceDTO {
 
 interface AppearanceContextValue {
   appearance: AppearanceDTO | null;
-  /** Optimistic PUT — the DOM updates immediately, rolls back on error. */
+  /** Optimistic PUT - the DOM updates immediately, rolls back on error. */
   setAppearance: (input: AppearanceInput) => void;
   /** True while the row is being loaded (first paint). */
   isLoading: boolean;

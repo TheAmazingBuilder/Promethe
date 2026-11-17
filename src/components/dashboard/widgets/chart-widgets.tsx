@@ -458,7 +458,7 @@ export function YearCalendarWidget() {
       {/* Focus info (accessible, non-color) */}
       <div className="min-h-4 text-xs text-muted-foreground" aria-live="polite">
         {focusCell?.inYear
-          ? `${focusCell.date} — ${titleOf(focusCell)}`
+          ? `${focusCell.date} - ${titleOf(focusCell)}`
           : tYear("hoverHint")}
       </div>
     </div>

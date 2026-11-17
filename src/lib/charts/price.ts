@@ -179,7 +179,7 @@ export interface OverlayLine {
   width: 1 | 2;
 }
 
-/** Semantic colors — token expressions resolved in the browser. */
+/** Semantic colors - token expressions resolved in the browser. */
 export const OVERLAY_COLORS = {
   entry: "var(--chart-1)",
   exit: "var(--chart-2)",

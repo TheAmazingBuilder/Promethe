@@ -9,7 +9,7 @@ import { InstrumentsBrowser } from "@/components/tools/instruments-browser";
 import { PRESET_INSTRUMENTS } from "@/lib/trading/instruments";
 import { Badge } from "@/components/ui/badge";
 
-/** Functional tools view — the decimal engines power the trade form (phase 3). */
+/** Functional tools view - the decimal engines power the trade form (phase 3). */
 export function ToolsView() {
   const t = useTranslations("tools");
 

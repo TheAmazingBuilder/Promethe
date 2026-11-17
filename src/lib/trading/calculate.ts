@@ -229,7 +229,7 @@ export function classifyResult(
 
 export interface PositionSizeInput {
   accountBalance: DecimalInput;
-  /** Risk as % of balance — used when riskAmount is not provided. */
+  /** Risk as % of balance - used when riskAmount is not provided. */
   riskPercent?: DecimalInput | null;
   /** Fixed risk amount in ACCOUNT currency (overrides riskPercent). */
   riskAmount?: DecimalInput | null;

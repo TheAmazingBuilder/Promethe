@@ -17,7 +17,7 @@ export interface PlaceholderViewProps {
   featureKeys: string[];
 }
 
-/** Generic "coming in phase N" view — keeps the roadmap visible in-app. */
+/** Generic "coming in phase N" view - keeps the roadmap visible in-app. */
 export function PlaceholderView({
   titleKey,
   descriptionKey,

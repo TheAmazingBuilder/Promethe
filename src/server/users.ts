@@ -23,7 +23,7 @@ type ProfileRow = {
   publicDisplayName?: string | null;
 };
 
-/** Safe parse of Profile.preferencesJson — never throws, defaults to {}. */
+/** Safe parse of Profile.preferencesJson - never throws, defaults to {}. */
 export function parsePreferences(json: string | null | undefined): ProfilePreferences {
   if (!json) return {};
   try {

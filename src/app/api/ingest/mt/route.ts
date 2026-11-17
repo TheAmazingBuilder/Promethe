@@ -91,7 +91,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: "UNSUPPORTED_SCHEMA",
-          message: `Unsupported schemaVersion ${String(rawVersion)} — update your EA (server supports 1).`,
+          message: `Unsupported schemaVersion ${String(rawVersion)} - update your EA (server supports 1).`,
         },
         { status: 400 }
       );

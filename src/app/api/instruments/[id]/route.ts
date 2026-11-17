@@ -72,7 +72,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
         {
           error: "INSTRUMENT_HAS_TRADES",
           message:
-            "Des trades référencent cet instrument — suppression impossible.",
+            "Des trades référencent cet instrument - suppression impossible.",
         },
         { status: 409 }
       );

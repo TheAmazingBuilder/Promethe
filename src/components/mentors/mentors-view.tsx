@@ -676,7 +676,7 @@ function EditAccessDialog({
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {t("edit")} — {access.mentorDisplayName}
+            {t("edit")} - {access.mentorDisplayName}
           </DialogTitle>
           <DialogDescription>{t("invitePermissions")}</DialogDescription>
         </DialogHeader>

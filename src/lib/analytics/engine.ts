@@ -8,10 +8,10 @@
  */
 import { D0, Decimal, toD, type DecimalInput } from "@/lib/trading/dec";
 
-/** Minimal closed-trade summary — everything the engine needs. */
+/** Minimal closed-trade summary - everything the engine needs. */
 export interface StatTrade {
   id: string;
-  /** ISO date — exit for P&L attribution, entry for entry-time breakdowns. */
+  /** ISO date - exit for P&L attribution, entry for entry-time breakdowns. */
   exitTime: string;
   entryTime: string;
   netPnl: string | null;
@@ -49,7 +49,7 @@ export interface TradeStats {
   netPnl: string;
   grossWin: string;
   grossLoss: string;
-  /** grossWin / |grossLoss| — null when no loss. */
+  /** grossWin / |grossLoss| - null when no loss. */
   profitFactor: string | null;
   avgWin: string | null;
   avgLoss: string | null;
@@ -79,7 +79,7 @@ function sum(values: Decimal[]): Decimal {
   return values.reduce((acc, v) => acc.plus(v), D0);
 }
 
-/** Chronological (exit-time ascending, stable) — REQUIRED for equity/drawdown. */
+/** Chronological (exit-time ascending, stable) - REQUIRED for equity/drawdown. */
 export function sortChronologically<T extends StatTrade>(trades: T[]): T[] {
   return [...trades].sort(
     (a, b) =>
@@ -221,7 +221,7 @@ export function groupStats<T extends StatTrade>(
     .sort((a, b) => toD(b.stats.netPnl).cmp(toD(a.stats.netPnl)));
 }
 
-/** Daily net P&L list (ISO date → sum) — calendar view (v1 phase 5). */
+/** Daily net P&L list (ISO date → sum) - calendar view (v1 phase 5). */
 export function dailyPnl(
   trades: StatTrade[]
 ): Array<{ date: string; netPnl: string; count: number }> {

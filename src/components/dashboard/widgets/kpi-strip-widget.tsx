@@ -25,7 +25,7 @@ import { asKpiData } from "./types";
 const EMERALD = "text-gain";
 const ROSE = "text-loss";
 
-/** One KPI card — ported from the old dashboard view. */
+/** One KPI card - ported from the old dashboard view. */
 export function KpiCard({
   label,
   value,
@@ -142,7 +142,7 @@ function isFiniteNumber(v: string | null): v is string {
   return toD(v).isFinite();
 }
 
-/** Format groups — which formatter a KPI key uses. */
+/** Format groups - which formatter a KPI key uses. */
 type KpiFormat =
   | "money"
   | "moneySigned"
@@ -182,7 +182,7 @@ const KPI_FORMAT: Record<KpiKey, KpiFormat> = {
   tradingDays: "count",
 };
 
-/** Keys where a NEGATIVE delta is actually good — tone flips. */
+/** Keys where a NEGATIVE delta is actually good - tone flips. */
 const LOWER_IS_BETTER = new Set<KpiKey>([
   "grossLoss",
   "avgLoss",
@@ -206,7 +206,7 @@ function useKpiDisplay() {
     ): { value: React.ReactNode; tone: string } => {
       const format = KPI_FORMAT[key];
       if (format !== "count" && !isFiniteNumber(raw)) {
-        return { value: "—", tone: "" };
+        return { value: "-", tone: "" };
       }
       const d = raw != null ? toD(raw) : null;
       switch (format) {
@@ -266,10 +266,10 @@ function useKpiDisplay() {
               tone: ROSE,
             };
           }
-          return { value: "—", tone: "" };
+          return { value: "-", tone: "" };
         }
         default:
-          return { value: "—", tone: "" };
+          return { value: "-", tone: "" };
       }
     },
     [durationLabel, tDash, fmt]

@@ -42,7 +42,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     const ok = await deleteAccount(session.user.id, id);
     if (!ok) {
       return NextResponse.json(
-        { error: "TRADES_ON_ACCOUNT", message: "Ce compte contient des trades — archivage seulement." },
+        { error: "TRADES_ON_ACCOUNT", message: "Ce compte contient des trades - archivage seulement." },
         { status: 422 }
       );
     }

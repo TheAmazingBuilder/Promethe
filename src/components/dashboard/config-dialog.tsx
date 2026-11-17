@@ -48,7 +48,7 @@ import {
   type KpiKey,
 } from "@/lib/dashboard/types";
 
-/** Widget types whose config schema is empty — the dialog shows a note. */
+/** Widget types whose config schema is empty - the dialog shows a note. */
 const NO_SETTINGS_TYPES = new Set([
   "equity-curve",
   "drawdown-curve",

@@ -41,9 +41,9 @@ export interface MetricTrade {
   accountId: string;
   accountName?: string;
   tags: string[];
-  /** Local weekday of entry 1 (Mon) → 7 (Sun) — null unknown. */
+  /** Local weekday of entry 1 (Mon) → 7 (Sun) - null unknown. */
   localWeekday: number | null;
-  /** Local entry hour 0-23 — null unknown. */
+  /** Local entry hour 0-23 - null unknown. */
   localHour: number | null;
   durationMin: number | null;
 }

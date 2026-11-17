@@ -140,7 +140,7 @@ function isLive(access: MentorAccess): boolean {
 
 export interface InviteResult {
   invitation: MentorInvitationDTO;
-  /** Raw accept URL — returned ONCE, never stored or logged. */
+  /** Raw accept URL - returned ONCE, never stored or logged. */
   inviteUrl: string;
 }
 
@@ -198,7 +198,7 @@ export async function createInvitation(
   if (existingAccess && isLive(existingAccess)) {
     throw new MentorValidationError(
       "MENTOR_ALREADY_ACTIVE",
-      "Ce mentor a déjà un accès actif — modifiez ses permissions à la place."
+      "Ce mentor a déjà un accès actif - modifiez ses permissions à la place."
     );
   }
 
@@ -382,7 +382,7 @@ export async function updateAccess(
   const row = await db.mentorAccess.findFirst({ where: { id: accessId, ownerId } });
   if (!row) throw new MentorValidationError("ACCESS_NOT_FOUND", "Accès introuvable.", 404);
   if (row.status === "REVOKED") {
-    throw new MentorValidationError("ACCESS_REVOKED", "Cet accès est révoqué — invitez à nouveau le mentor.");
+    throw new MentorValidationError("ACCESS_REVOKED", "Cet accès est révoqué - invitez à nouveau le mentor.");
   }
 
   const data: Prisma.MentorAccessUpdateInput = {};

@@ -746,7 +746,7 @@ export function TradeFormView({
                     messages.map((message, i) => (
                       <li key={`${field}-${i}`}>
                         {FIELD_LABELS[field]
-                          ? `${t(FIELD_LABELS[field] as Parameters<typeof t>[0])} — ${message}`
+                          ? `${t(FIELD_LABELS[field] as Parameters<typeof t>[0])} - ${message}`
                           : message}
                       </li>
                     ))
@@ -1541,7 +1541,7 @@ export function TradeFormView({
                       value={
                         hasExit || hasTakeProfit
                           ? `${fmtSigned(preview.pips, 1)} ${tc("pips")}`
-                          : "—"
+                          : "-"
                       }
                       valueClass={
                         hasExit || hasTakeProfit ? pnlClass(preview.pips) : undefined
@@ -1550,7 +1550,7 @@ export function TradeFormView({
                     <PreviewRow
                       label={t("previewRR")}
                       value={
-                        preview.plannedRR ? fmtSigned(preview.plannedRR, 2) : "—"
+                        preview.plannedRR ? fmtSigned(preview.plannedRR, 2) : "-"
                       }
                     />
                     <PreviewRow
@@ -1567,7 +1567,7 @@ export function TradeFormView({
                               : null}
                           </>
                         ) : (
-                          "—"
+                          "-"
                         )
                       }
                     />

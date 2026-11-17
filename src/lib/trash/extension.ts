@@ -42,7 +42,7 @@ const FILTERED_READ_OPS = new Set([
   "groupBy",
 ]);
 
-/** Unique-where read ops — result post-check. */
+/** Unique-where read ops - result post-check. */
 const UNIQUE_READ_OPS = new Set(["findUnique", "findUniqueOrThrow"]);
 
 /** Bulk write ops whose `where` accepts extra filters. */

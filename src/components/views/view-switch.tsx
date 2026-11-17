@@ -41,7 +41,7 @@ import { PrivacyView } from "@/components/settings-views/privacy-view";
 import { AccessibilityView } from "@/components/settings-views/accessibility-view";
 import { TrashView } from "@/components/trash/trash-view";
 
-/** No locked sections remain — phase 7 shipped every placeholder. */
+/** No locked sections remain - phase 7 shipped every placeholder. */
 const FEATURES: Record<string, string[]> = {};
 
 export function ViewSwitch() {

@@ -290,11 +290,11 @@ function ConnectionCard({ connection }: { connection: BrokerConnection }) {
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
           <div>
             <dt className="text-xs text-muted-foreground">{t("fields.server")}</dt>
-            <dd className="truncate font-medium">{connection.brokerServer ?? "—"}</dd>
+            <dd className="truncate font-medium">{connection.brokerServer ?? "-"}</dd>
           </div>
           <div>
             <dt className="text-xs text-muted-foreground">{t("fields.login")}</dt>
-            <dd className="truncate font-medium">{connection.brokerLogin ?? "—"}</dd>
+            <dd className="truncate font-medium">{connection.brokerLogin ?? "-"}</dd>
           </div>
           <div>
             <dt className="text-xs text-muted-foreground">{t("fields.heartbeat")}</dt>

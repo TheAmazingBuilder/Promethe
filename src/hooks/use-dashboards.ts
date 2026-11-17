@@ -217,7 +217,7 @@ export function useAddWidget() {
   });
 }
 
-/** Strips undefined values — the strict server schema rejects unknown/empty keys. */
+/** Strips undefined values - the strict server schema rejects unknown/empty keys. */
 function cleanPatch(patch: WidgetPatchInput): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(patch)) {
@@ -375,7 +375,7 @@ export function useDeleteCustomMetric() {
 
 // ── Templates / import / export (settings view, v2.5 M1) ────────────────────
 
-/** Saved user blueprint — `definition` is the export-shaped payload. */
+/** Saved user blueprint - `definition` is the export-shaped payload. */
 export interface UserTemplateDTO {
   id: string;
   name: string;
@@ -490,7 +490,7 @@ export function useImportDashboards() {
   });
 }
 
-/** Raw GET of the portable export payload (no cache — one-off download). */
+/** Raw GET of the portable export payload (no cache - one-off download). */
 export async function fetchDashboardExport(
   dashboardId: string
 ): Promise<DashboardExportPayloadDTO> {

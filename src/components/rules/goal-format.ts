@@ -48,7 +48,7 @@ export function formatGoalValue(
   value: string | null,
   currency: string
 ): string {
-  if (value == null) return "—";
+  if (value == null) return "-";
   switch (metric) {
     case "NET_PNL":
       return fmt.signedMoney(value, currency);
@@ -71,14 +71,14 @@ export function formatGoalValue(
   }
 }
 
-/** Progress bar color — achieved = gain token, close = amber, else primary. */
+/** Progress bar color - achieved = gain token, close = amber, else primary. */
 export function goalBarTone(progressPercent: number, isAchieved: boolean): string {
   if (isAchieved) return "bg-gain";
   if (progressPercent >= 75) return "bg-amber-500";
   return "bg-primary";
 }
 
-/** Rule limit display — count vs money depending on the kind. */
+/** Rule limit display - count vs money depending on the kind. */
 export function formatRuleValue(
   fmt: FormatApi,
   kind: string,
@@ -97,7 +97,7 @@ export function formatMeasuredValue(
   measured: string,
   currency: string
 ): string {
-  if (measured === "") return "—";
+  if (measured === "") return "-";
   if (kind === "MAX_TRADES_PER_DAY") return fmtNum(Number(measured), 0);
   if (kind === "MAX_DAILY_LOSS" || kind === "MAX_RISK_PER_TRADE") {
     return fmt.signedMoney(measured, currency);

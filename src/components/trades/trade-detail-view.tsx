@@ -73,7 +73,7 @@ import { ExportCardDialog } from "@/components/sharing/export-card-dialog";
 import dynamic from "next/dynamic";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-/** v2.5 M2 — lightweight-charts bundle loads only when the tab is opened. */
+/** v2.5 M2 - lightweight-charts bundle loads only when the tab is opened. */
 const LazyPriceChart = dynamic(
   () =>
     import("@/components/charts/price-chart").then(
@@ -82,7 +82,7 @@ const LazyPriceChart = dynamic(
   { ssr: false, loading: () => <Skeleton className="h-[520px] w-full" /> }
 );
 
-/** v2.5 M2 Phase 4 — replay player (lazy). */
+/** v2.5 M2 Phase 4 - replay player (lazy). */
 const LazyReplayPlayer = dynamic(
   () =>
     import("@/components/charts/replay-player").then(
@@ -132,7 +132,7 @@ import { navigate } from "@/lib/router";
 import { EXIT_REASONS } from "@/lib/trading/types";
 import type { CloseTradeInput } from "@/lib/validations/trade";
 
-/** Trade detail sheet — read-only fiche with close dialog and screenshot flow. */
+/** Trade detail sheet - read-only fiche with close dialog and screenshot flow. */
 export function TradeDetailView({ tradeId }: { tradeId: string }) {
   // v2.5 M2 — overview / price chart / replay tabs
   const [detailTab, setDetailTab] = React.useState<
@@ -454,11 +454,11 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
         {trade.accountName}
       </Sensitive>,
     ],
-    [t("strategy"), trade.strategyName ?? "—"],
+    [t("strategy"), trade.strategyName ?? "-"],
     [t("sessionLabel"), labels.session(trade.session)],
-    [t("timeframe"), trade.timeframe ?? "—"],
+    [t("timeframe"), trade.timeframe ?? "-"],
     [t("orderType"), labels.orderType(trade.orderType)],
-    [t("setupType"), trade.setupType ?? "—"],
+    [t("setupType"), trade.setupType ?? "-"],
     [t("marketCondition"), labels.marketCondition(trade.marketCondition)],
     ...(trade.exitReason
       ? ([[tForm("exitReason"), labels.exitReason(trade.exitReason)]] as Array<
@@ -510,7 +510,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
             <span className="tabular-nums">
               {trade.exitTime
                 ? `${fmtDateTimeInTz(trade.exitTime, timezone)} · ${fmtPrice(trade.exitPrice, digits)}`
-                : "—"}
+                : "-"}
             </span>
           </p>
         </div>
@@ -885,7 +885,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
             <InfoRow
               label={t("confidence")}
               value={
-                trade.confidence != null ? `${trade.confidence} / 5` : "—"
+                trade.confidence != null ? `${trade.confidence} / 5` : "-"
               }
             />
             <InfoRow
@@ -893,7 +893,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
               value={
                 trade.setupQualityRating != null
                   ? `${trade.setupQualityRating} / 5`
-                  : "—"
+                  : "-"
               }
             />
             <InfoRow
@@ -901,7 +901,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
               value={
                 trade.executionRating != null
                   ? `${trade.executionRating} / 5`
-                  : "—"
+                  : "-"
               }
             />
             <InfoRow
@@ -921,7 +921,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
                     <span className="sr-only">{tCommon("no")}</span>
                   </span>
                 ) : (
-                  "—"
+                  "-"
                 )
               }
             />
@@ -1186,7 +1186,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
         open={shareOpen}
         onOpenChange={setShareOpen}
         tradeId={trade.id}
-        defaultTitle={`${trade.symbol} — ${labels.direction(trade.direction)}`}
+        defaultTitle={`${trade.symbol} - ${labels.direction(trade.direction)}`}
       />
       <ExportCardDialog
         open={exportOpen}

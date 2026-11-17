@@ -158,7 +158,7 @@ export function useTradeViolations(tradeId: string | null) {
   });
 }
 
-/** Convenience selector — goal cards ready for the dashboard. */
+/** Convenience selector - goal cards ready for the dashboard. */
 export function selectActiveGoals(payload: GoalsPayload | undefined): GoalWithProgressDTO[] {
   return (payload?.goals ?? []).filter((g) => g.status === "ACTIVE");
 }

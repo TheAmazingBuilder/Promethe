@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Promethe — Journal de trading & analytique",
+  title: "Promethe - Journal de trading & analytique",
   description:
     "Promethe, a multi-user trading journal for XAUUSD and Forex: pips, lots, contract sizes, strategy statistics and insights.",
   icons: {
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
   ],
 };
 
-/** App locale — English only since the language switcher was removed. */
+/** App locale - English only since the language switcher was removed. */
 function getInitialLocale(): AppLocale {
   return DEFAULT_LOCALE;
 }

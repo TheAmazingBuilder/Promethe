@@ -27,7 +27,7 @@ export const journalEntrySchema = z.object({
 
 export type JournalEntryInput = z.infer<typeof journalEntrySchema>;
 
-/** GET /api/journal — either ?date=YYYY-MM-DD (single day) or no param (recent list). */
+/** GET /api/journal - either ?date=YYYY-MM-DD (single day) or no param (recent list). */
 export const journalQuerySchema = z.object({
   date: isoDay.optional(),
 });

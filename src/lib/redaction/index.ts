@@ -28,7 +28,7 @@ export interface RedactionPolicy {
   hideStrategyName: boolean;
   /** Replaces exact timestamps with their date (YYYY-MM-DD) only. */
   hideExactTimes: boolean;
-  /** Hides psychology fields (emotions, ratings, checklist) — mentor journal scope off. */
+  /** Hides psychology fields (emotions, ratings, checklist) - mentor journal scope off. */
   hidePsychology: boolean;
 }
 
@@ -37,7 +37,7 @@ export const PIPS_R_ONLY_PRESET: RedactionPolicy = {
   hideAmounts: true,
   hideAccountInfo: true,
   hideNotes: false,
-  hideScreenshots: true, // screenshots may show balances — OFF by default with amounts hidden
+  hideScreenshots: true, // screenshots may show balances - OFF by default with amounts hidden
   hideStrategyName: false,
   hideExactTimes: false,
   hidePsychology: false,

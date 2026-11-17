@@ -1,12 +1,12 @@
 "use client";
 
-/** sticky-note widget — yellow-tinted markdown note (config-driven, no loader). */
+/** sticky-note widget - yellow-tinted markdown note (config-driven, no loader). */
 import { Pencil } from "lucide-react";
 import { useTranslations } from "next-intl";
 import ReactMarkdown from "react-markdown";
 import { stickyNoteConfigSchema } from "@/lib/dashboard/registry";
 
-/** Restricted markdown — raw HTML escaped (same policy as comments). */
+/** Restricted markdown - raw HTML escaped (same policy as comments). */
 const MARKDOWN_ALLOWED: readonly string[] = [
   "p", "br", "strong", "em", "ul", "ol", "li", "blockquote", "code", "a", "h1",
   "h2", "h3", "h4", "hr",

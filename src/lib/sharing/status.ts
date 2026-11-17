@@ -10,7 +10,7 @@ import type {
 } from "@/lib/redaction";
 import type { ShareLinkStatus } from "./types";
 
-/** Stored-row shape (subset of the Prisma model — keeps the helper pure). */
+/** Stored-row shape (subset of the Prisma model - keeps the helper pure). */
 export interface ShareLinkRowLike {
   revokedAt: Date | null;
   expiresAt: Date;
@@ -49,7 +49,7 @@ const SUMMARY_KEYS: Array<[keyof RedactionPolicy, "fr" | "en", string]> = [
   ["hidePsychology", "en", "psychology"],
 ];
 
-/** Comma list of what the policy hides — "rien" / "nothing" when empty. */
+/** Comma list of what the policy hides - "rien" / "nothing" when empty. */
 export function policySummary(policy: RedactionPolicy, locale: "fr" | "en"): string {
   const hidden = SUMMARY_KEYS.filter(([key, l]) => l === locale && policy[key]).map(
     ([, , label]) => label
@@ -60,7 +60,7 @@ export function policySummary(policy: RedactionPolicy, locale: "fr" | "en"): str
   return (locale === "fr" ? "masqué : " : "hidden: ") + hidden.join(", ");
 }
 
-/** Max expiry is 10 years — privacy by default: links always expire. */
+/** Max expiry is 10 years - privacy by default: links always expire. */
 export const MAX_EXPIRY_DAYS = 3650;
 
 export const EXPIRY_OPTIONS = [7, 30, 90, 365, 3650] as const;

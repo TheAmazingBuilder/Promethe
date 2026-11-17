@@ -75,7 +75,7 @@ export function NotificationsBell() {
           variant="ghost"
           size="icon"
           className="relative"
-          aria-label={unread > 0 ? `${t("open")} — ${unread}` : t("open")}
+          aria-label={unread > 0 ? `${t("open")} - ${unread}` : t("open")}
         >
           <Bell className="h-4 w-4" aria-hidden="true" />
           {unread > 0 && (

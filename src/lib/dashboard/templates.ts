@@ -38,7 +38,7 @@ const l = (x: number, y: number, w: number, h: number): WidgetLayout => ({
   h,
 });
 
-/** Layouts helper — md/sm derived by the normalizer, lg explicit. */
+/** Layouts helper - md/sm derived by the normalizer, lg explicit. */
 const lg = (layout: WidgetLayout): WidgetLayouts => ({ lg: layout });
 
 const lGrid = (layout: WidgetLayout): WidgetLayouts => ({

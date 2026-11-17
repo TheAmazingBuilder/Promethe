@@ -73,7 +73,7 @@ export function parseImportFile(content: ImportFileContent): ParseResult {
   if (!detected) {
     throw new ImportParseError(
       "FORMAT_UNRECOGNIZED",
-      "Format non reconnu — formats supportés : relevés MT4/MT5 (HTML), historiques MT5 (XLSX/CSV), cTrader (CSV/XLSX), TradingView (CSV), CSV générique."
+      "Format non reconnu - formats supportés : relevés MT4/MT5 (HTML), historiques MT5 (XLSX/CSV), cTrader (CSV/XLSX), TradingView (CSV), CSV générique."
     );
   }
 
@@ -87,7 +87,7 @@ export function parseImportFile(content: ImportFileContent): ParseResult {
       if (alternative.trades.length > 0 || alternative.cash.length > 0) return alternative;
       throw new ImportParseError(
         "NO_TRADES_FOUND",
-        "Aucun trade trouvé dans ce fichier — vérifiez qu'il s'agit bien d'un relevé d'historique (transactions clôturées)."
+        "Aucun trade trouvé dans ce fichier - vérifiez qu'il s'agit bien d'un relevé d'historique (transactions clôturées)."
       );
     }
     return result;
@@ -105,7 +105,7 @@ export function parseImportFile(content: ImportFileContent): ParseResult {
     if (parsed.trades.length === 0 && parsed.cash.length === 0) {
       throw new ImportParseError(
         "NO_TRADES_FOUND",
-        "Aucun trade trouvé dans ce classeur — vérifiez l'onglet (Deals / Positions / Historique)."
+        "Aucun trade trouvé dans ce classeur - vérifiez l'onglet (Deals / Positions / Historique)."
       );
     }
     return {

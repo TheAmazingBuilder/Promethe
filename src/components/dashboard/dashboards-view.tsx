@@ -485,7 +485,7 @@ export function DashboardsView() {
     [gridState, active, layoutsSignature]
   );
 
-  /** Debounced layout save — patches only the widgets that actually moved. */
+  /** Debounced layout save - patches only the widgets that actually moved. */
   const saveLayouts = React.useCallback(() => {
     if (!active) return;
     const all = gridsRef.current;

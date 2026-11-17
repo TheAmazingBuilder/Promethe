@@ -177,7 +177,7 @@ export function metricScale(
   }
 }
 
-/** Cell intensity (0-1) + tone for the metric — tokens resolved by the UI. */
+/** Cell intensity (0-1) + tone for the metric - tokens resolved by the UI. */
 export function cellTone(
   stats: YearDayStats | null,
   metric: YearMetric,

@@ -36,7 +36,7 @@ const DEFAULT_STATE: PrivacyPreferences = {
   auto: { ...DEFAULT_PRIVACY_PREFERENCES.auto },
 };
 
-/** Current runtime state (module singleton — one per JS realm). */
+/** Current runtime state (module singleton - one per JS realm). */
 let state: PrivacyPreferences = DEFAULT_STATE;
 
 /** The user-chosen mode, tracked separately so auto-triggers can restore it. */
@@ -66,7 +66,7 @@ export function subscribePrivacy(listener: Listener): () => void {
   return () => listeners.delete(listener);
 }
 
-/** useSyncExternalStore snapshot — the CURRENT effective preferences. */
+/** useSyncExternalStore snapshot - the CURRENT effective preferences. */
 export function getPrivacySnapshot(): PrivacyPreferences {
   return state;
 }
@@ -182,7 +182,7 @@ export function loadPrivacyState(
   notify();
 }
 
-/** Reads localStorage (browser only) — null when absent or invalid. */
+/** Reads localStorage (browser only) - null when absent or invalid. */
 export function readStoredPrivacy(): PrivacyPreferences | null {
   if (typeof window === "undefined") return null;
   try {

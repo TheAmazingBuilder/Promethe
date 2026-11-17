@@ -10,7 +10,7 @@ import { peekShareForOg } from "@/server/sharing";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
-export const alt = "Promethe — shared link";
+export const alt = "Promethe - shared link";
 
 export default async function OgImage({
   params,
@@ -37,14 +37,14 @@ export default async function OgImage({
           }}>P</div>
           <div style={{ fontSize: 44, fontWeight: 700, color: text }}>Promethe</div>
         </div>
-        <div style={{ fontSize: 26, color: muted }}>Journal de trading — trading journal</div>
+        <div style={{ fontSize: 26, color: muted }}>Journal de trading - trading journal</div>
       </div>
     );
   }
 
   if (payload.kind === "TRADE") {
     const t = payload.trade;
-    const symbol = typeof t.symbol === "string" ? t.symbol : "—";
+    const symbol = typeof t.symbol === "string" ? t.symbol : "-";
     const direction = typeof t.direction === "string" ? t.direction : "";
     const pips = t.pips != null ? `${fmt(t.pips, 1)} pips` : null;
     const r = t.rMultiple != null ? `${fmt(t.rMultiple, 2)} R` : null;
@@ -84,7 +84,7 @@ export default async function OgImage({
 
   // REPORT
   const s = payload.stats;
-  const trades = s.tradeCount != null ? String(s.tradeCount) : "—";
+  const trades = s.tradeCount != null ? String(s.tradeCount) : "-";
   const winRate = s.winRate != null ? `${fmt(s.winRate, 1)}%` : null;
   const totalR = s.totalR != null ? `${fmt(s.totalR, 2)} R` : null;
   const netPnl =
@@ -167,7 +167,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: str
 
 function fmt(value: unknown, digits: number): string {
   const n = Number(value);
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "-";
   return n.toFixed(digits);
 }
 

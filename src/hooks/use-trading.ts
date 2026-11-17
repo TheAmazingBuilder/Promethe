@@ -38,7 +38,7 @@ import type { AnalyticsPeriod } from "@/lib/validations/analytics";
 
 export interface InstrumentApiDTO {
   id: string;
-  /** True for global presets (read-only) — customs belong to the user. */
+  /** True for global presets (read-only) - customs belong to the user. */
   isPreset: boolean;
   symbol: string;
   name: string;

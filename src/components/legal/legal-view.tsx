@@ -77,10 +77,10 @@ export function LegalView({ page, standalone = false }: { page: LegalPage; stand
   });
 
   const values = {
-    entity: identity.data?.entityName ?? "—",
-    contact: identity.data?.contactEmail ?? "—",
-    address: identity.data?.address ?? "—",
-    privacy: identity.data?.privacyContact ?? "—",
+    entity: identity.data?.entityName ?? "-",
+    contact: identity.data?.contactEmail ?? "-",
+    address: identity.data?.address ?? "-",
+    privacy: identity.data?.privacyContact ?? "-",
     authority: identity.data?.supervisoryAuthority ?? "CNIL",
   };
 

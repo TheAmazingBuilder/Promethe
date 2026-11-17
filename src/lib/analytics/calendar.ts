@@ -188,9 +188,9 @@ export interface PropLimit {
   limitAmount: string | null;
   /** Amount consumed so far (≥ 0). */
   used: string;
-  /** % of the limit consumed — can exceed 100 on breach (null: no limit). */
+  /** % of the limit consumed - can exceed 100 on breach (null: no limit). */
   usedPercent: string | null;
-  /** Amount left before breach — negative once breached (null: no limit). */
+  /** Amount left before breach - negative once breached (null: no limit). */
   remaining: string | null;
   status: PropLimitStatus;
 }
@@ -334,7 +334,7 @@ export function computePropStatus(input: PropStatusInput): PropStatus {
 
 // ── Local dates (timezone) ───────────────────────────────────────────────────
 
-/** ISO date (YYYY-MM-DD) of `date` in `timezone` — null on invalid TZ. */
+/** ISO date (YYYY-MM-DD) of `date` in `timezone` - null on invalid TZ. */
 export function localDateInTz(date: Date, timezone: string): string | null {
   try {
     const fmt = new Intl.DateTimeFormat("en-CA", {

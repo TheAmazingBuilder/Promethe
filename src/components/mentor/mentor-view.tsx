@@ -60,7 +60,7 @@ export function MentorView() {
         </div>
       ) : home.error ? (
         <p className="text-sm text-rose-600 dark:text-rose-400">
-          {home.error instanceof Error ? home.error.message : "—"}
+          {home.error instanceof Error ? home.error.message : "-"}
         </p>
       ) : (
         <>
@@ -103,7 +103,7 @@ export function MentorView() {
                             {t("lastVisit")} :{" "}
                             {mentee.lastViewedAt
                               ? format(new Date(mentee.lastViewedAt), "d MMM yyyy HH:mm")
-                              : "—"}
+                              : "-"}
                           </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5">

@@ -527,7 +527,7 @@ function fmtSide(
   fmt: FormatApi,
   currency: string
 ): string {
-  if (v == null) return "—";
+  if (v == null) return "-";
   if (row.pct) return fmt.pct(v, 1);
   if (row.r) return `${fmtNum(v, 2)} R`;
   if (row.money) return fmt.money(v, currency, 0);

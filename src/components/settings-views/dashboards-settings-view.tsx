@@ -656,7 +656,7 @@ function ImportExportCard() {
                     {t("importSkippedItem", {
                       dashboard: item.dashboardIndex + 1,
                       widget: item.widgetIndex + 1,
-                      type: item.type === "" ? "—" : item.type,
+                      type: item.type === "" ? "-" : item.type,
                       reason: t(`skipReason.${item.reason}`),
                     })}
                   </li>

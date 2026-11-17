@@ -31,7 +31,7 @@ import type {
 import { evaluateTradeViolations } from "@/server/rules";
 import { refreshTradeSearchText } from "@/server/search-index";
 
-/** Validation/ownership errors — mapped to typed API responses by the routes. */
+/** Validation/ownership errors - mapped to typed API responses by the routes. */
 export class TradeValidationError extends Error {
   readonly code: string;
   readonly status: number;
@@ -563,7 +563,7 @@ export async function getTradeDetail(
 
 export interface CreateTradeResult {
   trade: TradeDetailDTO;
-  /** True when the clientMutationId already existed — no new row created. */
+  /** True when the clientMutationId already existed - no new row created. */
   deduplicated: boolean;
 }
 

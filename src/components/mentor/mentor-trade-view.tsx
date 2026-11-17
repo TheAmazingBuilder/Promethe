@@ -103,7 +103,7 @@ function MentorTradeBody({
   const policy = payload.policy;
   const s = (key: string): string => {
     const value = trade[key];
-    return value === undefined || value === null ? "—" : String(value);
+    return value === undefined || value === null ? "-" : String(value);
   };
 
   const screenshots = Array.isArray(trade.screenshots)
@@ -214,7 +214,7 @@ function MentorTradeBody({
 }
 
 function fmt(iso: string, dateOnly: boolean): string {
-  if (!iso || iso === "—") return "—";
+  if (!iso || iso === "-") return "-";
   try {
     return dateOnly
       ? format(new Date(iso), "yyyy-MM-dd")

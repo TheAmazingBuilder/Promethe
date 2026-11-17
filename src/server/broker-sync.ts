@@ -91,7 +91,7 @@ async function requireConnection(
 
 export interface CreatedConnection {
   connection: BrokerConnectionDTO;
-  /** Raw token — displayed ONCE, never stored or logged. */
+  /** Raw token - displayed ONCE, never stored or logged. */
   token: string;
   /** Ready-to-copy ingest URL for the EA. */
   ingestUrl: string;

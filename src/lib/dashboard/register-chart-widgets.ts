@@ -24,7 +24,7 @@ export const HEATMAP_DIM_KEYS = X_DIMENSIONS.filter(
 ) as unknown as [XDimension, ...XDimension[]];
 
 export const savedChartWidgetConfigSchema = z.object({
-  /** SavedChart id — empty until the user picks one. */
+  /** SavedChart id - empty until the user picks one. */
   chartId: z.string().default(""),
 });
 
@@ -41,7 +41,7 @@ export const yearCalendarWidgetConfigSchema = z.object({}).strict();
 
 let registered = false;
 
-/** Idempotent — imported for side effects by the catalog and the renderer. */
+/** Idempotent - imported for side effects by the catalog and the renderer. */
 export function registerChartWidgets(): void {
   if (registered) return;
   registered = true;

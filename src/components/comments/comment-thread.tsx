@@ -526,7 +526,7 @@ function CommentItem({
   );
 }
 
-/** Restricted markdown — raw HTML escaped, links hardened. */
+/** Restricted markdown - raw HTML escaped, links hardened. */
 export function CommentMarkdown({ body }: { body: string }) {
   return (
     <ReactMarkdown

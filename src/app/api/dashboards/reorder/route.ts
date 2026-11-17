@@ -4,7 +4,7 @@ import { apiError } from "@/server/api";
 import { reorderDashboards } from "@/server/dashboards";
 import { dashboardsReorderSchema, zodFieldErrors } from "@/lib/validations/shared";
 
-/** POST /api/dashboards/reorder — full order array (all dashboard ids). */
+/** POST /api/dashboards/reorder - full order array (all dashboard ids). */
 export async function POST(req: Request) {
   try {
     const session = await requireUser();

@@ -55,7 +55,7 @@ interface LocalParts {
   isoWeek: number; // 1-53
 }
 
-/** Local parts of a Date in `timezone` — null on invalid TZ. */
+/** Local parts of a Date in `timezone` - null on invalid TZ. */
 export function localParts(date: Date, timezone: string): LocalParts | null {
   try {
     const fmt = new Intl.DateTimeFormat("en-US", {
@@ -240,7 +240,7 @@ export async function getBuilderTrades(
   };
 }
 
-/** Trade row (no relations) → minimal BuilderTrade — test helper. */
+/** Trade row (no relations) → minimal BuilderTrade - test helper. */
 export function toBuilderTradeFromRow(
   t: TradeRow & Partial<Row>,
   timezone: string
@@ -358,7 +358,7 @@ export interface CandleWindowPayload {
   candles: CandleDTO[];
 }
 
-/** Hard caps (free tier / 500 MB budget — documented in README). */
+/** Hard caps (free tier / 500 MB budget - documented in README). */
 export const CANDLE_MAX_ROWS_PER_IMPORT = 50_000;
 export const CANDLE_MAX_WINDOW_BARS = 6_000;
 export const CANDLE_USER_BUDGET = 250_000;

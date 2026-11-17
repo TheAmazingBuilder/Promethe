@@ -70,9 +70,9 @@ export interface AppRoute {
   token?: string;
   /** Legal page (#/legal/{mentions|confidentialite|cookies}). */
   legalPage?: "mentions" | "confidentialite" | "cookies";
-  /** Journal day (#/journal/2025-05-02) — local calendar day. */
+  /** Journal day (#/journal/2025-05-02) - local calendar day. */
   journalDate?: string;
-  /** Hash query params (#/trades?symbol=EURUSD) — drill-down filters etc. */
+  /** Hash query params (#/trades?symbol=EURUSD) - drill-down filters etc. */
   query?: Record<string, string>;
 }
 
@@ -217,7 +217,7 @@ export function parseHash(hash: string): AppRoute {
   return withQuery({ view });
 }
 
-/** Programmatic navigation — accepts "#/trades" or "trades". */
+/** Programmatic navigation - accepts "#/trades" or "trades". */
 export function navigate(to: string): void {
   const target = to.startsWith("#") ? to : `#/${to.replace(/^\/+/, "")}`;
   if (window.location.hash === target) return;

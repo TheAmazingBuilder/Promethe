@@ -54,7 +54,7 @@ function localDayToUtcInstant(isoDay: string, timezone: string): Date {
   return guess;
 }
 
-/** Zone offset (minutes east of UTC) of an instant — 0 on invalid zones. */
+/** Zone offset (minutes east of UTC) of an instant - 0 on invalid zones. */
 function zoneOffsetMinutes(date: Date, timezone: string): number {
   try {
     const fmt = new Intl.DateTimeFormat("en-US", {
@@ -107,7 +107,7 @@ function presetFrom(preset: PeriodPreset, timezone: string, now: Date): string |
   }
 }
 
-/** Duration (in local days) of a preset window — for comparison periods. */
+/** Duration (in local days) of a preset window - for comparison periods. */
 function presetLengthDays(
   preset: PeriodPreset,
   timezone: string,

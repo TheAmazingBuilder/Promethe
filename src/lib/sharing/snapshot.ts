@@ -25,7 +25,7 @@ import type {
   ShareLinkMode,
 } from "./types";
 
-/** Raw trade snapshot (before URL injection) — what lands in snapshotJson. */
+/** Raw trade snapshot (before URL injection) - what lands in snapshotJson. */
 export interface TradeSnapshotStored {
   kind: "TRADE";
   title: string;
@@ -93,7 +93,7 @@ export function redactReportPayload(
   policy: RedactionPolicy
 ): ReportSnapshotStored {
   const stats = redactStats(raw.stats, policy);
-  delete stats.currency; // account-ish info — reports are currency-neutral
+  delete stats.currency; // account-ish info - reports are currency-neutral
 
   const curve = redactEquityCurve(
     raw.equity.points.map((p) => ({ time: p.time, value: p.value })),

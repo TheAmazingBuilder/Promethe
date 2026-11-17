@@ -19,7 +19,7 @@ import { normalizeA11yPreferences } from "@/lib/a11y/preferences";
 import type { ExtraTimezone } from "@/lib/time/broker-time";
 import type { TradingDaySettings } from "@/lib/time/trading-day";
 
-/** Parses a JSON column with a fallback — never throws, never logs data. */
+/** Parses a JSON column with a fallback - never throws, never logs data. */
 function parseJson<T>(raw: string, fallback: T): T {
   try {
     const parsed = JSON.parse(raw) as T;
@@ -110,7 +110,7 @@ function rowToPreferences(row: {
   return parsed.success ? parsed.data : displayPreferencesSchema.parse({});
 }
 
-/** GET — the user's row, created with defaults on first read. */
+/** GET - the user's row, created with defaults on first read. */
 export async function getDisplayPreferences(
   userId: string
 ): Promise<DisplayPreferences> {
@@ -121,7 +121,7 @@ export async function getDisplayPreferences(
   return rowToPreferences(row);
 }
 
-/** PUT — partial patch; JSON slices replace, scalars overwrite. */
+/** PUT - partial patch; JSON slices replace, scalars overwrite. */
 export async function putDisplayPreferences(
   userId: string,
   input: DisplayPreferencesInput

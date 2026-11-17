@@ -144,13 +144,13 @@ export type ChartSort = (typeof CHART_SORTS)[number];
 
 export const chartConfigSchema = z
   .object({
-    /** X dimension (categorical/temporal) — or numeric measure for scatter/histogram. */
+    /** X dimension (categorical/temporal) - or numeric measure for scatter/histogram. */
     x: z.union([z.enum(X_DIMENSIONS), z.enum(NUMERIC_X_MEASURES)]),
-    /** Y measure — omitted for histogram. */
+    /** Y measure - omitted for histogram. */
     y: z.enum(Y_MEASURES).optional(),
     /** Aggregation of the per-trade Y values inside each X category. */
     aggregation: z.enum(AGGREGATIONS).optional(),
-    /** 1-99 — required when aggregation = percentile. */
+    /** 1-99 - required when aggregation = percentile. */
     percentile: z.number().int().min(1).max(99).optional(),
     chartType: z.enum(CHART_TYPES),
     groupBy: z.enum(GROUP_BYS).default("none"),
@@ -165,7 +165,7 @@ export const chartConfigSchema = z
     binCount: z.number().int().min(5).max(60).optional(),
     /** Optional second Y measure on the right axis (bar/line/area only). */
     y2: z.enum(Y_MEASURES).optional(),
-    /** Saved filter context (period + account) — informational replay. */
+    /** Saved filter context (period + account) - informational replay. */
     period: z.enum(["30d", "90d", "ytd", "all"]).default("all"),
     accountId: z.string().nullish(),
   })
@@ -350,7 +350,7 @@ const benchmarkParamsSchema = z
     rPerPeriod: z.number().min(0).max(1000).optional(),
     period: z.enum(BENCHMARK_PERIODS),
     compounding: z.boolean().default(true),
-    /** ISO date — benchmark start (defaults to first trade). */
+    /** ISO date - benchmark start (defaults to first trade). */
     startDate: isoTs.optional(),
     /** Base balance for FIXED_PERCENT (defaults to equity initial). */
     startBalance: z.string().regex(/^\d+(\.\d+)?$/).optional(),
@@ -413,7 +413,7 @@ export const candleImportSchema = z.object({
   timeframe: candleTimeframeSchema,
   /** Declared timezone of the CSV timestamps (IANA name or fixed offset). */
   timezone: z.string().min(1).max(64).default("UTC"),
-  /** CSV text — header row with time/open/high/low/close(/volume) columns. */
+  /** CSV text - header row with time/open/high/low/close(/volume) columns. */
   csv: z.string().min(1).max(8_000_000),
 });
 export type CandleImportInput = z.infer<typeof candleImportSchema>;

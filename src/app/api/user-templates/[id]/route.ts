@@ -3,7 +3,7 @@ import { requireUser } from "@/server/session";
 import { apiError } from "@/server/api";
 import { deleteUserTemplate } from "@/server/dashboards";
 
-/** DELETE /api/user-templates/[id] — remove a saved blueprint. */
+/** DELETE /api/user-templates/[id] - remove a saved blueprint. */
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function DELETE(_req: Request, ctx: Ctx) {
