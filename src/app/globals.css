@@ -599,3 +599,31 @@ body {
 [data-tabular-nums="1"] body {
   font-variant-numeric: tabular-nums;
 }
+
+/* Gaïa print — only active while body carries .printing-gaia (set by the
+ * print dialog). A print started anywhere else is never hijacked. */
+@media print {
+  body.printing-gaia * {
+    visibility: hidden !important;
+  }
+  body.printing-gaia .print-sheet,
+  body.printing-gaia .print-sheet * {
+    visibility: visible !important;
+  }
+  body.printing-gaia .print-sheet {
+    position: absolute !important;
+    inset: 0 auto auto 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 18mm 14mm !important;
+    box-shadow: none !important;
+  }
+  body.printing-gaia .print-sheet .no-print {
+    display: none !important;
+  }
+  @page {
+    margin: 8mm;
+  }
+}

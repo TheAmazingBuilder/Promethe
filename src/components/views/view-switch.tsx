@@ -10,6 +10,7 @@ import { SettingsView } from "./settings-view";
 import { PlaceholderView } from "./placeholder-view";
 import { CalendarView } from "@/components/calendar/calendar-view";
 import { JournalView } from "@/components/journal/journal-view";
+import { GaiaView } from "@/components/gaia/gaia-view";
 import { StrategiesView } from "@/components/strategies/strategies-view";
 import { RulesView } from "@/components/rules/rules-view";
 import { AccountsView } from "@/components/settings-views/accounts-view";
@@ -119,6 +120,9 @@ export function ViewSwitch() {
       break;
     case "journal":
       view = <JournalView date={route.journalDate} />;
+      break;
+    case "gaia":
+      view = <GaiaView />;
       break;
     case "strategies":
       view = <StrategiesView />;
