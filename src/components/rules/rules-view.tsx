@@ -297,6 +297,7 @@ function GoalEditor({
               <Input
                 id="goal-start"
                 type="date"
+                className="h-10 font-mono tabular-nums"
                 value={form.startDate}
                 onChange={(e) => set("startDate", e.target.value)}
               />
@@ -308,6 +309,7 @@ function GoalEditor({
               <Input
                 id="goal-end"
                 type="date"
+                className="h-10 font-mono tabular-nums"
                 value={form.endDate}
                 onChange={(e) => set("endDate", e.target.value)}
               />

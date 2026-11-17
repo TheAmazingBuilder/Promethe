@@ -663,6 +663,7 @@ export function QuickTradeView() {
               <Input
                 id="qt-entry-time"
                 type="datetime-local"
+                className="h-10 font-mono tabular-nums"
                 value={isoToLocalInput(form.entryTime)}
                 onChange={(e) =>
                   set("entryTime", localInputToIso(e.target.value) ?? "")

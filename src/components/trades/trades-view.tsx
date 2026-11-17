@@ -1086,6 +1086,7 @@ export function TradesView() {
                   <Input
                     id="filter-from"
                     type="date"
+                    className="h-8 w-32 text-sm font-mono tabular-nums"
                     value={query.dateFrom ?? ""}
                     onChange={(e) =>
                       setFilter({ dateFrom: e.target.value || undefined })
@@ -1097,6 +1098,7 @@ export function TradesView() {
                   <Input
                     id="filter-to"
                     type="date"
+                    className="h-8 w-32 text-sm font-mono tabular-nums"
                     value={query.dateTo ?? ""}
                     onChange={(e) =>
                       setFilter({ dateTo: e.target.value || undefined })

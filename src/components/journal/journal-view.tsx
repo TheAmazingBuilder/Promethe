@@ -240,7 +240,7 @@ export function JournalView({ date }: { date?: string }) {
               if (e.target.value) navigate(`#/journal/${e.target.value}`);
             }}
             aria-label={t("dateLabel")}
-            className="w-[170px]"
+            className="w-[170px] font-mono tabular-nums"
           />
           <Button
             variant="outline"

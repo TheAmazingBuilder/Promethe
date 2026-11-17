@@ -1028,6 +1028,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
               <Input
                 id="close-exit-time"
                 type="datetime-local"
+                className="h-10 font-mono tabular-nums"
                 value={exitTime}
                 onChange={(e) => setExitTime(e.target.value)}
               />

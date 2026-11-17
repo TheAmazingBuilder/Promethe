@@ -348,6 +348,7 @@ function AccountEditor({
                   <Input
                     id="acc-start"
                     type="date"
+                    className="h-10 font-mono tabular-nums"
                     value={form.startDate ?? ""}
                     onChange={(e) =>
                       set(

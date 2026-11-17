@@ -174,7 +174,7 @@ export function PeriodEditor({
                     type="date"
                     value={customFrom}
                     onChange={(e) => setCustomFrom(e.target.value)}
-                    className="h-8"
+                    className="h-8 font-mono tabular-nums"
                   />
                 </div>
                 <div className="space-y-1">
@@ -186,7 +186,7 @@ export function PeriodEditor({
                     type="date"
                     value={customTo}
                     onChange={(e) => setCustomTo(e.target.value)}
-                    className="h-8"
+                    className="h-8 font-mono tabular-nums"
                   />
                 </div>
               </div>

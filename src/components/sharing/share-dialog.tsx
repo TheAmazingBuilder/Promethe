@@ -301,6 +301,7 @@ export function ShareDialog({
                       <Input
                         id="period-start"
                         type="date"
+                        className="h-10 font-mono tabular-nums"
                         value={customStart}
                         onChange={(e) => setCustomStart(e.target.value)}
                       />
@@ -310,6 +311,7 @@ export function ShareDialog({
                       <Input
                         id="period-end"
                         type="date"
+                        className="h-10 font-mono tabular-nums"
                         value={customEnd}
                         onChange={(e) => setCustomEnd(e.target.value)}
                       />

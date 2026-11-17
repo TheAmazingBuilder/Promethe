@@ -671,6 +671,7 @@ function AnnotationDialog({
               <Input
                 id="ann-end"
                 type="date"
+                className="h-10 font-mono tabular-nums"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
               />

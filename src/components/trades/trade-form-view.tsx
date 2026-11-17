@@ -951,6 +951,7 @@ export function TradeFormView({
                 <Input
                   id="tf-entry-time"
                   type="datetime-local"
+                  className="h-10 font-mono tabular-nums"
                   value={isoToLocalInput(form.entryTime)}
                   onChange={(e) =>
                     set("entryTime", localInputToIso(e.target.value) ?? "")
@@ -1104,6 +1105,7 @@ export function TradeFormView({
                 <Input
                   id="tf-exit-time"
                   type="datetime-local"
+                  className="h-10 font-mono tabular-nums"
                   value={isoToLocalInput(form.exitTime)}
                   onChange={(e) =>
                     set("exitTime", localInputToIso(e.target.value) ?? "")

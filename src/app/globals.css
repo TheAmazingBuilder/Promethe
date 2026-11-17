@@ -123,6 +123,67 @@
   }
 }
 
+/* Native color scheme: the browser renders native date/datetime popups and
+ * the calendar-picker indicator in the app's actual theme. Class-based dark
+ * mode does not follow the OS preference, hence the html.dark override. */
+html {
+  color-scheme: light dark;
+}
+html.dark {
+  color-scheme: dark;
+}
+
+/* ── Native date / datetime-local inputs, Euforia style ─────────────────────
+ *
+ * Euforia dresses its native date inputs (no custom picker) with:
+ * h-10 w-full rounded-md border bg-background px-3 font-mono text-sm
+ * tabular-nums plus a focus ring. The rules below reproduce that look for
+ * EVERY date input in the app at once, using the project tokens. The
+ * emerald focus outline comes from --gain (never cobalt, never gold).
+ * Per-field classNames (h-10, or h-8 w-32 for From/To filters) refine
+ * height and width where needed; Tailwind utilities win over these
+ * element selectors by specificity.
+ * On focus, the gray shadcn ring is suppressed (box-shadow: none) so the
+ * single visible indicator is the emerald outline.
+ * ─────────────────────────────────────────────────────────────────────────── */
+input[type="date"],
+input[type="datetime-local"] {
+  height: 2.5rem;
+  width: 100%;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--input);
+  background-color: var(--background);
+  padding-inline: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground);
+  outline: none;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+input[type="date"]::placeholder,
+input[type="datetime-local"]::placeholder {
+  color: var(--muted-foreground);
+}
+input[type="date"]:disabled,
+input[type="datetime-local"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+input[type="date"]:focus-visible,
+input[type="datetime-local"]:focus-visible {
+  outline: 2px solid var(--gain);
+  outline-offset: 2px;
+  border-color: var(--gain);
+  box-shadow: none;
+}
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
+
 /* ── P&L semantic tokens (v2.5 Module 1 — appearance system, spec §1) ────────
  *
  * --gain / --loss / --neutral carry the meaning (profit / loss / flat); the
