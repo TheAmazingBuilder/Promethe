@@ -12,6 +12,7 @@ type DateFieldProps = {
   disabled?: boolean
   min?: string
   max?: string
+  ariaLabel?: string
   className?: string
 }
 
@@ -23,8 +24,10 @@ type DateFieldProps = {
  * used as-is. The emerald focus outline comes from the global rules in
  * globals.css (input[type="date"]:focus-visible), so it is not repeated
  * here. The optional label renders the shadcn Label above the input.
- * Pass the raw input string to onChange; conversion to ISO stays with the
- * caller (isoToLocalInput / localInputToIso), never inside this component.
+ * Without a label the bare input is returned, so the component also fits
+ * inside a Field or a custom label wrapper. Pass the raw input string to
+ * onChange; conversion to ISO stays with the caller (isoToLocalInput /
+ * localInputToIso), never inside this component.
  */
 function DateField({
   id,
@@ -35,25 +38,31 @@ function DateField({
   disabled,
   min,
   max,
+  ariaLabel,
   className,
 }: DateFieldProps) {
+  const input = (
+    <input
+      id={id}
+      type={type}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+      min={min}
+      max={max}
+      aria-label={ariaLabel}
+      data-slot="date-field"
+      className={cn(
+        "h-10 w-full rounded-md border border-border bg-background px-3 font-mono text-sm tabular-nums outline-none transition-colors placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
+        className
+      )}
+    />
+  )
+  if (!label) return input
   return (
     <div className="space-y-2">
-      {label ? <Label htmlFor={id}>{label}</Label> : null}
-      <input
-        id={id}
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-        min={min}
-        max={max}
-        data-slot="date-field"
-        className={cn(
-          "h-10 w-full rounded-md border border-border bg-background px-3 font-mono text-sm tabular-nums outline-none transition-colors placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
-          className
-        )}
-      />
+      <Label htmlFor={id}>{label}</Label>
+      {input}
     </div>
   )
 }

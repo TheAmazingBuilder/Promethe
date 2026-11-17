@@ -29,6 +29,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -473,15 +474,13 @@ function AccountEditor({
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="acc-start">{t("startDate")}</Label>
-                  <Input
+                  <DateField
                     id="acc-start"
-                    type="date"
-                    className="h-10 font-mono tabular-nums"
                     value={form.startDate ?? ""}
-                    onChange={(e) =>
+                    onChange={(v) =>
                       set(
                         "startDate",
-                        e.target.value.trim() === "" ? null : e.target.value
+                        v.trim() === "" ? null : v
                       )
                     }
                   />

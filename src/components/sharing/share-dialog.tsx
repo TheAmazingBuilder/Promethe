@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -298,22 +299,18 @@ export function ShareDialog({
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label htmlFor="period-start">Début</Label>
-                      <Input
+                      <DateField
                         id="period-start"
-                        type="date"
-                        className="h-10 font-mono tabular-nums"
                         value={customStart}
-                        onChange={(e) => setCustomStart(e.target.value)}
+                        onChange={setCustomStart}
                       />
                     </div>
                     <div className="space-y-1.5">
                       <Label htmlFor="period-end">Fin</Label>
-                      <Input
+                      <DateField
                         id="period-end"
-                        type="date"
-                        className="h-10 font-mono tabular-nums"
                         value={customEnd}
-                        onChange={(e) => setCustomEnd(e.target.value)}
+                        onChange={setCustomEnd}
                       />
                     </div>
                   </div>

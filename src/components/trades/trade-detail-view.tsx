@@ -40,6 +40,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -1076,12 +1077,11 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
               htmlFor="close-exit-time"
               className="sm:col-span-1"
             >
-              <Input
+              <DateField
                 id="close-exit-time"
                 type="datetime-local"
-                className="h-10 font-mono tabular-nums"
                 value={exitTime}
-                onChange={(e) => setExitTime(e.target.value)}
+                onChange={setExitTime}
               />
             </Field>
             <Field

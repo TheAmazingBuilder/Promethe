@@ -17,6 +17,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -236,14 +237,14 @@ export function JournalView({ date }: { date?: string }) {
           >
             <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           </Button>
-          <Input
-            type="date"
+          <DateField
+            id="journal-day"
+            ariaLabel={t("dateLabel")}
+            className="h-9 w-[170px]"
             value={day}
-            onChange={(e) => {
-              if (e.target.value) navigate(`#/journal/${e.target.value}`);
+            onChange={(v) => {
+              if (v) navigate(`#/journal/${v}`);
             }}
-            aria-label={t("dateLabel")}
-            className="w-[170px] font-mono tabular-nums"
           />
           <Button
             variant="outline"

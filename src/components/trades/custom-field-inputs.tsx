@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -154,11 +155,11 @@ export function CustomFieldInputs({
             return (
               <div key={def.key} className="space-y-1.5">
                 {label}
-                <Input
+                <DateField
                   id={`cf-${def.key}`}
-                  type="date"
+                  className="h-9"
                   value={typeof value === "string" ? value : ""}
-                  onChange={(e) => setValue(def.key, e.target.value)}
+                  onChange={(v) => setValue(def.key, v)}
                 />
               </div>
             );

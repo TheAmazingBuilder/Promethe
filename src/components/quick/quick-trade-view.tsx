@@ -27,6 +27,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -660,13 +661,12 @@ export function QuickTradeView() {
               />
             </Field>
             <Field label={t("entryTime")} htmlFor="qt-entry-time">
-              <Input
+              <DateField
                 id="qt-entry-time"
                 type="datetime-local"
-                className="h-10 font-mono tabular-nums"
                 value={isoToLocalInput(form.entryTime)}
-                onChange={(e) =>
-                  set("entryTime", localInputToIso(e.target.value) ?? "")
+                onChange={(v) =>
+                  set("entryTime", localInputToIso(v) ?? "")
                 }
               />
             </Field>

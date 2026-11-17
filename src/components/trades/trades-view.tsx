@@ -63,6 +63,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -1140,30 +1141,24 @@ export function TradesView() {
                     onCheckedChange={(v) => setFilter({ includeDrafts: v })}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="filter-from">{t("from")}</Label>
-                  <Input
-                    id="filter-from"
-                    type="date"
-                    className="h-8 w-32 text-sm font-mono tabular-nums"
-                    value={query.dateFrom ?? ""}
-                    onChange={(e) =>
-                      setFilter({ dateFrom: e.target.value || undefined })
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="filter-to">{t("to")}</Label>
-                  <Input
-                    id="filter-to"
-                    type="date"
-                    className="h-8 w-32 text-sm font-mono tabular-nums"
-                    value={query.dateTo ?? ""}
-                    onChange={(e) =>
-                      setFilter({ dateTo: e.target.value || undefined })
-                    }
-                  />
-                </div>
+                <DateField
+                  id="filter-from"
+                  label={t("from")}
+                  className="h-8 w-32"
+                  value={query.dateFrom ?? ""}
+                  onChange={(v) =>
+                    setFilter({ dateFrom: v || undefined })
+                  }
+                />
+                <DateField
+                  id="filter-to"
+                  label={t("to")}
+                  className="h-8 w-32"
+                  value={query.dateTo ?? ""}
+                  onChange={(v) =>
+                    setFilter({ dateTo: v || undefined })
+                  }
+                />
               </>
             )}
           </div>

@@ -47,6 +47,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -668,12 +669,10 @@ function AnnotationDialog({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ann-end">{t("endDateLabel")}</Label>
-              <Input
+              <DateField
                 id="ann-end"
-                type="date"
-                className="h-10 font-mono tabular-nums"
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                onChange={setEndDate}
               />
             </div>
           </div>

@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -949,13 +950,12 @@ export function TradeFormView({
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
               <Field label={t("entryTime")} htmlFor="tf-entry-time">
-                <Input
+                <DateField
                   id="tf-entry-time"
                   type="datetime-local"
-                  className="h-10 font-mono tabular-nums"
                   value={isoToLocalInput(form.entryTime)}
-                  onChange={(e) =>
-                    set("entryTime", localInputToIso(e.target.value) ?? "")
+                  onChange={(v) =>
+                    set("entryTime", localInputToIso(v) ?? "")
                   }
                 />
               </Field>
@@ -1103,13 +1103,12 @@ export function TradeFormView({
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
               <Field label={t("exitTime")} htmlFor="tf-exit-time">
-                <Input
+                <DateField
                   id="tf-exit-time"
                   type="datetime-local"
-                  className="h-10 font-mono tabular-nums"
                   value={isoToLocalInput(form.exitTime)}
-                  onChange={(e) =>
-                    set("exitTime", localInputToIso(e.target.value) ?? "")
+                  onChange={(v) =>
+                    set("exitTime", localInputToIso(v) ?? "")
                   }
                 />
               </Field>

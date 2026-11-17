@@ -38,6 +38,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Progress } from "@/components/ui/progress";
 import {
   Select,
@@ -294,24 +295,20 @@ function GoalEditor({
               <label className="text-xs font-medium text-muted-foreground" htmlFor="goal-start">
                 {t("startDate")}
               </label>
-              <Input
+              <DateField
                 id="goal-start"
-                type="date"
-                className="h-10 font-mono tabular-nums"
                 value={form.startDate}
-                onChange={(e) => set("startDate", e.target.value)}
+                onChange={(v) => set("startDate", v)}
               />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground" htmlFor="goal-end">
                 {t("endDate")}
               </label>
-              <Input
+              <DateField
                 id="goal-end"
-                type="date"
-                className="h-10 font-mono tabular-nums"
                 value={form.endDate}
-                onChange={(e) => set("endDate", e.target.value)}
+                onChange={(v) => set("endDate", v)}
               />
             </div>
           </div>
