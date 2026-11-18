@@ -776,6 +776,10 @@ export interface AdvancedAnalyticsPayload {
 
 import type { WeeklyPlan } from "@/lib/analytics/weekly-plan";
 
+// ── Performance report (MRT wave 3) ──────────────────────────────────────
+
+import type { PerformanceReport } from "@/lib/analytics/performance-report";
+
 // ── When you trade (MRT wave 2) ─────────────────────────────────────────────
 
 import type { WhenYouTradeResult } from "@/lib/analytics/when-you-trade";
@@ -798,6 +802,16 @@ export interface WeeklyPlanPayload {
   currency: string;
   timezone: string;
   plan: WeeklyPlan;
+}
+
+/** Performance report (MRT wave 3) — verdict, weekly P&L, edge sources. */
+export interface PerformanceReportPayload {
+  period: AnalyticsPeriod;
+  /** Active account filter (null = all accounts). */
+  accountId: string | null;
+  currency: string;
+  timezone: string;
+  report: PerformanceReport;
 }
 
 // ── Journal & calendar (v1 Phase 5) ─────────────────────────────────────────

@@ -63,7 +63,12 @@ function formatDay(dayKey: string): string {
   }).format(new Date(Date.UTC(y, m - 1, d)));
 }
 
-function ActionRow({
+/**
+ * One weekly plan action with its "Done this week" checkbox. Exported so
+ * the performance report's "Next week" section reuses the exact same row
+ * (same checkbox, same toggle) instead of duplicating it.
+ */
+export function ActionRow({
   action,
   pending,
   onToggle,

@@ -39,7 +39,8 @@ export type AdvancedTabId =
   | "sequences"
   | "seasonality"
   | "anomalies"
-  | "weekly-plan";
+  | "weekly-plan"
+  | "performance-report";
 
 export const ADVANCED_TABS: Array<{ id: AdvancedTabId; path: string }> = [
   { id: "lifecycle", path: "/analytics/lifecycle" },
@@ -52,6 +53,7 @@ export const ADVANCED_TABS: Array<{ id: AdvancedTabId; path: string }> = [
   { id: "seasonality", path: "/analytics/seasonality" },
   { id: "anomalies", path: "/analytics/anomalies" },
   { id: "weekly-plan", path: "/analytics/weekly-plan" },
+  { id: "performance-report", path: "/analytics/performance-report" },
 ];
 
 const PERIODS: AnalyticsPeriod[] = ["30d", "90d", "ytd", "all"];

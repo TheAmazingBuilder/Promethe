@@ -6,9 +6,9 @@
  * KPI block, mini equity curve, symbol + strategy tables, best/worst trades.
  */
 import * as React from "react";
-import { jsPDF } from "jspdf";
 import { useTranslations } from "next-intl";
 import { FileDown, Loader2 } from "lucide-react";
+import { ReportPdf } from "@/lib/reports/pdf";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -63,166 +63,36 @@ function currentMonth(): string {
 }
 
 function buildPdf(report: MonthlyReport, generatedLabel: string): void {
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const pageWidth = 210;
-  const margin = 15;
-  const contentWidth = pageWidth - margin * 2;
-  const bottom = 282;
-  let y = 18;
-  let page = 1;
+  const pdf = new ReportPdf(report.currency);
+  const footerLabel = `Monthly report ${report.monthLabel}`;
 
-  const money = new Intl.NumberFormat("en-CA", {
-    style: "currency",
-    currency: report.currency,
-  });
-  const moneyOf = (v: string | null) =>
-    v == null ? "-" : money.format(Number(v));
-  const pctOf = (v: string | null) =>
-    v == null ? "-" : `${Number(v).toFixed(1)} %`;
-
-  const footer = () => {
-    doc.setFontSize(8);
-    doc.setTextColor(130, 130, 130);
-    doc.text(
-      `Promethe – Monthly report ${report.monthLabel}  ·  ${page}`,
-      margin,
-      290
-    );
-    doc.setTextColor(0, 0, 0);
-  };
-
-  const ensureSpace = (needed: number) => {
-    if (y + needed > bottom) {
-      footer();
-      doc.addPage();
-      page += 1;
-      y = 18;
-    }
-  };
-
-  const section = (title: string) => {
-    ensureSpace(14);
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(16, 185, 129);
-    doc.text(title, margin, y);
-    doc.setDrawColor(16, 185, 129);
-    doc.line(margin, y + 2, margin + contentWidth, y + 2);
-    doc.setTextColor(0, 0, 0);
-    y += 9;
-  };
-
-  const kvRow = (label: string, value: string) => {
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text(label, margin, y);
-    doc.setFont("helvetica", "bold");
-    doc.text(value, margin + contentWidth, y, { align: "right" });
-    y += 6;
-  };
-
-  // ── Header ──
-  doc.setFontSize(18);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(16, 185, 129);
-  doc.text("Promethe", margin, y);
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(13);
-  doc.text(`Monthly report – ${report.monthLabel}`, margin, y + 8);
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(100, 100, 100);
-  doc.text(generatedLabel, margin, y + 14);
-  doc.setTextColor(0, 0, 0);
-  y += 24;
+  pdf.header(`Monthly report – ${report.monthLabel}`, generatedLabel);
 
   if (report.tradeCount === 0) {
-    section("No trades");
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text("No trades closed this month.", margin, y);
-    footer();
-    doc.save(`promethe-report-${report.month}.pdf`);
+    pdf.section("No trades", footerLabel);
+    pdf.paragraph("No trades closed this month.", footerLabel);
+    pdf.footer(footerLabel);
+    pdf.save(`promethe-report-${report.month}.pdf`);
     return;
   }
 
   // ── KPIs ──
-  section("Key figures");
-  kvRow("Closed trades", String(report.tradeCount));
-  kvRow("Net P&L", moneyOf(report.netPnl));
-  kvRow("Win rate", pctOf(report.winRate));
-  kvRow("Profit factor", report.profitFactor ?? "-");
-  kvRow("Average win", moneyOf(report.avgWin));
-  kvRow("Average loss", moneyOf(report.avgLoss));
-  kvRow("Total R", report.totalR ?? "-");
-  kvRow("Max drawdown", moneyOf(report.maxDrawdown));
-  y += 4;
+  pdf.section("Key figures", footerLabel);
+  pdf.kvRow("Closed trades", String(report.tradeCount));
+  pdf.kvRow("Net P&L", pdf.moneyOf(report.netPnl));
+  pdf.kvRow("Win rate", pdf.pctOf(report.winRate));
+  pdf.kvRow("Profit factor", report.profitFactor ?? "-");
+  pdf.kvRow("Average win", pdf.moneyOf(report.avgWin));
+  pdf.kvRow("Average loss", pdf.moneyOf(report.avgLoss));
+  pdf.kvRow("Total R", report.totalR ?? "-");
+  pdf.kvRow("Max drawdown", pdf.moneyOf(report.maxDrawdown));
+  pdf.y += 4;
 
   // ── Equity curve ──
-  if (report.equity.length >= 2) {
-    section("Equity curve");
-    const boxH = 42;
-    ensureSpace(boxH + 4);
-    const boxY = y;
-    const values = report.equity.map((p) => Number(p.cumPnl));
-    const min = Math.min(0, ...values);
-    const max = Math.max(0, ...values);
-    const span = max - min || 1;
-    doc.setDrawColor(220, 220, 220);
-    doc.rect(margin, boxY, contentWidth, boxH);
-    // Zero line.
-    const zeroY = boxY + boxH - ((0 - min) / span) * boxH;
-    doc.setDrawColor(180, 180, 180);
-    doc.line(margin, zeroY, margin + contentWidth, zeroY);
-    doc.setDrawColor(16, 185, 129);
-    doc.setLineWidth(0.6);
-    report.equity.forEach((p, i) => {
-      if (i === 0) return;
-      const x1 =
-        margin + ((i - 1) / (report.equity.length - 1)) * contentWidth;
-      const x2 = margin + (i / (report.equity.length - 1)) * contentWidth;
-      const y1 = boxY + boxH - ((values[i - 1] - min) / span) * boxH;
-      const y2 = boxY + boxH - ((values[i] - min) / span) * boxH;
-      doc.line(x1, y1, x2, y2);
-    });
-    doc.setLineWidth(0.2);
-    y = boxY + boxH + 8;
-  }
+  pdf.equityChart(report.equity, footerLabel);
 
   // ── Tables ──
-  const table = (
-    title: string,
-    headers: string[],
-    widths: number[],
-    rows: string[][]
-  ) => {
-    if (rows.length === 0) return;
-    section(title);
-    ensureSpace(8 + rows.length * 6);
-    let x = margin;
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.setFillColor(245, 245, 245);
-    doc.rect(margin, y - 4, contentWidth, 7, "F");
-    headers.forEach((h, i) => {
-      doc.text(h, x, y);
-      x += widths[i];
-    });
-    y += 7;
-    doc.setFont("helvetica", "normal");
-    rows.forEach((row) => {
-      ensureSpace(6);
-      let cx = margin;
-      row.forEach((cell, i) => {
-        doc.text(cell, cx, y);
-        cx += widths[i];
-      });
-      y += 6;
-    });
-    y += 4;
-  };
-
-  table(
+  pdf.table(
     "By instrument",
     ["Symbol", "Trades", "Winners", "Net P&L"],
     [60, 40, 40, 40],
@@ -230,11 +100,12 @@ function buildPdf(report: MonthlyReport, generatedLabel: string): void {
       g.name,
       String(g.trades),
       String(g.wins),
-      moneyOf(g.netPnl),
-    ])
+      pdf.moneyOf(g.netPnl),
+    ]),
+    footerLabel
   );
 
-  table(
+  pdf.table(
     "By strategy",
     ["Strategy", "Trades", "Win rate", "Net P&L"],
     [70, 30, 40, 40],
@@ -242,8 +113,9 @@ function buildPdf(report: MonthlyReport, generatedLabel: string): void {
       g.name,
       String(g.trades),
       g.winRate == null ? "-" : `${g.winRate.toFixed(1)} %`,
-      moneyOf(g.netPnl),
-    ])
+      pdf.moneyOf(g.netPnl),
+    ]),
+    footerLabel
   );
 
   const tradeRows = (trades: MonthlyReportTrade[]) =>
@@ -251,23 +123,25 @@ function buildPdf(report: MonthlyReport, generatedLabel: string): void {
       t.date,
       t.symbol,
       t.direction === "LONG" ? "Buy" : "Sell",
-      moneyOf(t.netPnl),
+      pdf.moneyOf(t.netPnl),
     ]);
-  table(
+  pdf.table(
     "Best trades",
     ["Date", "Symbol", "Side", "Net P&L"],
     [45, 55, 40, 40],
-    tradeRows(report.bestTrades)
+    tradeRows(report.bestTrades),
+    footerLabel
   );
-  table(
+  pdf.table(
     "Worst trades",
     ["Date", "Symbol", "Side", "Net P&L"],
     [45, 55, 40, 40],
-    tradeRows(report.worstTrades)
+    tradeRows(report.worstTrades),
+    footerLabel
   );
 
-  footer();
-  doc.save(`promethe-report-${report.month}.pdf`);
+  pdf.footer(footerLabel);
+  pdf.save(`promethe-report-${report.month}.pdf`);
 }
 
 export function MonthlyReportDialog({

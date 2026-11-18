@@ -28,6 +28,7 @@ import { SequencesView } from "@/components/analytics/sequences-view";
 import { SeasonalityView } from "@/components/analytics/seasonality-view";
 import { AnomaliesView } from "@/components/analytics/anomalies-view";
 import { WeeklyPlanView } from "@/components/analytics/weekly-plan-view";
+import { PerformanceReportView } from "@/components/analytics/performance-report-view";
 import { ChartBuilderView } from "@/components/charts/chart-builder-view";
 import { HeatmapsView } from "@/components/charts/heatmap-view";
 import { BenchmarkView } from "@/components/charts/benchmark-view";
@@ -152,6 +153,9 @@ export function ViewSwitch() {
       break;
     case "analytics-weekly-plan":
       view = <WeeklyPlanView />;
+      break;
+    case "analytics-performance-report":
+      view = <PerformanceReportView />;
       break;
     case "analytics-charts":
       view = <ChartBuilderView />;

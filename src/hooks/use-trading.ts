@@ -26,6 +26,7 @@ import type {
   AdvancedAnalyticsPayload,
   AccountsHealthPayload,
   WeeklyPlanPayload,
+  PerformanceReportPayload,
   WhenYouTradePayload,
 } from "@/lib/trading/dto";
 import type {
@@ -376,6 +377,25 @@ export function useToggleWeeklyPlanAction(accountId?: string) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["weekly-plan"] });
     },
+  });
+}
+
+// ── Performance report (MRT wave 3) ──────────────────────────────────────
+export function usePerformanceReport(filters: AnalyticsFilters) {
+  const params = new URLSearchParams({ period: filters.period });
+  if (filters.account) params.set("account", filters.account);
+  const qs = params.toString();
+  return useQuery({
+    queryKey: [
+      "performance-report",
+      filters.period,
+      filters.account ?? "all",
+    ],
+    queryFn: async () =>
+      apiFetch<PerformanceReportPayload>(
+        `/api/v1/performance-report?${qs}`
+      ),
+    staleTime: 60 * 1000,
   });
 }
 
