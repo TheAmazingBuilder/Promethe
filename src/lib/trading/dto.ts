@@ -821,6 +821,30 @@ export interface CalendarPayload {
   };
 }
 
+/**
+ * One trading day, for the calendar day-detail panel (MRT wave 2).
+ * Trades are the CLOSED trades whose TRADING day (exit, user setting) is
+ * `date` — the same bucketing as the month grid, so the panel totals match
+ * the grid cell. The journal entry is fetched separately (useJournalEntry).
+ */
+export interface CalendarDayPayload {
+  /** Trading day YYYY-MM-DD. */
+  date: string;
+  /** Active account filter (null = all accounts). */
+  accountId: string | null;
+  currency: string;
+  timezone: string;
+  /** Closed trades of the day, newest exit first. */
+  trades: TradeListItemDTO[];
+  /** Day totals over `trades` (same math as the month grid). */
+  netPnl: string;
+  tradeCount: number;
+  wins: number;
+  losses: number;
+  /** Sum of R multiples over R-trades (null when none has an R). */
+  totalR: string | null;
+}
+
 // ── Strategy versions & stats (v1 Phase 5) ──────────────────────────────────
 
 export interface StrategyVersionDTO {

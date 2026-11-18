@@ -18,11 +18,13 @@ import {
   computeDayStreaks,
   computeMonthSummary,
   monthBounds,
+  summarizeDayTrades,
   type CalendarDay,
 } from "@/lib/analytics/calendar";
-import type { CalendarPayload } from "@/lib/trading/dto";
-import type { CalendarQuery } from "@/lib/validations/journal";
+import type { CalendarDayPayload, CalendarPayload } from "@/lib/trading/dto";
+import type { CalendarDayQuery, CalendarQuery } from "@/lib/validations/journal";
 import { journalDays } from "@/server/journal";
+import { toTradeListItem } from "@/server/trades";
 import { getDisplayPreferences } from "@/server/display-preferences";
 import { getTradingDay } from "@/lib/time/trading-day";
 
@@ -174,6 +176,76 @@ export async function getCalendar(
     days: daysRecord,
     summary,
     streaks,
+  };
+}
+
+// ── One trading day (calendar day-detail panel, MRT wave 2) ─────────────────
+
+/**
+ * Closed trades of one TRADING day, with day totals — the same bucketing
+ * as getCalendar (exit time through getTradingDay), so the panel totals
+ * match the month grid cell exactly. The journal entry is NOT included:
+ * the panel reads it with the existing useJournalEntry hook.
+ */
+export async function getCalendarDay(
+  userId: string,
+  query: CalendarDayQuery
+): Promise<CalendarDayPayload> {
+  const [profile, accounts, prefs] = await Promise.all([
+    db.profile.findUnique({ where: { id: userId } }),
+    db.account.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
+    getDisplayPreferences(userId),
+  ]);
+
+  // Account filter must belong to the user (silent fallback to "all").
+  const accountFilter =
+    query.account != null
+      ? (accounts.find((a) => a.id === query.account) ?? null)
+      : null;
+
+  const timezone = profile?.timezone ?? "UTC";
+  const currency = accountFilter?.currency ?? profile?.baseCurrency ?? "USD";
+  // Trades are attributed to their TRADING day (user setting, default
+  // MIDNIGHT_LOCAL = the local calendar day, i.e. the previous behaviour).
+  const dayOf = (d: Date) => getTradingDay(d, timezone, prefs.tradingDay);
+
+  const { date } = query;
+  // Margin instants: one full day on each side covers every TZ offset and
+  // rollover, same as the month view.
+  const from = new Date(`${date}T00:00:00Z`);
+  from.setUTCDate(from.getUTCDate() - 1);
+  const to = new Date(`${date}T00:00:00Z`);
+  to.setUTCDate(to.getUTCDate() + 2);
+
+  const rows = await db.trade.findMany({
+    where: {
+      userId,
+      status: "CLOSED",
+      isDraft: false,
+      exitTime: { gte: from, lt: to },
+      ...(accountFilter ? { accountId: accountFilter.id } : {}),
+    },
+    include: {
+      instrument: true,
+      account: true,
+      strategy: true,
+      tags: { include: { tag: true } },
+    },
+    orderBy: { exitTime: "desc" },
+  });
+  const dayRows = rows.filter(
+    (t) => t.exitTime != null && dayOf(t.exitTime) === date
+  );
+  const trades = dayRows.map((t) => toTradeListItem(t));
+  const summary = summarizeDayTrades(trades);
+
+  return {
+    date,
+    accountId: accountFilter?.id ?? null,
+    currency,
+    timezone,
+    trades,
+    ...summary,
   };
 }
 

@@ -28,12 +28,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PageHeader } from "@/components/ui/page-header";
+import { CalendarDayDetailPanel } from "@/components/calendar/calendar-day-detail";
 import { useAccounts } from "@/hooks/use-trading";
 import { useCalendar } from "@/hooks/use-journal";
 import { useTimePrefs } from "@/components/time/time-provider";
 import { pnlClass } from "@/lib/format";
 import { useFormat } from "@/lib/format/use-format";
-import { navigate } from "@/lib/router";
 import { toD } from "@/lib/trading/dec";
 
 const EMERALD_BG = "bg-gain-subtle";
@@ -70,6 +70,14 @@ export function CalendarView() {
   const [accountId, setAccountId] = React.useState<string>("all");
   // v2.5 M2 — year (contribution calendar) vs month mode.
   const [mode, setMode] = React.useState<"month" | "year">("month");
+  // MRT wave 2 — selected day for the detail panel below the grid. Clicking
+  // a day selects it (no longer deep-links to the journal: the panel links
+  // there). The selection clears when the month or account changes, so the
+  // panel never shows a day from another view.
+  const [selectedDay, setSelectedDay] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    setSelectedDay(null);
+  }, [cursor.year, cursor.month, accountId]);
 
   const { data: accountsData } = useAccounts();
   const accounts = accountsData ?? [];
@@ -211,11 +219,13 @@ export function CalendarView() {
                     const day = data?.days?.[cell.date];
                     const pnl = day && day.tradeCount > 0 ? toD(day.netPnl) : null;
                     const isToday = cell.date === today;
+                    const isSelected = selectedDay === cell.date;
                     return (
                       <button
                         key={cell.date}
                         type="button"
-                        onClick={() => navigate(`/journal/${cell.date}`)}
+                        onClick={() => setSelectedDay(cell.date)}
+                        aria-pressed={isSelected}
                         aria-label={[
                           // a11y (M8 Phase 5): axe's label-content-name-mismatch
                           // requires the VISIBLE text tokens (day number, P&L,
@@ -240,7 +250,8 @@ export function CalendarView() {
                           // + muted background instead of opacity-40 text
                           // (blended color failed color-contrast).
                           cell.inMonth ? "" : "border-dashed bg-muted/30",
-                          isToday ? "ring-2 ring-primary ring-offset-1 ring-offset-background" : "",
+                          isToday && !isSelected ? "ring-2 ring-primary ring-offset-1 ring-offset-background" : "",
+                          isSelected ? "ring-2 ring-emerald-500 ring-offset-1 ring-offset-background" : "",
                           pnl ? (pnl.gt(0) ? EMERALD_BG : pnl.lt(0) ? ROSE_BG : "") : "",
                           "hover:bg-muted/60",
                         ].join(" ")}
@@ -402,6 +413,16 @@ export function CalendarView() {
         </>
         )}
       </div>
+
+      {/* MRT wave 2 — day-detail panel, below the grid. */}
+      {mode === "month" && selectedDay ? (
+        <CalendarDayDetailPanel
+          date={selectedDay}
+          accountId={effectiveAccount}
+          timezone={data?.timezone ?? "UTC"}
+          onClose={() => setSelectedDay(null)}
+        />
+      ) : null}
     </section>
   );
 }

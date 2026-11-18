@@ -33,6 +33,7 @@ function statTrade(
 describe("parseGridViewMode", () => {
   it("keeps grid", () => expect(parseGridViewMode("grid")).toBe("grid"));
   it("keeps table", () => expect(parseGridViewMode("table")).toBe("table"));
+  it("keeps by-day", () => expect(parseGridViewMode("by-day")).toBe("by-day"));
   it("defaults unknown values to table", () => {
     expect(parseGridViewMode(undefined)).toBe("table");
     expect(parseGridViewMode(null)).toBe("table");
@@ -47,6 +48,8 @@ describe("readGridViewMode / writeGridViewMode", () => {
     expect(readGridViewMode(storage)).toBe("table");
     writeGridViewMode("grid", storage);
     expect(readGridViewMode(storage)).toBe("grid");
+    writeGridViewMode("by-day", storage);
+    expect(readGridViewMode(storage)).toBe("by-day");
     writeGridViewMode("table", storage);
     expect(readGridViewMode(storage)).toBe("table");
   });

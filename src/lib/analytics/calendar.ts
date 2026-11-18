@@ -378,3 +378,55 @@ export function isoDayBetween(
 ): boolean {
   return day >= first && day <= last;
 }
+
+// ── One trading day (calendar day-detail panel, MRT wave 2) ─────────────────
+
+export interface DayTradeSummaryInput {
+  netPnl: string | null;
+  rMultiple: string | null;
+  resultType: string | null;
+}
+
+export interface DayTradeSummary {
+  /** Decimal sum of netPnl over the trades ("0" when none has a P&L). */
+  netPnl: string;
+  tradeCount: number;
+  wins: number;
+  losses: number;
+  /** Sum of R multiples over R-trades (null when none has an R). */
+  totalR: string | null;
+}
+
+/**
+ * Day totals over a list of closed trades — the same math as the month
+ * grid buckets (bucketByTradingDay in src/server/calendar.ts), extracted
+ * so the day endpoint and the unit tests share one implementation. A win
+ * is a positive net P&L, a loss a negative one; breakeven and open trades
+ * count in tradeCount but in neither wins nor losses.
+ */
+export function summarizeDayTrades(
+  trades: DayTradeSummaryInput[]
+): DayTradeSummary {
+  let pnl = D0;
+  let wins = 0;
+  let losses = 0;
+  let rSum = D0;
+  let rCount = 0;
+  for (const t of trades) {
+    const p = toD(t.netPnl ?? 0);
+    pnl = pnl.plus(p);
+    if (p.gt(0)) wins += 1;
+    else if (p.lt(0)) losses += 1;
+    if (t.rMultiple != null) {
+      rSum = rSum.plus(toD(t.rMultiple));
+      rCount += 1;
+    }
+  }
+  return {
+    netPnl: pnl.toString(),
+    tradeCount: trades.length,
+    wins,
+    losses,
+    totalR: rCount > 0 ? rSum.toString() : null,
+  };
+}

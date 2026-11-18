@@ -16,8 +16,9 @@ import {
 describe("sidebar slimming", () => {
   it("lists every page for the command palette and the mobile sheet", () => {
     const items = allNavItems();
-    // 17 visible pages + Mentor Space (mentorOnly, hidden by default).
-    expect(items).toHaveLength(18);
+    // 17 visible pages + Mentor Space (mentorOnly, hidden by default)
+    // + Profile settings (palette-only, added with the Profile page).
+    expect(items).toHaveLength(19);
     const views = items.map((item) => item.view);
     for (const view of [
       "dashboard",
@@ -38,6 +39,7 @@ describe("sidebar slimming", () => {
       "reconciliation",
       "mentor",
       "settings",
+      "profile-settings",
     ]) {
       expect(views).toContain(view);
     }

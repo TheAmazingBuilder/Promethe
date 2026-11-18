@@ -12,6 +12,7 @@ import {
 } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 import type {
+  CalendarDayPayload,
   CalendarPayload,
   JournalEntryDTO,
   StrategyDTO,
@@ -34,6 +35,26 @@ export function useCalendar(
     queryKey: ["calendar", year, month, account ?? null],
     queryFn: async () =>
       apiFetch<CalendarPayload>(`/api/v1/calendar?${params.toString()}`),
+    staleTime: 60 * 1000,
+  });
+}
+
+// ── Calendar day detail (MRT wave 2) ─────────────────────────────────────────
+
+export function useCalendarDay(
+  date: string | null,
+  account?: string | null,
+) {
+  const params = new URLSearchParams();
+  if (date) params.set("date", date);
+  if (account) params.set("account", account);
+  return useQuery({
+    queryKey: ["calendar", "day", date, account ?? null],
+    queryFn: async () =>
+      apiFetch<CalendarDayPayload>(
+        `/api/v1/calendar/day?${params.toString()}`
+      ),
+    enabled: date != null,
     staleTime: 60 * 1000,
   });
 }

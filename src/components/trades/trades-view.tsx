@@ -10,6 +10,7 @@ import {
   ArrowUpDown,
   Bookmark,
   BookmarkPlus,
+  CalendarDays,
   CandlestickChart,
   CheckCircle2,
   ChevronDown,
@@ -87,6 +88,7 @@ import {
 } from "@/components/ui/table";
 import { PageHeader } from "@/components/ui/page-header";
 import { TradesGridView } from "@/components/trades/trades-grid-view";
+import { TradesByDayView } from "@/components/trades/trades-by-day-view";
 import {
   readGridViewMode,
   writeGridViewMode,
@@ -250,7 +252,7 @@ export function TradesView() {
     setViewModeState(mode);
     writeGridViewMode(mode);
     // Bulk selection is a table affordance: drop it when leaving the table.
-    if (mode === "grid") setSelectedIds([]);
+    if (mode !== "table") setSelectedIds([]);
   };
   const [saveOpen, setSaveOpen] = React.useState(false);
   const [viewName, setViewName] = React.useState("");
@@ -1394,7 +1396,7 @@ export function TradesView() {
               </button>
             </Badge>
           )}
-          {/* ── Table / Grid toggle (persisted in localStorage) ── */}
+          {/* ── Table / Grid / By day toggle (persisted in localStorage) ── */}
           <div
             className="ml-auto inline-flex rounded-md border"
             role="group"
@@ -1409,6 +1411,16 @@ export function TradesView() {
             >
               <Table2 className="h-3.5 w-3.5" aria-hidden="true" />
               {tGrid("table")}
+            </Button>
+            <Button
+              variant={viewMode === "by-day" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 gap-1.5 rounded-none border-l px-2 text-xs"
+              aria-pressed={viewMode === "by-day"}
+              onClick={() => setViewMode("by-day")}
+            >
+              <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
+              {tGrid("byDay")}
             </Button>
             <Button
               variant={viewMode === "grid" ? "secondary" : "ghost"}
@@ -1464,6 +1476,12 @@ export function TradesView() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {Array.from({ length: 8 }).map((_, i) => (
               <Skeleton key={i} className="h-44 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : viewMode === "by-day" ? (
+          <div className="space-y-2 rounded-lg border p-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full" />
             ))}
           </div>
         ) : (
@@ -1541,6 +1559,8 @@ export function TradesView() {
         )
       ) : viewMode === "grid" ? (
         <TradesGridView trades={rows} query={query} timezone={timezone} />
+      ) : viewMode === "by-day" ? (
+        <TradesByDayView trades={rows} timezone={timezone} />
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <Table>

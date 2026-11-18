@@ -45,3 +45,11 @@ export const calendarQuerySchema = z.object({
 });
 
 export type CalendarQuery = z.infer<typeof calendarQuerySchema>;
+
+/** GET /api/v1/calendar/day?date=YYYY-MM-DD&account=… — one trading day. */
+export const calendarDayQuerySchema = z.object({
+  date: isoDay,
+  account: z.string().trim().min(1).max(40).optional(),
+});
+
+export type CalendarDayQuery = z.infer<typeof calendarDayQuerySchema>;

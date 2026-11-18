@@ -767,6 +767,32 @@
     "modeMonth": "Month",
     "modeYear": "Year"
   },
+  "calendarDay": {
+    "panelLabel": "Trades for {date}",
+    "tradesCount": "{count} trade{count, plural, one {} other {s}} closed",
+    "loading": "Loading the day...",
+    "loadError": "Could not load this day.",
+    "retry": "Retry",
+    "close": "Close the day detail",
+    "netPnl": "Net P&L",
+    "totalR": "Total R",
+    "wins": "Wins",
+    "losses": "Losses",
+    "noTradesTitle": "No trades closed on this day",
+    "noTradesDesc": "Trades appear here once they are closed on this trading day.",
+    "setup": "Setup",
+    "risk": "Risk",
+    "rMultiple": "R",
+    "plannedRR": "Planned R:R",
+    "openTrade": "Open {symbol} trade",
+    "journal": "Journal",
+    "bias": "Market bias",
+    "keyLesson": "Key lesson",
+    "discipline": "Discipline",
+    "noJournal": "No journal entry for this day yet.",
+    "openJournal": "Open journal",
+    "writeJournal": "Write the journal"
+  },
   "journalView": {
     "title": "Daily journal",
     "subtitle": "Plan, review, mood and discipline - one journal per trading day",
@@ -4934,6 +4960,7 @@
     "viewMode": "Trades view",
     "table": "Table",
     "grid": "Grid",
+    "byDay": "By day",
     "trades": "Trades",
     "winRate": "Win rate",
     "netPnl": "Net P&L",
@@ -4943,5 +4970,10 @@
     "noScreenshot": "No screenshot",
     "miniChartLabel": "Price chart for {symbol}",
     "openTrade": "Open {symbol} {direction} trade"
+  },
+  "tradesByDay": {
+    "tradesCount": "{count} trade{count, plural, one {} other {s}}",
+    "winLoss": "{wins} W, {losses} L",
+    "openTrade": "Open {symbol} trade"
   }
 }

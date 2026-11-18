@@ -13,10 +13,12 @@ import { CANDLE_TIMEFRAMES } from "@/lib/validations/charts";
 
 export const GRID_VIEW_MODE_KEY = "promethe.trades.viewMode";
 
-export type TradesViewMode = "table" | "grid";
+export type TradesViewMode = "table" | "grid" | "by-day";
 
 export function parseGridViewMode(value: unknown): TradesViewMode {
-  return value === "grid" ? "grid" : "table";
+  if (value === "grid") return "grid";
+  if (value === "by-day") return "by-day";
+  return "table";
 }
 
 interface StorageLike {
@@ -35,7 +37,7 @@ function defaultStorage(): StorageLike | null {
   return null;
 }
 
-/** Read the persisted Table/Grid mode. Defaults to "table" (existing view). */
+/** Read the persisted Table/Grid/By-day mode. Defaults to "table" (existing view). */
 export function readGridViewMode(
   storage: StorageLike | null = defaultStorage()
 ): TradesViewMode {
@@ -46,7 +48,7 @@ export function readGridViewMode(
   }
 }
 
-/** Persist the Table/Grid mode. Never throws (private mode, SSR, tests). */
+/** Persist the Table/Grid/By-day mode. Never throws (private mode, SSR, tests). */
 export function writeGridViewMode(
   mode: TradesViewMode,
   storage: StorageLike | null = defaultStorage()
