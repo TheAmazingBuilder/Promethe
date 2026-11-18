@@ -8,7 +8,7 @@
 
 <p align="center">
   A trading journal for XAUUSD &amp; forex traders. Log your trades, grade your setups,<br />
-  and find out — with honest numbers — what actually works.
+  and see what actually works, with numbers you can trust.
   <br />
   <a href="https://promethe-nine.vercel.app">Live app</a>
 </p>
@@ -29,32 +29,32 @@
 
 ## What it is
 
-Promethe is a self-hostable web app to record trades, keep a strategy playbook, and analyse performance. It is built for discretionary traders — mainly XAUUSD (gold) and forex — with exact decimal math for pips, lots, R multiples and costs. No demo data, no fake stats: empty states stay honest until you have real trades.
+Promethe is a web app you can host yourself. Record your trades, keep a strategy playbook, and analyse how you perform. It is built for discretionary traders - mainly XAUUSD (gold) and forex - with exact decimal math for pips, lots, R multiples and costs. No demo data, no fake stats: empty states stay honest until you have real trades.
 
 ## Features
 
 **Journal**
 
-- Log trades with instrument, direction, entry / stop / target, size, costs and screenshots
-- Exact decimal P&amp;L, R multiples and break-even math (XAUUSD pip = 0.10 by default, configurable per instrument)
+- Log every trade with its instrument, direction, entry, stop, target, size, costs and screenshots
+- Exact decimal P&L, R multiples and break-even math - XAUUSD pip = 0.10 by default, configurable per instrument
 - Daily journal: pre-market plan, post-market review, mood / sleep / discipline scores
 - MT5 / MT4 statement import and broker sync, with reconciliation
 
 **Analytics**
 
 - Dashboards with customisable widgets, equity curve and KPIs
-- Weekly improvement plan — 100% rules-based over your own stats, no AI, with an honest "is your edge real?" check (expectancy, sample size, confidence interval)
+- A weekly improvement plan built only from your own stats - no AI - with an honest "is your edge real?" check (expectancy, sample size, confidence interval)
 - Confluences with hit rates, grades (A+ / A / B / C) and by-grade analytics
 - When-you-trade (hour, weekday, session), top leaks, habits, performance report with verdict, goals with auto progress
 
-**Playbook &amp; risk**
+**Playbook & risk**
 
 - Versioned setups with invalidation rules, checklists and compliance scoring
 - Interactive Risk/Reward × win-rate table, required win rate, expectancy in $ and R, daily risk-budget gauge, discipline score
 
 **Gaïa**
 
-- A notes workspace (mini-Notion) with a block editor, versions, tags and links to trades and strategies — your knowledge base, separate from the daily journal
+- A notes workspace (mini-Notion) with a block editor, versions, tags and links to trades and strategies. It is your knowledge base, separate from the daily journal.
 
 **Integrations**
 
@@ -77,13 +77,13 @@ npx prisma generate
 npm run dev            # http://localhost:3000
 ```
 
-Seed the reference data (37 instruments, 21 tags, plus a local demo account — idempotent, local use only):
+Seed the reference data (37 instruments, 21 tags, plus a local demo account - idempotent, local use only):
 
 ```bash
 bun prisma/seed.ts
 ```
 
-Apply Row Level Security in Supabase (SQL Editor, `prisma/rls.sql`). It is defense-in-depth for the `anon` / `authenticated` roles; the app itself scopes every query by user.
+Apply Row Level Security in Supabase (SQL Editor, `prisma/rls.sql`). It is defense-in-depth for the `anon` / `authenticated` roles; the app itself scopes every query to the signed-in user.
 
 ## Environment variables
 
@@ -98,14 +98,14 @@ Apply Row Level Security in Supabase (SQL Editor, `prisma/rls.sql`). It is defen
 | `INTEGRATION_ENCRYPTION_KEY` | Optional | AES-256-GCM key for Discord / Telegram secrets |
 | `NEXT_PUBLIC_APP_URL` | Optional | Public base URL of the app |
 
-Generate peppers with `openssl rand -hex 32`. Never commit a real `.env` — this repo is public.
+Generate peppers with `openssl rand -hex 32`. Never commit a real `.env` - this repo is public.
 
 ## Deployment
 
-1. **Supabase** — create a project, copy the pooler URLs into `DATABASE_URL` / `DIRECT_URL`, run `npx prisma db push`, apply `prisma/rls.sql` in the SQL Editor.
-2. **Vercel** — import the repo (Next.js preset), set the environment variables above, deploy. The build runs `prisma generate` before `next build`, so the Prisma client always matches the current schema.
+1. **Supabase** - create a project, copy the pooler URLs into `DATABASE_URL` / `DIRECT_URL`, run `npx prisma db push`, apply `prisma/rls.sql` in the SQL Editor.
+2. **Vercel** - import the repo (Next.js preset), set the environment variables above, deploy. The build runs `prisma generate` before `next build`, so the Prisma client always matches the current schema.
 
-Notes for the free tiers: a Supabase free project pauses after ~7 days of inactivity (expect a ~30 s cold start); the Vercel Hobby plan is for non-commercial use. Rate limiting is in-memory — fine for personal use, move to Upstash before opening the app to the public.
+Notes for the free tiers: a Supabase free project pauses after ~7 days of inactivity (expect a ~30 s cold start); the Vercel Hobby plan is for non-commercial use. Rate limiting is in-memory - fine for personal use, move to Upstash before opening the app to the public.
 
 ## Project structure
 
@@ -128,4 +128,4 @@ npm run lint       # ESLint
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).
