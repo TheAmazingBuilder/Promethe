@@ -445,7 +445,7 @@ function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
 }
 
-function scoreGrade(total: number): ScoreGrade {
+export function scoreGrade(total: number): ScoreGrade {
   if (total >= 80) return "excellent";
   if (total >= 60) return "good";
   if (total >= 40) return "developing";
@@ -1296,9 +1296,12 @@ export function computeAdvancedAnalyticsModules(
   const out: Partial<AdvancedAnalytics> = {};
   if (want.has("lifecycle")) out.lifecycle = computeLifecycle(trades);
   if (want.has("exits")) out.exits = computeExits(trades);
+  // Phase 2 perf — the score module is the score only. Its history is
+  // served from the TraderScoreSnapshot rows (server side), never from
+  // the monthly replay; computeAdvancedAnalytics below still appends
+  // the replayed history for pure callers and tests.
   if (want.has("score")) {
     out.score = computeTraderScore(trades, stats, advanced);
-    out.scoreHistory = computeScoreHistory(trades);
   }
   if (want.has("setups")) out.setups = computeSetupRanking(trades);
   if (want.has("confluences")) out.confluences = computeConfluences(trades);
@@ -1314,10 +1317,14 @@ export function computeAdvancedAnalytics(
   stats: TradeStats,
   advanced: AdvancedStats
 ): AdvancedAnalytics {
-  return computeAdvancedAnalyticsModules(
+  const partial = computeAdvancedAnalyticsModules(
     trades,
     stats,
     advanced,
     ADVANCED_MODULES
   ) as AdvancedAnalytics;
+  // Pure callers keep the replayed monthly history; the server path
+  // replaces it with the snapshot history (see getAdvancedAnalytics).
+  partial.scoreHistory = computeScoreHistory(trades);
+  return partial;
 }

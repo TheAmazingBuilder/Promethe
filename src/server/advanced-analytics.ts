@@ -6,6 +6,12 @@
  * ranking, sequences, seasonality and anomaly detection over CLOSED
  * non-draft trades.
  *
+ * Trader score (Phase 2 perf): the headline score is served from
+ * today's TraderScoreSnapshot when present (frozen daily value, one
+ * indexed read) and recomputed only when it is missing; the history is
+ * built from the snapshots (last one of each month) instead of the
+ * O(months x N) monthly replay.
+ *
  * Persistence (idempotent, user-scoped, Phase 2 perf): the GET handler
  * only writes when the stored rows actually differ — a read-only visit
  * writes nothing — and only for the modules it computed. Lifecycle rows,
@@ -22,8 +28,10 @@ import {
   computeAdvancedAnalyticsModules,
   computeTraderScore,
   isAlmostTp,
+  scoreGrade,
   type AdvancedAnalytics,
   type AdvancedTrade,
+  type ScoreHistoryPoint,
 } from "@/lib/analytics/advanced";
 import { ADVANCED_MODULES } from "@/lib/validations/analytics";
 import {
@@ -144,7 +152,14 @@ export async function loadAdvancedTradesCached(
   accountId?: string,
   period?: AnalyticsQuery["period"]
 ): Promise<LoadedTrades> {
-  return loadAdvancedTradesCachedInner(userId, accountId, period);
+  try {
+    return await loadAdvancedTradesCachedInner(userId, accountId, period);
+  } catch {
+    // unstable_cache needs a Next request scope (route handlers); outside
+    // one (tests, scripts) fall back to the direct load — same data, no
+    // cache. A DB failure still throws from the direct load below.
+    return loadAdvancedTrades(userId, accountId, period);
+  }
 }
 
 /**
@@ -484,6 +499,50 @@ export async function getAdvancedAnalytics(
     modules
   );
   const now = new Date();
+  // Phase 2 perf — trader score from the daily snapshot: the headline
+  // score is the frozen value of the day (one indexed read), recomputed
+  // only when today's snapshot is missing. The details below the score
+  // still describe the currently loaded trades. History comes from the
+  // snapshots (last one of each month) instead of the O(months x N)
+  // monthly replay; when today's snapshot is missing, the current
+  // month's point is the freshly computed score (same >= 3 trades bar
+  // as the replay).
+  if (modules.includes("score") && computed.score != null) {
+    const [history, today] = await Promise.all([
+      loadScoreHistoryFromSnapshots(userId),
+      db.traderScoreSnapshot.findUnique({
+        where: { userId_date: { userId, date: utcDay(now) } },
+      }),
+    ]);
+    if (today != null) {
+      computed.score = {
+        ...computed.score,
+        total: today.score,
+        grade: scoreGrade(today.score),
+        components: {
+          discipline: today.discipline,
+          edge: today.edge,
+          consistency: today.consistency,
+          risk: today.risk,
+        },
+        trades: today.tradeCount,
+      };
+    }
+    const currentMonth = now.toISOString().slice(0, 7);
+    if (
+      today == null &&
+      computed.score.trades >= 3 &&
+      !history.some((p) => p.month === currentMonth)
+    ) {
+      history.push({
+        month: currentMonth,
+        score: computed.score.total,
+        trades: computed.score.trades,
+      });
+      history.sort((a, b) => a.month.localeCompare(b.month));
+    }
+    computed.scoreHistory = history;
+  }
   try {
     await persistAdvanced(userId, trades, computed, now);
   } catch (error) {
@@ -497,6 +556,34 @@ export async function getAdvancedAnalytics(
     timezone,
     advanced: { ...EMPTY_ADVANCED, ...computed },
   };
+}
+
+/**
+ * Phase 2 perf — score history from the daily TraderScoreSnapshot rows:
+ * the last snapshot of each month (one indexed read, no monthly replay
+ * over the whole history). Months without any snapshot have no point —
+ * nothing is invented. The daily cron and the advanced endpoint keep
+ * the snapshots fed (see persistAdvanced / recordDailyTraderScores).
+ */
+export async function loadScoreHistoryFromSnapshots(
+  userId: string
+): Promise<ScoreHistoryPoint[]> {
+  const rows = await db.traderScoreSnapshot.findMany({
+    where: { userId },
+    orderBy: { date: "asc" },
+    select: { date: true, score: true, tradeCount: true },
+  });
+  const byMonth = new Map<string, ScoreHistoryPoint>();
+  for (const r of rows) {
+    byMonth.set(r.date.toISOString().slice(0, 7), {
+      month: r.date.toISOString().slice(0, 7),
+      score: r.score,
+      trades: r.tradeCount,
+    });
+  }
+  return [...byMonth.values()].sort((a, b) =>
+    a.month.localeCompare(b.month)
+  );
 }
 
 /**
@@ -517,24 +604,26 @@ export async function recordDailyTraderScores(
       const stats = computeTradeStats(trades);
       const advancedStats = computeAdvancedStats(trades, stats);
       const score = computeTraderScore(trades, stats, advancedStats);
+      // Components are stored as Int (schema): round the 1-decimal
+      // computed values, same fix as persistAdvanced.
+      const components = {
+        discipline: Math.round(score.components.discipline),
+        edge: Math.round(score.components.edge),
+        consistency: Math.round(score.components.consistency),
+        risk: Math.round(score.components.risk),
+      };
       await db.traderScoreSnapshot.upsert({
         where: { userId_date: { userId: u.id, date: day } },
         update: {
           score: score.total,
-          discipline: score.components.discipline,
-          edge: score.components.edge,
-          consistency: score.components.consistency,
-          risk: score.components.risk,
+          ...components,
           tradeCount: score.trades,
         },
         create: {
           userId: u.id,
           date: day,
           score: score.total,
-          discipline: score.components.discipline,
-          edge: score.components.edge,
-          consistency: score.components.consistency,
-          risk: score.components.risk,
+          ...components,
           tradeCount: score.trades,
         },
       });
