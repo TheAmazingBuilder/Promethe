@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import type { SessionPayload } from "@/lib/auth/types";
 import { SessionProvider, useSession } from "./session-context";
 import { AppearanceProvider } from "./appearance-provider";
@@ -14,8 +15,15 @@ import { ViewSwitch } from "@/components/views/view-switch";
 import { QueryProvider } from "./query-provider";
 import { PwaRoot } from "@/components/pwa/pwa-root";
 import { QuickFab } from "@/components/quick/quick-fab";
-import { LegalView } from "@/components/legal/legal-view";
 import { useRoute } from "@/lib/router";
+
+// Legal pages are public and rendered outside the shell; the view is a
+// separate chunk (also dynamic in view-switch) so logged-out users never
+// download the legal copy with the shell.
+const LegalView = dynamic(
+  () =>
+    import("@/components/legal/legal-view").then((m) => m.LegalView),
+);
 
 /**
  * SPA root: the server passes the initial session (no auth flash), then the

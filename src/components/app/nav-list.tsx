@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { motion, useReducedMotion } from "framer-motion";
 import { ChevronDown } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
@@ -183,10 +182,6 @@ export function NavList({
 }) {
   const t = useTranslations();
   const isMentor = useIsMentor();
-  const reduceMotion = useReducedMotion();
-  // Scoped per NavList instance (desktop sidebar + mobile sheet can both
-  // be mounted) so the shared layoutId never collides across instances.
-  const pillId = React.useId();
 
   return (
     <>
@@ -225,28 +220,16 @@ export function NavList({
                           onClick={onNavigate}
                           aria-current={isActive ? "page" : undefined}
                         >
-                          {/* Sliding active pill - one shared element that
-                              glides between items (plain span when reduced
-                              motion is on). Rendered first so it paints
-                              under the icon and label. */}
+                          {/* Active pill - a plain highlight span. The
+                              previous framer-motion shared-layout glide
+                              is gone (bundle: framer-motion removed);
+                              the highlight itself is unchanged. Rendered
+                              first so it paints under the icon and label. */}
                           {isActive ? (
-                            reduceMotion ? (
-                              <span
-                                className="absolute inset-0 rounded-md bg-emerald-500/10"
-                                aria-hidden="true"
-                              />
-                            ) : (
-                              <motion.span
-                                layoutId={`nav-active-pill-${pillId}`}
-                                className="absolute inset-0 rounded-md bg-emerald-500/10"
-                                aria-hidden="true"
-                                transition={{
-                                  type: "spring",
-                                  stiffness: 500,
-                                  damping: 40,
-                                }}
-                              />
-                            )
+                            <span
+                              className="absolute inset-0 rounded-md bg-emerald-500/10"
+                              aria-hidden="true"
+                            />
                           ) : null}
                           <item.icon aria-hidden="true" />
                           <span>{t(item.labelKey)}</span>
