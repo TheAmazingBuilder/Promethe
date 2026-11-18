@@ -42,6 +42,9 @@ export const WIDGET_TYPES = [
   // Phase 2 — risk / reward widgets
   "risk-budget",
   "discipline-score",
+  // MRT wave 2 — leaks + habits widgets
+  "top-leaks",
+  "habits-at-a-glance",
 ] as const;
 
 export type WidgetType = (typeof WIDGET_TYPES)[number];

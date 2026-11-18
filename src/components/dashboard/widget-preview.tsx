@@ -70,6 +70,8 @@ const SHAPE_BY_TYPE: Record<WidgetType, Shape> = {
   "saved-chart": "line",
   "risk-budget": "progress",
   "discipline-score": "bigNumber",
+  "top-leaks": "list",
+  "habits-at-a-glance": "progress",
   heatmap: "heatmap",
   "year-calendar": "calendar",
 };

@@ -36,6 +36,7 @@ import { WidgetPreview } from "./widget-preview";
 // before the catalog lists definitions — idempotent side-effect import.
 import "@/lib/dashboard/register-chart-widgets";
 import "@/lib/dashboard/register-risk-reward-widgets";
+import "@/lib/dashboard/register-mrt-wave2-widgets";
 
 export function WidgetCatalog({
   open,

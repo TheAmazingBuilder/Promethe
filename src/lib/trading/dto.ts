@@ -435,6 +435,32 @@ export interface AccountDTO {
   createdAt: string;
 }
 
+// ── Account health badges (MRT wave 2, chantier 4) ─────────────────────────
+
+/** Health of one account, computed from its real closed trades. */
+export interface AccountHealthDTO {
+  accountId: string;
+  currency: string;
+  /** growing | stable | in-drawdown | no-data (no closed trade yet). */
+  status: "growing" | "stable" | "in-drawdown" | "no-data";
+  /** Current drawdown from the peak, account currency, always >= 0. */
+  drawdown: string;
+  /** Current drawdown as % of the peak, null when the peak is not positive. */
+  drawdownPercent: number | null;
+  /** Share of the allowed max drawdown used, null when no limit is set. */
+  drawdownUsagePercent: number | null;
+  /** Net P&L since the start (current equity - initial balance). */
+  netPnl: string;
+  /** Closed trades behind the figures. */
+  tradeCount: number;
+  /** Exit time of the most recent closed trade, ISO, null when none. */
+  lastTradeAt: string | null;
+}
+
+export interface AccountsHealthPayload {
+  health: AccountHealthDTO[];
+}
+
 // ── v2.5 Module 5 — trading tools ────────────────────────────────────────────
 
 export interface ToolScenarioDTO {

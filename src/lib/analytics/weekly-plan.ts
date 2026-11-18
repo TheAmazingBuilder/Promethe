@@ -73,6 +73,11 @@ export interface PlanEvidence {
   suffix?: string;
 }
 
+export interface PlanActionDrilldown {
+  /** Trades list URL with the exact filter for this leak. */
+  href: string;
+}
+
 export interface PlanAction {
   rule: WeeklyRuleKey;
   /** 1-based rank, 1 = the biggest leak ("fix this first"). */
@@ -83,6 +88,31 @@ export interface PlanAction {
   target: string;
   /** Checked off for this week (merged in by the server, default false). */
   done: boolean;
+  /**
+   * Deep link to the filtered trades behind this leak, when the trades
+   * list can filter on it exactly (session, weekday). Null otherwise:
+   * the weekly plan page itself is the detail view for those rules
+   * (the 2-hour bucket has no exact single-hour filter, after-loss
+   * needs sequence context, and there is no setup / playbook filter).
+   */
+  drilldown: PlanActionDrilldown | null;
+}
+
+/**
+ * Exact trades-list link for a leak, or null when no exact filter exists.
+ * Pure and unit-tested (tests/unit/top-leaks.test.ts).
+ */
+export function planActionDrilldown(
+  rule: WeeklyRuleKey,
+  detail: { session?: string | null; weekday?: number | null }
+): PlanActionDrilldown | null {
+  if (rule === "worst-session" && detail.session != null) {
+    return { href: `/trades?session=${encodeURIComponent(detail.session)}` };
+  }
+  if (rule === "worst-weekday" && detail.weekday != null) {
+    return { href: `/trades?entryWeekday=${detail.weekday}` };
+  }
+  return null;
 }
 
 export type EdgeVerdict = "yes" | "not-yet" | "no";
@@ -358,6 +388,8 @@ interface Candidate {
   evidence: PlanEvidence;
   /** Absolute money lost, for ranking (biggest leak first). */
   loss: Decimal;
+  /** Exact trades-list link when one exists, null otherwise. */
+  drilldown: PlanActionDrilldown | null;
 }
 
 function evidenceFor(
@@ -407,6 +439,9 @@ function buildCandidates(
         currency
       ),
       loss: worstSession.slice.net.abs(),
+      drilldown: planActionDrilldown("worst-session", {
+        session: worstSession.key,
+      }),
     });
   }
 
@@ -436,6 +471,8 @@ function buildCandidates(
         currency
       ),
       loss: worstHour.slice.net.abs(),
+      // No exact filter: the trades list filters one entry hour, not a 2-hour bucket.
+      drilldown: null,
     });
   }
 
@@ -463,6 +500,7 @@ function buildCandidates(
           `, ${fmtR(slice.avgR)} on average`
         ),
         loss: slice.net.abs(),
+        drilldown: null,
       });
     }
   }
@@ -494,6 +532,7 @@ function buildCandidates(
         currency
       ),
       loss: offSlice.slice.net.abs(),
+      drilldown: null,
     });
   }
 
@@ -520,6 +559,7 @@ function buildCandidates(
         currency
       ),
       loss: slice.net.abs(),
+      drilldown: null,
     });
   }
 
@@ -546,6 +586,7 @@ function buildCandidates(
         `, expectancy ${fmtR(losing.expectancy)}`
       ),
       loss: slice.net.abs(),
+      drilldown: null,
     });
   }
 
@@ -572,6 +613,9 @@ function buildCandidates(
         currency
       ),
       loss: worstDay.slice.net.abs(),
+      drilldown: planActionDrilldown("worst-weekday", {
+        weekday: worstDay.day,
+      }),
     });
   }
 
@@ -595,6 +639,7 @@ function buildCandidates(
               : undefined
           ),
           loss: slice.net.abs(),
+          drilldown: null,
         });
       }
     }
@@ -639,6 +684,7 @@ export function generateWeeklyPlan(input: WeeklyPlanInput): WeeklyPlan {
     evidence: c.evidence,
     target: c.target,
     done: false,
+    drilldown: c.drilldown,
   }));
   base.actions = actions;
   base.fixFirst = actions[0] ?? null;

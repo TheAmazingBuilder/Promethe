@@ -40,8 +40,11 @@ import {
 } from "./chart-widgets";
 import { RiskBudgetWidget } from "./risk-budget-widget";
 import { DisciplineScoreWidget } from "./discipline-score-widget";
+import { TopLeaksWidget } from "./top-leaks-widget";
+import { HabitsAtAGlanceWidget } from "./habits-at-a-glance-widget";
 import "@/lib/dashboard/register-chart-widgets";
 import "@/lib/dashboard/register-risk-reward-widgets";
+import "@/lib/dashboard/register-mrt-wave2-widgets";
 
 export interface WidgetRendererProps {
   type: string;
@@ -176,6 +179,10 @@ export function WidgetRenderer({
       return <RiskBudgetWidget />;
     case "discipline-score":
       return <DisciplineScoreWidget />;
+    case "top-leaks":
+      return <TopLeaksWidget />;
+    case "habits-at-a-glance":
+      return <HabitsAtAGlanceWidget />;
     default:
       return null;
   }

@@ -1792,6 +1792,23 @@
     "yes": "Yes",
     "xauPipSuffix": "Each user will be able to add their own instruments and override pip / point / contract to match their broker."
   },
+  "topLeaks": {
+    "title": "Top 3 leaks",
+    "desc": "Your biggest money leaks from the last 30 days.",
+    "descWithSample": "Your biggest money leaks from the last 30 days, over {n} trades.",
+    "empty": "Not enough trades yet to spot leaks. Log at least 5 closed trades in the last 30 days: {n} so far.",
+    "noLeaks": "No leaks found in the last 30 days. Nothing is losing money right now.",
+    "seePlan": "See the full plan"
+  },
+  "habitsAtAGlance": {
+    "title": "Habits at a glance",
+    "desc": "Win rate by session, all time.",
+    "descWithSample": "Win rate by session, all time, over {n} trades.",
+    "empty": "No closed trades yet. Your win rate by session will show up here.",
+    "trades": "{n} trades",
+    "noDecided": "No decided trades",
+    "viewSession": "View {session} session trades"
+  },
   "trading": {
     "direction": {
       "LONG": "Long (buy)",
@@ -2897,6 +2914,16 @@
       "serverTimeNow": "Server time now: {time} ({zone})"
     }
   },
+  "accountHealth": {
+    "growing": "Growing",
+    "stable": "Stable",
+    "inDrawdown": "In Drawdown",
+    "noTrades": "No trades yet",
+    "hintGrowing": "Above the starting balance and near the peak.",
+    "hintStable": "Neither growing nor in drawdown.",
+    "hintDrawdown": "{pct}% below the peak.",
+    "hintDrawdownLimit": "{pct}% below the peak, {usage}% of the max drawdown used."
+  },
   "instrumentsView": {
     "title": "Instruments",
     "subtitle": "Global presets (read-only) and your custom instruments - pip, digits and contract size configurable.",
@@ -3042,7 +3069,11 @@
       "unavailable": "Widget unavailable",
       "unavailableDesc": "This widget could not be displayed.",
       "retry": "Retry",
-      "loading": "Loading widget…"
+      "loading": "Loading widget…",
+      "topLeaks": "Top 3 leaks",
+      "topLeaksDesc": "Your three biggest money leaks from the last 30 days.",
+      "habitsAtAGlance": "Habits at a glance",
+      "habitsAtAGlanceDesc": "Win rate by session, all time."
     },
     "categories": {
       "performance": "Performance",

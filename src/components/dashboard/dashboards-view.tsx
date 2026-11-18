@@ -138,6 +138,7 @@ import { BUILT_IN_TEMPLATES } from "@/lib/dashboard/templates";
 // safeParseWidgetConfig call — idempotent side-effect import.
 import "@/lib/dashboard/register-chart-widgets";
 import "@/lib/dashboard/register-risk-reward-widgets";
+import "@/lib/dashboard/register-mrt-wave2-widgets";
 import type { WidgetPatchInput } from "@/lib/validations/dashboard";
 import { WidgetShell } from "@/components/dashboard/widget-shell";
 import { WidgetCatalog } from "@/components/dashboard/widget-catalog";

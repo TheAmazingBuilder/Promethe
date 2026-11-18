@@ -45,6 +45,7 @@ import {
 // safeParseWidgetConfig call — idempotent side-effect import.
 import "@/lib/dashboard/register-chart-widgets";
 import "@/lib/dashboard/register-risk-reward-widgets";
+import "@/lib/dashboard/register-mrt-wave2-widgets";
 
 /** Domain errors - mapped to typed API responses by apiError(). */
 export class DashboardValidationError extends Error {

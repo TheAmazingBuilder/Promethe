@@ -44,6 +44,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import {
   useAccounts,
+  useAccountsHealth,
   useCreateAccount,
   useDeleteAccount,
   useUpdateAccount,
@@ -58,7 +59,7 @@ import {
   type BrokerTimeConfig,
 } from "@/lib/time/broker-time";
 import { Money, Sensitive } from "@/components/privacy/money";
-import type { AccountDTO } from "@/lib/trading/dto";
+import type { AccountDTO, AccountHealthDTO } from "@/lib/trading/dto";
 
 const CURRENCIES = ["USD", "EUR", "GBP", "CAD", "CHF", "AUD", "NZD", "JPY"] as const;
 const TYPES = ["LIVE", "DEMO", "PROP", "BACKTEST"] as const;
@@ -523,17 +524,69 @@ function typeBadgeClass(type: string): string {
   }
 }
 
+/**
+ * Account health badge (MRT wave 2, chantier 4) — the status comes from
+ * GET /api/v1/accounts/health, computed from the real closed trades
+ * (see src/lib/accounts/health.ts for the thresholds). An account with
+ * no closed trade never reads as Growing: it gets the neutral outline
+ * badge instead.
+ */
+function HealthBadge({ record }: { record: AccountHealthDTO | undefined }) {
+  const t = useTranslations("accountHealth");
+  if (!record) return null;
+
+  const variant =
+    record.status === "growing"
+      ? "default"
+      : record.status === "stable"
+        ? "secondary"
+        : record.status === "in-drawdown"
+          ? "destructive"
+          : "outline";
+  const label =
+    record.status === "growing"
+      ? t("growing")
+      : record.status === "stable"
+        ? t("stable")
+        : record.status === "in-drawdown"
+          ? t("inDrawdown")
+          : t("noTrades");
+  const title =
+    record.status === "growing"
+      ? t("hintGrowing")
+      : record.status === "stable"
+        ? t("hintStable")
+        : record.status === "in-drawdown"
+          ? record.drawdownUsagePercent != null
+            ? t("hintDrawdownLimit", {
+                pct: record.drawdownPercent ?? 0,
+                usage: record.drawdownUsagePercent,
+              })
+            : t("hintDrawdown", { pct: record.drawdownPercent ?? 0 })
+          : undefined;
+
+  return (
+    <Badge variant={variant} title={title}>
+      {label}
+    </Badge>
+  );
+}
+
 export function AccountsView() {
   const t = useTranslations("accountsView");
   const tRoot = useTranslations();
   const { toast } = useToast();
   const accounts = useAccounts();
+  const health = useAccountsHealth();
   const del = useDeleteAccount();
 
   const [editorOpen, setEditorOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<AccountDTO | null>(null);
 
   const list = accounts.data ?? [];
+  const healthByAccount = new Map(
+    (health.data ?? []).map((h) => [h.accountId, h])
+  );
 
   const onEdit = (a: AccountDTO) => {
     setEditing(a);
@@ -603,6 +656,7 @@ export function AccountsView() {
                   <Badge className={typeBadgeClass(a.type)}>
                     {t(`type.${a.type}`)}
                   </Badge>
+                  <HealthBadge record={healthByAccount.get(a.id)} />
                   {!a.isActive && (
                     <Badge variant="secondary">{t("inactiveBadge")}</Badge>
                   )}

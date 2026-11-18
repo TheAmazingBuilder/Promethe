@@ -32,6 +32,8 @@ import {
 import "@/lib/dashboard/register-chart-widgets";
 // Phase 2 — registers the risk-budget / discipline-score widgets.
 import "@/lib/dashboard/register-risk-reward-widgets";
+// MRT wave 2 — registers the top-leaks / habits-at-a-glance widgets.
+import "@/lib/dashboard/register-mrt-wave2-widgets";
 
 const templateCases: Array<{ source: string; dashboards: TemplateDashboard[] }> = [
   ...BUILT_IN_TEMPLATES.map((t) => ({

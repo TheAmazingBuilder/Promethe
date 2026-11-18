@@ -24,6 +24,7 @@ import type {
   DashboardPayload,
   AnalyticsPayload,
   AdvancedAnalyticsPayload,
+  AccountsHealthPayload,
   WeeklyPlanPayload,
   WhenYouTradePayload,
 } from "@/lib/trading/dto";
@@ -79,6 +80,18 @@ export function useAccounts() {
     queryKey: ["accounts"],
     queryFn: async () =>
       (await apiFetch<{ accounts: AccountDTO[] }>("/api/v1/accounts")).accounts,
+    staleTime: 60 * 1000,
+  });
+}
+
+// ── Account health badges (MRT wave 2, chantier 4) ─────────────────────────
+
+export function useAccountsHealth() {
+  return useQuery({
+    queryKey: ["accounts-health"],
+    queryFn: async () =>
+      (await apiFetch<AccountsHealthPayload>("/api/v1/accounts/health"))
+        .health,
     staleTime: 60 * 1000,
   });
 }
