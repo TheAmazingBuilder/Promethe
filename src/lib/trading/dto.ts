@@ -829,6 +829,11 @@ export interface PerformanceReportPayload {
   currency: string;
   timezone: string;
   report: PerformanceReport;
+  /**
+   * Phase 2 perf — the standard 30d weekly plan, embedded so the page
+   * needs no second GET /api/weekly-plan (same computation at 30d).
+   */
+  plan: WeeklyPlan;
 }
 
 // ── Journal & calendar (v1 Phase 5) ─────────────────────────────────────────

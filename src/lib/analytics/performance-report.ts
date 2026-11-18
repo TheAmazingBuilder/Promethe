@@ -30,6 +30,7 @@ import {
   sessionLabel,
   type EdgeCheck,
   type PlanAction,
+  type WeeklyPlan,
   type WeeklyPlanInput,
 } from "./weekly-plan";
 
@@ -116,6 +117,12 @@ export interface PerformanceReportInput {
   weekStart: string;
   weekEnd: string;
   currency: string;
+  /**
+   * Phase 2 perf — prebuilt weekly plan (same inputs, same trades).
+   * When provided, the report reuses it for verdict/recommendations
+   * instead of generating the plan a second time.
+   */
+  plan?: WeeklyPlan;
 }
 
 function pad(n: number): string {
@@ -347,8 +354,9 @@ export function buildPerformanceReport(
   };
   // The verdict, actions, strengths and fixes below come straight from
   // the weekly plan engine — same rules, same source as the weekly plan
-  // tab, run here on the selected period's trades.
-  const plan = generateWeeklyPlan(planInput);
+  // tab, run here on the selected period's trades. A prebuilt plan
+  // (same inputs) is reused when the caller already generated it.
+  const plan = input.plan ?? generateWeeklyPlan(planInput);
   return {
     weekStart: input.weekStart,
     weekEnd: input.weekEnd,

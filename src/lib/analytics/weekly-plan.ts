@@ -99,6 +99,19 @@ export interface PlanAction {
 }
 
 /**
+ * Toggle response (Phase 2 perf): the stored checkbox state. The full
+ * action (rank, evidence, drilldown) comes from the plan GET — the
+ * client refetches the plan after a toggle, so the POST only needs to
+ * confirm which stored row changed.
+ */
+export interface WeeklyPlanToggleResult {
+  rule: WeeklyRuleKey;
+  title: string;
+  target: string;
+  done: boolean;
+}
+
+/**
  * Exact trades-list link for a leak, or null when no exact filter exists.
  * Pure and unit-tested (tests/unit/top-leaks.test.ts).
  */

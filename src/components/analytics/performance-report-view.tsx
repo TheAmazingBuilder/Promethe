@@ -33,7 +33,6 @@ import { useA11yPrefs } from "@/components/a11y/a11y-provider";
 import {
   usePerformanceReport,
   useToggleWeeklyPlanAction,
-  useWeeklyPlan,
 } from "@/hooks/use-trading";
 import type { AnalyticsPeriod } from "@/lib/validations/analytics";
 import { buildPerformancePdf } from "@/lib/reports/performance-pdf";
@@ -85,13 +84,14 @@ export function PerformanceReportView() {
     period,
     account,
   });
-  const planQuery = useWeeklyPlan(account);
   const toggle = useToggleWeeklyPlanAction(account);
   const [pdfBusy, setPdfBusy] = React.useState(false);
   const [pdfError, setPdfError] = React.useState<string | null>(null);
 
   const report = data?.report ?? null;
-  const plan = planQuery.data?.plan ?? null;
+  // Phase 2 perf — the 30d weekly plan rides in the report payload, no
+  // second GET /api/weekly-plan for this page.
+  const plan = data?.plan ?? null;
   const doneCount = plan?.actions.filter((a) => a.done).length ?? 0;
   const totalCount = plan?.actions.length ?? 0;
 
@@ -583,7 +583,7 @@ export function PerformanceReportView() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {planQuery.isLoading ? (
+              {isLoading ? (
                 <div className="space-y-3">
                   <Skeleton className="h-16 w-full rounded-lg" />
                   <Skeleton className="h-16 w-full rounded-lg" />

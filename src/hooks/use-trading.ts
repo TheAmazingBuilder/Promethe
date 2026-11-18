@@ -29,7 +29,7 @@ import type {
   TradesListPayload,
 } from "@/lib/trading/dto";
 import type {
-  PlanAction,
+  WeeklyPlanToggleResult,
 } from "@/lib/analytics/weekly-plan";
 import type {
   AdvancedModule,
@@ -380,13 +380,15 @@ export function useToggleWeeklyPlanAction(accountId?: string) {
       const params = new URLSearchParams();
       if (accountId) params.set("account", accountId);
       const qs = params.toString();
-      return apiFetch<{ action: PlanAction }>(
+      return apiFetch<{ action: WeeklyPlanToggleResult }>(
         `/api/v1/weekly-plan${qs ? `?${qs}` : ""}`,
         { method: "POST", body: JSON.stringify({ rule, done }) }
       );
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["weekly-plan"] });
+      // The performance report embeds the same plan.
+      void qc.invalidateQueries({ queryKey: ["performance-report"] });
     },
   });
 }

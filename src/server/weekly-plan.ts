@@ -9,12 +9,17 @@
  * still fire are upserted (title/target refreshed, `done` kept), rows
  * for rules that no longer fire are removed for that week.
  *
+ * Phase 2 perf — the plan only needs 3 advanced modules (score,
+ * setups, sequences), not the full 10. POST toggles one checkbox with a
+ * single update when its row already exists (the GET syncs it); the
+ * plan is rebuilt only when the row is missing.
+ *
  * Persistence must never break the read path: a DB failure leaves the
  * computed plan (with unchecked boxes) intact.
  */
 import { db } from "@/lib/db";
 import {
-  computeAdvancedAnalytics,
+  computeAdvancedAnalyticsModules,
 } from "@/lib/analytics/advanced";
 import { computeAdvancedStats } from "@/lib/analytics/insights";
 import { computeTradeStats } from "@/lib/analytics/engine";
@@ -22,8 +27,8 @@ import {
   generateWeeklyPlan,
   weekEndSunday,
   weekStartMonday,
-  type PlanAction,
   type WeeklyPlan,
+  type WeeklyPlanToggleResult,
   type WeeklyRuleKey,
 } from "@/lib/analytics/weekly-plan";
 import { loadAdvancedTradesCached } from "@/server/advanced-analytics";
@@ -52,15 +57,26 @@ async function buildPlan(
     dayOf: tradingDayOfTrade(timezone, tradingDay),
   });
   const advancedStats = computeAdvancedStats(trades, stats);
-  const computed = computeAdvancedAnalytics(trades, stats, advancedStats);
+  // Phase 2 perf — the plan only uses score, setups and sequences.
+  const computed = computeAdvancedAnalyticsModules(trades, stats, advancedStats, [
+    "score",
+    "setups",
+    "sequences",
+  ]);
+  const score = computed.score;
+  const setups = computed.setups;
+  const sequences = computed.sequences;
+  if (score == null || setups == null || sequences == null) {
+    throw new Error("[weekly-plan] required modules missing");
+  }
   const weekStart = weekStartMonday(new Date(), timezone);
   const plan = generateWeeklyPlan({
     trades,
     stats,
     advanced: advancedStats,
-    score: computed.score,
-    setups: computed.setups,
-    sequences: computed.sequences,
+    score,
+    setups,
+    sequences,
     weekStart,
     weekEnd: weekEndSunday(weekStart),
     currency,
@@ -69,7 +85,7 @@ async function buildPlan(
 }
 
 /** Sync the persisted checkboxes with the freshly generated plan. */
-async function syncActions(
+export async function syncWeeklyPlanActions(
   userId: string,
   plan: WeeklyPlan
 ): Promise<Map<string, boolean>> {
@@ -128,7 +144,7 @@ export async function getWeeklyPlan(
     userId,
     query
   );
-  const doneByRule = await syncActions(userId, plan);
+  const doneByRule = await syncWeeklyPlanActions(userId, plan);
   const actions = plan.actions.map((a) => ({
     ...a,
     done: doneByRule.get(a.rule) ?? false,
@@ -149,28 +165,54 @@ export async function getWeeklyPlan(
 }
 
 /**
- * Toggle one "Done this week" checkbox. The rule must belong to the
- * current week's generated plan; otherwise null (unknown rule for this
- * week — the plan is rule-generated, never hand-written).
+ * Toggle one "Done this week" checkbox. Fast path: the row already
+ * exists (the plan GET syncs it), so one update is enough — no plan
+ * rebuild. Slow path (first toggle before any GET, or a rule that is
+ * not in this week's plan): rebuild the plan once to validate the rule
+ * and get its title/target; unknown rules still return null.
  */
 export async function toggleWeeklyPlanAction(
   userId: string,
   body: WeeklyPlanToggle,
   query: WeeklyPlanQuery = {}
-): Promise<PlanAction | null> {
+): Promise<WeeklyPlanToggleResult | null> {
+  const profile = await db.profile.findUnique({ where: { id: userId } });
+  const timezone = profile?.timezone ?? "UTC";
+  const weekStart = weekStartMonday(new Date(), timezone);
+  const weekStartDate = new Date(`${weekStart}T00:00:00.000Z`);
+  const doneAt = body.done ? new Date() : null;
+  const updated = await db.weeklyPlanAction.updateMany({
+    where: { userId, weekStart: weekStartDate, rule: body.rule },
+    data: { done: body.done, doneAt },
+  });
+  if (updated.count > 0) {
+    const row = await db.weeklyPlanAction.findUnique({
+      where: {
+        userId_weekStart_rule: { userId, weekStart: weekStartDate, rule: body.rule },
+      },
+    });
+    if (row != null) {
+      return {
+        rule: body.rule,
+        title: row.title,
+        target: row.target,
+        done: body.done,
+      };
+    }
+    // Row vanished between the update and the read — fall through.
+  }
   const { plan } = await buildPlan(userId, query);
   const action = plan.actions.find((a) => a.rule === body.rule);
   if (action == null) return null;
-  const weekStart = new Date(`${plan.weekStart}T00:00:00.000Z`);
-  const doneAt = body.done ? new Date() : null;
+  const planWeekStart = new Date(`${plan.weekStart}T00:00:00.000Z`);
   await db.weeklyPlanAction.upsert({
     where: {
-      userId_weekStart_rule: { userId, weekStart, rule: body.rule },
+      userId_weekStart_rule: { userId, weekStart: planWeekStart, rule: body.rule },
     },
     update: { done: body.done, doneAt },
     create: {
       userId,
-      weekStart,
+      weekStart: planWeekStart,
       rule: body.rule,
       title: action.title,
       target: action.target,
@@ -178,5 +220,10 @@ export async function toggleWeeklyPlanAction(
       doneAt,
     },
   });
-  return { ...action, done: body.done };
+  return {
+    rule: action.rule,
+    title: action.title,
+    target: action.target,
+    done: body.done,
+  };
 }
