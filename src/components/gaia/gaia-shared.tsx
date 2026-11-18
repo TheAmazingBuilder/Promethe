@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
+import { parseHash, routeToPath } from "@/lib/routes";
 
 // ── Block model (mirrors the backend contract) ─────────────────────────────
 
@@ -245,10 +246,12 @@ export function gaiaRefLabel(kind: GaiaRefKind, t: GaiaT): string {
   return t(GAIA_REF_META[kind].labelKey);
 }
 
-/** Only internal hrefs are ever linked (never raw HTML, XSS-safe by design). */
+/** Only internal hrefs are ever linked (never raw HTML, XSS-safe by design).
+ *  Legacy "#/..." hrefs stored in old notes are upgraded to clean URLs. */
 export function safeGaiaHref(href: string | null | undefined): string | null {
   if (!href) return null;
-  if (href.startsWith("/") || href.startsWith("#/")) return href;
+  if (href.startsWith("#/")) return routeToPath(parseHash(href));
+  if (href.startsWith("/")) return href;
   return null;
 }
 

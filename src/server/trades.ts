@@ -1180,7 +1180,7 @@ export async function deleteTrade(userId: string, id: string): Promise<boolean> 
   // (accountId, externalId) key are KEPT — restore brings everything back.
   // The daily cron purges rows trashed more than 30 days ago.
   // v2.5 Module 4 — the delete is logged as a one-trade ChangeLog group so
-  // it can be undone from #/history (or with Cmd+Z) within 30 days.
+  // it can be undone from /history (or with Cmd+Z) within 30 days.
   const current = await db.trade.findFirst({
     where: { id, userId, deletedAt: null },
     select: {

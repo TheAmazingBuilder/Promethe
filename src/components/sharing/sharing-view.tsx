@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * v3 — Sharing management view (#/reglages/partage).
+ * v3 — Sharing management view (/settings/sharing).
  *
  * Lists every public link with its true status (owner-only), view counts,
  * expiry and one-click revocation. Report sharing is created here; trade

@@ -440,7 +440,7 @@ export function useDeleteSavedView() {
   });
 }
 
-// ── Accounts mutations (v1 phase 7 — #/comptes) ─────────────────────────────
+// ── Accounts mutations (v1 phase 7 — /accounts) ─────────────────────────────
 
 export interface AccountInputBody {
   name: string;
@@ -510,7 +510,7 @@ export function useDeleteAccount() {
   });
 }
 
-// ── Tags mutations (v1 phase 7 — #/tags) ────────────────────────────────────
+// ── Tags mutations (v1 phase 7 — /tags) ────────────────────────────────────
 
 export interface TagInputBody {
   name: string;
@@ -564,7 +564,7 @@ export function useDeleteTag() {
   });
 }
 
-// ── Custom instruments mutations (v1 phase 7 — #/instruments) ────────────────
+// ── Custom instruments mutations (v1 phase 7 — /instruments) ────────────────
 
 export interface InstrumentInputBody {
   symbol: string;

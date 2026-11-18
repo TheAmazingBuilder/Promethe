@@ -1,15 +1,16 @@
 "use client";
 
 /**
- * TimeView (v2.5 Module 8, §3.4) — #/reglages/heure.
+ * TimeView (v2.5 Module 8, §3.4) — /settings/time.
  *
  * Main timezone (profile, editable here), extra timezones (max 3), clock
  * format, trading-day definition (mode + custom rollover) and the broker
- * server time of each account (read-only — configured in #/comptes).
+ * server time of each account (read-only — configured in /accounts).
  * Every change applies instantly through the TimeProvider (partial PUT to
  * /api/display-preferences, except the main timezone which PATCHes the
  * profile like the settings page does).
  */
+import Link from "next/link";
 import * as React from "react";
 import { useTranslations } from "next-intl";
 import { Clock, Plus, Trash2 } from "lucide-react";
@@ -420,7 +421,7 @@ export function TimeView() {
         <CardContent className="space-y-4">
           <BrokerServerClocks />
           <Button variant="outline" size="sm" asChild>
-            <a href="#/comptes">{t("brokerManage")}</a>
+            <Link href="/accounts">{t("brokerManage")}</Link>
           </Button>
         </CardContent>
       </Card>

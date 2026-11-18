@@ -41,7 +41,8 @@ import {
 import { NotificationsBell } from "./notifications-bell";
 import { DeletionBanner } from "./deletion-banner";
 import { findNavItem } from "./nav";
-import { navigate, useHashRoute, type ViewId } from "@/lib/router";
+import { navigate, useRoute, type ViewId } from "@/lib/router";
+import Link from "next/link";
 
 /**
  * Application shell — shadcn collapsible sidebar (icon rail) + two-tone
@@ -56,7 +57,7 @@ export function AppShell({
   children: React.ReactNode;
   defaultSidebarOpen?: boolean;
 }) {
-  const route = useHashRoute();
+  const route = useRoute();
   const t = useTranslations("shell");
   const tRoot = useTranslations();
   const tPhase = useTranslations("common");
@@ -92,13 +93,13 @@ export function AppShell({
       if (!matchesChord(event, effectiveKeys("focus-mode", overrides))) return;
       if (isTypingTarget(event.target)) return;
       if (document.querySelector("[data-state=open]") != null) return;
-      if (window.location.hash === "#/focus") return;
+      if (route.view === "focus") return;
       event.preventDefault();
-      navigate("#/focus");
+      navigate("/focus");
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [overrides]);
+  }, [overrides, route.view]);
 
   return (
     <TourProvider>
@@ -108,9 +109,9 @@ export function AppShell({
       <Sidebar collapsible="icon" aria-label={t("sidebarLabel")}>
         <SidebarHeader className="border-b border-sidebar-border">
           <div className="flex h-14 items-center px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
-            <a href="#/" aria-label="Promethe - Home" className="min-w-0">
+            <Link href="/" aria-label="Promethe - Home" className="min-w-0">
               <BrandMark />
-            </a>
+            </Link>
           </div>
         </SidebarHeader>
         <SidebarContent data-tour="nav">
@@ -140,7 +141,7 @@ export function AppShell({
               <BreadcrumbList className="sm:gap-2.5">
                 <BreadcrumbItem className="hidden sm:inline-flex">
                   <BreadcrumbLink asChild>
-                    <a href="#/">{t("breadcrumbHome")}</a>
+                    <Link href="/">{t("breadcrumbHome")}</Link>
                   </BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="hidden sm:inline-flex" />
@@ -173,7 +174,7 @@ export function AppShell({
                 variant="ghost"
                 size="sm"
                 className="gap-2 text-muted-foreground hidden sm:inline-flex"
-                onClick={() => navigate("#/focus")}
+                onClick={() => navigate("/focus")}
                 aria-label={t("focus")}
                 title={t("focusHint")}
               >
@@ -215,26 +216,26 @@ export function AppShell({
               {t("footerLeft")}
             </p>
             <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-              <a
-                href="#/legal/mentions"
+              <Link
+                href="/legal/terms"
                 className="underline-offset-4 hover:text-foreground hover:underline"
               >
                 {t("legalMentions")}
-              </a>
+              </Link>
               <span aria-hidden="true">·</span>
-              <a
-                href="#/legal/confidentialite"
+              <Link
+                href="/legal/privacy"
                 className="underline-offset-4 hover:text-foreground hover:underline"
               >
                 {t("legalPrivacy")}
-              </a>
+              </Link>
               <span aria-hidden="true">·</span>
-              <a
-                href="#/legal/cookies"
+              <Link
+                href="/legal/cookies"
                 className="underline-offset-4 hover:text-foreground hover:underline"
               >
                 {t("legalCookies")}
-              </a>
+              </Link>
               <span aria-hidden="true" className="hidden sm:inline">·</span>
               <p className="tabular-nums">{t("footerRight")}</p>
             </div>

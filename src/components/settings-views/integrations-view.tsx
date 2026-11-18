@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import * as React from "react";
 import { useTranslations } from "next-intl";
 import {
@@ -298,13 +299,13 @@ export function IntegrationsView() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <a
-          href="#/reglages"
+        <Link
+          href="/settings"
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           {t("back")}
-        </a>
+        </Link>
         <h2 className="mt-2 text-lg font-semibold tracking-tight">{t("title")}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
         <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-800 dark:text-amber-200">

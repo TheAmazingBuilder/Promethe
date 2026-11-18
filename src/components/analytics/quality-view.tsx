@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Trader score tab — #/analytics/quality (v2.5 Module 6).
+ * Trader score tab — /analytics/quality (v2.5 Module 6).
  *
  * Composite score 0-100 (discipline / edge / consistency / risk, 25 each),
  * component details and month-end replay history.

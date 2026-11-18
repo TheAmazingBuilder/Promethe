@@ -45,7 +45,7 @@ import type { CustomFieldDefinitionDTO } from "@/lib/trading/dto";
 import type { CustomFieldDefinitionInput } from "@/lib/validations/productivity";
 
 /**
- * #/reglages/champs-personnalises - custom trade fields (v2.5 Module 4
+ * /settings/custom-fields - custom trade fields (v2.5 Module 4
  * §4.7). Create / edit / archive / delete definitions; archived fields
  * stop appearing in the trade form and table but keep their stored values.
  */

@@ -1,6 +1,6 @@
 /**
  * Advanced analytics aggregation (v2.5 Module 6, Prompt 6) — powers
- * #/analytics/lifecycle, /exits, /quality, /setups, /sequences,
+ * /analytics/lifecycle, /exits, /quality, /setups, /sequences,
  * /seasonality and /anomalies: lifecycle (MFE/MAE, almost-TP, time in
  * profit/loss from stored candles), exit analysis, trader score, setup
  * ranking, sequences, seasonality and anomaly detection over CLOSED

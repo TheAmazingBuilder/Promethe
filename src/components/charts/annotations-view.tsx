@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * v2.5 Module 2 — annotation manager (#/analytics/annotations, spec §4.7).
+ * v2.5 Module 2 — annotation manager (/analytics/annotations, spec §4.7).
  *
  * The equity curve annotated with the user's annotations (vertical lines for
  * points, translucent bands for ranges — vertical bands in time). Create by
@@ -199,7 +199,7 @@ export function AnnotationsView() {
           <p className="text-sm text-muted-foreground">{t("description")}</p>
         </div>
         <div className="flex gap-1">
-          <Button variant="outline" size="sm" onClick={() => navigate("#/analytics")}>
+          <Button variant="outline" size="sm" onClick={() => navigate("/analytics")}>
             {tCommon("back")}
           </Button>
           <Button variant="outline" size="sm" onClick={() => setCreating(new Date().toISOString())}>

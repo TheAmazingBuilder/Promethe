@@ -38,13 +38,13 @@ export type AdvancedTabId =
   | "anomalies";
 
 export const ADVANCED_TABS: Array<{ id: AdvancedTabId; path: string }> = [
-  { id: "lifecycle", path: "#/analytics/lifecycle" },
-  { id: "exits", path: "#/analytics/exits" },
-  { id: "quality", path: "#/analytics/quality" },
-  { id: "setups", path: "#/analytics/setups" },
-  { id: "sequences", path: "#/analytics/sequences" },
-  { id: "seasonality", path: "#/analytics/seasonality" },
-  { id: "anomalies", path: "#/analytics/anomalies" },
+  { id: "lifecycle", path: "/analytics/lifecycle" },
+  { id: "exits", path: "/analytics/exits" },
+  { id: "quality", path: "/analytics/quality" },
+  { id: "setups", path: "/analytics/setups" },
+  { id: "sequences", path: "/analytics/sequences" },
+  { id: "seasonality", path: "/analytics/seasonality" },
+  { id: "anomalies", path: "/analytics/anomalies" },
 ];
 
 const PERIODS: AnalyticsPeriod[] = ["30d", "90d", "ytd", "all"];
@@ -96,7 +96,7 @@ export function AdvancedShell({
           variant="ghost"
           size="sm"
           className="w-fit px-0"
-          onClick={() => navigate("#/analytics")}
+          onClick={() => navigate("/analytics")}
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           {t("backToAnalytics")}

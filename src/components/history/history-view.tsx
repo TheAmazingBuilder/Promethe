@@ -14,7 +14,7 @@ import { ApiClientError } from "@/lib/api-client";
 import type { ChangeLogGroupDTO } from "@/lib/trading/dto";
 
 /**
- * #/history - change history (v2.5 Module 4 §4.5). One row per undoable
+ * /history - change history (v2.5 Module 4 §4.5). One row per undoable
  * action (bulk edit or delete, single deletes included). Undo restores
  * the BEFORE snapshots and marks the group undone. Entries expire
  * after 30 days.

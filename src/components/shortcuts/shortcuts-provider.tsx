@@ -44,7 +44,7 @@ export function ShortcutsProvider({ children }: { children: React.ReactNode }) {
       }
       if (matchesChord(event, effectiveKeys("go-search", overrides))) {
         event.preventDefault();
-        navigate("#/search");
+        navigate("/search");
         return;
       }
       if (matchesChord(event, effectiveKeys("undo-last-change", overrides))) {

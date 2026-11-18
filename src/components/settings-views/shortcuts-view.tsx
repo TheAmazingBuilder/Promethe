@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import * as React from "react";
 import { useTranslations } from "next-intl";
 import { Keyboard, Loader2, RotateCcw } from "lucide-react";
@@ -31,7 +32,7 @@ import { ApiClientError } from "@/lib/api-client";
 import type { ShortcutDTO } from "@/lib/trading/dto";
 
 /**
- * #/reglages/raccourcis - reassignable shortcuts (v2.5 Module 4 §4.1).
+ * /settings/shortcuts - reassignable shortcuts (v2.5 Module 4 §4.1).
  * Click "Modifier", press the new keys, conflicts are shown before
  * saving. The privacy shortcut is managed in the privacy settings
  * (shown here read-only). Reset restores every registry default.
@@ -189,7 +190,7 @@ export function ShortcutsView() {
                         </Button>
                       ) : (
                         <Button variant="outline" size="sm" asChild>
-                          <a href="#/reglages/privacy">{t("manageInPrivacy")}</a>
+                          <Link href="/settings/privacy">{t("manageInPrivacy")}</Link>
                         </Button>
                       )}
                     </div>

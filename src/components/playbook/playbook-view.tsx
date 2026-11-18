@@ -5,7 +5,7 @@
  *
  * Seven tabs persisted in ?tab= (overview, strategies, setups, rules,
  * checklists, performance, templates). Data: /api/playbook/*, /api/setups/*,
- * /api/strategies/stats. Full strategy editing stays in #/strategies; this
+ * /api/strategies/stats. Full strategy editing stays in /strategies; this
  * page focuses on health, versions, duplication, setups, rules and
  * compliance.
  */
@@ -83,7 +83,7 @@ import { ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import { pnlClass } from "@/lib/format";
 import { Money } from "@/components/privacy/money";
-import { navigate, useHashRoute } from "@/lib/router";
+import { navigate, useRoute } from "@/lib/router";
 import type {
   ChecklistTemplateDTO,
   PlaybookRuleDTO,
@@ -590,7 +590,7 @@ function StrategiesTab() {
           <p className="font-semibold">{t("emptyTitle")}</p>
           <p className="max-w-md text-sm text-muted-foreground">{t("emptyDesc")}</p>
           <div className="flex gap-2">
-            <Button size="sm" onClick={() => navigate("#/strategies")}>
+            <Button size="sm" onClick={() => navigate("/strategies")}>
               <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
               {t("newStrategy")}
             </Button>
@@ -609,11 +609,11 @@ function StrategiesTab() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => navigate("#/strategies")}
+          onClick={() => navigate("/strategies")}
         >
           {t("openFullStrategies")}
         </Button>
-        <Button size="sm" onClick={() => navigate("#/strategies")}>
+        <Button size="sm" onClick={() => navigate("/strategies")}>
           <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
           {t("newStrategy")}
         </Button>
@@ -643,7 +643,7 @@ function StrategiesTab() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => navigate("#/strategies")}
+                    onClick={() => navigate("/strategies")}
                     aria-label={t("editInStrategies")}
                   >
                     <Pencil className="h-4 w-4" aria-hidden="true" />
@@ -2163,7 +2163,7 @@ function TemplatesTab() {
 
 export function PlaybookView() {
   const t = useTranslations("playbook");
-  const route = useHashRoute();
+  const route = useRoute();
   const tab: TabId = isTab(route.query?.tab) ? (route.query?.tab as TabId) : "overview";
 
   return (
@@ -2188,7 +2188,7 @@ export function PlaybookView() {
               type="button"
               role="tab"
               aria-selected={active}
-              onClick={() => navigate(`#/playbook?tab=${id}`)}
+              onClick={() => navigate(`/playbook?tab=${id}`)}
               className={[
                 "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
                 active

@@ -686,7 +686,7 @@ export function TradeFormView({
           });
         } else {
           toast({ title: t("updatedToast") });
-          navigate(`#/trades/${result.trade.id}`);
+          navigate(`/trades/${result.trade.id}`);
         }
       } else {
         const result: MutationResult = await createTrade.mutateAsync({
@@ -701,7 +701,7 @@ export function TradeFormView({
         } else {
           toast({ title: t("createdToast") });
         }
-        navigate(`#/trades/${result.trade.id}`);
+        navigate(`/trades/${result.trade.id}`);
       }
     } catch (error) {
       const err = error instanceof ApiClientError ? error : null;

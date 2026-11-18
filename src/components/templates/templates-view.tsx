@@ -5,7 +5,7 @@
  *
  * A template pre-fills the quick trade form (instrument, direction, risk,
  * SL/TP in pips, tags, notes). "Use" records the usage and deep-links to
- * #/trades/quick?template=<id>, where the quick form auto-applies it.
+ * /trades/quick?template=<id>, where the quick form auto-applies it.
  */
 import * as React from "react";
 import { useTranslations } from "next-intl";
@@ -284,7 +284,7 @@ export function TemplatesView() {
   const onUse = (tpl: TemplateDTO) => {
     recordTemplateUse.mutate(tpl.id);
     toast({ title: t("useToast") });
-    navigate(`#/trades/quick?template=${tpl.id}`);
+    navigate(`/trades/quick?template=${tpl.id}`);
   };
 
   // ── Gates ──

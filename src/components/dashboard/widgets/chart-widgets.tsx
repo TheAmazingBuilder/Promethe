@@ -68,7 +68,7 @@ import {
 
 // ── Shared helpers ───────────────────────────────────────────────────────────
 
-/** Drill-down → #/trades?… (same contract as the full builder/heatmap views). */
+/** Drill-down → /trades?… (same contract as the full builder/heatmap views). */
 function useDrill() {
   return React.useCallback(
     (drills: Array<{ dimension: XDimension; value: string }>) => {
@@ -81,7 +81,7 @@ function useDrill() {
           }
         }
       }
-      navigate(parts.length > 0 ? `#/trades?${parts.join("&")}` : "#/trades");
+      navigate(parts.length > 0 ? `/trades?${parts.join("&")}` : "/trades");
     },
     []
   );
@@ -93,7 +93,7 @@ function useTradeDrillEvent(enabled: boolean) {
     if (!enabled) return;
     const handler = (e: Event) => {
       const id = (e as CustomEvent<string>).detail;
-      if (id) navigate(`#/trades/${encodeURIComponent(id)}`);
+      if (id) navigate(`/trades/${encodeURIComponent(id)}`);
     };
     window.addEventListener("tj:chart-drill-trade", handler);
     return () => window.removeEventListener("tj:chart-drill-trade", handler);
@@ -387,7 +387,7 @@ export function YearCalendarWidget() {
         const cell = grid.cells[focus.row]?.[focus.col];
         if (cell?.inYear) {
           e.preventDefault();
-          navigate(`#/journal/${cell.date}`);
+          navigate(`/journal/${cell.date}`);
         }
         return;
       }
@@ -446,7 +446,7 @@ export function YearCalendarWidget() {
                   strokeWidth={isFocus ? 1.5 : 0}
                   style={{ cursor: cell.inYear ? "pointer" : undefined }}
                   onMouseEnter={() => setFocus({ row, col })}
-                  onClick={() => cell.inYear && navigate(`#/journal/${cell.date}`)}
+                  onClick={() => cell.inYear && navigate(`/journal/${cell.date}`)}
                 >
                   <title>{titleOf(cell)}</title>
                 </rect>

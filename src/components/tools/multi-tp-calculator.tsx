@@ -4,7 +4,7 @@
  * Size is computed once on the total risk (entry vs SL), then split across
  * up to 4 take-profits with an allocation % per tier (sum = 100%).
  * Scenarios save to the server (ToolScenario) and the state can be
- * shared with a link: #/outils?tab=multi-tp&mtp=<base64url JSON>.
+ * shared with a link: /tools?tab=multi-tp&mtp=<base64url JSON>.
  */
 "use client";
 
@@ -57,10 +57,7 @@ interface ShareState {
 
 function readSharedState(): ShareState | null {
   if (typeof window === "undefined") return null;
-  const hash = window.location.hash;
-  const qIndex = hash.indexOf("?");
-  if (qIndex < 0) return null;
-  const params = new URLSearchParams(hash.slice(qIndex + 1));
+  const params = new URLSearchParams(window.location.search);
   return decodeShareState<ShareState>(params.get("mtp"));
 }
 
@@ -163,7 +160,7 @@ export function MultiTpCalculator() {
   };
 
   const copyShareLink = async () => {
-    const url = `${window.location.origin}${window.location.pathname}#/outils?tab=multi-tp&mtp=${encodeShareState(shareState as unknown as Record<string, unknown>)}`;
+    const url = `${window.location.origin}/tools/multi-tp?mtp=${encodeShareState(shareState as unknown as Record<string, unknown>)}`;
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);

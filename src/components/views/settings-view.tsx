@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import * as React from "react";
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
@@ -255,7 +256,7 @@ export function SettingsView() {
               </p>
             </div>
             <Button variant="outline" size="sm" asChild>
-              <a href="#/comptes">{t("manageAccounts")}</a>
+              <Link href="/accounts">{t("manageAccounts")}</Link>
             </Button>
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
@@ -264,8 +265,8 @@ export function SettingsView() {
         </CardContent>
       </Card>
 
-      <a
-        href="#/reglages/compte"
+      <Link
+        href="/settings/account"
         className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
       >
         <div className="flex items-center gap-3">
@@ -276,10 +277,10 @@ export function SettingsView() {
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </a>
+      </Link>
 
-      <a
-        href="#/reglages/appearance"
+      <Link
+        href="/settings/appearance"
         className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
       >
         <div className="flex items-center gap-3">
@@ -290,10 +291,10 @@ export function SettingsView() {
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </a>
+      </Link>
 
-      <a
-        href="#/reglages/dashboards"
+      <Link
+        href="/settings/dashboards"
         className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
       >
         <div className="flex items-center gap-3">
@@ -304,10 +305,10 @@ export function SettingsView() {
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </a>
+      </Link>
 
-      <a
-        href="#/reglages/templates"
+      <Link
+        href="/settings/templates"
         className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
       >
         <div className="flex items-center gap-3">
@@ -318,10 +319,10 @@ export function SettingsView() {
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </a>
+      </Link>
 
-      <a
-        href="#/reglages/broker-sync"
+      <Link
+        href="/broker-sync"
         className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
       >
         <div className="flex items-center gap-3">
@@ -332,10 +333,10 @@ export function SettingsView() {
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </a>
+      </Link>
 
-      <a
-        href="#/reglages/integrations"
+      <Link
+        href="/settings/integrations"
         className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
       >
         <div className="flex items-center gap-3">
@@ -346,10 +347,10 @@ export function SettingsView() {
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </a>
+      </Link>
 
-      <a
-        href="#/reglages/partage"
+      <Link
+        href="/settings/sharing"
         className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
       >
         <div className="flex items-center gap-3">
@@ -360,10 +361,10 @@ export function SettingsView() {
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </a>
+      </Link>
 
-      <a
-        href="#/reglages/mentors"
+      <Link
+        href="/settings/mentors"
         className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
       >
         <div className="flex items-center gap-3">
@@ -374,10 +375,10 @@ export function SettingsView() {
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </a>
+      </Link>
 
-      <a
-        href="#/reglages/privacy"
+      <Link
+        href="/settings/privacy"
         className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
       >
         <div className="flex items-center gap-3">
@@ -388,10 +389,10 @@ export function SettingsView() {
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </a>
+      </Link>
 
-      <a
-        href="#/reglages/accessibility"
+      <Link
+        href="/settings/accessibility"
         className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
       >
         <div className="flex items-center gap-3">
@@ -402,10 +403,10 @@ export function SettingsView() {
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </a>
+      </Link>
 
-      <a
-        href="#/reglages/heure"
+      <Link
+        href="/settings/time"
         className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
       >
         <div className="flex items-center gap-3">
@@ -416,10 +417,10 @@ export function SettingsView() {
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </a>
+      </Link>
 
-      <a
-        href="#/reglages/champs-personnalises"
+      <Link
+        href="/settings/custom-fields"
         className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
       >
         <div className="flex items-center gap-3">
@@ -430,10 +431,10 @@ export function SettingsView() {
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </a>
+      </Link>
 
-      <a
-        href="#/reglages/raccourcis"
+      <Link
+        href="/settings/shortcuts"
         className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
       >
         <div className="flex items-center gap-3">
@@ -444,10 +445,10 @@ export function SettingsView() {
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </a>
+      </Link>
 
-      <a
-        href="#/history"
+      <Link
+        href="/history"
         className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
       >
         <div className="flex items-center gap-3">
@@ -458,10 +459,10 @@ export function SettingsView() {
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </a>
+      </Link>
 
-      <a
-        href="#/trash"
+      <Link
+        href="/trash"
         className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
       >
         <div className="flex items-center gap-3">
@@ -472,7 +473,7 @@ export function SettingsView() {
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </a>
+      </Link>
 
       <button
         type="button"

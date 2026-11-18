@@ -81,7 +81,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         labelKey: "nav.dashboard",
         descriptionKey: "nav.dashboardDesc",
-        path: "#/",
+        path: "/",
         view: "dashboard",
         icon: LayoutDashboard,
         phase: null,
@@ -90,7 +90,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         labelKey: "nav.trades",
         descriptionKey: "nav.tradesDesc",
-        path: "#/trades",
+        path: "/trades",
         view: "trades",
         icon: CandlestickChart,
         phase: null,
@@ -99,7 +99,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         labelKey: "nav.calendar",
         descriptionKey: "nav.calendarDesc",
-        path: "#/calendrier",
+        path: "/calendar",
         view: "calendar",
         icon: CalendarDays,
         phase: null,
@@ -108,7 +108,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         labelKey: "nav.tools",
         descriptionKey: "nav.toolsDesc",
-        path: "#/outils",
+        path: "/tools",
         view: "tools",
         icon: Calculator,
         phase: null,
@@ -122,7 +122,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         labelKey: "nav.analytics",
         descriptionKey: "nav.analyticsDesc",
-        path: "#/analytics",
+        path: "/analytics",
         view: "analytics",
         icon: BarChart3,
         phase: null,
@@ -136,7 +136,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         labelKey: "nav.journal",
         descriptionKey: "nav.journalDesc",
-        path: "#/journal",
+        path: "/journal",
         view: "journal",
         icon: NotebookPen,
         phase: null,
@@ -145,7 +145,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         labelKey: "nav.playbook",
         descriptionKey: "nav.playbookDesc",
-        path: "#/playbook",
+        path: "/playbook",
         view: "playbook",
         icon: BookOpen,
         phase: null,
@@ -154,7 +154,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         labelKey: "nav.gaia",
         descriptionKey: "nav.gaiaDesc",
-        path: "#/gaia",
+        path: "/gaia",
         view: "gaia",
         icon: NotebookText,
         phase: null,
@@ -163,7 +163,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         labelKey: "nav.rules",
         descriptionKey: "nav.rulesDesc",
-        path: "#/regles",
+        path: "/rules",
         view: "rules",
         icon: ListChecks,
         phase: null,
@@ -179,7 +179,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         labelKey: "nav.accounts",
         descriptionKey: "nav.accountsDesc",
-        path: "#/comptes",
+        path: "/accounts",
         view: "accounts",
         icon: Wallet,
         phase: null,
@@ -188,7 +188,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         labelKey: "nav.instruments",
         descriptionKey: "nav.instrumentsDesc",
-        path: "#/instruments",
+        path: "/instruments",
         view: "instruments",
         icon: Coins,
         phase: null,
@@ -197,7 +197,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         labelKey: "nav.tags",
         descriptionKey: "nav.tagsDesc",
-        path: "#/tags",
+        path: "/tags",
         view: "tags",
         icon: Tags,
         phase: null,
@@ -206,7 +206,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         labelKey: "nav.import",
         descriptionKey: "nav.importDesc",
-        path: "#/importer",
+        path: "/import",
         view: "import",
         icon: Upload,
         phase: null,
@@ -215,7 +215,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         labelKey: "nav.brokerSync",
         descriptionKey: "nav.brokerSyncDesc",
-        path: "#/reglages/broker-sync",
+        path: "/broker-sync",
         view: "broker-sync",
         icon: Plug,
         phase: null,
@@ -224,7 +224,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         labelKey: "nav.reconciliation",
         descriptionKey: "nav.reconciliationDesc",
-        path: "#/reconciliation",
+        path: "/reconciliation",
         view: "reconciliation",
         icon: GitMerge,
         phase: null,
@@ -238,7 +238,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         labelKey: "nav.mentorSpace",
         descriptionKey: "nav.mentorSpaceDesc",
-        path: "#/mentor",
+        path: "/mentor",
         view: "mentor",
         icon: GraduationCap,
         phase: null,
@@ -248,7 +248,7 @@ export const NAV_GROUPS: NavGroup[] = [
       {
         labelKey: "nav.settings",
         descriptionKey: "nav.settingsDesc",
-        path: "#/reglages",
+        path: "/settings",
         view: "settings",
         icon: Settings,
         phase: null,
@@ -276,7 +276,7 @@ export const EXTRA_NAV_ITEMS: NavItem[] = [
   {
     labelKey: "nav.strategies",
     descriptionKey: "nav.strategiesDesc",
-    path: "#/strategies",
+    path: "/strategies",
     view: "strategies",
     icon: Target,
     phase: null,

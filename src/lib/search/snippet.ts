@@ -1,6 +1,6 @@
 /**
  * Search snippets (v2.5 Module 4 §4.2) - shared by the /api/search route
- * and the #/search page.
+ * and the /search page.
  *
  * Folding (NFD strip + lowercase) changes string length, so a folded index
  * does not map 1:1 onto the raw text. Strategy: try a plain

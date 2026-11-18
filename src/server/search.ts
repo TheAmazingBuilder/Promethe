@@ -78,7 +78,7 @@ export async function globalSearch(
       ),
       query
     ),
-    href: `#/trades/${t.id}`,
+    href: `/trades/${t.id}`,
   }));
 
   const strategies: SearchResultItemDTO[] = strategyRows.map((s) => ({
@@ -90,7 +90,7 @@ export async function globalSearch(
       pickSnippetField([s.description, s.entryRules, s.exitRules, s.riskRules], terms),
       query
     ),
-    href: `#/strategies`,
+    href: `/strategies`,
   }));
 
   const journal: SearchResultItemDTO[] = journalRows.map((j) => ({
@@ -102,7 +102,7 @@ export async function globalSearch(
       pickSnippetField([j.preMarketPlan, j.postMarketReview, j.keyLesson], terms),
       query
     ),
-    href: `#/journal/${j.date}`,
+    href: `/journal/${j.date}`,
   }));
 
   return {

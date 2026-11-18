@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Anomalies tab — #/analytics/anomalies (v2.5 Module 6).
+ * Anomalies tab — /analytics/anomalies (v2.5 Module 6).
  *
  * Robust MAD z-scores on R and on log holding time. Flags are for review
  * only: no alert is ever raised when a trade is opened.
@@ -132,7 +132,7 @@ export function AnomaliesView() {
                                 size="sm"
                                 className="h-auto w-fit p-0"
                                 onClick={() =>
-                                  navigate(`#/trades/${a.tradeId}`)
+                                  navigate(`/trades/${a.tradeId}`)
                                 }
                               >
                                 {a.symbol}

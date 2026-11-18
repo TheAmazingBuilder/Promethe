@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * v2.5 Module 2 — chart builder page (#/analytics/charts, spec §4.1).
+ * v2.5 Module 2 — chart builder page (/analytics/charts, spec §4.1).
  *
  * Dropdown-based builder with live preview: the pure engine (/src/lib/charts/
  * builder.ts) recomputes client-side over the cached trades payload, so every
@@ -281,7 +281,7 @@ export function ChartBuilderView() {
   React.useEffect(() => {
     const handler = (e: Event) => {
       const id = (e as CustomEvent<string>).detail;
-      if (id) navigate(`#/trades/${encodeURIComponent(id)}`);
+      if (id) navigate(`/trades/${encodeURIComponent(id)}`);
     };
     window.addEventListener("tj:chart-drill-trade", handler);
     return () => window.removeEventListener("tj:chart-drill-trade", handler);
@@ -359,10 +359,10 @@ export function ChartBuilderView() {
       .join("&");
     if (!keys) {
       toast({ description: t("preview.drillNotFilterable") });
-      navigate("#/trades");
+      navigate("/trades");
       return;
     }
-    navigate(`#/trades?${keys}`);
+    navigate(`/trades?${keys}`);
   };
 
   // ── Exports ───────────────────────────────────────────────────────────────
@@ -495,7 +495,7 @@ export function ChartBuilderView() {
             action: (
               <ToastAction
                 altText={t("toast.viewDashboard")}
-                onClick={() => navigate(`#/?d=${dashboardId}`)}
+                onClick={() => navigate(`/?d=${dashboardId}`)}
               >
                 {t("toast.viewDashboard")}
               </ToastAction>
@@ -572,11 +572,11 @@ export function ChartBuilderView() {
         </div>
         <Tabs value="charts">
           <TabsList>
-            <TabsTrigger value="overview" onClick={() => navigate("#/analytics")}>
+            <TabsTrigger value="overview" onClick={() => navigate("/analytics")}>
               {t("tabs.overview")}
             </TabsTrigger>
             <TabsTrigger value="charts">{t("tabs.charts")}</TabsTrigger>
-            <TabsTrigger value="heatmaps" onClick={() => navigate("#/analytics/heatmaps")}>
+            <TabsTrigger value="heatmaps" onClick={() => navigate("/analytics/heatmaps")}>
               {t("tabs.heatmaps")}
             </TabsTrigger>
           </TabsList>
@@ -1043,7 +1043,7 @@ export function ChartBuilderView() {
                 title={t("preview.empty")}
                 description={t("preview.emptyDesc")}
                 actionLabel={t("preview.emptyCta")}
-                onAction={() => navigate("#/trades/new")}
+                onAction={() => navigate("/trades/new")}
               />
             ) : !config ? (
               <div className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm">

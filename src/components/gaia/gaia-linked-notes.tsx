@@ -92,7 +92,7 @@ export function GaiaLinkedNotesSection({
               <button
                 type="button"
                 data-testid={`${testidPrefix}-gaia-row`}
-                onClick={() => navigate(`#/gaia?tab=notes&note=${note.id}`)}
+                onClick={() => navigate(`/gaia?tab=notes&note=${note.id}`)}
                 className="group flex w-full items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-left hover:border-border hover:bg-muted/60"
               >
                 <span className="text-sm leading-none" aria-hidden="true">
@@ -117,7 +117,7 @@ export function GaiaLinkedNotesSection({
       {notes.length > 5 ? (
         <button
           type="button"
-          onClick={() => navigate("#/gaia?tab=notes")}
+          onClick={() => navigate("/gaia?tab=notes")}
           className="mt-2 text-xs text-muted-foreground hover:text-foreground"
         >
           + {notes.length - 5} {t("gaia.linked.moreInNofy")}

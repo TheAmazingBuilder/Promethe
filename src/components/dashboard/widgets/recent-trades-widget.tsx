@@ -68,7 +68,7 @@ export function RecentTradesWidget({
             <TableRow
               key={trade.id}
               className="cursor-pointer"
-              onClick={() => navigate(`#/trades/${trade.id}`)}
+              onClick={() => navigate(`/trades/${trade.id}`)}
             >
               <TableCell>
                 <span className="flex items-center gap-2">

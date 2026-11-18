@@ -329,7 +329,7 @@ export async function createComment(
   };
 }
 
-/** Deep links are role-aware: owners land on #/trades, mentors on #/mentor. */
+/** Deep links are role-aware: owners land on /trades, mentors on /mentor. */
 function tradeUrlForOwner(tradeId: string): string {
   return `/trades/${tradeId}`;
 }

@@ -11,18 +11,16 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { navigate, parseHash } from "@/lib/router";
+import { navigate, useRoute } from "@/lib/router";
 import { useGlobalSearch } from "@/hooks/use-productivity";
 import { splitHighlight } from "@/lib/search/snippet";
 import type { SearchResultItemDTO } from "@/lib/trading/dto";
 
-/** #/search - global search over trades, strategies and journal entries. */
+/** /search - global search over trades, strategies and journal entries. */
 export function SearchView() {
   const t = useTranslations("searchView");
-  const [input, setInput] = React.useState(() => {
-    if (typeof window === "undefined") return "";
-    return parseHash(window.location.hash).query?.q ?? "";
-  });
+  const route = useRoute();
+  const [input, setInput] = React.useState(() => route.query?.q ?? "");
   const [query, setQuery] = React.useState(input);
 
   React.useEffect(() => {

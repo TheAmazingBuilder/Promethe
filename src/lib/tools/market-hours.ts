@@ -3,7 +3,7 @@
  *
  * Two related concepts share the MarketSessionSetting model:
  *  - DISPLAY sessions (Sydney, Tokyo, London, New York): IANA zones, local
- *    open/close hours, DST handled by Intl - used by the #/outils clock.
+ *    open/close hours, DST handled by Intl - used by the /tools clock.
  *  - DETECTION ranges (ASIAN, LONDON, OVERLAP, NEW_YORK, OTHER): the
  *    legacy UTC ranges that used to be hardcoded in src/lib/trading/session.ts.
  *    They are the defaults so existing trades keep their historical session;

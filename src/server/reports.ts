@@ -1,6 +1,6 @@
 /**
  * Monthly report - closed trades of one calendar month, aggregated for the
- * PDF export (#/analytics "Rapport PDF"). Reuses the analytics engines
+ * PDF export (/analytics "Rapport PDF"). Reuses the analytics engines
  * (computeTradeStats / computeAdvancedStats) over the month's trades.
  */
 import { db } from "@/lib/db";

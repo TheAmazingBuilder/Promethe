@@ -16,6 +16,7 @@ import { ExitPlansManager } from "@/components/tools/exit-plans-manager";
 import { RiskRewardCalculator } from "@/components/tools/risk-reward-calculator";
 import { PRESET_INSTRUMENTS } from "@/lib/trading/instruments";
 import { Badge } from "@/components/ui/badge";
+import { useRoute } from "@/lib/router";
 
 const TAB_VALUES = [
   "sizing",
@@ -32,51 +33,26 @@ const TAB_VALUES = [
 
 type TabValue = (typeof TAB_VALUES)[number];
 
-function readTabFromHash(): TabValue {
-  if (typeof window === "undefined") return "sizing";
-  const hash = window.location.hash;
-  const qIndex = hash.indexOf("?");
-  if (qIndex >= 0) {
-    const tab = new URLSearchParams(hash.slice(qIndex + 1)).get("tab");
-    if ((TAB_VALUES as readonly string[]).includes(tab ?? "")) {
-      return tab as TabValue;
-    }
-  }
-  // Deep link: #/outils/marge, #/outils/exposition, ...
-  const clean = hash.replace(/^#/, "").split("?")[0].replace(/^\/+/, "");
-  const [, second] = clean.split("/");
-  const bySegment: Record<string, TabValue> = {
-    "multi-tp": "multi-tp",
-    marge: "margin",
-    margin: "margin",
-    exposition: "exposure",
-    exposure: "exposure",
-    sessions: "market-hours",
-    "market-hours": "market-hours",
-    convertisseur: "converter",
-    converter: "converter",
-    sorties: "exit-plans",
-    "exit-plans": "exit-plans",
-    "risk-reward": "risk-reward",
-    "risque-recompense": "risk-reward",
-    taille: "sizing",
-    sizing: "sizing",
-    pnl: "pnl",
-    instruments: "instruments",
-  };
-  return (second ? bySegment[second] : undefined) ?? "sizing";
+/** Tab from the route (/tools/margin or /tools?tab=margin); defaults to sizing. */
+function tabFromQuery(tab: string | undefined): TabValue {
+  return (TAB_VALUES as readonly string[]).includes(tab ?? "")
+    ? (tab as TabValue)
+    : "sizing";
 }
 
 /** Functional tools view - the decimal engines power the trade form (phase 3). */
 export function ToolsView() {
   const t = useTranslations("tools");
-  const [tab, setTab] = React.useState<TabValue>(() => readTabFromHash());
+  const route = useRoute();
+  const [tab, setTab] = React.useState<TabValue>(() =>
+    tabFromQuery(route.query?.tab)
+  );
 
+  // A deep link (or back/forward) re-selects the tab; clicking a tab stays
+  // local, exactly like before.
   React.useEffect(() => {
-    const onChange = () => setTab(readTabFromHash());
-    window.addEventListener("hashchange", onChange);
-    return () => window.removeEventListener("hashchange", onChange);
-  }, []);
+    setTab(tabFromQuery(route.query?.tab));
+  }, [route.query?.tab]);
 
   return (
     <div className="space-y-6">

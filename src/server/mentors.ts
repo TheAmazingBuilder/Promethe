@@ -225,7 +225,7 @@ export async function createInvitation(
   });
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
-  const inviteUrl = `${baseUrl}/#/invitation/${token}`;
+  const inviteUrl = `${baseUrl}//invitation/${token}`;
 
   // In-app notification when the invitee already has an account (email channel
   // is a documented production addition — sandbox has no SMTP).
@@ -551,7 +551,7 @@ export async function acceptInvitation(
     type: "MENTOR_INVITE_ACCEPTED",
     title: "Mentorship accepted",
     body: `${mentorProfile?.publicDisplayName || mentorProfile?.displayName || "Your mentor"} (@${viewerProfile.handle}) accepted your invitation.`,
-    url: "/reglages/mentors",
+    url: "/settings/mentors",
     dedupeWithinMs: 0,
   });
 

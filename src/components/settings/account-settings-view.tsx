@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * v3 Phase 6 — Account, data portability & deletion, #/reglages/compte.
+ * v3 Phase 6 — Account, data portability & deletion, /settings/account.
  *
  * Three cards:
  *  1. Export — full ZIP download (RGPD art. 20), 24 h cooldown, history.

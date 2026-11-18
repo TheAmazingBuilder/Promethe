@@ -55,7 +55,7 @@ export function GoalsCard() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate("#/regles")}
+            onClick={() => navigate("/rules")}
           >
             {t("manage")}
           </Button>

@@ -4,7 +4,7 @@
  * DashboardsView (v2.5 Module 1) — replaces the old fixed dashboard.
  *
  * Header: greeting + global filters (period preset / account, URL state
- * `#/?p=&a=&d=`). Dashboard tabs (dnd-kit reorder, rename / default / delete,
+ * `/?p=&a=&d=`). Dashboard tabs (dnd-kit reorder, rename / default / delete,
  * create from blank or the 6 built-in templates). Edit mode toolbar
  * (customize, add widget, undo, reset layout, done) with live announcements.
  * Desktop/tablet: react-grid-layout (12 cols, drag + resize in edit mode,
@@ -117,7 +117,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useSession } from "@/components/app/session-context";
 import { useI18n } from "@/i18n/i18n-provider";
 import { intlLocale } from "@/i18n/config";
-import { navigate } from "@/lib/router";
+import { ROUTE_CHANGE_EVENT, navigate } from "@/lib/router";
 import { getWidgetDefinition } from "@/lib/dashboard/registry";
 import {
   GRID_BREAKPOINTS,
@@ -218,10 +218,9 @@ function chartHeightPx(widget: DashboardWidgetDTO): number {
   return Math.max(120, h * 40 - 110);
 }
 
-/** URL query of the dashboard route (`#/?p=&a=&d=`). */
-function readHashQuery(): URLSearchParams {
-  const qs = window.location.hash.split("?")[1] ?? "";
-  return new URLSearchParams(qs);
+/** URL query of the dashboard route (`/?p=&a=&d=`). */
+function readUrlQuery(): URLSearchParams {
+  return new URLSearchParams(window.location.search);
 }
 
 // ── Sortable dashboard tab ───────────────────────────────────────────────────
@@ -343,7 +342,7 @@ export function DashboardsView() {
 
   React.useEffect(() => {
     const read = () => {
-      const params = readHashQuery();
+      const params = readUrlQuery();
       const p = params.get("p");
       if (p && isPeriodPreset(p)) setPreset(p);
       const a = params.get("a");
@@ -353,8 +352,12 @@ export function DashboardsView() {
     read();
     setHydrated(true);
     setStoredId(window.localStorage.getItem(LAST_DASHBOARD_KEY));
-    window.addEventListener("hashchange", read);
-    return () => window.removeEventListener("hashchange", read);
+    window.addEventListener("popstate", read);
+    window.addEventListener(ROUTE_CHANGE_EVENT, read);
+    return () => {
+      window.removeEventListener("popstate", read);
+      window.removeEventListener(ROUTE_CHANGE_EVENT, read);
+    };
   }, []);
 
   // ── Data ──
@@ -404,8 +407,8 @@ export function DashboardsView() {
     sp.set("p", preset);
     if (effectiveAccountId) sp.set("a", effectiveAccountId);
     if (active?.id) sp.set("d", active.id);
-    const next = `#/?${sp.toString()}`;
-    if (window.location.hash !== next) {
+    const next = `/?${sp.toString()}`;
+    if (`${window.location.pathname}${window.location.search}` !== next) {
       window.history.replaceState(null, "", next);
     }
   }, [hydrated, preset, effectiveAccountId, active?.id]);
@@ -857,17 +860,17 @@ export function DashboardsView() {
         <CardDescription>{tDash("emptyDesc")}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <Button onClick={() => navigate("#/trades/quick")} data-tour="quick-trade-alt">
+        <Button onClick={() => navigate("/trades/quick")} data-tour="quick-trade-alt">
           <Zap className="h-4 w-4" aria-hidden="true" />
           {tDash("emptyCtaQuick")}
         </Button>
-        <Button variant="outline" onClick={() => navigate("#/trades/new")}>
+        <Button variant="outline" onClick={() => navigate("/trades/new")}>
           <Plus className="h-4 w-4" aria-hidden="true" />
           {tDash("emptyCtaForm")}
         </Button>
         <Button
           variant="outline"
-          onClick={() => navigate("#/reglages/templates")}
+          onClick={() => navigate("/settings/templates")}
         >
           <LayoutTemplate className="h-4 w-4" aria-hidden="true" />
           {tDash("emptyCtaTemplates")}

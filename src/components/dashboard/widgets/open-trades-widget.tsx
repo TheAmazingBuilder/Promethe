@@ -58,7 +58,7 @@ export function OpenTradesWidget({
               <TableRow
                 key={p.id}
                 className="cursor-pointer"
-                onClick={() => navigate(`#/trades/${p.id}`)}
+                onClick={() => navigate(`/trades/${p.id}`)}
               >
                 <TableCell>
                   <span className="flex items-center gap-2">

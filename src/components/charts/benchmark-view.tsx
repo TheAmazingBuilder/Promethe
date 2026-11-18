@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * v2.5 Module 2 — benchmark comparison page (#/analytics/benchmark, spec §4.5).
+ * v2.5 Module 2 — benchmark comparison page (/analytics/benchmark, spec §4.5).
  *
  * Overlays the realized equity curve against a benchmark (fixed % per period
  * compounding/linear, fixed R per period, or an imported custom CSV series),
@@ -224,7 +224,7 @@ export function BenchmarkView() {
           <p className="text-sm text-muted-foreground">{t("description")}</p>
         </div>
         <div className="flex gap-1" role="tablist">
-          <Button variant="outline" size="sm" onClick={() => navigate("#/analytics")}>
+          <Button variant="outline" size="sm" onClick={() => navigate("/analytics")}>
             {tCommon("back")}
           </Button>
           <Button

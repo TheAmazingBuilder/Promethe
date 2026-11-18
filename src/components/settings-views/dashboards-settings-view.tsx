@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * DashboardsSettingsView (v2.5 Module 1, spec §4.9) — #/reglages/dashboards.
+ * DashboardsSettingsView (v2.5 Module 1, spec §4.9) — /settings/dashboards.
  *
  * Manage the dashboards (default star, delete), browse the built-in
  * templates + the user's saved blueprints (add as new / replace current /

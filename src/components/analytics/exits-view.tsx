@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Exits tab — #/analytics/exits (v2.5 Module 6).
+ * Exits tab — /analytics/exits (v2.5 Module 6).
  *
  * Capture ratio, left on the table, breakdown by exit reason, and exit
  * simulations (fixed TP, trailing, breakeven) compared with real exits.

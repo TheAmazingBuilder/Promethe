@@ -6,7 +6,7 @@
  *
  * No new calculation: the score, its four pillars and the monthly
  * history come straight from GET /api/analytics/advanced, the same
- * payload as #/analytics/quality. No closed trades → an honest empty
+ * payload as /analytics/quality. No closed trades → an honest empty
  * state, never a placeholder score. Self-fetching (hasLoader: false).
  */
 import { useTranslations } from "next-intl";

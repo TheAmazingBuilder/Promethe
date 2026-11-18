@@ -54,7 +54,7 @@ export function ViolationsCard() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate("#/regles")}
+            onClick={() => navigate("/rules")}
           >
             {t("manage")}
           </Button>
@@ -70,7 +70,7 @@ export function ViolationsCard() {
               <button
                 type="button"
                 className="min-w-0 truncate text-left font-medium underline-offset-2 hover:underline"
-                onClick={() => navigate(`#/trades/${v.tradeId}`)}
+                onClick={() => navigate(`/trades/${v.tradeId}`)}
               >
                 {tRules(`kind.${v.kind}`)}
                 {v.trade ? (

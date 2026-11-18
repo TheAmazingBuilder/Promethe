@@ -543,7 +543,8 @@ export function GaiaEditor({
       },
       navigateToRef: (href) => {
         void flushSaveRef.current().then(() => {
-          if (href.startsWith("#/")) navigate(href);
+          // Legacy "#/..." refs stored in old notes still navigate.
+          if (href.startsWith("#/") || href.startsWith("/")) navigate(href);
           else window.location.href = href;
         });
       },

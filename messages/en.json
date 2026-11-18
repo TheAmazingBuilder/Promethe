@@ -2428,8 +2428,8 @@
     "footerNote": "Promethe - your data stays yours.",
     "lastUpdated": "Last updated: November 2025.",
     "title": {
-      "mentions": "Legal notice",
-      "confidentialite": "Privacy policy",
+      "terms": "Legal notice",
+      "privacy": "Privacy policy",
       "cookies": "Cookie policy"
     },
     "m": {

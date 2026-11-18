@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * v3 Phase 5 — Mentors management (owner side), #/reglages/mentors.
+ * v3 Phase 5 — Mentors management (owner side), /settings/mentors.
  *
  * Handle reservation, invitation creation (link shown ONCE), active accesses
  * (scope edit / pause / revoke — immediate effect), pending invitations and

@@ -19,6 +19,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { apiFetch } from "@/lib/api-client";
+import Link from "next/link";
 import type { MenteeSummaryDTO, ReceivedInvitationDTO } from "@/lib/mentor/dto";
 import type { ViewId } from "@/lib/router";
 
@@ -147,14 +148,14 @@ function CollapsibleNavGroup({
                         isActive={isActive}
                         className="data-[active=true]:font-medium data-[active=true]:text-emerald-700 dark:data-[active=true]:text-emerald-400"
                       >
-                        <a
+                        <Link
                           href={item.path}
                           onClick={onNavigate}
                           aria-current={isActive ? "page" : undefined}
                         >
                           <item.icon aria-hidden="true" />
                           <span>{t(item.labelKey)}</span>
-                        </a>
+                        </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                   );
@@ -219,7 +220,7 @@ export function NavList({
                         tooltip={t(item.descriptionKey)}
                         className="relative data-[active=true]:font-medium data-[active=true]:text-emerald-700 dark:data-[active=true]:text-emerald-400"
                       >
-                        <a
+                        <Link
                           href={item.path}
                           onClick={onNavigate}
                           aria-current={isActive ? "page" : undefined}
@@ -249,7 +250,7 @@ export function NavList({
                           ) : null}
                           <item.icon aria-hidden="true" />
                           <span>{t(item.labelKey)}</span>
-                        </a>
+                        </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   );

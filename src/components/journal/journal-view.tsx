@@ -3,7 +3,7 @@
 /**
  * Journal view (v1 phase 5) — one entry per trading day: pre-market plan,
  * post-market review, mood/sleep/discipline scores (1-5), market bias and
- * key lesson. Deep-linkable (#/journal/{date}) from the calendar.
+ * key lesson. Deep-linkable (/journal/{date}) from the calendar.
  */
 import * as React from "react";
 import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
@@ -100,7 +100,7 @@ export function JournalView({ date }: { date?: string }) {
   const day = date ?? today;
 
   const { data: entry, isLoading } = useJournalEntry(day);
-  // Day P&L — reuses the calendar month payload (cached, shared with #/calendrier).
+  // Day P&L — reuses the calendar month payload (cached, shared with /calendar).
   const { data: calendarData } = useCalendar(
     Number(day.slice(0, 4)),
     Number(day.slice(5, 7)),
@@ -232,7 +232,7 @@ export function JournalView({ date }: { date?: string }) {
           <Button
             variant="outline"
             size="icon"
-            onClick={() => navigate(`#/journal/${shiftDay(day, -1)}`)}
+            onClick={() => navigate(`/journal/${shiftDay(day, -1)}`)}
             aria-label={t("prevDay")}
           >
             <ChevronLeft className="h-4 w-4" aria-hidden="true" />
@@ -243,19 +243,19 @@ export function JournalView({ date }: { date?: string }) {
             className="h-9 w-[170px]"
             value={day}
             onChange={(v) => {
-              if (v) navigate(`#/journal/${v}`);
+              if (v) navigate(`/journal/${v}`);
             }}
           />
           <Button
             variant="outline"
             size="icon"
-            onClick={() => navigate(`#/journal/${shiftDay(day, 1)}`)}
+            onClick={() => navigate(`/journal/${shiftDay(day, 1)}`)}
             aria-label={t("nextDay")}
           >
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </Button>
           {!isToday ? (
-            <Button variant="outline" size="sm" onClick={() => navigate("#/journal")}>
+            <Button variant="outline" size="sm" onClick={() => navigate("/journal")}>
               {t("today")}
             </Button>
           ) : null}

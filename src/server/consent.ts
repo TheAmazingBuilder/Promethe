@@ -4,7 +4,7 @@
  * user-creation transaction (atomic: a user without consent proof cannot
  * exist), COOKIES_PREFERENCES would record granular choices when marketing
  * cookies are ever added (the app currently uses strictly necessary cookies
- * only — see the #/legal/cookies page).
+ * only — see the /legal/cookies page).
  *
  * Versions are DATED constants: bumping them lets a future "re-consent"
  * banner compare Profile signup date vs current version.

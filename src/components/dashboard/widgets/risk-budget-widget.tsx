@@ -3,7 +3,7 @@
 /**
  * Daily risk-budget gauge widget (Phase 2) — emerald dashboard widget.
  *
- * Budget = user-defined % of the balance (set in #/outils → Risk /
+ * Budget = user-defined % of the balance (set in /tools → Risk /
  * Reward). Consumed today = Σ risk of OPEN trades + realized losses of
  * the trading day. This is NOT the prop daily-loss limit: that one
  * counts realized losses only, while the budget also counts the risk
@@ -79,7 +79,7 @@ export function RiskBudgetWidget() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => navigate("/outils/risk-reward")}
+              onClick={() => navigate("/tools/risk-reward")}
             >
               {tRisk("budgetWidgetSetUp")}
             </Button>

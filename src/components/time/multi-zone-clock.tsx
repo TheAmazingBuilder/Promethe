@@ -6,13 +6,14 @@
  * Local time + the user's extra timezones (max 3) + the broker server time
  * of each account. Two variants:
  *  - "compact": one discreet line for the top bar (local time, then the
- *    first extra zone when one is configured) linking to #/reglages/heure;
+ *    first extra zone when one is configured) linking to /settings/time;
  *  - "full": the whole list, with the calendar date when it differs from
  *    the local date (a zone can be a day ahead/behind).
  *
  * Ticks once a second (same as the market-hours clock). No amounts are
  * shown; account names go through <Sensitive kind="account">.
  */
+import Link from "next/link";
 import * as React from "react";
 import { useTranslations } from "next-intl";
 import { Clock } from "lucide-react";
@@ -72,8 +73,8 @@ export function MultiZoneClock({
   if (variant === "compact") {
     const first = extras[0];
     return (
-      <a
-        href="#/reglages/heure"
+      <Link
+        href="/settings/time"
         className={cn(
           "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground tabular-nums transition-colors hover:bg-accent hover:text-foreground",
           className
@@ -100,7 +101,7 @@ export function MultiZoneClock({
             <span className="hidden xl:inline">{first.label}</span>
           </>
         )}
-      </a>
+      </Link>
     );
   }
 
@@ -162,7 +163,7 @@ function ClockRow({
 /**
  * Broker server clocks (read-only) — one row per account, with the live
  * server time and the configured clock description. The configuration
- * itself lives in the account editor (#/comptes).
+ * itself lives in the account editor (/accounts).
  */
 export function BrokerServerClocks({ className }: { className?: string }) {
   const t = useTranslations("time");

@@ -78,7 +78,7 @@ export function CommandMenu({
   /** Navigate home and ask the dashboard view to enter edit mode. */
   const customizeDashboard = () => {
     onOpenChange(false);
-    navigate("#/");
+    navigate("/");
     // Let the dashboard view mount before the event is dispatched.
     window.setTimeout(() => {
       window.dispatchEvent(new CustomEvent("tj:customize-dashboard"));
@@ -118,7 +118,7 @@ export function CommandMenu({
               <CommandItem
                 value={t("commandSeeAllResults")}
                 onSelect={() =>
-                  go(`#/search?q=${encodeURIComponent(searchQuery.trim())}`)
+                  go(`/search?q=${encodeURIComponent(searchQuery.trim())}`)
                 }
               >
                 <SearchIcon aria-hidden="true" />
@@ -145,15 +145,15 @@ export function CommandMenu({
         </CommandGroup>
         <CommandSeparator />
         <CommandGroup heading={t("commandActions")}>
-          <CommandItem onSelect={() => go("#/search")}>
+          <CommandItem onSelect={() => go("/search")}>
             <SearchIcon aria-hidden="true" />
             {t("commandGoSearch")}
           </CommandItem>
-          <CommandItem onSelect={() => go("#/history")}>
+          <CommandItem onSelect={() => go("/history")}>
             <History aria-hidden="true" />
             {t("commandGoHistory")}
           </CommandItem>
-          <CommandItem onSelect={() => go("#/reglages/raccourcis")}>
+          <CommandItem onSelect={() => go("/settings/shortcuts")}>
             <Keyboard aria-hidden="true" />
             {t("commandGoShortcuts")}
           </CommandItem>

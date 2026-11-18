@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Seasonality tab — #/analytics/seasonality (v2.5 Module 6).
+ * Seasonality tab — /analytics/seasonality (v2.5 Module 6).
  *
  * Month / quarter / day-of-month / ISO week breakdowns with Wilson
  * intervals, verdicts under a minimum sample, and a year x month heatmap.

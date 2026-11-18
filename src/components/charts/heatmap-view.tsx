@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * v2.5 Module 2 — cross-heatmaps page (#/analytics/heatmaps, spec §4.4).
+ * v2.5 Module 2 — cross-heatmaps page (/analytics/heatmaps, spec §4.4).
  *
  * Preset dimension pairs (day × hour, session × instrument, strategy ×
  * emotion, weekday × session, instrument × strategy, regime × strategy) plus
@@ -141,7 +141,7 @@ export function HeatmapsView() {
     if (unfilterable.length > 0) {
       toast({ description: t("preview.drillNotFilterable") });
     }
-    navigate(parts.length > 0 ? `#/trades?${parts.join("&")}` : "#/trades");
+    navigate(parts.length > 0 ? `/trades?${parts.join("&")}` : "/trades");
   };
 
   const exportCsv = () => {
@@ -165,10 +165,10 @@ export function HeatmapsView() {
           <p className="text-sm text-muted-foreground">{tHeat("description")}</p>
         </div>
         <div className="flex gap-1" role="tablist" aria-label={t("tabs.charts")}>
-          <Button variant="outline" size="sm" onClick={() => navigate("#/analytics")}>
+          <Button variant="outline" size="sm" onClick={() => navigate("/analytics")}>
             {t("tabs.overview")}
           </Button>
-          <Button variant="outline" size="sm" onClick={() => navigate("#/analytics/charts")}>
+          <Button variant="outline" size="sm" onClick={() => navigate("/analytics/charts")}>
             {t("tabs.charts")}
           </Button>
           <Button variant="secondary" size="sm" aria-current="page">

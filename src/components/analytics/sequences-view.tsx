@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Sequences tab — #/analytics/sequences (v2.5 Module 6).
+ * Sequences tab — /analytics/sequences (v2.5 Module 6).
  *
  * Performance after N consecutive wins/losses (binomial test vs the
  * overall win rate) and the win/loss transition matrix.

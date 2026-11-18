@@ -612,7 +612,7 @@ export function StrategiesView() {
         ],
       })
       .then(
-        (res) => navigate(`#/gaia?tab=notes&note=${res.note.id}`),
+        (res) => navigate(`/gaia?tab=notes&note=${res.note.id}`),
         (err: unknown) =>
           toast({ title: gaiaErrorMessage(err), variant: "destructive" }),
       )

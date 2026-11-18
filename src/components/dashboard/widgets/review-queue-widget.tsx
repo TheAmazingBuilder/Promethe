@@ -37,7 +37,7 @@ export function ReviewQueueWidget({ data }: { data: unknown }) {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => navigate("#/trades")}
+          onClick={() => navigate("/trades")}
         >
           {t("goTrades")}
           <ArrowRight className="h-4 w-4" aria-hidden="true" />

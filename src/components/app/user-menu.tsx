@@ -79,7 +79,7 @@ export function UserMenu() {
           </p>
         </div>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => navigate("#/reglages")}>
+        <DropdownMenuItem onClick={() => navigate("/settings")}>
           <Settings aria-hidden="true" />
           {tRoot("nav.settings")}
         </DropdownMenuItem>

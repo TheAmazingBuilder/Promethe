@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Lifecycle tab — #/analytics/lifecycle (v2.5 Module 6).
+ * Lifecycle tab — /analytics/lifecycle (v2.5 Module 6).
  *
  * MFE/MAE distributions in R, almost-TP cases, and time in profit/loss
  * (from stored candles when coverage allows).
@@ -177,7 +177,7 @@ export function LifecycleView() {
                               size="sm"
                               className="h-auto p-0"
                               onClick={() =>
-                                navigate(`#/trades/${row.tradeId}`)
+                                navigate(`/trades/${row.tradeId}`)
                               }
                             >
                               {row.tradeId.slice(0, 8)}

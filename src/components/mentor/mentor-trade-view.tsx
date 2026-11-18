@@ -2,7 +2,7 @@
 
 /**
  * v3 Phase 5 — Read-only trade detail in the mentor space,
- * #/mentor/{ownerId}/trades/{tradeId}. The payload arrives ALREADY scoped
+ * /mentor/{ownerId}/trades/{tradeId}. The payload arrives ALREADY scoped
  * and redacted from the server (journal/psychology/screenshots/amounts
  * structurally absent when disallowed). Read-only badge on every field;
  * the comment thread is the one collaborative surface.
@@ -63,7 +63,7 @@ export function MentorTradeView({
         variant="ghost"
         size="sm"
         className="gap-2 text-muted-foreground"
-        onClick={() => navigate(`#/mentor/${ownerId}`)}
+        onClick={() => navigate(`/mentor/${ownerId}`)}
       >
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         {t("backToMentees")}

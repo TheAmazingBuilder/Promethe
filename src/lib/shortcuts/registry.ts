@@ -3,7 +3,7 @@
  *
  * Single source of truth for every global keyboard shortcut: the action
  * id, its default chord, its i18n label and whether the user may reassign
- * it on #/reglages/raccourcis. Chords use the same "mod+k" / "shift+h" /
+ * it on /settings/shortcuts. Chords use the same "mod+k" / "shift+h" /
  * "f" / "?" notation as the privacy provider (mod = Cmd on macOS,
  * Ctrl elsewhere). Stored overrides live in KeyboardShortcut (one row per
  * user + action); absent row = default.

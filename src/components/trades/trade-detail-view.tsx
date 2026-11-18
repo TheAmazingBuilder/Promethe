@@ -318,7 +318,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
         ],
       })
       .then(
-        (res) => navigate(`#/gaia?tab=notes&note=${res.note.id}`),
+        (res) => navigate(`/gaia?tab=notes&note=${res.note.id}`),
         (err: unknown) =>
           toast({ title: gaiaErrorMessage(err), variant: "destructive" }),
       );
@@ -329,7 +329,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
     deleteTrade.mutate(trade.id, {
       onSuccess: () => {
         toast({ title: t("deletedToast") });
-        navigate("#/trades");
+        navigate("/trades");
       },
       onError: mutationErrorToast,
     });
@@ -393,7 +393,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
           variant="ghost"
           size="sm"
           className="-ml-2 text-muted-foreground"
-          onClick={() => navigate("#/trades")}
+          onClick={() => navigate("/trades")}
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           {tCommon("back")}
@@ -412,7 +412,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => navigate("#/trades")}
+                  onClick={() => navigate("/trades")}
                 >
                   {tCommon("back")}
                 </Button>
@@ -439,7 +439,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
           variant="ghost"
           size="sm"
           className="-ml-2 text-muted-foreground"
-          onClick={() => navigate("#/trades")}
+          onClick={() => navigate("/trades")}
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           {tCommon("back")}
@@ -455,7 +455,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => navigate("#/trades")}
+                onClick={() => navigate("/trades")}
               >
                 {tCommon("back")}
               </Button>
@@ -526,7 +526,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
         variant="ghost"
         size="sm"
         className="-ml-2 text-muted-foreground"
-        onClick={() => navigate("#/trades")}
+        onClick={() => navigate("/trades")}
       >
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         {tCommon("back")}
@@ -614,7 +614,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
           </Select>
           <Button
             variant="outline"
-            onClick={() => navigate(`#/trades/${trade.id}/edit`)}
+            onClick={() => navigate(`/trades/${trade.id}/edit`)}
           >
             <Pencil className="h-4 w-4" aria-hidden="true" />
             {t("edit")}

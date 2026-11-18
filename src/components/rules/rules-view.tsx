@@ -925,7 +925,7 @@ export function RulesView() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => navigate(`#/trades/${v.tradeId}`)}
+                          onClick={() => navigate(`/trades/${v.tradeId}`)}
                         >
                           {t("violations.viewTrade")}
                         </Button>

@@ -353,14 +353,12 @@ export function QuickTradeView() {
     recordTemplateUse.mutate(tpl.id);
   }
 
-  // ── Auto-apply ?template=<id> from the hash (templates "use" action) ──
+  // ── Auto-apply ?template=<id> from the query string (templates "use" action) ──
   React.useEffect(() => {
     if (autoTemplateRef.current || !templates) return;
     autoTemplateRef.current = true;
-    const hash = typeof window === "undefined" ? "" : window.location.hash;
-    const qIndex = hash.indexOf("?");
-    if (qIndex === -1) return;
-    const id = new URLSearchParams(hash.slice(qIndex + 1)).get("template");
+    if (typeof window === "undefined") return;
+    const id = new URLSearchParams(window.location.search).get("template");
     if (!id) return;
     const tpl = templates.find((x) => x.id === id);
     if (tpl) applyTemplate(tpl);

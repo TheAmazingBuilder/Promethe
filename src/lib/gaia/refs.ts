@@ -60,7 +60,7 @@ async function resolveTrade(userId: string, id: string): Promise<GaiaRefHit | nu
       trade.status === "CLOSED"
         ? `${symbol} ${trade.direction} · ${trade.status} · ${formatR(r)}`
         : `${symbol} ${trade.direction} · ${trade.status}`,
-    href: `#/trades?trade=${trade.id}`,
+    href: `/trades?trade=${trade.id}`,
   };
 }
 
@@ -72,7 +72,7 @@ async function resolveStrategy(userId: string, id: string): Promise<GaiaRefHit |
     id: strategy.id,
     label: strategy.name,
     meta: "Playbook strategy",
-    href: "#/strategies",
+    href: "/strategies",
   };
 }
 
@@ -91,7 +91,7 @@ async function resolveSetup(userId: string, id: string): Promise<GaiaRefHit | nu
       id: setup.id,
       label: setup.name,
       meta: `Playbook setup · ${setup.strategy.name} · ${tradeCount} trade${tradeCount === 1 ? "" : "s"}`,
-      href: "#/playbook?tab=setups",
+      href: "/playbook?tab=setups",
     };
   }
   // Legacy fallback: free-text setupType on trades.
@@ -108,7 +108,7 @@ async function resolveSetup(userId: string, id: string): Promise<GaiaRefHit | nu
       trades.length === 1
         ? "Trade setup · 1 trade"
         : `Trade setup · ${trades.length} trades`,
-    href: "#/trades",
+    href: "/trades",
   };
 }
 
@@ -123,7 +123,7 @@ async function resolveRule(userId: string, id: string): Promise<GaiaRefHit | nul
       id: playbookRule.id,
       label: playbookRule.title,
       meta: "Playbook rule",
-      href: "#/playbook?tab=rules",
+      href: "/playbook?tab=rules",
     };
   }
   const rule = await db.tradingRule.findFirst({ where: { userId, id } });
@@ -133,7 +133,7 @@ async function resolveRule(userId: string, id: string): Promise<GaiaRefHit | nul
     id: rule.id,
     label: rule.description ?? rule.kind,
     meta: "Trading rule",
-    href: "#/rules",
+    href: "/rules",
   };
 }
 
@@ -150,7 +150,7 @@ async function resolveSymbol(userId: string, id: string): Promise<GaiaRefHit | n
     id: instrument.id,
     label: instrument.symbol,
     meta: instrument.assetClass,
-    href: "#/instruments",
+    href: "/instruments",
   };
 }
 
@@ -164,7 +164,7 @@ async function resolveNote(userId: string, id: string): Promise<GaiaRefHit | nul
     id: note.id,
     label: note.title === "" ? "Untitled note" : note.title,
     meta: "Note Gaïa",
-    href: `#/gaia?tab=notes&note=${note.id}`,
+    href: `/gaia?tab=notes&note=${note.id}`,
   };
 }
 

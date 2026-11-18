@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import * as React from "react";
 import {
   BarChart3,
@@ -96,26 +97,26 @@ export function AuthScreen() {
             <span className="font-medium text-foreground">Promethe</span>
           </p>
           <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-            <a
-              href="#/legal/mentions"
+            <Link
+              href="/legal/terms"
               className="underline-offset-4 hover:text-foreground hover:underline"
             >
               {t("legalMentions")}
-            </a>
+            </Link>
             <span aria-hidden="true">·</span>
-            <a
-              href="#/legal/confidentialite"
+            <Link
+              href="/legal/privacy"
               className="underline-offset-4 hover:text-foreground hover:underline"
             >
               {t("legalPrivacy")}
-            </a>
+            </Link>
             <span aria-hidden="true">·</span>
-            <a
-              href="#/legal/cookies"
+            <Link
+              href="/legal/cookies"
               className="underline-offset-4 hover:text-foreground hover:underline"
             >
               {t("legalCookies")}
-            </a>
+            </Link>
             <span aria-hidden="true" className="hidden sm:inline">·</span>
             <p className="tabular-nums">{t("footerRight")}</p>
           </div>

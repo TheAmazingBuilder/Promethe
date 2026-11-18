@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useHashRoute } from "@/lib/router";
+import { useRoute } from "@/lib/router";
 import { findNavItem } from "@/components/app/nav";
 import { DashboardsView } from "@/components/dashboard/dashboards-view";
 import { ToolsView } from "./tools-view";
@@ -62,7 +62,7 @@ import { TrashView } from "@/components/trash/trash-view";
 const FEATURES: Record<string, string[]> = {};
 
 export function ViewSwitch() {
-  const route = useHashRoute();
+  const route = useRoute();
   const reduceMotion = useReducedMotion();
   // Key changes only when the page itself changes - query params (filters,
   // drill-downs) keep the same view mounted, no transition replay.
@@ -236,7 +236,7 @@ export function ViewSwitch() {
       view = <TrashView />;
       break;
     case "legal":
-      view = <LegalView page={route.legalPage ?? "mentions"} />;
+      view = <LegalView page={route.legalPage ?? "terms"} />;
       break;
     default: {
       const item = findNavItem(route.view);

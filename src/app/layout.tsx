@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { PwaRegister } from "@/components/app/pwa-register";
+import { LegacyHashRedirect } from "@/components/app/legacy-hash-redirect";
 import { ThemeProvider } from "@/components/theme-provider";
 import { I18nProvider } from "@/i18n/i18n-provider";
 import { DEFAULT_LOCALE } from "@/i18n/config";
@@ -71,6 +72,7 @@ export default async function RootLayout({
             disableTransitionOnChange
           >
             <PwaRegister />
+            <LegacyHashRedirect />
             {children}
             <Toaster />
           </ThemeProvider>

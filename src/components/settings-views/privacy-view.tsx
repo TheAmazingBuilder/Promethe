@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * PrivacyView (v2.5 Module 8, §3.1/§3.2) — #/reglages/privacy.
+ * PrivacyView (v2.5 Module 8, §3.1/§3.2) — /settings/privacy.
  *
  * Every control applies INSTANTLY (privacy store) and persists per device +
  * to the server row (debounced) — no save bar, unlike the appearance view.

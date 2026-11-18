@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * v3 Phase 5 — Mentor space home, #/mentor: mentee cards (new trades,
+ * v3 Phase 5 — Mentor space home, /mentor: mentee cards (new trades,
  * unreviewed, unread comments badges) + received invitations
  * (accept requires a reserved handle).
  */
@@ -82,7 +82,7 @@ export function MentorView() {
                     <li key={mentee.ownerId}>
                       <button
                         type="button"
-                        onClick={() => navigate(`#/mentor/${mentee.ownerId}`)}
+                        onClick={() => navigate(`/mentor/${mentee.ownerId}`)}
                         className="flex w-full flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors hover:bg-accent"
                       >
                         <div className="min-w-0">
@@ -251,7 +251,7 @@ function InvitationsCard({
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => navigate("#/reglages/mentors")}
+                  onClick={() => navigate("/settings/mentors")}
                 >
                   {t("requiresHandle")}
                 </Button>

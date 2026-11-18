@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Setup ranking tab — #/analytics/setups (v2.5 Module 6).
+ * Setup ranking tab — /analytics/setups (v2.5 Module 6).
  *
  * Expectancy per setup with Wilson intervals, categories (proven /
  * promising / unproven / losing), per-setup detail and two-setup compare.

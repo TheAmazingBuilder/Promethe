@@ -527,7 +527,7 @@ export function AnalyticsView() {
             variant="outline"
             size="sm"
             className="ml-auto"
-            onClick={() => navigate("#/analytics/charts")}
+            onClick={() => navigate("/analytics/charts")}
           >
             <LineChart className="h-4 w-4" aria-hidden="true" />
             {t("openChartBuilder")}
@@ -535,7 +535,7 @@ export function AnalyticsView() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate("#/analytics/heatmaps")}
+            onClick={() => navigate("/analytics/heatmaps")}
           >
             <Grid3x3 className="h-4 w-4" aria-hidden="true" />
             {tRoot("nav.heatmaps")}
@@ -566,7 +566,7 @@ export function AnalyticsView() {
               key={tab}
               variant="outline"
               size="sm"
-              onClick={() => navigate(`#/analytics/${tab}`)}
+              onClick={() => navigate(`/analytics/${tab}`)}
             >
               {tAdv(`tabs.${tab}`)}
             </Button>
@@ -617,12 +617,12 @@ export function AnalyticsView() {
                 {t("emptyCtaAll")}
               </Button>
             ) : (
-              <Button onClick={() => navigate("#/trades/quick")}>
+              <Button onClick={() => navigate("/trades/quick")}>
                 <Zap className="h-4 w-4" aria-hidden="true" />
                 {t("emptyCtaQuick")}
               </Button>
             )}
-            <Button variant="outline" onClick={() => navigate("#/trades/new")}>
+            <Button variant="outline" onClick={() => navigate("/trades/new")}>
               <Plus className="h-4 w-4" aria-hidden="true" />
               {t("emptyCtaForm")}
             </Button>
@@ -1080,7 +1080,7 @@ export function AnalyticsView() {
             <button
               type="button"
               className="underline underline-offset-2 hover:text-foreground"
-              onClick={() => navigate("#/reglages")}
+              onClick={() => navigate("/settings")}
             >
               {t("currencyNoteLink")}
             </button>

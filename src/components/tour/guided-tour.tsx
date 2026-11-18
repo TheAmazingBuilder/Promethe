@@ -13,14 +13,14 @@ import * as React from "react";
 import { useTranslations } from "next-intl";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { navigate, useHashRoute } from "@/lib/router";
+import { navigate, useRoute } from "@/lib/router";
 import { useA11yPrefs } from "@/components/a11y/a11y-provider";
 
 const SEEN_KEY = "promethe.tour.v1";
 
 interface TourStep {
   id: string;
-  /** Hash route to navigate to before showing this step. */
+  /** Clean route to navigate to before showing this step. */
   route?: string;
   /** Selectors tried in order (mobile FAB vs desktop quick action). */
   selectors: string[];
@@ -49,21 +49,21 @@ const STEPS: TourStep[] = [
   },
   {
     id: "trades",
-    route: "#/trades",
+    route: "/trades",
     selectors: ['[data-tour="trades"]'],
     titleKey: "steps.trades.title",
     bodyKey: "steps.trades.body",
   },
   {
     id: "analytics",
-    route: "#/analytics",
+    route: "/analytics",
     selectors: ['[data-tour="analytics"]'],
     titleKey: "steps.analytics.title",
     bodyKey: "steps.analytics.body",
   },
   {
     id: "journal",
-    route: "#/journal",
+    route: "/journal",
     selectors: ['[data-tour="journal"]'],
     titleKey: "steps.journal.title",
     bodyKey: "steps.journal.body",
@@ -84,7 +84,7 @@ export function useTour(): TourContextValue {
 
 export function TourProvider({ children }: { children: React.ReactNode }) {
   const [step, setStep] = React.useState<number | null>(null);
-  const route = useHashRoute();
+  const route = useRoute();
   const autoStarted = React.useRef(false);
 
   const start = React.useCallback(() => setStep(0), []);
@@ -146,7 +146,7 @@ function GuidedTourOverlay({
   React.useEffect(() => {
     let cancelled = false;
     setRect(null);
-    if (current.route && !window.location.hash.startsWith(current.route)) {
+    if (current.route && window.location.pathname !== current.route) {
       navigate(current.route);
     }
     const find = (): HTMLElement | null => {

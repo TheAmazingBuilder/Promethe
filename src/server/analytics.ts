@@ -1,5 +1,5 @@
 /**
- * Analytics aggregation (v2 Phase 4) — powers #/analytics: KPIs + advanced
+ * Analytics aggregation (v2 Phase 4) — powers /analytics: KPIs + advanced
  * stats (SQN, Sharpe/Sortino), equity curve, R distribution, breakdowns and
  * rule-based insights over CLOSED non-draft trades.
  *

@@ -97,7 +97,7 @@ export async function scheduleAccountDeletion(
       "en-CA",
       { day: "numeric", month: "long", year: "numeric" }
     )}. You can cancel at any time before then.`,
-    url: "#/reglages/compte",
+    url: "/settings/account",
     dedupeWithinMs: 0,
   });
 
@@ -124,7 +124,7 @@ export async function cancelAccountDeletion(userId: string): Promise<boolean> {
     type: "DELETION_CANCELLED",
     title: "Account deletion cancelled",
     body: "Your deletion request was cancelled. Your data is kept.",
-    url: "#/reglages/compte",
+    url: "/settings/account",
     dedupeWithinMs: 0,
   });
   return true;

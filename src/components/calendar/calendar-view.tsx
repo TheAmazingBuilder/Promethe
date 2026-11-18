@@ -3,7 +3,7 @@
 /**
  * Calendar view (v1 phase 5) — month grid of daily net P&L with journal
  * markers, month summary and day streaks. Clicking a day deep-links to its
- * journal entry (#/journal/{date}). Data: GET /api/calendar.
+ * journal entry (/journal/{date}). Data: GET /api/calendar.
  */
 import * as React from "react";
 import { BookOpen, ChevronLeft, ChevronRight } from "lucide-react";
@@ -214,7 +214,7 @@ export function CalendarView() {
                       <button
                         key={cell.date}
                         type="button"
-                        onClick={() => navigate(`#/journal/${cell.date}`)}
+                        onClick={() => navigate(`/journal/${cell.date}`)}
                         aria-label={[
                           // a11y (M8 Phase 5): axe's label-content-name-mismatch
                           // requires the VISIBLE text tokens (day number, P&L,

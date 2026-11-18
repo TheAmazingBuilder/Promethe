@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Risk / Reward calculator — #/outils, tab "Risk / Reward".
+ * Risk / Reward calculator — /tools, tab "Risk / Reward".
  *
  * - Interactive R:R × win-rate table (1:1–5:1 × 20–60%), coloured
  *   Profitable / Break Even / Not Profitable like the reference image,

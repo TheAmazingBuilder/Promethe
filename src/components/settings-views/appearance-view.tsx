@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * AppearanceView (v2.5 Module 1, spec §1) — #/reglages/appearance.
+ * AppearanceView (v2.5 Module 1, spec §1) — /settings/appearance.
  *
  * Palette (6 presets + custom with a WCAG contrast checker + auto-adjust),
  * density, chart palette — everything with a LIVE PREVIEW that reflects the

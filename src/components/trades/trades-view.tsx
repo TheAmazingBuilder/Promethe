@@ -126,7 +126,7 @@ import {
 } from "@/lib/format";
 import { useFormat } from "@/lib/format/use-format";
 import { apiErrorMessage } from "@/lib/i18n-errors";
-import { navigate, parseHash } from "@/lib/router";
+import { navigate, parsePathname } from "@/lib/router";
 import type { SavedViewDTO, TradeListItemDTO } from "@/lib/trading/dto";
 import {
   DIRECTIONS,
@@ -176,14 +176,17 @@ const TRADE_COLUMNS: TradeColumnDef[] = [
   { id: "session", labelKey: "colSession", className: "hidden xl:table-cell", cellClassName: "text-muted-foreground" },
   { id: "timeframe", labelKey: "colTimeframe", className: "hidden xl:table-cell" },
   { id: "review", labelKey: "colReview", className: "hidden lg:table-cell" },
-  // v2.5 M6 — anomaly badge (robust MAD z-score, see #/analytics/anomalies).
+  // v2.5 M6 — anomaly badge (robust MAD z-score, see /analytics/anomalies).
   { id: "anomaly", labelKey: "colAnomaly", className: "hidden md:table-cell" },
 ];
 
-/** v2.5 M2 - chart drill-down: apply #/trades?… filters once on mount. */
+/** v2.5 M2 - chart drill-down: apply /trades?… filters once on mount. */
 function drillFiltersFromHash(): Partial<TradeListQuery> | null {
   if (typeof window === "undefined") return null;
-  const route = parseHash(window.location.hash);
+  const route = parsePathname(
+    window.location.pathname,
+    new URLSearchParams(window.location.search)
+  );
   if (route.view !== "trades") return null;
   const q = route.query ?? {};
   const patch: Partial<TradeListQuery> = {};
@@ -232,7 +235,7 @@ export function TradesView() {
   const [viewName, setViewName] = React.useState("");
   const [activeViewId, setActiveViewId] = React.useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = React.useState<TradeListItemDTO | null>(null);
-  // v2.5 M2 — chart drill-down filters arrive as #/trades?… query params.
+  // v2.5 M2 — chart drill-down filters arrive as /trades?… query params.
   const [drillApplied, setDrillApplied] = React.useState(false);
   // v2.5 M4 — bulk selection, saved-view rename, column overrides.
   const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
@@ -403,7 +406,7 @@ export function TradesView() {
     setActiveViewId(null);
     setViewColumns(null);
     if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", "#/trades");
+      window.history.replaceState(null, "", "/trades");
     }
   };
 
@@ -462,9 +465,9 @@ export function TradesView() {
         ? { order: view.columns, visibility: {} }
         : null
     );
-    // Shareable URL: #/trades?view=<id> (no navigation, no remount).
+    // Shareable URL: /trades?view=<id> (no navigation, no remount).
     if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", `#/trades?view=${view.id}`);
+      window.history.replaceState(null, "", `/trades?view=${view.id}`);
     }
   };
 
@@ -478,7 +481,10 @@ export function TradesView() {
       setViewAutoApplied(true);
       return;
     }
-    const hashViewId = parseHash(window.location.hash).query?.view;
+    const hashViewId = parsePathname(
+      window.location.pathname,
+      new URLSearchParams(window.location.search)
+    ).query?.view;
     const target =
       views.find((v) => v.id === hashViewId) ??
       (hashViewId ? undefined : views.find((v) => v.isDefault));
@@ -994,12 +1000,12 @@ export function TradesView() {
           <Button
             variant="outline"
             aria-label={t("quick")}
-            onClick={() => navigate("#/trades/quick")}
+            onClick={() => navigate("/trades/quick")}
           >
             <Zap className="h-4 w-4" aria-hidden="true" />
             <span className="hidden sm:inline">{t("quick")}</span>
           </Button>
-          <Button onClick={() => navigate("#/trades/new")}>
+          <Button onClick={() => navigate("/trades/new")}>
             <Plus className="h-4 w-4" aria-hidden="true" />
             {t("new")}
           </Button>
@@ -1469,7 +1475,7 @@ export function TradesView() {
                     {t("emptyDesc")}
                   </p>
                 </div>
-                <Button onClick={() => navigate("#/trades/quick")}>
+                <Button onClick={() => navigate("/trades/quick")}>
                   <Zap className="h-4 w-4" aria-hidden="true" />
                   {t("emptyCta")}
                 </Button>
@@ -1518,7 +1524,7 @@ export function TradesView() {
                 <TableRow
                   key={trade.id}
                   className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => navigate(`#/trades/${trade.id}`)}
+                  onClick={() => navigate(`/trades/${trade.id}`)}
                 >
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <Checkbox
@@ -1549,14 +1555,14 @@ export function TradesView() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
-                          onClick={() => navigate(`#/trades/${trade.id}`)}
+                          onClick={() => navigate(`/trades/${trade.id}`)}
                         >
                           <Eye className="h-4 w-4" aria-hidden="true" />
                           {t("view")}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() =>
-                            navigate(`#/trades/${trade.id}/edit`)
+                            navigate(`/trades/${trade.id}/edit`)
                           }
                         >
                           <Pencil className="h-4 w-4" aria-hidden="true" />

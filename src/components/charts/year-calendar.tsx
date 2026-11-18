@@ -140,7 +140,7 @@ export function YearCalendar({
         const cell = grid.cells[focus.row][focus.col];
         if (cell.inYear) {
           e.preventDefault();
-          navigate(`#/journal/${cell.date}`);
+          navigate(`/journal/${cell.date}`);
         }
         return;
       }
@@ -290,7 +290,7 @@ export function YearCalendar({
                           cursor: cell.inYear ? "pointer" : undefined,
                         }}
                         onMouseEnter={() => setFocus({ row, col })}
-                        onClick={() => cell.inYear && navigate(`#/journal/${cell.date}`)}
+                        onClick={() => cell.inYear && navigate(`/journal/${cell.date}`)}
                       >
                         <title>
                           {cell.inYear

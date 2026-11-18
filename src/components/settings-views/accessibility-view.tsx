@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * AccessibilityView (v2.5 Module 8, §3.3) — #/reglages/accessibility.
+ * AccessibilityView (v2.5 Module 8, §3.3) — /settings/accessibility.
  *
  * Text scale (80–200 %), contrast modes (Standard / High / System),
  * reduced motion, dyslexia-friendly font, line/letter spacing, focus ring,
@@ -10,6 +10,7 @@
  * LIVE PREVIEW panel that reflects the current settings, plus reset to
  * defaults. WCAG 2.2 AA target (README "Privacy & accessibility").
  */
+import Link from "next/link";
 import * as React from "react";
 import { useTranslations } from "next-intl";
 import {
@@ -437,9 +438,9 @@ export function AccessibilityView() {
               <p className="text-sm leading-relaxed">
                 {t("previewBody")}
               </p>
-              <a href="#/reglages/accessibility" className="text-sm underline-offset-4 hover:underline">
+              <Link href="/settings/accessibility" className="text-sm underline-offset-4 hover:underline">
                 {t("previewLink")}
-              </a>
+              </Link>
             </div>
           </div>
           <p className="mt-3 text-xs text-muted-foreground">

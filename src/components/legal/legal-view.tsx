@@ -1,11 +1,12 @@
 "use client";
 
 /**
- * v3 Phase 6 — Legal pages: #/legal/mentions, #/legal/confidentialite,
- * #/legal/cookies. Public (rendered even when logged out — AppRoot routes
+ * v3 Phase 6 — Legal pages: /legal/terms, /legal/privacy,
+ * /legal/cookies. Public (rendered even when logged out — AppRoot routes
  * here instead of the auth screen), i18n FR/EN, content parameterised by the
  * LEGAL_* server values (public /api/legal endpoint, no personal data).
  */
+import Link from "next/link";
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
@@ -26,8 +27,8 @@ interface LegalIdentity {
 type LegalPage = NonNullable<AppRoute["legalPage"]>;
 
 const PAGES: { id: LegalPage; icon: typeof ScrollText; labelKey: string }[] = [
-  { id: "mentions", icon: ScrollText, labelKey: "tabMentions" },
-  { id: "confidentialite", icon: ShieldCheck, labelKey: "tabPrivacy" },
+  { id: "terms", icon: ScrollText, labelKey: "tabMentions" },
+  { id: "privacy", icon: ShieldCheck, labelKey: "tabPrivacy" },
   { id: "cookies", icon: Cookie, labelKey: "tabCookies" },
 ];
 
@@ -38,7 +39,7 @@ interface Section {
 }
 
 const SECTIONS: Record<LegalPage, Section[]> = {
-  mentions: [
+  terms: [
     { titleKey: "m.editor", bodyKeys: ["m.editorBody"] },
     { titleKey: "m.contact", bodyKeys: ["m.contactBody"] },
     { titleKey: "m.hosting", bodyKeys: ["m.hostingBody"] },
@@ -47,7 +48,7 @@ const SECTIONS: Record<LegalPage, Section[]> = {
     // v2.5 M2 Phase 7 — lightweight-charts / Recharts attribution.
     { titleKey: "m.licenses", bodyKeys: ["m.licensesBody"] },
   ],
-  confidentialite: [
+  privacy: [
     { titleKey: "p.controller", bodyKeys: ["p.controllerBody"] },
     { titleKey: "p.data", bodyKeys: ["p.dataBody"] },
     { titleKey: "p.law", bodyKeys: ["p.lawBody"] },
@@ -91,9 +92,9 @@ export function LegalView({ page, standalone = false }: { page: LegalPage; stand
           const active = p.id === page;
           const Icon = p.icon;
           return (
-            <a
+            <Link
               key={p.id}
-              href={`#/legal/${p.id}`}
+              href={`/legal/${p.id}`}
               aria-current={active ? "page" : undefined}
               className={cn(
                 "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
@@ -104,7 +105,7 @@ export function LegalView({ page, standalone = false }: { page: LegalPage; stand
             >
               <Icon className="h-4 w-4" aria-hidden="true" />
               {t(p.labelKey)}
-            </a>
+            </Link>
           );
         })}
       </nav>
@@ -142,13 +143,13 @@ export function LegalView({ page, standalone = false }: { page: LegalPage; stand
       <header className="border-b">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3.5 sm:px-6">
           <BrandMark />
-          <a
-            href="#/"
+          <Link
+            href="/"
             className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             {t("backToApp")}
-          </a>
+          </Link>
         </div>
       </header>
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8 sm:px-6">

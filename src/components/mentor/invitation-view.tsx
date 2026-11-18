@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * v3 Phase 5 — Invitation landing page, #/invitation/{token}: shows who
+ * v3 Phase 5 — Invitation landing page, /invitation/{token}: shows who
  * invites and the granted permissions, then accept (requires a reserved
  * handle — link to the mentors settings when missing) or decline.
  */
@@ -96,7 +96,7 @@ export function InvitationView({ token }: { token: string }) {
               aria-hidden="true"
             />
             <p className="text-sm text-muted-foreground">{t("accepted")}</p>
-            <Button onClick={() => navigate("#/mentor")}>
+            <Button onClick={() => navigate("/mentor")}>
               <GraduationCap className="h-4 w-4" aria-hidden="true" />
               {t("goToMentorSpace")}
             </Button>
@@ -152,7 +152,7 @@ export function InvitationView({ token }: { token: string }) {
                 <button
                   type="button"
                   className="font-medium underline underline-offset-2"
-                  onClick={() => navigate("#/reglages/mentors")}
+                  onClick={() => navigate("/settings/mentors")}
                 >
                   {t("goToHandle")}
                 </button>

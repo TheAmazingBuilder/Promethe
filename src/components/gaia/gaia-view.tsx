@@ -3,7 +3,7 @@
 /**
  * Gaïa — main view.
  *
- * One hash route (#/gaia); all internal navigation goes through hash query
+ * One hash route (/gaia); all internal navigation goes through hash query
  * params (?tab=&note=&folder=&tag=&q=&sort=&view=). When ?note= is present
  * the whole content area is replaced by the editor. Focus mode hides the
  * chrome (state lives here, not in the editor).
@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { navigate, useHashRoute } from "@/lib/router";
+import { navigate, useRoute } from "@/lib/router";
 import {
   GAIA_DEFAULT_PARAMS,
   gaiaErrorMessage,
@@ -57,7 +57,7 @@ export function GaiaView() {
   const t = useTranslations();
   const tr: GaiaT = (key) => t(key);
   const { toast } = useToast();
-  const route = useHashRoute();
+  const route = useRoute();
   const query = route.query ?? {};
 
   const rawTab = query.tab ?? "overview";
@@ -82,7 +82,7 @@ export function GaiaView() {
         else params.set(key, value);
       }
       const qs = params.toString();
-      navigate(`#/gaia${qs === "" ? "" : `?${qs}`}`);
+      navigate(`/gaia${qs === "" ? "" : `?${qs}`}`);
     },
     [query],
   );

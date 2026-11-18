@@ -414,7 +414,7 @@ export function WidgetConfigDialog({
               size="sm"
               onClick={() => {
                 onOpenChange(false);
-                navigate("#/reglages/dashboards");
+                navigate("/settings/dashboards");
               }}
             >
               {t("config.metricGoSettings")}
@@ -455,7 +455,7 @@ export function WidgetConfigDialog({
               size="sm"
               onClick={() => {
                 onOpenChange(false);
-                navigate("#/analytics/charts");
+                navigate("/analytics/charts");
               }}
             >
               {t("config.chartGoBuilder")}

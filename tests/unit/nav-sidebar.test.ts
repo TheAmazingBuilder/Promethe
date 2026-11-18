@@ -104,8 +104,14 @@ describe("sidebar slimming", () => {
     for (const item of allNavItems()) {
       expect(findNavItem(item.view)).toBe(item);
     }
-    expect(findNavItem("accounts")?.path).toBe("#/comptes");
-    expect(findNavItem("settings")?.path).toBe("#/reglages");
+    expect(findNavItem("accounts")?.path).toBe("/accounts");
+    expect(findNavItem("settings")?.path).toBe("/settings");
+    // Phase 2 — clean URLs: every nav path is a real App Router route,
+    // no hash, no French slug.
+    for (const item of allNavItems()) {
+      expect(item.path.startsWith("#")).toBe(false);
+      expect(item.path.startsWith("/")).toBe(true);
+    }
   });
 
   it("keeps Strategies out of the sidebar but reachable via palette and search", () => {
@@ -117,7 +123,7 @@ describe("sidebar slimming", () => {
     // ...but the route stays listed for the command palette and search,
     // and the header title still resolves.
     expect(allNavItems().map((item) => item.view)).toContain("strategies");
-    expect(findNavItem("strategies")?.path).toBe("#/strategies");
+    expect(findNavItem("strategies")?.path).toBe("/strategies");
   });
 
   it("auto-expands a collapsed group when one of its pages is active", () => {
