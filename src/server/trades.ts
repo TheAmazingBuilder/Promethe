@@ -39,6 +39,11 @@ import type {
   TradeListItemDTO,
   TradesListPayload,
 } from "@/lib/trading/dto";
+import {
+  computeGridStats,
+  gridStatsFromCounts,
+  type GridStats,
+} from "@/lib/trades/grid-stats";
 import { evaluateTradeViolations } from "@/server/rules";
 import { checkDrawdownAlerts } from "@/server/integrations/delivery";
 import { refreshTradeSearchText } from "@/server/search-index";
@@ -561,6 +566,40 @@ export function tradeListWhere(
   };
 }
 
+/**
+ * v2.5 M2 drill-down: local-hour / local-weekday match, timezone-aware.
+ * SQLite has no TZ support, so the filter runs in JS over a bounded
+ * fetch (take 5000) — shared by the list and the stats endpoints.
+ */
+function matchesEntryDrilldown(
+  entryTime: Date,
+  timezone: string,
+  query: Pick<TradeListQuery, "entryHour" | "entryWeekday">
+): boolean {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      hour: "2-digit",
+      hourCycle: "h23",
+      weekday: "short",
+    }).formatToParts(entryTime);
+    const hour = parts.find((p) => p.type === "hour")?.value;
+    const weekday = parts.find((p) => p.type === "weekday")?.value;
+    const hourNum = hour != null ? Number.parseInt(hour, 10) : null;
+    // Intl weekday "short" en-US: Sun..Sat → ISO 1-7 (Mon..Sun)
+    const isoWeekday = weekday
+      ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(weekday) + 1
+      : null;
+    if (query.entryHour != null && hourNum !== query.entryHour) return false;
+    if (query.entryWeekday != null && isoWeekday !== query.entryWeekday) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function listTrades(
   userId: string,
   query: TradeListQuery
@@ -584,30 +623,9 @@ export async function listTrades(
       orderBy: { entryTime: "desc" },
       take: 5000,
     });
-    const filtered = rows.filter((t) => {
-      try {
-        const parts = new Intl.DateTimeFormat("en-US", {
-          timeZone: timezone,
-          hour: "2-digit",
-          hourCycle: "h23",
-          weekday: "short",
-        }).formatToParts(t.entryTime);
-        const hour = parts.find((p) => p.type === "hour")?.value;
-        const weekday = parts.find((p) => p.type === "weekday")?.value;
-        const hourNum = hour != null ? Number.parseInt(hour, 10) : null;
-        // Intl weekday "short" en-US: Sun..Sat → ISO 1-7 (Mon..Sun)
-        const isoWeekday = weekday
-          ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(weekday) + 1
-          : null;
-        if (query.entryHour != null && hourNum !== query.entryHour) return false;
-        if (query.entryWeekday != null && isoWeekday !== query.entryWeekday) {
-          return false;
-        }
-        return true;
-      } catch {
-        return false;
-      }
-    });
+    const filtered = rows.filter((t) =>
+      matchesEntryDrilldown(t.entryTime, timezone, query)
+    );
     const total = filtered.length;
     const pageRows = filtered.slice(
       (query.page - 1) * query.pageSize,
@@ -653,6 +671,80 @@ export async function listTrades(
       rows.map((t) => t.id)
     ),
   };
+}
+
+/**
+ * Header stats over the WHOLE filtered set (grid view) — aggregated in
+ * SQL instead of paging the list endpoint one page at a time. Same
+ * filters as listTrades, same numbers as computeGridStats over the same
+ * rows (one shared math function, gridStatsFromCounts).
+ *
+ * Drill-down filters (entryHour/entryWeekday) still need the bounded
+ * 5000-row JS-filter path (SQLite has no TZ support) — one narrow query,
+ * still one HTTP call.
+ */
+export async function getGridStats(
+  userId: string,
+  query: TradeListQuery
+): Promise<GridStats> {
+  const where = tradeListWhere(userId, query);
+
+  if (query.entryHour != null || query.entryWeekday != null) {
+    const profile = await db.profile.findUnique({ where: { id: userId } });
+    const timezone = profile?.timezone ?? "UTC";
+    const rows = await db.trade.findMany({
+      where,
+      select: {
+        entryTime: true,
+        resultType: true,
+        netPnl: true,
+        pnlCurrency: true,
+      },
+      orderBy: { entryTime: "desc" },
+      take: 5000,
+    });
+    const filtered = rows.filter((t) =>
+      matchesEntryDrilldown(t.entryTime, timezone, query)
+    );
+    return computeGridStats(
+      filtered.map((t) => ({
+        resultType: t.resultType,
+        netPnl: t.netPnl?.toString() ?? null,
+        pnlCurrency: t.pnlCurrency,
+      }))
+    );
+  }
+
+  const [byResult, total, byCurrency] = await Promise.all([
+    db.trade.groupBy({
+      by: ["resultType"],
+      where,
+      _count: { _all: true },
+    }),
+    db.trade.aggregate({
+      where,
+      _count: { _all: true },
+      _sum: { netPnl: true },
+    }),
+    db.trade.groupBy({
+      by: ["pnlCurrency"],
+      where,
+      _count: { _all: true },
+    }),
+  ]);
+  const resultCounts = new Map(
+    byResult.map((g) => [g.resultType, g._count._all] as const)
+  );
+  return gridStatsFromCounts({
+    count: total._count._all,
+    wins: resultCounts.get("WIN") ?? 0,
+    losses: resultCounts.get("LOSS") ?? 0,
+    breakevens: resultCounts.get("BREAKEVEN") ?? 0,
+    netPnl: total._sum.netPnl?.toString() ?? "0",
+    currencies: new Map(
+      byCurrency.map((g) => [g.pnlCurrency, g._count._all] as const)
+    ),
+  });
 }
 
 /**

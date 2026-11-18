@@ -9,12 +9,14 @@
  * - Grade badge: the trade's MRT setup grade (A+ / A / B / C), or
  *   "Ungraded" when no grade was given — never an invented grade.
  *   A reviewed trade shows a small review check instead.
- * - Mini chart: real candles from /api/v1/charts/candles for the trade's
- *   instrument and timeframe, drawn as a dependency-free inline SVG.
- *   Candles only exist when the user imported them, so most cards show
- *   the "No screenshot" placeholder, exactly like the reference.
+ * - Mini chart: real candles for the trade's instrument and timeframe,
+ *   drawn as a dependency-free inline SVG — one batched POST
+ *   /api/v1/charts/candles/batch for the whole page, not one GET per
+ *   card. Candles only exist when the user imported them, so most cards
+ *   show the "No screenshot" placeholder, exactly like the reference.
  * - Header stats are computed over the WHOLE filtered set (all pages),
- *   not just the visible page, via the existing list endpoint.
+ *   not just the visible page, via the aggregated /api/v1/trades/stats
+ *   endpoint (SQL aggregates, no page loop).
  */
 import * as React from "react";
 import { useTranslations } from "next-intl";
@@ -32,19 +34,19 @@ import { confluenceTagsOf } from "@/lib/trading/confluences";
 import { apiFetch } from "@/lib/api-client";
 import { fmtDateInTz, fmtSigned, pnlClass } from "@/lib/format";
 import { navigate } from "@/lib/router";
-import type { PaginatedDTO, TradeListItemDTO } from "@/lib/trading/dto";
+import type { TradeListItemDTO } from "@/lib/trading/dto";
 import type { TradeListQuery } from "@/lib/validations/trade";
 import type { CandleDTO } from "@/lib/validations/charts";
 import {
   candleWindowForTrade,
-  computeGridStats,
   layoutCandles,
   type GridStats,
 } from "@/lib/trades/grid-stats";
 import { cn } from "@/lib/utils";
 
-interface CandleWindowPayload {
-  candles: CandleDTO[];
+/** One batched candle response: results aligned by index with the request. */
+interface CandleBatchPayload {
+  results: Array<{ candles: CandleDTO[] }>;
 }
 
 /** Same query params as useTradesList, minus pagination. */
@@ -67,8 +69,8 @@ function listParams(query: TradeListQuery, page: number, pageSize: number) {
 }
 
 /**
- * Stats over the whole filtered set. Journals are small (tens to low
- * hundreds of trades); the loop is capped at 100 pages (10,000 trades).
+ * Stats over the whole filtered set — one aggregated call (Phase 2 perf,
+ * item 7), not a sequential loop over the list endpoint's pages.
  */
 function useFilteredGridStats(query: TradeListQuery) {
   const key = React.useMemo(() => {
@@ -78,61 +80,58 @@ function useFilteredGridStats(query: TradeListQuery) {
   }, [query]);
   return useQuery<GridStats>({
     queryKey: ["trades-grid-stats", key],
-    queryFn: async () => {
-      const first = await apiFetch<PaginatedDTO<TradeListItemDTO>>(
-        `/api/v1/trades?${listParams(query, 1, 100).toString()}`
-      );
-      let all = [...first.data];
-      const pages = Math.min(first.totalPages, 100);
-      for (let p = 2; p <= pages; p += 1) {
-        const next = await apiFetch<PaginatedDTO<TradeListItemDTO>>(
-          `/api/v1/trades?${listParams(query, p, 100).toString()}`
-        );
-        all = all.concat(next.data);
-      }
-      return computeGridStats(all);
-    },
+    queryFn: async () =>
+      apiFetch<GridStats>(
+        `/api/v1/trades/stats?${listParams(query, 1, 100).toString()}`
+      ),
     staleTime: 60 * 1000,
   });
 }
 
-/** Tiny inline-SVG candlestick chart, or the honest empty placeholder. */
-function MiniCandleChart({ trade }: { trade: TradeListItemDTO }) {
-  const t = useTranslations("tradesGrid");
-  const window = React.useMemo(
+/**
+ * Mini-chart candles for the whole visible page in ONE batched POST
+ * (Phase 2 perf, item 7) — one request per (instrument, timeframe)
+ * group on the server, sliced per card, instead of one GET per card.
+ */
+function useBatchMiniCandles(trades: TradeListItemDTO[]) {
+  const windows = React.useMemo(
     () =>
-      candleWindowForTrade(trade.entryTime, trade.exitTime, trade.timeframe),
-    [trade.entryTime, trade.exitTime, trade.timeframe]
+      trades.map((t) => ({
+        instrumentId: t.instrumentId,
+        ...candleWindowForTrade(t.entryTime, t.exitTime, t.timeframe),
+      })),
+    [trades]
   );
-  const candlesQuery = useQuery<CandleWindowPayload>({
-    queryKey: [
-      "trade-mini-candles",
-      trade.instrumentId,
-      window.timeframe,
-      window.from,
-      window.to,
-    ],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        instrumentId: trade.instrumentId,
-        timeframe: window.timeframe,
-        from: window.from,
-        to: window.to,
-      });
-      return apiFetch<CandleWindowPayload>(
-        `/api/v1/charts/candles?${params.toString()}`
-      );
-    },
+  const key = React.useMemo(() => JSON.stringify(windows), [windows]);
+  return useQuery<CandleBatchPayload>({
+    queryKey: ["trade-mini-candles-batch", key],
+    queryFn: async () =>
+      apiFetch<CandleBatchPayload>("/api/v1/charts/candles/batch", {
+        method: "POST",
+        body: JSON.stringify({ requests: windows }),
+      }),
     staleTime: 5 * 60 * 1000,
+    enabled: trades.length > 0,
   });
+}
 
-  const candles = candlesQuery.data?.candles ?? [];
+/** Tiny inline-SVG candlestick chart, or the honest empty placeholder. */
+function MiniCandleChart({
+  trade,
+  candles,
+  isLoading,
+}: {
+  trade: TradeListItemDTO;
+  candles: CandleDTO[];
+  isLoading: boolean;
+}) {
+  const t = useTranslations("tradesGrid");
   const laidOut = React.useMemo(
     () => layoutCandles(candles, 280, 104),
     [candles]
   );
 
-  if (candlesQuery.isLoading) {
+  if (isLoading) {
     return (
       <div
         className="h-28 animate-pulse rounded-t-lg bg-muted/60"
@@ -184,9 +183,13 @@ function MiniCandleChart({ trade }: { trade: TradeListItemDTO }) {
 function TradeGridCard({
   trade,
   timezone,
+  candles,
+  candlesLoading,
 }: {
   trade: TradeListItemDTO;
   timezone: string;
+  candles: CandleDTO[];
+  candlesLoading: boolean;
 }) {
   const t = useTranslations("tradesGrid");
   const labels = useTradingLabels();
@@ -211,7 +214,11 @@ function TradeGridCard({
       }}
       className="group cursor-pointer overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-500/50 hover:shadow-md focus-visible:outline-2 focus-visible:outline-ring"
     >
-      <MiniCandleChart trade={trade} />
+      <MiniCandleChart
+        trade={trade}
+        candles={candles}
+        isLoading={candlesLoading}
+      />
       <div className="space-y-2 p-3">
         <div className="flex items-baseline justify-between gap-2">
           <p className="truncate text-sm font-semibold">
@@ -277,6 +284,7 @@ export function TradesGridView({
   const t = useTranslations("tradesGrid");
   const statsQuery = useFilteredGridStats(query);
   const stats = statsQuery.data;
+  const candlesQuery = useBatchMiniCandles(trades);
 
   return (
     <div className="space-y-4">
@@ -321,8 +329,14 @@ export function TradesGridView({
 
       {/* ── Cards ── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {trades.map((trade) => (
-          <TradeGridCard key={trade.id} trade={trade} timezone={timezone} />
+        {trades.map((trade, i) => (
+          <TradeGridCard
+            key={trade.id}
+            trade={trade}
+            timezone={timezone}
+            candles={candlesQuery.data?.results[i]?.candles ?? []}
+            candlesLoading={candlesQuery.isLoading}
+          />
         ))}
       </div>
     </div>

@@ -111,23 +111,50 @@ export function computeGridStats(trades: GridStatTrade[]): GridStats {
       );
     }
   }
-  const decided = wins + losses;
+  return gridStatsFromCounts({
+    count: trades.length,
+    wins,
+    losses,
+    breakevens,
+    netPnl: sum.toString(),
+    currencies,
+  });
+}
+
+/**
+ * Same math from pre-aggregated counts (Phase 2 perf — the server stats
+ * endpoint aggregates in SQL instead of shipping every row). Currency is
+ * the most frequent code; ties break alphabetically so the result is
+ * deterministic (the row path breaks ties by first-seen order).
+ */
+export function gridStatsFromCounts(input: {
+  count: number;
+  wins: number;
+  losses: number;
+  breakevens: number;
+  /** Decimal sum as a string ("0" when the set is empty). */
+  netPnl: string;
+  currencies: Map<string, number>;
+}): GridStats {
+  const decided = input.wins + input.losses;
   let currency = "USD";
   let best = 0;
-  for (const [code, n] of currencies) {
+  const codes = [...input.currencies.keys()].sort();
+  for (const code of codes) {
+    const n = input.currencies.get(code) ?? 0;
     if (n > best) {
       best = n;
       currency = code;
     }
   }
   return {
-    count: trades.length,
-    wins,
-    losses,
-    breakevens,
+    count: input.count,
+    wins: input.wins,
+    losses: input.losses,
+    breakevens: input.breakevens,
     winRate:
-      decided > 0 ? Math.round((wins / decided) * 1000) / 10 : null,
-    netPnl: sum.toString(),
+      decided > 0 ? Math.round((input.wins / decided) * 1000) / 10 : null,
+    netPnl: input.netPnl,
     currency,
   };
 }

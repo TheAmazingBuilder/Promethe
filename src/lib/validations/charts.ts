@@ -397,6 +397,16 @@ export const candleWindowQuerySchema = z.object({
 });
 export type CandleWindowQuery = z.infer<typeof candleWindowQuerySchema>;
 
+/**
+ * Batch candle windows (Phase 2 perf, item 7) — one POST carries every
+ * card window of the trades grid instead of one GET per card. At most
+ * 50 windows: a grid page holds 24 cards at most.
+ */
+export const candleBatchRequestSchema = z.object({
+  requests: z.array(candleWindowQuerySchema).min(1).max(50),
+});
+export type CandleBatchRequest = z.infer<typeof candleBatchRequestSchema>;
+
 /** One candle as sent to the client (decimals as strings, time epoch ms UTC). */
 export const candleDtoSchema = z.object({
   time: z.number().int(),

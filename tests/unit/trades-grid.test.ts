@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   candleWindowForTrade,
   computeGridStats,
+  gridStatsFromCounts,
   layoutCandles,
   parseGridViewMode,
   readGridViewMode,
@@ -198,5 +199,67 @@ describe("layoutCandles", () => {
       close: String(11 + i),
     }));
     expect(layoutCandles(many, 280, 104)!.length).toBe(40);
+  });
+});
+
+describe("gridStatsFromCounts (SQL aggregate path)", () => {
+  it("matches computeGridStats on the same rows", () => {
+    const rows: GridStatTrade[] = [
+      { resultType: "WIN", netPnl: "341", pnlCurrency: "USD" },
+      { resultType: "WIN", netPnl: "412", pnlCurrency: "USD" },
+      { resultType: "LOSS", netPnl: "-118", pnlCurrency: "EUR" },
+      { resultType: "BREAKEVEN", netPnl: "0", pnlCurrency: "USD" },
+      { resultType: null, netPnl: null, pnlCurrency: "USD" },
+    ];
+    const fromRows = computeGridStats(rows);
+    const currencies = new Map<string, number>();
+    for (const r of rows) {
+      currencies.set(r.pnlCurrency, (currencies.get(r.pnlCurrency) ?? 0) + 1);
+    }
+    const fromCounts = gridStatsFromCounts({
+      count: 5,
+      wins: 2,
+      losses: 1,
+      breakevens: 1,
+      netPnl: "635",
+      currencies,
+    });
+    expect(fromCounts).toEqual(fromRows);
+  });
+
+  it("empty set: zero count, no win rate, zero P&L", () => {
+    expect(
+      gridStatsFromCounts({
+        count: 0,
+        wins: 0,
+        losses: 0,
+        breakevens: 0,
+        netPnl: "0",
+        currencies: new Map(),
+      })
+    ).toEqual({
+      count: 0,
+      wins: 0,
+      losses: 0,
+      breakevens: 0,
+      winRate: null,
+      netPnl: "0",
+      currency: "USD",
+    });
+  });
+
+  it("breaks currency ties alphabetically (deterministic)", () => {
+    const stats = gridStatsFromCounts({
+      count: 2,
+      wins: 1,
+      losses: 1,
+      breakevens: 0,
+      netPnl: "5",
+      currencies: new Map([
+        ["USD", 1],
+        ["EUR", 1],
+      ]),
+    });
+    expect(stats.currency).toBe("EUR");
   });
 });
