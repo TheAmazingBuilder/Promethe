@@ -196,6 +196,7 @@
     "commandSearchResults": "Search results",
     "commandSeeAllResults": "See all results",
     "commandGoSearch": "Search everywhere",
+    "commandGoGoals": "Go to Goals",
     "commandGoHistory": "Change history",
     "commandGoShortcuts": "Keyboard shortcuts"
   },
@@ -425,6 +426,7 @@
         "weekly-plan": "Weekly plan",
         "confluences": "Confluences",
         "grades": "Grades",
+        "goals": "Goals",
         "performance-report": "Performance report"
       },
       "sample": "Sample: {count} trades",
@@ -652,6 +654,40 @@
         "notEnoughDetail": "The weekly plan needs at least {min} closed trades in the last {window} days. You have {count} so far.",
         "logTrade": "Log a trade",
         "methodNote": "How this plan is built: every Monday the rules re-read your last 30 days of closed trades and rank the leaks by money lost. Checkboxes belong to the current week only."
+      },
+      "goals": {
+        "title": "Goals",
+        "desc": "Targets with live progress bars, computed automatically from your closed trades. Pick a suggested goal or create your own.",
+        "templatesTitle": "Suggested goals",
+        "templatesDesc": "One click adds the goal. Progress is measured from your trades, never typed by hand.",
+        "addGoal": "Add goal",
+        "alreadyTracking": "Already tracking",
+        "addedToast": "Goal added.",
+        "yourGoals": "Your goals",
+        "emptyGoals": "No goals yet. Add a suggested goal above to start tracking.",
+        "methodNote": "How progress is measured: every goal counts your closed trades in its current period (month, quarter, year or all time). Win rate counts wins over closed trades, the plan rate counts trades with a plan verdict, and the screenshot goal counts trades with at least one screenshot attached. A goal with no eligible trade yet says so plainly instead of showing 0%.",
+        "templates": {
+          "a-plus-win-rate": {
+            "name": "Hit 70% win rate on A+ setups",
+            "desc": "Win rate on your best-graded setups only, this month."
+          },
+          "follow-plan": {
+            "name": "Follow the plan 90% of the time",
+            "desc": "Share of trades that matched your playbook, this month."
+          },
+          "log-with-screenshot": {
+            "name": "Log 30 trades with a chart screenshot",
+            "desc": "Closed trades with at least one screenshot attached, this month."
+          },
+          "win-rate": {
+            "name": "Reach 60% win rate",
+            "desc": "Overall win rate on closed trades, this month."
+          },
+          "trades-this-month": {
+            "name": "Log 20 trades this month",
+            "desc": "Closed trades logged, this month."
+          }
+        }
       },
       "confluences": {
         "title": "Confluence hit rate",
@@ -2810,6 +2846,11 @@
     "until": "until",
     "window": "Window: {from} → {to}",
     "targetLabel": "Target:",
+    "sampleTrades": "Based on {count} trades",
+    "sampleDays": "Based on {count} journal days",
+    "noData": "No trades in this period yet.",
+    "noGradedTrades": "No graded trades yet. Grade a trade to track this goal.",
+    "viewTrades": "View trades in this period",
     "edit": "Edit",
     "delete": "Delete",
     "pauseResume": "Pause / resume",
@@ -2829,7 +2870,10 @@
       "AVG_R": "Average R",
       "PROFIT_FACTOR": "Profit factor",
       "TRADE_COUNT": "Trade count",
-      "DISCIPLINE_SCORE": "Discipline score"
+      "DISCIPLINE_SCORE": "Discipline score",
+      "A_PLUS_WIN_RATE": "Win rate on A+ setups",
+      "PLAN_FOLLOW_RATE": "Plan follow rate",
+      "TRADES_WITH_SCREENSHOT": "Trades with screenshot"
     },
     "period": {
       "WEEKLY": "Week",

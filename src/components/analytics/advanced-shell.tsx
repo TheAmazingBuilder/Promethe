@@ -40,7 +40,8 @@ export type AdvancedTabId =
   | "seasonality"
   | "anomalies"
   | "weekly-plan"
-  | "performance-report";
+  | "performance-report"
+  | "goals";
 
 export const ADVANCED_TABS: Array<{ id: AdvancedTabId; path: string }> = [
   { id: "lifecycle", path: "/analytics/lifecycle" },
@@ -54,6 +55,7 @@ export const ADVANCED_TABS: Array<{ id: AdvancedTabId; path: string }> = [
   { id: "anomalies", path: "/analytics/anomalies" },
   { id: "weekly-plan", path: "/analytics/weekly-plan" },
   { id: "performance-report", path: "/analytics/performance-report" },
+  { id: "goals", path: "/analytics/goals" },
 ];
 
 const PERIODS: AnalyticsPeriod[] = ["30d", "90d", "ytd", "all"];
@@ -74,6 +76,8 @@ interface AdvancedShellProps {
   sampleCount: number | null;
   /** Hide the period switcher (the weekly plan always covers 30 days). */
   hidePeriod?: boolean;
+  /** Hide the account filter (goals are user-wide, not per account). */
+  hideAccount?: boolean;
   children: React.ReactNode;
 }
 
@@ -91,6 +95,7 @@ export function AdvancedShell({
   empty,
   sampleCount,
   hidePeriod = false,
+  hideAccount = false,
   children,
 }: AdvancedShellProps) {
   const { session } = useSession();
@@ -154,6 +159,7 @@ export function AdvancedShell({
               </ToggleGroupItem>
             </ToggleGroup>
           )}
+          {hideAccount ? null : (
           <Select
             value={accountId}
             onValueChange={(v) => onAccountChange(v === "all" ? "all" : v)}
@@ -175,6 +181,7 @@ export function AdvancedShell({
               ))}
             </SelectContent>
           </Select>
+          )}
         </div>
         {/* Tab navigation (segmented ToggleGroup, same a11y pattern as the
             analytics period switcher: a tabset without panels dangles

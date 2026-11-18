@@ -562,6 +562,7 @@ export function AnalyticsView() {
               "seasonality",
               "anomalies",
               "weekly-plan",
+              "goals",
               "performance-report",
             ] as const
           ).map((tab) => (

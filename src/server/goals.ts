@@ -34,27 +34,63 @@ function toGoalDTO(g: GoalRow): GoalDTO {
 export async function listGoalsWithProgress(
   userId: string
 ): Promise<GoalsPayload> {
-  const [profile, goals, trades, journal, prefs] = await Promise.all([
-    db.profile.findUnique({ where: { id: userId } }),
-    db.goal.findMany({ where: { userId }, orderBy: [{ status: "asc" }, { createdAt: "desc" }] }),
-    db.trade.findMany({
-      where: { userId, status: "CLOSED", isDraft: false },
-      select: { exitTime: true, netPnl: true, rMultiple: true },
-    }),
-    db.journalEntry.findMany({
-      where: { userId, disciplineScore: { not: null } },
-      select: { date: true, disciplineScore: true },
-    }),
-    getDisplayPreferences(userId),
-  ]);
+  const [profile, goals, trades, reviews, screenshots, journal, prefs] =
+    await Promise.all([
+      db.profile.findUnique({ where: { id: userId } }),
+      db.goal.findMany({ where: { userId }, orderBy: [{ status: "asc" }, { createdAt: "desc" }] }),
+      db.trade.findMany({
+        where: { userId, status: "CLOSED", isDraft: false },
+        select: {
+          id: true,
+          exitTime: true,
+          netPnl: true,
+          rMultiple: true,
+          followedPlan: true,
+        },
+      }),
+      // Plan verdicts live on TradeReview (one per trade, declared at
+      // review time), not on Trade: playbookMatch + followedPlan.
+      db.tradeReview.findMany({
+        where: { userId },
+        select: { tradeId: true, playbookMatch: true, followedPlan: true },
+      }),
+      // Trades with at least one screenshot (TRADES_WITH_SCREENSHOT).
+      db.tradeScreenshot.findMany({
+        where: { userId },
+        select: { tradeId: true },
+      }),
+      db.journalEntry.findMany({
+        where: { userId, disciplineScore: { not: null } },
+        select: { date: true, disciplineScore: true },
+      }),
+      getDisplayPreferences(userId),
+    ]);
   const timezone = profile?.timezone ?? "UTC";
   const now = new Date();
+  const screenshotTradeIds = new Set(screenshots.map((s) => s.tradeId));
+  const reviewByTradeId = new Map(
+    reviews.map((r) => [r.tradeId, r] as const)
+  );
 
-  const tradePoints = trades.map((t) => ({
-    exitIso: (t.exitTime ?? new Date(0)).toISOString(),
-    netPnl: t.netPnl?.toString() ?? null,
-    rMultiple: t.rMultiple?.toString() ?? null,
-  }));
+  const tradePoints = trades.map((t) => {
+    const review = reviewByTradeId.get(t.id);
+    return {
+      exitIso: (t.exitTime ?? new Date(0)).toISOString(),
+      netPnl: t.netPnl?.toString() ?? null,
+      rMultiple: t.rMultiple?.toString() ?? null,
+      // No grade column on Trade in this clone yet: the parallel wave-3
+      // grades chantier adds it. Until then every trade is ungraded and
+      // the A+ win-rate goal honestly reports "no graded trades yet".
+      // Wiring after that chantier merges: add `grade: true` to the
+      // select above and pass `grade: t.grade` here.
+      grade: null,
+      // Review verdict wins; the trade's own followedPlan is the fallback
+      // for trades recorded before the Playbook review.
+      playbookMatch: review?.playbookMatch ?? null,
+      followedPlan: review?.followedPlan ?? t.followedPlan ?? null,
+      hasScreenshot: screenshotTradeIds.has(t.id),
+    };
+  });
   const discipline = journal
     .filter((j) => j.disciplineScore != null)
     .map((j) => ({ date: j.date, score: j.disciplineScore as number }));

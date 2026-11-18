@@ -20,6 +20,9 @@ export const METRICS: GoalMetric[] = [
   "PROFIT_FACTOR",
   "TRADE_COUNT",
   "DISCIPLINE_SCORE",
+  "A_PLUS_WIN_RATE",
+  "PLAN_FOLLOW_RATE",
+  "TRADES_WITH_SCREENSHOT",
 ];
 
 export const PERIODS = [
@@ -54,6 +57,8 @@ export function formatGoalValue(
     case "NET_PNL":
       return fmt.signedMoney(value, currency);
     case "WIN_RATE":
+    case "A_PLUS_WIN_RATE":
+    case "PLAN_FOLLOW_RATE":
       return fmt.pct(value);
     case "AVG_R": {
       const n = Number(value);
@@ -64,6 +69,7 @@ export function formatGoalValue(
       return Number.isFinite(n) ? fmtNum(n) : "∞";
     }
     case "TRADE_COUNT":
+    case "TRADES_WITH_SCREENSHOT":
       return fmtNum(Number(value), 0);
     case "DISCIPLINE_SCORE":
       return `${fmtNum(Number(value))}/5`;

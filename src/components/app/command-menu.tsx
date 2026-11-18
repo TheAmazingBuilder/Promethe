@@ -12,6 +12,7 @@ import {
   PencilRuler,
   Search as SearchIcon,
   SunMoon,
+  Target,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
@@ -145,6 +146,10 @@ export function CommandMenu({
         </CommandGroup>
         <CommandSeparator />
         <CommandGroup heading={t("commandActions")}>
+          <CommandItem onSelect={() => go("/analytics/goals")}>
+            <Target aria-hidden="true" />
+            {t("commandGoGoals")}
+          </CommandItem>
           <CommandItem onSelect={() => go("/search")}>
             <SearchIcon aria-hidden="true" />
             {t("commandGoSearch")}
