@@ -31,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PageHeader } from "@/components/ui/page-header";
 import { useSession } from "@/components/app/session-context";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
@@ -351,12 +352,11 @@ export function TimeView() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          {t("description")}
-        </p>
-      </div>
+      <PageHeader
+        title={t("title")}
+        description={t("description")}
+        descriptionClassName="max-w-2xl"
+      />
 
       <Card>
         <CardHeader>

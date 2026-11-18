@@ -11,6 +11,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/ui/page-header";
 import { navigate, useRoute } from "@/lib/router";
 import { useGlobalSearch } from "@/hooks/use-productivity";
 import { splitHighlight } from "@/lib/search/snippet";
@@ -43,10 +44,7 @@ export function SearchView() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-      </div>
+      <PageHeader title={t("title")} description={t("subtitle")} />
 
       <div className="relative max-w-xl">
         <Search

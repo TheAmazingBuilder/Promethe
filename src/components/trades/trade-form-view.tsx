@@ -45,6 +45,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   AccountSelect,
   DraftBadge,
@@ -755,13 +756,18 @@ export function TradeFormView({
   return (
     <div ref={topRef} className="space-y-6">
       {/* ── Header ── */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <h2 className="flex flex-wrap items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl">
-          {mode === "edit" ? t("editTitle") : t("createTitle")}
-          {mode === "edit" && form.isDraft ? <DraftBadge /> : null}
-        </h2>
-        {mode === "create" && (
-          <div className="w-full sm:w-64">
+      <PageHeader
+        title={
+          <>
+            {mode === "edit" ? t("editTitle") : t("createTitle")}
+            {mode === "edit" && form.isDraft ? <DraftBadge /> : null}
+          </>
+        }
+        className="sm:items-end"
+        actions={
+          <>
+            {mode === "create" && (
+              <div className="w-full sm:w-64">
             <Field label={t("template")} htmlFor="tf-template">
               <Select
                 value={templateId}
@@ -782,8 +788,10 @@ export function TradeFormView({
               </Select>
             </Field>
           </div>
-        )}
-      </div>
+          )}
+          </>
+        }
+      />
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
         {/* ── Left: form sections ── */}

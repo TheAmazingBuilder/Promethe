@@ -16,6 +16,7 @@ import { ExitPlansManager } from "@/components/tools/exit-plans-manager";
 import { RiskRewardCalculator } from "@/components/tools/risk-reward-calculator";
 import { PRESET_INSTRUMENTS } from "@/lib/trading/instruments";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/page-header";
 import { useRoute } from "@/lib/router";
 
 const TAB_VALUES = [
@@ -56,10 +57,7 @@ export function ToolsView() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-      </div>
+      <PageHeader title={t("title")} description={t("subtitle")} />
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as TabValue)} className="gap-4">
         <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">

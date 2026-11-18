@@ -535,7 +535,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-2xl font-bold tabular-nums">{trade.symbol}</h2>
+            <h2 className="text-2xl font-bold tracking-tight tabular-nums">{trade.symbol}</h2>
             <DirectionBadge direction={trade.direction} />
             <StatusBadge status={trade.status} />
             <ResultBadge result={trade.resultType} />

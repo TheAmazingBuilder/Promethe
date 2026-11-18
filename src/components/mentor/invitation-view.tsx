@@ -83,7 +83,7 @@ export function InvitationView({ token }: { token: string }) {
           className="mx-auto h-10 w-10 text-emerald-600 dark:text-emerald-400"
           aria-hidden="true"
         />
-        <h2 className="mt-2 text-lg font-semibold tracking-tight">
+        <h2 className="mt-2 text-2xl font-bold tracking-tight">
           {t("title")}
         </h2>
       </div>

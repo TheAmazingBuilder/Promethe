@@ -43,7 +43,7 @@ export function PlaceholderView({
             </Badge>
             <h2
               id="placeholder-title"
-              className="text-xl font-bold tracking-tight"
+              className="text-2xl font-bold tracking-tight"
             >
               {t(titleKey)}
             </h2>

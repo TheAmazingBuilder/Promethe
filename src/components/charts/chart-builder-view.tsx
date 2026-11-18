@@ -77,6 +77,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { PageHeader } from "@/components/ui/page-header";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import { ApiClientError } from "@/lib/api-client";
 import { navigate } from "@/lib/router";
@@ -565,12 +566,11 @@ export function ChartBuilderView() {
   return (
     <div className="space-y-6">
       {/* Header + sub-nav */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
-          <p className="text-sm text-muted-foreground">{t("description")}</p>
-        </div>
-        <Tabs value="charts">
+      <PageHeader
+        title={t("title")}
+        description={t("description")}
+        actions={
+          <Tabs value="charts">
           <TabsList>
             <TabsTrigger value="overview" onClick={() => navigate("/analytics")}>
               {t("tabs.overview")}
@@ -580,8 +580,9 @@ export function ChartBuilderView() {
               {t("tabs.heatmaps")}
             </TabsTrigger>
           </TabsList>
-        </Tabs>
-      </div>
+          </Tabs>
+        }
+      />
 
       {/* Filters */}
       <Card>

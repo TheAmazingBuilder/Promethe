@@ -99,6 +99,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { useAccounts } from "@/hooks/use-trading";
 import {
@@ -978,16 +979,12 @@ export function DashboardsView() {
   return (
     <div className="space-y-6">
       {/* ── Greeting + global filters ── */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-xl font-bold tracking-tight sm:text-2xl">
-            {tDash("greeting", { name: profile.displayName })}
-          </h2>
-          {today && (
-            <p className="text-sm capitalize text-muted-foreground">{today}</p>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      <PageHeader
+        title={tDash("greeting", { name: profile.displayName })}
+        description={today ? <span className="capitalize">{today}</span> : undefined}
+        className="sm:flex-col lg:flex-row lg:items-end"
+        actions={
+          <>
           <Select
             value={preset}
             onValueChange={(v) => setPreset(v as PeriodPreset)}
@@ -1026,8 +1023,9 @@ export function DashboardsView() {
               ))}
             </SelectContent>
           </Select>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* ── Dashboard tabs ── */}
       <DndContext

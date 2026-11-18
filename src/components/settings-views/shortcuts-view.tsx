@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import {
   useResetShortcuts,
@@ -116,25 +117,26 @@ export function ShortcutsView() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        <Button
-          variant="outline"
-          disabled={reset.isPending}
-          onClick={() =>
-            reset.mutate(undefined, {
-              onSuccess: () => toast({ title: t("resetToast") }),
-              onError: errorToast,
-            })
-          }
-        >
+      <PageHeader
+        title={t("title")}
+        description={t("subtitle")}
+        className="flex-wrap"
+        actions={
+          <Button
+            variant="outline"
+            disabled={reset.isPending}
+            onClick={() =>
+              reset.mutate(undefined, {
+                onSuccess: () => toast({ title: t("resetToast") }),
+                onError: errorToast,
+              })
+            }
+          >
           <RotateCcw className="h-4 w-4" aria-hidden="true" />
           {t("reset")}
-        </Button>
-      </div>
+          </Button>
+        }
+      />
 
       {shortcuts.isLoading ? (
         <p className="text-sm text-muted-foreground">{tCommon("loading")}</p>

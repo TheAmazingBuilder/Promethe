@@ -63,6 +63,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { PageHeader } from "@/components/ui/page-header";
 import { useA11yPrefs } from "@/components/a11y/a11y-provider";
 import { Money, Sensitive } from "@/components/privacy/money";
 import { useTradingLabels } from "@/components/trades/trade-bits";
@@ -475,16 +476,14 @@ export function AnalyticsView() {
     <div className="space-y-6" data-tour="analytics">
       {/* ── Header + filters ── */}
       <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-xl font-bold tracking-tight sm:text-2xl">
-            {t("title")}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {hasAnyTrade
+        <PageHeader
+          title={t("title")}
+          description={
+            hasAnyTrade
               ? t("subtitle", { count: stats.tradeCount })
-              : t("subtitleEmpty")}
-          </p>
-        </div>
+              : t("subtitleEmpty")
+          }
+        />
         {/* a11y (M8 Phase 5): wraps at 200 % text / narrow viewports (WCAG 1.4.10). */}
         <div className="flex flex-wrap items-center gap-2">
           {/* a11y (M8 Phase 5): segmented ToggleGroup, NOT Tabs — a tabset

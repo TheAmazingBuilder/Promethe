@@ -213,7 +213,7 @@ export function NotePrintDialog({
                 <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
                   {t("gaia.print.sheetLabel")}
                 </p>
-                <h2 className="mt-1 text-2xl font-extrabold tracking-tight">
+                <h2 className="mt-1 text-2xl font-bold tracking-tight">
                   {note?.icon ? `${note.icon} ` : ""}
                   {note?.title === "" || !note?.title
                     ? t("gaia.shared.untitledNote")

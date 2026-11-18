@@ -58,6 +58,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { PageHeader } from "@/components/ui/page-header";
 import { Money } from "@/components/privacy/money";
 import { useA11yPrefs } from "@/components/a11y/a11y-provider";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
@@ -218,12 +219,11 @@ export function BenchmarkView() {
   return (
     <div className="space-y-6">
       {/* Header + sub-nav */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
-          <p className="text-sm text-muted-foreground">{t("description")}</p>
-        </div>
-        <div className="flex gap-1" role="tablist">
+      <PageHeader
+        title={t("title")}
+        description={t("description")}
+        actions={
+          <div className="flex gap-1" role="tablist">
           <Button variant="outline" size="sm" onClick={() => navigate("/analytics")}>
             {tCommon("back")}
           </Button>
@@ -235,8 +235,9 @@ export function BenchmarkView() {
           >
             <RefreshCw aria-hidden="true" />
           </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* Profile selector */}
       <Card>

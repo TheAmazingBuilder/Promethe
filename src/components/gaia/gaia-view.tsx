@@ -22,6 +22,7 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { navigate, useRoute } from "@/lib/router";
 import {
@@ -205,19 +206,21 @@ export function GaiaView() {
         className="overflow-hidden rounded-xl border bg-card"
       >
         <div className="px-4 py-5 sm:px-6">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight sm:text-3xl">
+          <PageHeader
+            title={
+              <span className="inline-flex items-center gap-2">
                 <NotebookText
                   className="size-6 text-emerald-600 dark:text-emerald-400 sm:size-7"
                   aria-hidden="true"
                 />
                 Gaïa
-              </h1>
-              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                {t("gaia.view.tagline")}
-              </p>
-            </div>
+              </span>
+            }
+            description={t("gaia.view.tagline")}
+            descriptionClassName="max-w-2xl"
+            className="flex-wrap sm:items-end"
+            actions={
+              <>
             {overviewQuery.data ? (
               <span
                 data-testid="gaia-note-count"
@@ -228,8 +231,10 @@ export function GaiaView() {
                 </span>
                 {t("gaia.shared.noteMany")}
               </span>
-            ) : null}
-          </div>
+              ) : null}
+              </>
+            }
+          />
         </div>
       </header>
 

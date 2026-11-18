@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/ui/page-header";
 import { navigate } from "@/lib/router";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import {
@@ -159,12 +160,11 @@ export function HeatmapsView() {
   return (
     <div className="space-y-6">
       {/* Header + sub-nav */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{tHeat("title")}</h1>
-          <p className="text-sm text-muted-foreground">{tHeat("description")}</p>
-        </div>
-        <div className="flex gap-1" role="tablist" aria-label={t("tabs.charts")}>
+      <PageHeader
+        title={tHeat("title")}
+        description={tHeat("description")}
+        actions={
+          <div className="flex gap-1" role="tablist" aria-label={t("tabs.charts")}>
           <Button variant="outline" size="sm" onClick={() => navigate("/analytics")}>
             {t("tabs.overview")}
           </Button>
@@ -174,8 +174,9 @@ export function HeatmapsView() {
           <Button variant="secondary" size="sm" aria-current="page">
             {t("tabs.heatmaps")}
           </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* Config */}
       <Card>

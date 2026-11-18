@@ -47,6 +47,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHeader } from "@/components/ui/page-header";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 import { useSession } from "@/components/app/session-context";
@@ -103,13 +104,15 @@ export function MentorsView() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-          <Users className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-          {t("title")}
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-      </div>
+      <PageHeader
+        title={
+          <span className="inline-flex items-center gap-2">
+            <Users className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+            {t("title")}
+          </span>
+        }
+        description={t("subtitle")}
+      />
 
       {overview.isLoading ? (
         <div className="flex justify-center py-12">

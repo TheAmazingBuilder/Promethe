@@ -72,6 +72,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { useAccounts, useStrategies } from "@/hooks/use-trading";
 import {
@@ -689,12 +690,11 @@ export function BrokerSyncView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        <div className="flex shrink-0 gap-2">
+      <PageHeader
+        title={t("title")}
+        description={t("subtitle")}
+        actions={
+          <div className="flex shrink-0 gap-2">
           <Button
             variant="outline"
             size="icon"
@@ -707,8 +707,9 @@ export function BrokerSyncView() {
             <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
             {t("create")}
           </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* Honest requirements */}
       <Card className="border-border bg-muted/30">

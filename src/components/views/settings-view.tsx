@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PageHeader } from "@/components/ui/page-header";
 import { useSession } from "@/components/app/session-context";
 import { useTour } from "@/components/tour/guided-tour";
 import { useToast } from "@/hooks/use-toast";
@@ -194,10 +195,7 @@ export function SettingsView() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-      </div>
+      <PageHeader title={t("title")} description={t("subtitle")} />
 
       <ProfileEditorCard />
 

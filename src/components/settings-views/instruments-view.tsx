@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import {
   useCreateInstrument,
@@ -409,12 +410,11 @@ export function InstrumentsView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
+      <PageHeader
+        title={t("title")}
+        description={t("subtitle")}
+        actions={
+          <div className="flex shrink-0 items-center gap-2">
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -426,8 +426,9 @@ export function InstrumentsView() {
             <Plus className="h-4 w-4" aria-hidden="true" />
             <span className="hidden sm:inline">{t("add")}</span>
           </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       <Card className="border-dashed">
         <CardContent className="flex items-start gap-2.5 py-3">

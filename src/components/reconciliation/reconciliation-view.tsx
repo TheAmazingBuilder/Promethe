@@ -50,6 +50,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PageHeader } from "@/components/ui/page-header";
 import { cn } from "@/lib/utils";
 import type { CandidateDTO } from "@/server/reconciliation";
 
@@ -342,12 +343,12 @@ export function ReconciliationView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+      <PageHeader
+        title={t("title")}
+        description={t("subtitle")}
+        className="flex-wrap"
+        actions={
+          <div className="flex flex-wrap gap-2">
           <Select value={accountFilter} onValueChange={setAccountFilter}>
             <SelectTrigger className="w-44" aria-label={t("filterAccount")}>
               <SelectValue />
@@ -364,8 +365,9 @@ export function ReconciliationView() {
           <Button variant="outline" size="icon" aria-label={t("refresh")} onClick={() => void load()}>
             <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
           </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {loading ? (
         <div className="flex justify-center py-12">

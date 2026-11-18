@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { useSession } from "@/components/app/session-context";
 import {
@@ -702,12 +703,11 @@ export function RulesView() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
+      <PageHeader
+        title={t("title")}
+        description={t("subtitle")}
+        actions={
+          <div className="flex shrink-0 items-center gap-2">
           <Button variant="outline" onClick={() => openRuleEditor(null)}>
             <ListChecks className="h-4 w-4" aria-hidden="true" />
             <span className="hidden sm:inline">{t("rules.add")}</span>
@@ -716,8 +716,9 @@ export function RulesView() {
             <Plus className="h-4 w-4" aria-hidden="true" />
             {t("addGoal")}
           </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       <Tabs defaultValue="goals" className="gap-4">
         <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">

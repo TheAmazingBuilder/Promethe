@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   AccountSelect,
   Field,
@@ -534,10 +535,7 @@ export function QuickTradeView() {
 
   return (
     <div className="w-full space-y-4">
-      <div className="space-y-1 text-center sm:text-left">
-        <h2 className="text-xl font-bold tracking-tight sm:text-2xl">{t("title")}</h2>
-        <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
-      </div>
+      <PageHeader title={t("title")} description={t("subtitle")} />
 
       <Card>
         <CardHeader className="pb-3">

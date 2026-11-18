@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { DateField } from "@/components/ui/date-field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import {
   useCalendar,
@@ -221,14 +222,13 @@ export function JournalView({ date }: { date?: string }) {
       className="flex flex-col gap-6"
     >
       {/* Header + day navigation */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 id="journal-title" className="text-2xl font-bold tracking-tight">
-            {t("title")}
-          </h1>
-          <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        id="journal-title"
+        title={t("title")}
+        description={t("subtitle")}
+        className="flex-wrap sm:items-end"
+        actions={
+          <>
           <Button
             variant="outline"
             size="icon"
@@ -258,9 +258,10 @@ export function JournalView({ date }: { date?: string }) {
             <Button variant="outline" size="sm" onClick={() => navigate("/journal")}>
               {t("today")}
             </Button>
-          ) : null}
-        </div>
-      </div>
+            ) : null}
+          </>
+        }
+      />
 
       {/* Scores + save bar */}
       <Card>

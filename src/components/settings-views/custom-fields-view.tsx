@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import {
   useCreateCustomField,
@@ -79,16 +80,17 @@ export function CustomFieldsView() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        <Button onClick={() => setCreating(true)}>
+      <PageHeader
+        title={t("title")}
+        description={t("subtitle")}
+        className="flex-wrap"
+        actions={
+          <Button onClick={() => setCreating(true)}>
           <Plus className="h-4 w-4" aria-hidden="true" />
           {t("new")}
-        </Button>
-      </div>
+          </Button>
+        }
+      />
 
       <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
         <Label htmlFor="cf-archived" className="cursor-pointer font-normal">

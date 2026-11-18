@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import {
   useCreateStrategy,
@@ -648,18 +649,18 @@ export function StrategiesView() {
 
   return (
     <section aria-labelledby="strategies-title" className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 id="strategies-title" className="text-2xl font-bold tracking-tight">
-            {t("title")}
-          </h1>
-          <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        <Button size="sm" onClick={onNew}>
+      <PageHeader
+        id="strategies-title"
+        title={t("title")}
+        description={t("subtitle")}
+        className="flex-wrap sm:items-end"
+        actions={
+          <Button size="sm" onClick={onNew}>
           <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
           {t("newStrategy")}
-        </Button>
-      </div>
+          </Button>
+        }
+      />
 
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2">

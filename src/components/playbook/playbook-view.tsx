@@ -50,6 +50,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import {
   useDeleteStrategy,
@@ -2168,12 +2169,7 @@ export function PlaybookView() {
 
   return (
     <section aria-labelledby="playbook-title" className="flex flex-col gap-6">
-      <div>
-        <h1 id="playbook-title" className="text-2xl font-bold tracking-tight">
-          {t("title")}
-        </h1>
-        <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
-      </div>
+      <PageHeader id="playbook-title" title={t("title")} description={t("subtitle")} />
 
       <div
         role="tablist"

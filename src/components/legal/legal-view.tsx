@@ -7,6 +7,7 @@
  * LEGAL_* server values (public /api/legal endpoint, no personal data).
  */
 import Link from "next/link";
+import { PageHeader } from "@/components/ui/page-header";
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
@@ -111,9 +112,7 @@ export function LegalView({ page, standalone = false }: { page: LegalPage; stand
       </nav>
 
       <article className="max-w-prose space-y-6">
-        <h1 className="text-xl font-semibold tracking-tight">
-          {t(`title.${page}`)}
-        </h1>
+        <PageHeader title={t(`title.${page}`)} />
         {SECTIONS[page].map((section) => (
           <section key={section.titleKey} className="space-y-1.5">
             <h2 className="text-sm font-semibold text-foreground">

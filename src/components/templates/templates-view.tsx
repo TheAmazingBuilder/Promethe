@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   DirectionBadge,
   Field,
@@ -307,18 +308,17 @@ export function TemplatesView() {
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight sm:text-2xl">
-            {t("title")}
-          </h2>
-          <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        <Button size="lg" onClick={openCreate}>
+      <PageHeader
+        title={t("title")}
+        description={t("subtitle")}
+        className="sm:items-end"
+        actions={
+          <Button size="lg" onClick={openCreate}>
           <Plus className="h-4 w-4" aria-hidden="true" />
           {t("create")}
-        </Button>
-      </div>
+          </Button>
+        }
+      />
 
       {/* ── Grid ── */}
       {templatesQuery.isLoading ? (

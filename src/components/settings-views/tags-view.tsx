@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import {
   useCreateTag,
@@ -229,16 +230,16 @@ export function TagsView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        <Button className="shrink-0" onClick={onCreate}>
+      <PageHeader
+        title={t("title")}
+        description={t("subtitle")}
+        actions={
+          <Button className="shrink-0" onClick={onCreate}>
           <Plus className="h-4 w-4" aria-hidden="true" />
           {t("add")}
-        </Button>
-      </div>
+          </Button>
+        }
+      />
 
       {isLoading ? (
         <Skeleton className="h-56 w-full rounded-xl" />

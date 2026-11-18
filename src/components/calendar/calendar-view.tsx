@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PageHeader } from "@/components/ui/page-header";
 import { useAccounts } from "@/hooks/use-trading";
 import { useCalendar } from "@/hooks/use-journal";
 import { useTimePrefs } from "@/components/time/time-provider";
@@ -102,15 +103,14 @@ export function CalendarView() {
   return (
     <section aria-labelledby="calendar-title" className="mx-auto flex max-w-6xl flex-col gap-6">
       {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 id="calendar-title" className="text-2xl font-bold tracking-tight">
-            {t("title")}
-          </h1>
-          <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        {/* a11y (M8 Phase 5): wraps at 200 % text / narrow viewports (WCAG 1.4.10). */}
-        <div className="flex flex-wrap items-center gap-2">
+      <PageHeader
+        id="calendar-title"
+        title={t("title")}
+        description={t("subtitle")}
+        className="flex-wrap sm:items-end"
+        actions={
+          <>
+            {/* a11y (M8 Phase 5): wraps at 200 % text / narrow viewports (WCAG 1.4.10). */}
           {/* v2.5 M2 — month / year mode toggle. a11y (M8 Phase 5): a
               segmented ToggleGroup, NOT Tabs - a tabset without panels dangles
               aria-controls (aria-valid-attr-value). */}
@@ -144,8 +144,9 @@ export function CalendarView() {
           <Button variant="outline" size="sm" onClick={goToday}>
             {t("today")}
           </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         {/* Year contribution calendar (v2.5 M2) */}

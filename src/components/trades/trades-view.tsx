@@ -83,6 +83,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHeader } from "@/components/ui/page-header";
 import { useSession } from "@/components/app/session-context";
 import { Money, Sensitive } from "@/components/privacy/money";
 import { useI18n } from "@/i18n/i18n-provider";
@@ -968,14 +969,13 @@ export function TradesView() {
   return (
     <div className="space-y-4" data-tour="trades">
       {/* ── Header ── */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        {/* a11y (M8 Phase 5): flex-wrap keeps the header reflow-safe at
-            200 % text scale / 320 px (WCAG 1.4.10). */}
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+      <PageHeader
+        title={t("title")}
+        description={t("subtitle")}
+        actions={
+          <>
+            {/* a11y (M8 Phase 5): flex-wrap keeps the header reflow-safe at
+                200 % text scale / 320 px (WCAG 1.4.10). */}
           <Button
             variant="outline"
             aria-label={t("columns")}
@@ -1009,8 +1009,9 @@ export function TradesView() {
             <Plus className="h-4 w-4" aria-hidden="true" />
             {t("new")}
           </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* ── Filters ── */}
       <Card className="gap-0 py-4">

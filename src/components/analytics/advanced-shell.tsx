@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { PageHeader } from "@/components/ui/page-header";
 import { Sensitive } from "@/components/privacy/money";
 import { useSession } from "@/components/app/session-context";
 import { useAccounts } from "@/hooks/use-trading";
@@ -101,17 +102,19 @@ export function AdvancedShell({
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           {t("backToAnalytics")}
         </Button>
-        <div className="flex flex-col gap-1">
-          <h2 className="text-xl font-bold tracking-tight sm:text-2xl">
-            {title}
-          </h2>
-          <p className="text-sm text-muted-foreground">{description}</p>
-          {sampleCount != null ? (
-            <p className="text-xs tabular-nums text-muted-foreground">
-              {t("sample", { count: sampleCount })}
-            </p>
-          ) : null}
-        </div>
+        <PageHeader
+          title={title}
+          description={
+            <>
+              {description}
+              {sampleCount != null ? (
+                <p className="text-xs tabular-nums text-muted-foreground">
+                  {t("sample", { count: sampleCount })}
+                </p>
+              ) : null}
+            </>
+          }
+        />
         <div className="flex flex-wrap items-center gap-2">
           <ToggleGroup
             type="single"

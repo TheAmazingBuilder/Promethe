@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PageHeader } from "@/components/ui/page-header";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -224,13 +225,15 @@ export function AccountSettingsView() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-          <ShieldCheck className="h-5 w-5 text-emerald-600" aria-hidden="true" />
-          {t("title")}
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-      </div>
+      <PageHeader
+        title={
+          <span className="inline-flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-emerald-600" aria-hidden="true" />
+            {t("title")}
+          </span>
+        }
+        description={t("subtitle")}
+      />
 
       {/* ── 1. Data export ─────────────────────────────────────────────── */}
       <Card>

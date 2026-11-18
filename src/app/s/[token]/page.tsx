@@ -112,7 +112,7 @@ function GoneView({ m, locale }: { m: (typeof MESSAGES)["en"]["publicShare"]; lo
         <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full border bg-card">
           <span className="text-2xl" aria-hidden="true">🔒</span>
         </div>
-        <h1 className="text-xl font-semibold tracking-tight">{m.goneTitle}</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{m.goneTitle}</h1>
         <p className="mt-2 text-sm text-muted-foreground">{m.goneBody}</p>
         <p className="mt-1 text-xs text-muted-foreground/70">{m.gonePrivacy}</p>
         <Link
@@ -206,7 +206,7 @@ function ViewHeader({
           </span>
         )}
       </div>
-      <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
+      <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
       <p className="text-xs text-muted-foreground">
         {payload.mode === "LIVE" ? m.liveHint : m.snapshotHint} ·{" "}
         {m.capturedAt.replace("{date}", fmtDateTime(locale, payload.capturedAt))}

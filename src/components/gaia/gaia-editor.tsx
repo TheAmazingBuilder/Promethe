@@ -782,7 +782,7 @@ export function GaiaEditor({
               }}
               placeholder={t("gaia.shared.untitledNote")}
               aria-label={t("gaia.editor.titleLabel")}
-              className="w-full bg-transparent text-xl font-bold tracking-tight outline-none placeholder:text-muted-foreground/50 sm:text-2xl"
+              className="w-full bg-transparent text-2xl font-bold tracking-tight outline-none placeholder:text-muted-foreground/50"
             />
             <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
               <span

@@ -44,6 +44,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { PageHeader } from "@/components/ui/page-header";
 import { useA11yPrefs } from "@/components/a11y/a11y-provider";
 import { useFormat } from "@/lib/format/use-format";
 import { TEXT_SCALE_PRESETS } from "@/lib/a11y/preferences";
@@ -84,14 +85,12 @@ export function AccessibilityView() {
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            {t("description")}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
+      <PageHeader
+        title={t("title")}
+        description={t("description")}
+        descriptionClassName="max-w-2xl"
+        actions={
+          <div className="flex shrink-0 items-center gap-2">
           <Badge variant={synced ? "secondary" : "outline"}>
             {synced ? tCommon("save") : t("localOnly")}
           </Badge>
@@ -99,8 +98,9 @@ export function AccessibilityView() {
             <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
             {t("resetDefaults")}
           </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* ── Text scale ── */}
       <Card>

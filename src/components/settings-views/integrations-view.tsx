@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
@@ -306,8 +307,7 @@ export function IntegrationsView() {
           <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           {t("back")}
         </Link>
-        <h2 className="mt-2 text-lg font-semibold tracking-tight">{t("title")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
+        <PageHeader title={t("title")} description={t("subtitle")} className="mt-2" />
         <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-800 dark:text-amber-200">
           {t("cronNote")}
         </p>
