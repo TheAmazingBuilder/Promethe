@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -44,6 +45,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   AccountSelect,
   DraftBadge,
@@ -58,6 +60,7 @@ import {
 } from "./trade-bits";
 import {
   useAccounts,
+  useCreateTag,
   useCreateTrade,
   useInstruments,
   useRecordTemplateUse,
@@ -68,8 +71,17 @@ import {
   useUpdateTrade,
   type MutationResult,
 } from "@/hooks/use-trading";
+import {
+  CONFLUENCE_CUSTOM_COLOR,
+  CONFLUENCE_PRESETS,
+  CONFLUENCE_PRESET_NAMES,
+  confluenceTagsOf,
+} from "@/lib/trading/confluences";
+import { useSetups } from "@/hooks/use-playbook";
 import type { TemplateDTO } from "@/lib/trading/dto";
 import { useToast } from "@/hooks/use-toast";
+import { useCustomFields } from "@/hooks/use-productivity";
+import { CustomFieldInputs } from "./custom-field-inputs";
 import { useSession } from "@/components/app/session-context";
 import { Money } from "@/components/privacy/money";
 import { useFormat } from "@/lib/format/use-format";
@@ -84,7 +96,9 @@ import {
   type TradeTemplateData,
 } from "@/lib/trading/template";
 import { previewTrade, type TradePreview } from "@/lib/trading/calculate";
+import { PreTradeExposureCheck } from "@/components/tools/pre-trade-exposure-check";
 import { toD } from "@/lib/trading/dec";
+import { TRADE_GRADES, type TradeGrade } from "@/lib/trading/grades";
 import {
   EMOTIONS,
   EXIT_REASONS,
@@ -155,7 +169,11 @@ interface TradeFormState {
   timeframe: string;
   session: string; // "" | "auto" | TradingSession
   setupType: string;
+  /** Playbook setup id ("" = none, "custom" = free-text setupType). */
+  setupId: string;
   marketCondition: string;
+  /** MRT setup grade ("" = ungraded). */
+  grade: string;
   entryTime: string; // ISO ("" = cleared → now on submit)
   exitTime: string; // ISO ("" = null)
   entryPrice: string;
@@ -184,6 +202,8 @@ interface TradeFormState {
   followedPlan: boolean;
   tagIds: string[];
   checklistResults: Record<string, boolean>;
+  /** Custom-field values, keyed by definition key (v2.5 Module 4 §4.7). */
+  customFields: Record<string, unknown>;
   preTradeAnalysis: string;
   postTradeReview: string;
   notes: string;
@@ -203,7 +223,9 @@ function emptyForm(): TradeFormState {
     timeframe: "",
     session: "auto",
     setupType: "",
+    setupId: "",
     marketCondition: "",
+    grade: "",
     entryTime: nowIso(),
     exitTime: "",
     entryPrice: "",
@@ -232,6 +254,7 @@ function emptyForm(): TradeFormState {
     followedPlan: false,
     tagIds: [],
     checklistResults: {},
+    customFields: {},
     preTradeAnalysis: "",
     postTradeReview: "",
     notes: "",
@@ -265,6 +288,7 @@ const FIELD_LABELS: Record<string, string> = {
   manualNetPnl: "manualNetPnl",
   exitReason: "exitReason",
   tradingViewUrl: "tradingViewUrl",
+  grade: "grade",
   notes: "notes",
   tagIds: "sectionTags",
   checklistResults: "checklist",
@@ -280,6 +304,7 @@ export function TradeFormView({
   tradeId?: string;
 }) {
   const t = useTranslations("trades.form");
+  const tp = useTranslations("playbook.tradeForm");
   const td = useTranslations("trades.detail");
   const tc = useTranslations("common");
   const tRoot = useTranslations();
@@ -305,11 +330,53 @@ export function TradeFormView({
   );
 
   const tradeQuery = useTrade(mode === "edit" ? tradeId ?? null : null);
+  const customFieldsQuery = useCustomFields(false);
+  const customFieldDefs = customFieldsQuery.data ?? [];
+
+  // Create mode: apply definition default values once they load.
+  React.useEffect(() => {
+    if (mode !== "create" || customFieldDefs.length === 0) return;
+    setForm((f) => {
+      const next = { ...f.customFields };
+      let changed = false;
+      for (const d of customFieldDefs) {
+        if (
+          next[d.key] === undefined &&
+          d.defaultValue !== null &&
+          d.defaultValue !== undefined
+        ) {
+          next[d.key] = d.defaultValue;
+          changed = true;
+        }
+      }
+      return changed ? { ...f, customFields: next } : f;
+    });
+  }, [mode, customFieldDefs]);
   const trade = tradeQuery.data;
   const { data: accounts } = useAccounts();
   const { data: instruments } = useInstruments();
   const { data: strategies } = useStrategies();
   const { data: tags } = useTags();
+  // Playbook setups for the chosen strategy (selector; free text stays
+  // available as "Custom" for older trades and one-off labels).
+  const { data: allSetups } = useSetups(form.strategyId || null);
+  const strategySetups = React.useMemo(
+    () => (allSetups ?? []).filter((s) => s.strategyId === form.strategyId),
+    [allSetups, form.strategyId],
+  );
+
+  // Changing strategy drops a setup that belongs to another strategy.
+  React.useEffect(() => {
+    if (
+      form.setupId &&
+      form.setupId !== "custom" &&
+      !strategySetups.some((s) => s.id === form.setupId)
+    ) {
+      setForm((f) => ({ ...f, setupId: "" }));
+    }
+    // Only the strategy change matters here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.strategyId]);
   const { data: templates } = useTemplates();
 
   const createTrade = useCreateTrade();
@@ -332,7 +399,9 @@ export function TradeFormView({
       timeframe: trade.timeframe ?? "",
       session: trade.session ?? "auto",
       setupType: trade.setupType ?? "",
+      setupId: trade.setupId ?? (trade.setupType ? "custom" : ""),
       marketCondition: trade.marketCondition ?? "",
+      grade: trade.grade ?? "",
       entryTime: trade.entryTime,
       exitTime: trade.exitTime ?? "",
       entryPrice: trade.entryPrice,
@@ -363,6 +432,7 @@ export function TradeFormView({
       followedPlan: trade.followedPlan ?? false,
       tagIds: trade.tags.map((tag) => tag.id),
       checklistResults: trade.checklistResults ?? {},
+      customFields: trade.customFields ?? {},
       preTradeAnalysis: trade.preTradeAnalysis,
       postTradeReview: trade.postTradeReview,
       notes: trade.notes ?? "",
@@ -486,6 +556,53 @@ export function TradeFormView({
         : [...f.tagIds, id],
     }));
 
+  // ── Confluences (MRT wave 1) ─────────────────────────────────────────────
+  // Confluences are Tag rows with kind CONFLUENCE. The predefined list lives
+  // in code only (never seeded): picking one creates the user's Tag row on
+  // demand (POST /api/tags, upsert by name) and selects it. Custom
+  // confluences are created the same way from the inline input.
+  const createTag = useCreateTag();
+  const [customConfluence, setCustomConfluence] = React.useState("");
+  const allConfluenceTags = React.useMemo(
+    () => confluenceTagsOf(tags ?? []),
+    [tags]
+  );
+  // The generic Tags section hides confluences: they have their own section
+  // below, so a confluence is never shown (or toggled) twice.
+  const regularTags = React.useMemo(
+    () => (tags ?? []).filter((tag) => tag.kind !== "CONFLUENCE"),
+    [tags]
+  );
+  const customConfluenceTags = React.useMemo(
+    () =>
+      allConfluenceTags.filter((tag) => !CONFLUENCE_PRESET_NAMES.has(tag.name)),
+    [allConfluenceTags]
+  );
+  const addConfluenceTag = (name: string, color: string) => {
+    const trimmed = name.trim();
+    if (trimmed === "" || createTag.isPending) return;
+    const existing = allConfluenceTags.find((tag) => tag.name === trimmed);
+    if (existing) {
+      toggleTag(existing.id);
+      return;
+    }
+    createTag.mutate(
+      { name: trimmed, color, kind: "CONFLUENCE" },
+      {
+        onSuccess: (tag) => {
+          setForm((f) =>
+            f.tagIds.includes(tag.id)
+              ? f
+              : { ...f, tagIds: [...f.tagIds, tag.id] }
+          );
+        },
+        onError: () => {
+          toast({ title: t("confluenceCreateFailed"), variant: "destructive" });
+        },
+      }
+    );
+  };
+
   const applyTemplate = (tplId: string) => {
     setTemplateId(tplId);
     const tpl = templates?.find((x) => x.id === tplId);
@@ -542,7 +659,10 @@ export function TradeFormView({
           ? (form.session as TradingSession)
           : null,
       setupType: nul(form.setupType),
+      setupId:
+        form.setupId && form.setupId !== "custom" ? form.setupId : null,
       marketCondition: (form.marketCondition || null) as MarketCondition | null,
+      grade: (form.grade || null) as TradeGrade | null,
       entryTime: form.entryTime || nowIso(),
       exitTime: nul(form.exitTime),
       entryPrice: form.entryPrice.trim(),
@@ -570,6 +690,7 @@ export function TradeFormView({
       executionRating: toIntOrNull(form.executionRating),
       followedPlan: form.followedPlan,
       tagIds: form.tagIds,
+      customFields: form.customFields,
       checklistResults:
         Object.keys(form.checklistResults).length > 0 ? form.checklistResults : null,
       preTradeAnalysis: form.preTradeAnalysis,
@@ -627,7 +748,7 @@ export function TradeFormView({
           });
         } else {
           toast({ title: t("updatedToast") });
-          navigate(`#/trades/${result.trade.id}`);
+          navigate(`/trades/${result.trade.id}`);
         }
       } else {
         const result: MutationResult = await createTrade.mutateAsync({
@@ -642,7 +763,7 @@ export function TradeFormView({
         } else {
           toast({ title: t("createdToast") });
         }
-        navigate(`#/trades/${result.trade.id}`);
+        navigate(`/trades/${result.trade.id}`);
       }
     } catch (error) {
       const err = error instanceof ApiClientError ? error : null;
@@ -696,13 +817,18 @@ export function TradeFormView({
   return (
     <div ref={topRef} className="space-y-6">
       {/* ── Header ── */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <h2 className="flex flex-wrap items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl">
-          {mode === "edit" ? t("editTitle") : t("createTitle")}
-          {mode === "edit" && form.isDraft ? <DraftBadge /> : null}
-        </h2>
-        {mode === "create" && (
-          <div className="w-full sm:w-64">
+      <PageHeader
+        title={
+          <>
+            {mode === "edit" ? t("editTitle") : t("createTitle")}
+            {mode === "edit" && form.isDraft ? <DraftBadge /> : null}
+          </>
+        }
+        className="sm:items-end"
+        actions={
+          <>
+            {mode === "create" && (
+              <div className="w-full sm:w-64">
             <Field label={t("template")} htmlFor="tf-template">
               <Select
                 value={templateId}
@@ -723,8 +849,10 @@ export function TradeFormView({
               </Select>
             </Field>
           </div>
-        )}
-      </div>
+          )}
+          </>
+        }
+      />
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
         {/* ── Left: form sections ── */}
@@ -746,7 +874,7 @@ export function TradeFormView({
                     messages.map((message, i) => (
                       <li key={`${field}-${i}`}>
                         {FIELD_LABELS[field]
-                          ? `${t(FIELD_LABELS[field] as Parameters<typeof t>[0])} — ${message}`
+                          ? `${t(FIELD_LABELS[field] as Parameters<typeof t>[0])} - ${message}`
                           : message}
                       </li>
                     ))
@@ -882,14 +1010,36 @@ export function TradeFormView({
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label={t("setupType")} htmlFor="tf-setup-type">
-                <Input
-                  id="tf-setup-type"
-                  value={form.setupType}
-                  placeholder={t("setupPlaceholder")}
-                  maxLength={60}
-                  onChange={(e) => set("setupType", e.target.value)}
-                />
+              <Field label={tp("setup")} htmlFor="tf-setup">
+                <Select
+                  value={form.setupId || "none"}
+                  onValueChange={(v) => set("setupId", v === "none" ? "" : v)}
+                  disabled={!form.strategyId}
+                >
+                  <SelectTrigger id="tf-setup" className="w-full">
+                    <SelectValue placeholder={tp("setupHint")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{tp("setupNone")}</SelectItem>
+                    {strategySetups.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="custom">{tp("setupCustom")}</SelectItem>
+                  </SelectContent>
+                </Select>
+                {form.setupId === "custom" ? (
+                  <Input
+                    id="tf-setup-type"
+                    value={form.setupType}
+                    placeholder={t("setupPlaceholder")}
+                    maxLength={60}
+                    className="mt-2"
+                    onChange={(e) => set("setupType", e.target.value)}
+                  />
+                ) : null}
+                <p className="mt-1 text-[11px] text-muted-foreground">{tp("setupHint")}</p>
               </Field>
               <Field label={t("marketCondition")} htmlFor="tf-market-condition">
                 <Select
@@ -909,6 +1059,24 @@ export function TradeFormView({
                   </SelectContent>
                 </Select>
               </Field>
+              <Field label={t("grade")} htmlFor="tf-grade" hint={t("gradeHint")}>
+                <Select
+                  value={form.grade || "none"}
+                  onValueChange={guardEmpty((v) => set("grade", v === "none" ? "" : v))}
+                >
+                  <SelectTrigger id="tf-grade" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{tc("none")}</SelectItem>
+                    {TRADE_GRADES.map((g) => (
+                      <SelectItem key={g} value={g}>
+                        {g}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
             </CardContent>
           </Card>
 
@@ -919,12 +1087,12 @@ export function TradeFormView({
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
               <Field label={t("entryTime")} htmlFor="tf-entry-time">
-                <Input
+                <DateField
                   id="tf-entry-time"
                   type="datetime-local"
                   value={isoToLocalInput(form.entryTime)}
-                  onChange={(e) =>
-                    set("entryTime", localInputToIso(e.target.value) ?? "")
+                  onChange={(v) =>
+                    set("entryTime", localInputToIso(v) ?? "")
                   }
                 />
               </Field>
@@ -1072,12 +1240,12 @@ export function TradeFormView({
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
               <Field label={t("exitTime")} htmlFor="tf-exit-time">
-                <Input
+                <DateField
                   id="tf-exit-time"
                   type="datetime-local"
                   value={isoToLocalInput(form.exitTime)}
-                  onChange={(e) =>
-                    set("exitTime", localInputToIso(e.target.value) ?? "")
+                  onChange={(v) =>
+                    set("exitTime", localInputToIso(v) ?? "")
                   }
                 />
               </Field>
@@ -1389,11 +1557,11 @@ export function TradeFormView({
               <CardTitle className="text-base">{t("sectionTags")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {(tags ?? []).length === 0 ? (
+              {regularTags.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{tc("none")}</p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
-                  {(tags ?? []).map((tag) => {
+                  {regularTags.map((tag) => {
                     const active = form.tagIds.includes(tag.id);
                     return (
                       <button
@@ -1455,6 +1623,120 @@ export function TradeFormView({
               </div>
             </CardContent>
           </Card>
+
+          {/* Confluences (MRT wave 1) — predefined ICT/SMC list in code +
+              user-created customs, stored as CONFLUENCE tags. */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">
+                {t("sectionConfluences")}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                {t("confluencesHint")}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {CONFLUENCE_PRESETS.map((preset) => {
+                  const tag = allConfluenceTags.find(
+                    (x) => x.name === preset.name
+                  );
+                  const active = tag != null && form.tagIds.includes(tag.id);
+                  return (
+                    <button
+                      key={preset.name}
+                      type="button"
+                      aria-pressed={active}
+                      disabled={createTag.isPending}
+                      onClick={() => addConfluenceTag(preset.name, preset.color)}
+                      className={cn(
+                        badgeVariants({ variant: active ? "default" : "outline" }),
+                        "min-h-10 cursor-pointer gap-1.5 px-3 font-normal",
+                        active ? "" : "text-muted-foreground"
+                      )}
+                      style={active ? { borderColor: `${preset.color}66` } : undefined}
+                    >
+                      <span
+                        className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: preset.color }}
+                        aria-hidden="true"
+                      />
+                      {preset.name}
+                    </button>
+                  );
+                })}
+                {customConfluenceTags.map((tag) => {
+                  const active = form.tagIds.includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => toggleTag(tag.id)}
+                      className={cn(
+                        badgeVariants({ variant: active ? "default" : "outline" }),
+                        "min-h-10 cursor-pointer gap-1.5 px-3 font-normal",
+                        active ? "" : "text-muted-foreground"
+                      )}
+                      style={active ? { borderColor: `${tag.color}66` } : undefined}
+                    >
+                      <span
+                        className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: tag.color }}
+                        aria-hidden="true"
+                      />
+                      {tag.name}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={customConfluence}
+                  onChange={(e) => setCustomConfluence(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addConfluenceTag(customConfluence, CONFLUENCE_CUSTOM_COLOR);
+                      setCustomConfluence("");
+                    }
+                  }}
+                  placeholder={t("confluenceAddPlaceholder")}
+                  maxLength={40}
+                  aria-label={t("confluenceAddPlaceholder")}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={
+                    customConfluence.trim() === "" || createTag.isPending
+                  }
+                  onClick={() => {
+                    addConfluenceTag(customConfluence, CONFLUENCE_CUSTOM_COLOR);
+                    setCustomConfluence("");
+                  }}
+                >
+                  {t("confluenceAdd")}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Custom fields (v2.5 Module 4 §4.7) */}
+          {customFieldDefs.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">{t("sectionCustomFields")}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CustomFieldInputs
+                  definitions={customFieldDefs}
+                  values={form.customFields}
+                  onChange={(next) => set("customFields", next)}
+                />
+              </CardContent>
+            </Card>
+          )}
 
           {/* Strategy checklist */}
           {strategy && strategy.checklistItems.length > 0 && (
@@ -1526,6 +1808,16 @@ export function TradeFormView({
               <CardTitle className="text-base">{t("previewTitle")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              <PreTradeExposureCheck
+                symbol={spec?.symbol ?? ""}
+                direction={form.direction}
+                lots={form.lots}
+                entryPrice={form.entryPrice}
+                stopLoss={form.stopLoss}
+                accountBalance={accountBalance ?? ""}
+                accountCurrency={accountCurrency}
+                excludeTradeId={mode === "edit" ? tradeId ?? null : null}
+              />
               {!preview ? (
                 <p className="text-sm text-muted-foreground">{t("previewEmpty")}</p>
               ) : (
@@ -1541,7 +1833,7 @@ export function TradeFormView({
                       value={
                         hasExit || hasTakeProfit
                           ? `${fmtSigned(preview.pips, 1)} ${tc("pips")}`
-                          : "—"
+                          : "-"
                       }
                       valueClass={
                         hasExit || hasTakeProfit ? pnlClass(preview.pips) : undefined
@@ -1550,7 +1842,7 @@ export function TradeFormView({
                     <PreviewRow
                       label={t("previewRR")}
                       value={
-                        preview.plannedRR ? fmtSigned(preview.plannedRR, 2) : "—"
+                        preview.plannedRR ? fmtSigned(preview.plannedRR, 2) : "-"
                       }
                     />
                     <PreviewRow
@@ -1567,7 +1859,7 @@ export function TradeFormView({
                               : null}
                           </>
                         ) : (
-                          "—"
+                          "-"
                         )
                       }
                     />

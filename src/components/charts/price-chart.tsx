@@ -254,7 +254,7 @@ export function TradeChart({
   }, [candles, trade]);
 
   const hoveredText = hovered
-    ? `${fmtDateTimeInTz(new Date(hovered.time * 1000).toISOString(), timezone)} — O ${hovered.open} H ${hovered.high} L ${hovered.low} C ${hovered.close}`
+    ? `${fmtDateTimeInTz(new Date(hovered.time * 1000).toISOString(), timezone)} - O ${hovered.open} H ${hovered.high} L ${hovered.low} C ${hovered.close}`
     : t("crosshairHint");
 
   return (
@@ -320,7 +320,7 @@ export function PriceChartSection({ trade }: { trade: TradeDetailDTO }) {
     ],
     queryFn: async () =>
       apiFetch<CandleWindowPayload>(
-        `/api/charts/candles?instrumentId=${encodeURIComponent(trade.instrumentId)}&timeframe=${timeframe}&from=${encodeURIComponent(window.from)}&to=${encodeURIComponent(window.to)}`
+        `/api/v1/charts/candles?instrumentId=${encodeURIComponent(trade.instrumentId)}&timeframe=${timeframe}&from=${encodeURIComponent(window.from)}&to=${encodeURIComponent(window.to)}`
       ),
     staleTime: 60 * 1000,
   });
@@ -360,7 +360,7 @@ export function PriceChartSection({ trade }: { trade: TradeDetailDTO }) {
 
   const fmtTime = (sec: number | null) =>
     sec == null
-      ? "—"
+      ? "-"
       : fmtDateTimeInTz(new Date(sec * 1000).toISOString(), timezone);
 
   return (
@@ -368,7 +368,7 @@ export function PriceChartSection({ trade }: { trade: TradeDetailDTO }) {
       <CardHeader className="flex-row flex-wrap items-start justify-between gap-2 space-y-0">
         <div className="space-y-1.5">
           <CardTitle className="text-base">
-            {t("title")} — {trade.symbol}
+            {t("title")} - {trade.symbol}
           </CardTitle>
           <CardDescription>{t("description")}</CardDescription>
         </div>
@@ -582,7 +582,7 @@ function CandleImportDialog({
     setBusy(true);
     try {
       const res = await apiFetch<{ imported: number; skipped: number; pruned: number }>(
-        "/api/charts/candles/import",
+        "/api/v1/charts/candles/import",
         {
           method: "POST",
           body: JSON.stringify({

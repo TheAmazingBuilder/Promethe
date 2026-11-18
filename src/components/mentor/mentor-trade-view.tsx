@@ -2,7 +2,7 @@
 
 /**
  * v3 Phase 5 — Read-only trade detail in the mentor space,
- * #/mentor/{ownerId}/trades/{tradeId}. The payload arrives ALREADY scoped
+ * /mentor/{ownerId}/trades/{tradeId}. The payload arrives ALREADY scoped
  * and redacted from the server (journal/psychology/screenshots/amounts
  * structurally absent when disallowed). Read-only badge on every field;
  * the comment thread is the one collaborative surface.
@@ -52,7 +52,7 @@ export function MentorTradeView({
     queryKey: ["mentor-trade", ownerId, tradeId],
     queryFn: () =>
       apiFetch<MentorTradePayload>(
-        `/api/mentor/${ownerId}/trades/${tradeId}`
+        `/api/v1/mentor/${ownerId}/trades/${tradeId}`
       ),
     retry: false,
   });
@@ -63,7 +63,7 @@ export function MentorTradeView({
         variant="ghost"
         size="sm"
         className="gap-2 text-muted-foreground"
-        onClick={() => navigate(`#/mentor/${ownerId}`)}
+        onClick={() => navigate(`/mentor/${ownerId}`)}
       >
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         {t("backToMentees")}
@@ -103,7 +103,7 @@ function MentorTradeBody({
   const policy = payload.policy;
   const s = (key: string): string => {
     const value = trade[key];
-    return value === undefined || value === null ? "—" : String(value);
+    return value === undefined || value === null ? "-" : String(value);
   };
 
   const screenshots = Array.isArray(trade.screenshots)
@@ -195,7 +195,7 @@ function MentorTradeBody({
               <img
                 key={shot.id}
                 src={shot.url}
-                alt={shot.label ?? "Capture du trade"}
+                alt={shot.label ?? "Trade screenshot"}
                 loading="lazy"
                 className="rounded-md border"
               />
@@ -214,7 +214,7 @@ function MentorTradeBody({
 }
 
 function fmt(iso: string, dateOnly: boolean): string {
-  if (!iso || iso === "—") return "—";
+  if (!iso || iso === "-") return "-";
   try {
     return dateOnly
       ? format(new Date(iso), "yyyy-MM-dd")

@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     const parsed = importBatchCreateSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Certains champs sont invalides.", fieldErrors: zodFieldErrors(parsed.error) },
+        { error: "VALIDATION", message: "Some fields are invalid.", fieldErrors: zodFieldErrors(parsed.error) },
         { status: 422 }
       );
     }

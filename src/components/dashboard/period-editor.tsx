@@ -10,6 +10,7 @@ import * as React from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -169,24 +170,22 @@ export function PeriodEditor({
                   <Label htmlFor="period-from" className="text-xs">
                     {t("periods.customFrom")}
                   </Label>
-                  <Input
+                  <DateField
                     id="period-from"
-                    type="date"
-                    value={customFrom}
-                    onChange={(e) => setCustomFrom(e.target.value)}
                     className="h-8"
+                    value={customFrom}
+                    onChange={setCustomFrom}
                   />
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="period-to" className="text-xs">
                     {t("periods.customTo")}
                   </Label>
-                  <Input
+                  <DateField
                     id="period-to"
-                    type="date"
-                    value={customTo}
-                    onChange={(e) => setCustomTo(e.target.value)}
                     className="h-8"
+                    value={customTo}
+                    onChange={setCustomTo}
                   />
                 </div>
               </div>

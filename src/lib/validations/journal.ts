@@ -27,17 +27,17 @@ export const journalEntrySchema = z.object({
 
 export type JournalEntryInput = z.infer<typeof journalEntrySchema>;
 
-/** GET /api/journal — either ?date=YYYY-MM-DD (single day) or no param (recent list). */
+/** GET /api/v1/journal - either ?date=YYYY-MM-DD (single day) or no param (recent list). */
 export const journalQuerySchema = z.object({
   date: isoDay.optional(),
 });
 
-/** DELETE /api/journal?date=YYYY-MM-DD */
+/** DELETE /api/v1/journal?date=YYYY-MM-DD */
 export const journalDeleteQuerySchema = z.object({
   date: isoDay,
 });
 
-/** GET /api/calendar?year=2025&month=5&account=… */
+/** GET /api/v1/calendar?year=2025&month=5&account=… */
 export const calendarQuerySchema = z.object({
   year: z.coerce.number().int().min(2000, "invalidDate").max(2100, "invalidDate"),
   month: z.coerce.number().int().min(1, "invalidDate").max(12, "invalidDate"),
@@ -45,3 +45,11 @@ export const calendarQuerySchema = z.object({
 });
 
 export type CalendarQuery = z.infer<typeof calendarQuerySchema>;
+
+/** GET /api/v1/calendar/day?date=YYYY-MM-DD&account=… — one trading day. */
+export const calendarDayQuerySchema = z.object({
+  date: isoDay,
+  account: z.string().trim().min(1).max(40).optional(),
+});
+
+export type CalendarDayQuery = z.infer<typeof calendarDayQuerySchema>;

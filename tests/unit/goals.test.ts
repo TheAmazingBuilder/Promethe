@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   computeGoalProgress,
+  goalDrilldownHref,
   goalWindow,
   type GoalDef,
   type GoalTradePoint,
@@ -25,8 +26,13 @@ function goal(over: Partial<GoalDef> = {}): GoalDef {
 /** 2026-11-14 12:00 Toronto (UTC-5 → 17:00Z). */
 const NOW = new Date("2026-11-14T12:00:00-05:00");
 
-function tp(exitIso: string, netPnl: string, rMultiple: string | null = null): GoalTradePoint {
-  return { exitIso, netPnl, rMultiple };
+function tp(
+  exitIso: string,
+  netPnl: string,
+  rMultiple: string | null = null,
+  extra: Partial<GoalTradePoint> = {}
+): GoalTradePoint {
+  return { exitIso, netPnl, rMultiple, ...extra };
 }
 
 // ── Fenêtres ────────────────────────────────────────────────────────────────
@@ -243,6 +249,174 @@ describe("computeGoalProgress — métriques", () => {
       TZ
     );
     expect(p.currentValue).toBe("50");
+  });
+});
+
+// ── Métriques MRT vague 3 (Goals) ───────────────────────────────────────────
+
+describe("computeGoalProgress — métriques vague 3", () => {
+  const nov = (day: number, hour = 10) =>
+    `2026-11-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:00:00-05:00`;
+
+  it("A_PLUS_WIN_RATE : seuls les trades A+ comptent ; null sans trade gradé", () => {
+    const g = goal({ id: "g1", metric: "A_PLUS_WIN_RATE", targetValue: "70" });
+    const p = computeGoalProgress(
+      g,
+      [
+        tp(nov(2), "100", null, { grade: "A+" }),
+        tp(nov(3), "80", null, { grade: "A+" }),
+        tp(nov(4), "-40", null, { grade: "A+" }),
+        tp(nov(5), "200", null, { grade: "A+" }),
+        tp(nov(6), "-500", null, { grade: "B" }), // hors échantillon
+        tp(nov(7), "300", null), // non gradé → hors échantillon
+      ],
+      [],
+      NOW,
+      TZ
+    );
+    expect(p.currentValue).toBe("75"); // 3 wins / 4 A+
+    expect(p.sampleSize).toBe(4);
+    expect(p.progressPercent).toBe(100); // 75 ≥ 70 → plafonné
+
+    const noGrade = computeGoalProgress(
+      g,
+      [tp(nov(2), "100", null, { grade: "B" }), tp(nov(3), "50")],
+      [],
+      NOW,
+      TZ
+    );
+    expect(noGrade.currentValue).toBeNull();
+    expect(noGrade.sampleSize).toBe(0);
+    expect(noGrade.progressPercent).toBe(0);
+    expect(noGrade.isAchieved).toBe(false);
+  });
+
+  it("PLAN_FOLLOW_RATE : playbookMatch prioritaire, followedPlan en repli", () => {
+    const g = goal({ id: "g1", metric: "PLAN_FOLLOW_RATE", targetValue: "90" });
+    const p = computeGoalProgress(
+      g,
+      [
+        tp(nov(2), "100", null, { playbookMatch: "MATCHED" }),
+        tp(nov(3), "-40", null, { playbookMatch: "MATCHED" }),
+        tp(nov(4), "80", null, { playbookMatch: "PARTIAL" }),
+        tp(nov(5), "-20", null, { playbookMatch: "OFF_PLAYBOOK" }),
+        tp(nov(6), "50", null, { followedPlan: true }), // repli legacy
+        tp(nov(7), "-10", null, { followedPlan: false }),
+      ],
+      [],
+      NOW,
+      TZ
+    );
+    expect(p.currentValue).toBe("50"); // 3 suivis / 6 avec verdict
+    expect(p.sampleSize).toBe(6);
+
+    const noVerdict = computeGoalProgress(
+      g,
+      [tp(nov(2), "100"), tp(nov(3), "-40")],
+      [],
+      NOW,
+      TZ
+    );
+    expect(noVerdict.currentValue).toBeNull();
+    expect(noVerdict.sampleSize).toBe(0);
+  });
+
+  it("TRADES_WITH_SCREENSHOT : compte les trades avec capture, 0 est une vraie valeur", () => {
+    const g = goal({
+      id: "g1",
+      metric: "TRADES_WITH_SCREENSHOT",
+      targetValue: "30",
+    });
+    const p = computeGoalProgress(
+      g,
+      [
+        tp(nov(2), "100", null, { hasScreenshot: true }),
+        tp(nov(3), "-40", null, { hasScreenshot: true }),
+        tp(nov(4), "80", null, { hasScreenshot: false }),
+      ],
+      [],
+      NOW,
+      TZ
+    );
+    expect(p.currentValue).toBe("2");
+    expect(p.sampleSize).toBe(3);
+    expect(p.progressPercent).toBe(6.67);
+
+    const none = computeGoalProgress(
+      g,
+      [tp(nov(2), "100"), tp(nov(3), "-40")],
+      [],
+      NOW,
+      TZ
+    );
+    expect(none.currentValue).toBe("0");
+    expect(none.sampleSize).toBe(2);
+  });
+
+  it("sampleSize : WIN_RATE compte les trades, DISCIPLINE_SCORE les jours", () => {
+    const winRate = computeGoalProgress(
+      goal({ id: "g1", metric: "WIN_RATE", targetValue: "55" }),
+      [tp(nov(2), "100"), tp(nov(4), "-40"), tp(nov(6), "80"), tp(nov(8), "0")],
+      [],
+      NOW,
+      TZ
+    );
+    expect(winRate.sampleSize).toBe(4);
+
+    const discipline = computeGoalProgress(
+      goal({ id: "g1", metric: "DISCIPLINE_SCORE", targetValue: "4" }),
+      [],
+      [
+        { date: "2026-11-02", score: 4 },
+        { date: "2026-11-03", score: 5 },
+        { date: "2026-11-10", score: 3 },
+      ],
+      NOW,
+      TZ
+    );
+    expect(discipline.sampleSize).toBe(3);
+  });
+});
+
+// ── Lien vers les trades ────────────────────────────────────────────────────
+
+describe("goalDrilldownHref", () => {
+  it("fenêtre mensuelle → dateFrom/dateTo de la fenêtre", () => {
+    const p = computeGoalProgress(
+      goal({ id: "g1", metric: "TRADE_COUNT", targetValue: "20" }),
+      [
+        tp("2026-11-02T10:00:00-05:00", "100"),
+        tp("2026-11-04T10:00:00-05:00", "-40"),
+      ],
+      [],
+      NOW,
+      TZ
+    );
+    expect(goalDrilldownHref(p)).toBe(
+      "/trades?dateFrom=2026-11-01&dateTo=2026-12-01"
+    );
+  });
+
+  it("échantillon vide → pas de lien", () => {
+    const p = computeGoalProgress(
+      goal({ id: "g1", metric: "WIN_RATE", targetValue: "55" }),
+      [],
+      [],
+      NOW,
+      TZ
+    );
+    expect(goalDrilldownHref(p)).toBeNull();
+  });
+
+  it("ALL_TIME → pas de dateTo", () => {
+    const p = computeGoalProgress(
+      goal({ id: "g1", metric: "TRADE_COUNT", period: "ALL_TIME" }),
+      [tp("2026-11-02T10:00:00-05:00", "100")],
+      [],
+      NOW,
+      TZ
+    );
+    expect(goalDrilldownHref(p)).toBe("/trades?dateFrom=2026-01-01");
   });
 });
 

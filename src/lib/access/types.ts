@@ -29,7 +29,7 @@ export interface AccessContext {
   ownerId: string;
   role: AccessRole;
   scope: AccessScope;
-  /** Mentors are ALWAYS read-only — enforced server-side, not just hidden UI. */
+  /** Mentors are ALWAYS read-only - enforced server-side, not just hidden UI. */
   readOnly: boolean;
 }
 
@@ -43,12 +43,12 @@ export const OWNER_SCOPE: AccessScope = {
   canComment: true,
 };
 
-/** Typed 403 — mapped by apiError() into a consistent envelope. */
+/** Typed 403 - mapped by apiError() into a consistent envelope. */
 export class AccessDeniedError extends Error {
   code = "ACCESS_DENIED";
   status = 403;
 
-  constructor(message = "Accès refusé.") {
+  constructor(message = "Access denied.") {
     super(message);
     this.name = "AccessDeniedError";
   }
@@ -57,7 +57,7 @@ export class AccessDeniedError extends Error {
 export class ReadOnlyContextError extends AccessDeniedError {
   code = "READ_ONLY";
 
-  constructor(message = "Lecture seule : les mentors ne peuvent pas modifier les données.") {
+  constructor(message = "Read-only: mentors cannot modify data.") {
     super(message);
     this.name = "ReadOnlyContextError";
   }

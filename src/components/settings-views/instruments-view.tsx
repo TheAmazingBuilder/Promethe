@@ -3,7 +3,7 @@
 /**
  * Instruments view (v1 phase 7) — the 20 seeded presets (read-only, with the
  * XAUUSD pip convention note) + the user's custom instruments (full CRUD,
- * pipSize editable). Data: GET/POST /api/instruments · PATCH/DELETE [id].
+ * pipSize editable). Data: GET/POST /api/v1/instruments · PATCH/DELETE [id].
  */
 import * as React from "react";
 import { Coins, Info, Pencil, Plus, Trash2 } from "lucide-react";
@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import {
   useCreateInstrument,
@@ -49,6 +50,7 @@ import {
 import { ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import { ASSET_CLASSES, COMMON_CURRENCIES } from "@/lib/trading/types";
+import { COMMON_TIMEZONES } from "@/lib/time/zones";
 
 const CLASS_BADGE: Record<string, string> = {
   METAL: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
@@ -73,6 +75,7 @@ const EMPTY: InstrumentInputBody = {
   tickSize: null,
   tickValue: null,
   isActive: true,
+  marketTimezone: null,
 };
 
 const POSITIVE = /^\d+(\.\d+)?$/;
@@ -111,6 +114,7 @@ function InstrumentEditor({
             tickSize: editing.tickSize,
             tickValue: editing.tickValue,
             isActive: editing.isActive,
+            marketTimezone: editing.marketTimezone,
           }
         : EMPTY,
     );
@@ -226,7 +230,7 @@ function InstrumentEditor({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">—</SelectItem>
+                  <SelectItem value="none">-</SelectItem>
                   {COMMON_CURRENCIES.map((c) => (
                     <SelectItem key={c} value={c}>
                       {c}
@@ -301,6 +305,30 @@ function InstrumentEditor({
           <p className="rounded-md border border-dashed p-2 text-[11px] text-muted-foreground">
             {t("pipHint")}
           </p>
+          <div className="space-y-1.5">
+            <Label htmlFor="ins-market-tz">{t("marketTimezone")}</Label>
+            <Select
+              value={form.marketTimezone ?? "none"}
+              onValueChange={(v) =>
+                set("marketTimezone", v === "none" ? null : v)
+              }
+            >
+              <SelectTrigger id="ins-market-tz">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{t("marketTimezoneNone")}</SelectItem>
+                {COMMON_TIMEZONES.map((tz) => (
+                  <SelectItem key={tz} value={tz}>
+                    {tz}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              {t("marketTimezoneHint")}
+            </p>
+          </div>
           <div className="flex items-center justify-between rounded-md border p-3">
             <Label htmlFor="ins-active">{t("active")}</Label>
             <Switch
@@ -382,12 +410,11 @@ export function InstrumentsView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
+      <PageHeader
+        title={t("title")}
+        description={t("subtitle")}
+        actions={
+          <div className="flex shrink-0 items-center gap-2">
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -399,8 +426,9 @@ export function InstrumentsView() {
             <Plus className="h-4 w-4" aria-hidden="true" />
             <span className="hidden sm:inline">{t("add")}</span>
           </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       <Card className="border-dashed">
         <CardContent className="flex items-start gap-2.5 py-3">
@@ -484,6 +512,14 @@ export function InstrumentsView() {
                             {i.quoteCurrency}
                           </dd>
                         </div>
+                        {i.marketTimezone != null && (
+                          <div>
+                            <dt className="text-muted-foreground">{t("marketTimezoneShort")}</dt>
+                            <dd className="truncate tabular-nums" title={i.marketTimezone}>
+                              {i.marketTimezone}
+                            </dd>
+                          </div>
+                        )}
                       </dl>
                     </CardContent>
                   </Card>
@@ -518,6 +554,9 @@ export function InstrumentsView() {
                         <th scope="col" className="py-2 pr-3 font-medium">
                           {t("contract")}
                         </th>
+                        <th scope="col" className="py-2 pr-3 font-medium">
+                          {t("marketTimezoneShort")}
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -541,6 +580,9 @@ export function InstrumentsView() {
                           </td>
                           <td className="py-2 pr-3 font-mono tabular-nums text-muted-foreground">
                             {i.contractSize}
+                          </td>
+                          <td className="py-2 pr-3 tabular-nums text-muted-foreground">
+                            {i.marketTimezone ?? "—"}
                           </td>
                         </tr>
                       ))}

@@ -71,9 +71,9 @@ function fmtNum(value: string | null | undefined, digits = 2, signed = false): s
 }
 
 function fmtDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   return d.toISOString().slice(0, 10);
 }
 
@@ -104,7 +104,7 @@ export function renderTradeCardCanvas(
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas 2D non disponible");
+  if (!ctx) throw new Error("Canvas 2D unavailable");
 
   // Background
   ctx.fillStyle = C.bg;
@@ -119,8 +119,8 @@ export function renderTradeCardCanvas(
   roundRect(ctx, M, M, 46, 46, 12);
   ctx.fillStyle = C.accent;
   ctx.fill();
-  text(ctx, "T", M + 16, M + 34, { size: 26, color: "#04110b", weight: "700" });
-  text(ctx, "TradeJournal", M + 62, M + 33, { size: 26, color: C.muted, weight: "600" });
+  text(ctx, "P", M + 16, M + 34, { size: 26, color: "#04110b", weight: "700" });
+  text(ctx, "Promethe", M + 62, M + 33, { size: 26, color: C.muted, weight: "600" });
 
   // Symbol block
   let y = M + 130;
@@ -161,7 +161,7 @@ export function renderTradeCardCanvas(
   const r = fmtNum(trade.rMultiple, 2, true);
   if (r) kpis.push({ label: "R", value: `${r} R`, color: tone });
   const rr = fmtNum(trade.realizedRR, 2);
-  if (rr) kpis.push({ label: "RR RÉALISÉ", value: rr, color: C.text });
+  if (rr) kpis.push({ label: "REALIZED RR", value: rr, color: C.text });
   if (!anonymous) {
     const pnl = fmtNum(trade.netPnl, 2, true);
     if (pnl) {
@@ -190,14 +190,14 @@ export function renderTradeCardCanvas(
 
   // Details card — dates (date-only when anonymous), prices, strategy
   const rows: Array<[string, string]> = [];
-  rows.push(["Entrée", anonymous ? fmtDate(trade.entryTime) : `${fmtDate(trade.entryTime)} ${trade.entryTime.slice(11, 16)} UTC`]);
+  rows.push(["Entry", anonymous ? fmtDate(trade.entryTime) : `${fmtDate(trade.entryTime)} ${trade.entryTime.slice(11, 16)} UTC`]);
   if (trade.exitTime) {
-    rows.push(["Sortie", anonymous ? fmtDate(trade.exitTime) : `${fmtDate(trade.exitTime)} ${trade.exitTime.slice(11, 16)} UTC`]);
+    rows.push(["Exit", anonymous ? fmtDate(trade.exitTime) : `${fmtDate(trade.exitTime)} ${trade.exitTime.slice(11, 16)} UTC`]);
   }
-  rows.push(["Prix d'entrée", trade.entryPrice]);
-  if (trade.exitPrice) rows.push(["Prix de sortie", trade.exitPrice]);
+  rows.push(["Entry price", trade.entryPrice]);
+  if (trade.exitPrice) rows.push(["Exit price", trade.exitPrice]);
   if (!anonymous) {
-    if (trade.strategyName) rows.push(["Stratégie", trade.strategyName]);
+    if (trade.strategyName) rows.push(["Strategy", trade.strategyName]);
     if (trade.timeframe) rows.push(["Timeframe", trade.timeframe]);
   }
 
@@ -233,10 +233,10 @@ export function renderTradeCardCanvas(
   }
 
   // Footer — watermark
-  text(ctx, "TradeJournal", M, H - 34, { size: 18, color: C.muted, weight: "600" });
+  text(ctx, "Promethe", M, H - 34, { size: 18, color: C.muted, weight: "600" });
   const footerRight = anonymous
-    ? "Montants masqués — pips & R seulement"
-    : "tradejournal.app";
+    ? "Amounts hidden – pips & R only"
+    : "promethe";
   text(ctx, footerRight, W - M, H - 34, { size: 16, color: C.muted, align: "right" });
 
   return canvas;
@@ -251,7 +251,7 @@ export async function downloadTradeCardPng(
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob((b) => resolve(b), "image/png")
   );
-  if (!blob) throw new Error("Export PNG impossible");
+  if (!blob) throw new Error("PNG export failed");
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   const datePart = (trade.exitTime ?? trade.entryTime).slice(0, 10);

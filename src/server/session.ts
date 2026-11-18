@@ -15,7 +15,7 @@ const SESSION_TTL_MS = SESSION_TTL_S * 1000;
 
 export class UnauthorizedError extends Error {
   constructor() {
-    super("Non authentifié");
+    super("Not authenticated");
     this.name = "UnauthorizedError";
   }
 }
@@ -71,7 +71,7 @@ export async function getSession(): Promise<SessionPayload | null> {
   return toSessionPayload(session.user, session.user.profile);
 }
 
-/** Like getSession but throws UnauthorizedError — for data-access helpers. */
+/** Like getSession but throws UnauthorizedError - for data-access helpers. */
 export async function requireUser(): Promise<SessionPayload> {
   const session = await getSession();
   if (!session) throw new UnauthorizedError();

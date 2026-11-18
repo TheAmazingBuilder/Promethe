@@ -2,7 +2,7 @@
 
 /**
  * Dashboard goals widget (v1 phase 6) — active goals with live progress
- * bars. Hidden when the user has no ACTIVE goal. Data: GET /api/goals.
+ * bars. Hidden when the user has no ACTIVE goal. Data: GET /api/v1/goals.
  */
 import { Target } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -55,7 +55,7 @@ export function GoalsCard() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate("#/regles")}
+            onClick={() => navigate("/rules")}
           >
             {t("manage")}
           </Button>

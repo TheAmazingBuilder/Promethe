@@ -39,6 +39,12 @@ export const WIDGET_TYPES = [
   "saved-chart",
   "heatmap",
   "year-calendar",
+  // Phase 2 — risk / reward widgets
+  "risk-budget",
+  "discipline-score",
+  // MRT wave 2 — leaks + habits widgets
+  "top-leaks",
+  "habits-at-a-glance",
 ] as const;
 
 export type WidgetType = (typeof WIDGET_TYPES)[number];
@@ -67,10 +73,10 @@ export interface WidgetLayout {
   h: number;
 }
 
-/** Partial map — missing breakpoints are filled by normalizeLayouts(). */
+/** Partial map - missing breakpoints are filled by normalizeLayouts(). */
 export type WidgetLayouts = Partial<Record<Breakpoint, WidgetLayout>>;
 
-/** Layout JSON schema version (migration hook — see layout.ts). */
+/** Layout JSON schema version (migration hook - see layout.ts). */
 export const LAYOUT_SCHEMA_VERSION = 1;
 
 // ── Periods ──────────────────────────────────────────────────────────────────
@@ -105,7 +111,7 @@ export function isPeriodPreset(value: string): value is PeriodPreset {
   return (PERIOD_PRESETS as readonly string[]).includes(value);
 }
 
-/** Per-widget period override — null / mode INHERIT uses the global filter. */
+/** Per-widget period override - null / mode INHERIT uses the global filter. */
 export interface PeriodOverride {
   mode: PeriodMode;
   preset?: PeriodPreset;
@@ -125,9 +131,9 @@ export interface PeriodOverride {
  * (rolling trades mode).
  */
 export interface ResolvedPeriod {
-  /** ISO lower bound (inclusive) — null = all time. */
+  /** ISO lower bound (inclusive) - null = all time. */
   from: string | null;
-  /** Keep only the N most recent trades — null = unlimited. */
+  /** Keep only the N most recent trades - null = unlimited. */
   lastTrades: number | null;
   /** ISO lower bound of the comparison period (compareToPrevious). */
   compareFrom: string | null;
@@ -135,7 +141,7 @@ export interface ResolvedPeriod {
   labelKey: string;
 }
 
-/** Global dashboard filter (URL state) — applies unless a widget overrides. */
+/** Global dashboard filter (URL state) - applies unless a widget overrides. */
 export interface GlobalFilter {
   preset: PeriodPreset;
   accountId: string | null;

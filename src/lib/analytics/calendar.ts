@@ -6,7 +6,7 @@
  * decimal.js — strings at the boundaries, exactly like the analytics engine.
  *
  * Documented conventions:
- *  - Calendar weeks start on MONDAY (fr-CA convention).
+ *  - Calendar weeks start on MONDAY.
  *  - A "trading day" is a local day with at least one closed trade.
  *  - PROP daily loss limit  = maxDailyLossPercent × initialBalance (firm
  *    convention: % of the initial balance, not of the running equity).
@@ -188,9 +188,9 @@ export interface PropLimit {
   limitAmount: string | null;
   /** Amount consumed so far (≥ 0). */
   used: string;
-  /** % of the limit consumed — can exceed 100 on breach (null: no limit). */
+  /** % of the limit consumed - can exceed 100 on breach (null: no limit). */
   usedPercent: string | null;
-  /** Amount left before breach — negative once breached (null: no limit). */
+  /** Amount left before breach - negative once breached (null: no limit). */
   remaining: string | null;
   status: PropLimitStatus;
 }
@@ -334,7 +334,7 @@ export function computePropStatus(input: PropStatusInput): PropStatus {
 
 // ── Local dates (timezone) ───────────────────────────────────────────────────
 
-/** ISO date (YYYY-MM-DD) of `date` in `timezone` — null on invalid TZ. */
+/** ISO date (YYYY-MM-DD) of `date` in `timezone` - null on invalid TZ. */
 export function localDateInTz(date: Date, timezone: string): string | null {
   try {
     const fmt = new Intl.DateTimeFormat("en-CA", {
@@ -377,4 +377,56 @@ export function isoDayBetween(
   last: string
 ): boolean {
   return day >= first && day <= last;
+}
+
+// ── One trading day (calendar day-detail panel, MRT wave 2) ─────────────────
+
+export interface DayTradeSummaryInput {
+  netPnl: string | null;
+  rMultiple: string | null;
+  resultType: string | null;
+}
+
+export interface DayTradeSummary {
+  /** Decimal sum of netPnl over the trades ("0" when none has a P&L). */
+  netPnl: string;
+  tradeCount: number;
+  wins: number;
+  losses: number;
+  /** Sum of R multiples over R-trades (null when none has an R). */
+  totalR: string | null;
+}
+
+/**
+ * Day totals over a list of closed trades — the same math as the month
+ * grid buckets (bucketByTradingDay in src/server/calendar.ts), extracted
+ * so the day endpoint and the unit tests share one implementation. A win
+ * is a positive net P&L, a loss a negative one; breakeven and open trades
+ * count in tradeCount but in neither wins nor losses.
+ */
+export function summarizeDayTrades(
+  trades: DayTradeSummaryInput[]
+): DayTradeSummary {
+  let pnl = D0;
+  let wins = 0;
+  let losses = 0;
+  let rSum = D0;
+  let rCount = 0;
+  for (const t of trades) {
+    const p = toD(t.netPnl ?? 0);
+    pnl = pnl.plus(p);
+    if (p.gt(0)) wins += 1;
+    else if (p.lt(0)) losses += 1;
+    if (t.rMultiple != null) {
+      rSum = rSum.plus(toD(t.rMultiple));
+      rCount += 1;
+    }
+  }
+  return {
+    netPnl: pnl.toString(),
+    tradeCount: trades.length,
+    wins,
+    losses,
+    totalR: rCount > 0 ? rSum.toString() : null,
+  };
 }

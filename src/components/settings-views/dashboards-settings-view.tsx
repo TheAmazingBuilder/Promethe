@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * DashboardsSettingsView (v2.5 Module 1, spec §4.9) — #/reglages/dashboards.
+ * DashboardsSettingsView (v2.5 Module 1, spec §4.9) — /settings/dashboards.
  *
  * Manage the dashboards (default star, delete), browse the built-in
  * templates + the user's saved blueprints (add as new / replace current /
@@ -49,6 +49,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import {
   fetchDashboardExport,
@@ -656,7 +657,7 @@ function ImportExportCard() {
                     {t("importSkippedItem", {
                       dashboard: item.dashboardIndex + 1,
                       widget: item.widgetIndex + 1,
-                      type: item.type === "" ? "—" : item.type,
+                      type: item.type === "" ? "-" : item.type,
                       reason: t(`skipReason.${item.reason}`),
                     })}
                   </li>
@@ -676,11 +677,8 @@ export function DashboardsSettingsView() {
   const t = useTranslations("dashboardsSettings");
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader title={t("title")} description={t("subtitle")} />
 
       <YourDashboardsCard />
 

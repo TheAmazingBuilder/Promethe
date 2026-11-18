@@ -22,7 +22,7 @@ import {
 export interface NormalizableWidget {
   id: string;
   layouts: WidgetLayouts;
-  /** Optional bounds — defaults when absent (registry lookup done by caller). */
+  /** Optional bounds - defaults when absent (registry lookup done by caller). */
   minW?: number;
   minH?: number;
   maxW?: number;

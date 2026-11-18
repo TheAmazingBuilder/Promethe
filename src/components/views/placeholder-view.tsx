@@ -17,7 +17,7 @@ export interface PlaceholderViewProps {
   featureKeys: string[];
 }
 
-/** Generic "coming in phase N" view — keeps the roadmap visible in-app. */
+/** Generic "coming in phase N" view - keeps the roadmap visible in-app. */
 export function PlaceholderView({
   titleKey,
   descriptionKey,
@@ -28,7 +28,7 @@ export function PlaceholderView({
   const t = useTranslations();
 
   return (
-    <section aria-labelledby="placeholder-title" className="mx-auto max-w-2xl">
+    <section aria-labelledby="placeholder-title">
       <Card>
         <CardContent className="flex flex-col items-center gap-4 p-6 text-center sm:p-10">
           <div
@@ -43,7 +43,7 @@ export function PlaceholderView({
             </Badge>
             <h2
               id="placeholder-title"
-              className="text-xl font-bold tracking-tight"
+              className="text-2xl font-bold tracking-tight"
             >
               {t(titleKey)}
             </h2>

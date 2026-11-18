@@ -11,8 +11,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -32,6 +33,9 @@ model User {
   cashTransactions CashTransaction[]
   instruments      Instrument[]
   strategies       Strategy[]
+  setups           Setup[]
+  playbookRules    PlaybookRule[]
+  checklistTemplates ChecklistTemplate[]
   trades           Trade[]
   tags             Tag[]
   screenshots      TradeScreenshot[]
@@ -97,8 +101,33 @@ model User {
   changeLogs            ChangeLog[]
   batchEntryDrafts      BatchEntryDraft[]
 
+  // ── v2.5 Module 5 — trading tools ──
+  toolScenarios        ToolScenario[]
+  fxRates              FxRate[]
+  marketSessionSettings MarketSessionSetting[]
+  exitPlans            ExitPlan[]
+  exposureAlertSetting ExposureAlertSetting?
+
   // ── v2.5 Module 8 — privacy, accessibility & time zones ──
   displayPreference     UserDisplayPreference?
+
+  // ── Gaïa — workspace de notes ──
+  gaiaNotes     Note[]
+  gaiaFolders   NoteFolder[]
+  gaiaTags      NoteTag[]
+  gaiaTemplates NoteTemplate[]
+  gaiaVersions  NoteVersion[]
+
+  // ── v2.5 Module 6 — advanced analytics ──
+  lifecycleStats      TradeLifecycleStats[]
+  traderScoreSnapshots TraderScoreSnapshot[]
+  tradeAnomalies      TradeAnomaly[]
+  weeklyPlanActions   WeeklyPlanAction[]
+
+  // ── v2.5 Module 9 — Discord / Telegram integrations ──
+  integrationEndpoints     IntegrationEndpoint[]
+  integrationSubscriptions IntegrationSubscription[]
+  outboundMessages         OutboundMessage[]
 
   @@map("users")
 }
@@ -122,7 +151,7 @@ model Profile {
   displayName       String   @map("display_name")
   timezone          String   @default("UTC")
   baseCurrency      String   @default("USD") @map("base_currency")
-  locale            String   @default("fr") // 'fr' | 'en' — UI language (addendum §11.6)
+  locale            String   @default("en") // 'en' — UI language, English only (addendum §11.6)
   theme             String   @default("system")
   defaultAccountId  String?  @map("default_account_id")
   /// v2 — quick-entry smart defaults (JSON): lastAccountId, lastInstrumentId,
@@ -153,6 +182,9 @@ model Account {
   currency                String    @default("USD")
   initialBalance          Decimal   @default(0) @map("initial_balance")
   leverage                Int?
+  /// v2.5 Module 5 — margin simulator defaults (null = 100 / 50).
+  marginCallLevel         Decimal? @map("margin_call_level")
+  stopOutLevel            Decimal? @map("stop_out_level")
   isActive                Boolean   @default(true) @map("is_active")
   // ── PROP firm challenge fields (addendum §11.5) ──
   maxDailyLossPercent     Decimal?  @map("max_daily_loss_percent")
@@ -260,7 +292,7 @@ model Strategy {
   name               String
   description        String?
   color              String   @default("#10b981")
-  status             String   @default("ACTIVE") // ACTIVE | TESTING | ARCHIVED
+  status             String   @default("ACTIVE") // ACTIVE | TESTING | DRAFT | PAUSED | ARCHIVED
   timeframesJson     String?  @map("timeframes_json") // JSON string[]
   instrumentsJson    String?  @map("instruments_json") // JSON string[] (symbols)
   sessionsJson       String?  @map("sessions_json") // JSON string[]
@@ -269,6 +301,22 @@ model Strategy {
   riskRules          String?  @map("risk_rules") // markdown
   defaultRiskPercent Decimal? @map("default_risk_percent")
   targetRR           Decimal? @map("target_rr")
+  // ── Playbook (Phase 2) — definition revision counter, bumped by the
+  // server whenever a PATCH touches one of the 13 definition fields
+  // (Euforia §17); presentation fields (name, status, grade, color, tags)
+  // mutate in place. Trades freeze this value at entry (Trade.strategyVersion).
+  version             Int      @default(1)
+  grade               String? // A+ | A | B | C (presentation, no version bump)
+  detailedDescription String?  @map("detailed_description") // markdown, ≤ 8000
+  tagsJson            String?  @map("tags_json") // JSON string[] (presentation)
+  marketProfileJson   String?  @map("market_profile_json") // JSON PlaybookMarketProfile
+  marketConditionsJson String? @map("market_conditions_json") // JSON MarketCondition[]
+  entryConditionsJson String?  @map("entry_conditions_json") // JSON PlaybookEntryCondition[] (AND, group = OR)
+  confirmationsJson   String?  @map("confirmations_json") // JSON PlaybookConfirmation[]
+  invalidationsJson   String?  @map("invalidations_json") // JSON string[]
+  riskJson             String? @map("risk_json") // JSON PlaybookRisk
+  tradeManagementJson String?  @map("trade_management_json") // JSON PlaybookManagementRule[]
+  exitPlanJson        String?  @map("exit_plan_json") // JSON PlaybookExitRule[]
   // ── v2.5 Module 4 — soft delete (trash) + global search ──
   deletedAt  DateTime? @map("deleted_at")
   deletedBy String?   @map("deleted_by") // userId snapshot (no FK — metadata only)
@@ -281,9 +329,89 @@ model Strategy {
   checklistItems StrategyChecklistItem[]
   versions       StrategyVersion[]
   templates      TradeTemplate[]
+  setups         Setup[]
+  playbookRules  PlaybookRule[]
+  checklistTemplates ChecklistTemplate[]
 
   @@index([userId])
   @@map("strategies")
+}
+
+/// Playbook setup (Phase 2) — one named way to trade a strategy. The
+/// invalidation is mandatory: it states when the setup is no longer valid.
+/// Trades point at a setup (Trade.setupId, SetNull on delete).
+model Setup {
+  id               String   @id @default(cuid())
+  userId           String   @map("user_id")
+  strategyId       String   @map("strategy_id")
+  name             String
+  description      String?
+  status           String   @default("ACTIVE") // ACTIVE | TESTING | DRAFT | PAUSED | ARCHIVED
+  context          String? // markdown — when this setup applies
+  marketCondition  String?  @map("market_condition") // TRENDING | RANGING | HIGH_VOLATILITY | LOW_VOLATILITY | EXPANSION | COMPRESSION | BULLISH_STRUCTURE | BEARISH_STRUCTURE | NEUTRAL_STRUCTURE
+  trigger          String?
+  confirmation     String?
+  entryModel       String?  @map("entry_model")
+  stopModel        String?  @map("stop_model")
+  targetModel      String?  @map("target_model")
+  /// When the setup is no longer valid — critical, never optional.
+  invalidation     String
+  notes            String? // markdown
+  tagsJson         String?  @map("tags_json") // JSON string[]
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  strategy Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  trades   Trade[]
+
+  @@index([userId])
+  @@index([strategyId])
+  @@map("setups")
+}
+
+/// Playbook operating rule (Phase 2, Euforia §24) — a written rule of the
+/// playbook, global or scoped to one strategy. `evaluatable` is declarative:
+/// true when the rule could be checked against market data or the calendar.
+model PlaybookRule {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  title          String
+  detail         String   @default("")
+  category       String // RISK | SESSION | NEWS | BEHAVIOR | EXECUTION | CUSTOM
+  scope          String   @default("GLOBAL") // GLOBAL | STRATEGY
+  strategyId     String?  @map("strategy_id")
+  evaluatable    Boolean  @default(false)
+  evaluationHint String?  @map("evaluation_hint")
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  strategy Strategy? @relation(fields: [strategyId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([strategyId])
+  @@map("playbook_rules")
+}
+
+/// Playbook checklist template (Phase 2, Euforia §16) — a reusable
+/// pre-trade checklist. strategyId null = global, usable with any strategy.
+model ChecklistTemplate {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  strategyId String?  @map("strategy_id")
+  name       String
+  itemsJson  String   @map("items_json") // JSON: [{ label, required, category? }] (max 24)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  strategy Strategy? @relation(fields: [strategyId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([strategyId])
+  @@map("checklist_templates")
 }
 
 model StrategyChecklistItem {
@@ -302,12 +430,16 @@ model StrategyChecklistItem {
 
 /// Immutable snapshot of a strategy at version N (addendum §11.3).
 /// Snapshots are JSON strings (SQLite parity), never mutated after creation.
+/// origin MANUAL = saved by hand from the versions dialog; AUTO = frozen by
+/// the server before a definition edit (Euforia §17). AUTO snapshots are
+/// never deletable.
 model StrategyVersion {
   id         String   @id @default(cuid())
   strategyId String   @map("strategy_id")
   version    Int
   snapshot   String // JSON: full strategy + checklist at save time
   note       String?
+  origin     String   @default("MANUAL") // MANUAL | AUTO
   createdAt  DateTime @default(now()) @map("created_at")
 
   strategy Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
@@ -369,6 +501,10 @@ model Trade {
   timeframe       String?
   session         String? // ASIAN | LONDON | NEW_YORK | OVERLAP | OTHER (from entry time UTC)
   setupType       String? @map("setup_type")
+  /// Playbook setup used (nullable; free-text setupType kept for back-compat).
+  setupId         String? @map("setup_id")
+  /// Strategy definition version frozen at entry (Strategy.version).
+  strategyVersion Int?    @map("strategy_version")
   marketCondition String? @map("market_condition") // TRENDING | RANGING | VOLATILE | NEWS | OTHER
 
   // Entry / exit (stored UTC, displayed in user timezone)
@@ -382,6 +518,8 @@ model Trade {
   initialTakeProfit Decimal?  @map("initial_take_profit")
   mfePrice          Decimal?  @map("mfe_price") // max favorable excursion (price extreme)
   maePrice          Decimal?  @map("mae_price") // max adverse excursion (price extreme)
+  /// v2.5 Module 5 — current price override, edited in the exposure dashboard.
+  currentPrice      Decimal?  @map("current_price")
 
   // Size & risk
   lots                  Decimal  @default(0)
@@ -414,6 +552,10 @@ model Trade {
   setupQualityRating Int?     @map("setup_quality_rating") // 1-5
   executionRating    Int?     @map("execution_rating") // 1-5
   followedPlan       Boolean? @map("followed_plan")
+  /// MRT setup grade (wave 3): A+ | A | B | C, null = ungraded. Distinct
+  /// from TradeReview 1-5 scores and from Strategy.grade (strategy
+  /// presentation grade) — this is the grade of this trade's setup.
+  grade              String? // A+ | A | B | C
   lessonLearned      String?  @map("lesson_learned")
 
   // Review workflow (addendum §11.3)
@@ -469,11 +611,14 @@ model Trade {
   user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   account        Account              @relation(fields: [accountId], references: [id], onDelete: Cascade)
   strategy       Strategy?            @relation(fields: [strategyId], references: [id], onDelete: SetNull)
+  setup          Setup?               @relation(fields: [setupId], references: [id], onDelete: SetNull)
   instrument     Instrument           @relation(fields: [instrumentId], references: [id])
   executions     TradeExecution[]
   tags           TradeTag[]
   screenshots    TradeScreenshot[]
   ruleViolations TradeRuleViolation[]
+  lifecycleStats TradeLifecycleStats?
+  anomalies      TradeAnomaly[]
 
   // ── v2 ──
   review        TradeReview?
@@ -483,14 +628,20 @@ model Trade {
   // ── v3 ──
   modifications TradeModification[]
 
+  // ── v2.5 Module 5 — partial exit plan (nullable, plan deleted -> SetNull).
+  exitPlanId String? @map("exit_plan_id")
+  exitPlan   ExitPlan? @relation(fields: [exitPlanId], references: [id], onDelete: SetNull)
+
   @@unique([accountId, externalId])
   @@index([accountId, positionId])
   @@index([userId, entryTime])
   @@index([userId, strategyId])
+  @@index([userId, setupId])
   @@index([userId, instrumentId])
   @@index([userId, status])
   @@index([userId, isDraft])
   @@index([userId, reviewStatus])
+  @@index([userId, grade])
   @@index([userId, deletedAt])
   @@index([accountId])
   @@map("trades")
@@ -603,7 +754,7 @@ model JournalEntry {
 model TradingRule {
   id          String   @id @default(cuid())
   userId      String   @map("user_id")
-  kind        String // MAX_TRADES_PER_DAY | MAX_DAILY_LOSS | MAX_RISK_PER_TRADE | CUSTOM
+  kind        String // MAX_TRADES_PER_DAY | MAX_DAILY_LOSS | MAX_RISK_PER_TRADE | MIN_PLANNED_RR | CUSTOM
   value       Decimal
   description String?
   isActive    Boolean  @default(true) @map("is_active")
@@ -787,16 +938,21 @@ model TradeReview {
   id                    String   @id @default(cuid())
   tradeId               String   @unique @map("trade_id")
   userId                String   @map("user_id")
-  followedPlan          Boolean
+  /// Playbook match, declared at review time only — never derived from
+  /// followedPlan (Euforia §20). MATCHED | PARTIAL | OFF_PLAYBOOK.
+  playbookMatch         String?  @map("playbook_match")
+  /// Score fields are nullable: a review may exist only to declare the
+  /// playbook match, without scored answers (no invented scores).
+  followedPlan          Boolean?
   /// 1-5
-  planAdherenceScore    Int      @map("plan_adherence_score")
-  executionQuality      Int      @map("execution_quality")
-  entryQuality          Int      @map("entry_quality")
-  exitQuality           Int      @map("exit_quality")
-  riskManagementScore   Int      @map("risk_management_score")
-  emotionalControlScore Int      @map("emotional_control_score")
+  planAdherenceScore    Int?     @map("plan_adherence_score")
+  executionQuality      Int?     @map("execution_quality")
+  entryQuality          Int?     @map("entry_quality")
+  exitQuality           Int?     @map("exit_quality")
+  riskManagementScore   Int?     @map("risk_management_score")
+  emotionalControlScore Int?     @map("emotional_control_score")
   /// YES | NO | MAYBE
-  wouldTakeAgain        String   @map("would_take_again")
+  wouldTakeAgain        String?  @map("would_take_again")
   mainLesson            String?  @map("main_lesson")
   whatWentWell          String?  @map("what_went_well")
   whatToImprove         String?  @map("what_to_improve")
@@ -865,8 +1021,8 @@ model ReportSetting {
   emailEnabled       Boolean @default(false) @map("email_enabled")
   emailAddress       String? @map("email_address")
   includeScreenshots Boolean @default(false) @map("include_screenshots")
-  /// fr | en
-  language           String  @default("fr")
+  /// en (English only)
+  language           String  @default("en")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1292,6 +1448,116 @@ model TradeModification {
   @@index([userId])
   @@index([tradeId, time])
   @@map("trade_modifications")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v2.5 Module 5 — trading tools
+// (Client persistence is localStorage until `prisma generate` runs on the
+// user's PC; the shapes in src/lib/tools/store.ts mirror these models.)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Saved calculator scenario (multi-TP sizing, margin what-if, ...).
+model ToolScenario {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  name      String
+  /// MULTI_TP | MARGIN | RISK_REWARD
+  kind      String
+  /// JSON: calculator inputs (payload shape depends on kind).
+  payloadJson String @map("payload_json")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind])
+  @@map("tool_scenarios")
+}
+
+/// Manual / CSV-imported FX rate: 1 base = rate quote.
+model FxRate {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  baseCurrency  String   @map("base_currency")
+  quoteCurrency String   @map("quote_currency")
+  rate          Decimal
+  /// MANUAL | CSV
+  source        String   @default("MANUAL")
+  /// Date the rate applies to.
+  rateDate      DateTime @map("rate_date")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, baseCurrency, quoteCurrency])
+  @@index([userId])
+  @@map("fx_rates")
+}
+
+/// Market session setting: DISPLAY (IANA clock sessions) or DETECTION
+/// (session ranges used by detectSession, legacy UTC ranges by default).
+model MarketSessionSetting {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  name       String
+  /// DISPLAY | DETECTION
+  kind       String   @default("DISPLAY")
+  /// IANA zone (e.g. Europe/London) or "UTC".
+  timezone   String   @default("UTC")
+  /// Local "HH:MM" open / close in the session timezone.
+  openTime   String   @map("open_time")
+  closeTime  String   @map("close_time")
+  /// JSON array of ISO weekdays 1 = Monday ... 7 = Sunday.
+  activeDays String   @default("[1,2,3,4,5]") @map("active_days")
+  isEnabled  Boolean  @default(true) @map("is_enabled")
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind])
+  @@map("market_session_settings")
+}
+
+/// Partial exit plan: tiers (% + price or R target), breakeven / trailing.
+model ExitPlan {
+  id                 String   @id @default(cuid())
+  userId             String   @map("user_id")
+  name               String
+  /// JSON: ExitPlanTier[] { pct, targetType: PRICE | R, target }.
+  tiersJson          String   @map("tiers_json")
+  /// Move SL to breakeven after this tier index (0-based), null = never.
+  breakevenAfterTier Int?     @map("breakeven_after_tier")
+  /// Start trailing after this tier index (0-based), null = never.
+  trailingAfterTier  Int?     @map("trailing_after_tier")
+  notes              String?
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trades Trade[]
+
+  @@index([userId])
+  @@map("exit_plans")
+}
+
+/// Exposure alert thresholds (one row per user).
+model ExposureAlertSetting {
+  id                            String   @id @default(cuid())
+  userId                        String   @unique @map("user_id")
+  enabled                       Boolean  @default(true)
+  /// Same currency, same direction, 2+ positions, above this % of balance.
+  duplicationThresholdPercent   Decimal  @default(2) @map("duplication_threshold_percent")
+  /// One currency above this % of balance (same direction) warns.
+  maxCurrencyExposurePercent    Decimal  @default(5) @map("max_currency_exposure_percent")
+  createdAt                     DateTime @default(now()) @map("created_at")
+  updatedAt                     DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("exposure_alert_settings")
 }
 
 /// Equity curve samples fed by EA heartbeats. Retention: 15-min granularity
@@ -1995,4 +2261,313 @@ model UserDisplayPreference {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_display_preferences")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Gaïa — workspace de notes
+// ═════════════════════════════════════════════════════════════════════════════
+// Réplique du workspace Nofy d'Euforia, adaptée aux tables Prisma de Promethe
+// (une table par entité, JSON stocké en String comme Trade.customFields).
+// Le contenu humain est en français ; les ids machine restent en anglais.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Une note Gaïa : titre, dossier, tags, blocs JSON (voir src/lib/gaia/content.ts).
+model Note {
+  id           String    @id @default(cuid())
+  userId       String    @map("user_id")
+  title        String    @default("")
+  icon         String?
+  folderId     String?   @map("folder_id")
+  /// JSON string[] des ids de NoteTag.
+  tagIds       String    @default("[]") @map("tag_ids")
+  favorite     Boolean   @default(false)
+  templateId   String?   @map("template_id")
+  /// JSON GaiaBlock[] (contenu éditorial, jamais de HTML brut).
+  blocks       String    @default("[]")
+  lastViewedAt DateTime? @map("last_viewed_at")
+  deletedAt    DateTime? @map("deleted_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder   NoteFolder?   @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  versions NoteVersion[]
+
+  @@index([userId])
+  @@index([userId, folderId])
+  @@map("gaia_notes")
+}
+
+/// Dossier de notes (nom unique par utilisateur, insensible à la casse).
+model NoteFolder {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notes Note[]
+
+  @@index([userId])
+  @@map("gaia_folders")
+}
+
+/// Tag de notes (nom unique par utilisateur, insensible à la casse, "#" retiré).
+model NoteTag {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("gaia_tags")
+}
+
+/// Modèle de note créé par l'utilisateur. Les 5 modèles built-in (tpl-...)
+/// vivent dans le code (src/lib/gaia/templates.ts) et ne sont jamais persistés.
+model NoteTemplate {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  name        String
+  description String   @default("")
+  icon        String   @default("📄")
+  /// JSON GaiaBlock[] (les blocs ref sont supprimés à la création).
+  blocks      String   @default("[]")
+  builtIn     Boolean  @default(false) @map("built_in")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("gaia_templates")
+}
+
+/// Snapshot immuable d'une note avant modification (versioning, cap 12).
+model NoteVersion {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  noteId    String   @map("note_id")
+  title     String   @default("")
+  /// JSON GaiaBlock[] tels qu'avant la modification.
+  blocks    String   @default("[]")
+  /// = updatedAt de la note AVANT la modification.
+  savedAt   DateTime @map("saved_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  note Note @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([userId, noteId])
+  @@index([noteId, savedAt])
+  @@map("gaia_versions")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// v2.5 Module 6 — advanced analytics (Prompt 6)
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Per-trade lifecycle stats, persisted by GET /api/analytics/advanced
+/// (idempotent upsert from the stored MFE/MAE prices and, when stored
+/// candles cover the trade window, from the price path). timeInProfitMin /
+/// timeInLossMin stay null without candle coverage — never invented.
+model TradeLifecycleStats {
+  id              String   @id @default(cuid())
+  tradeId         String   @unique @map("trade_id")
+  userId          String   @map("user_id")
+  /// MFE in R (from mfePrice + initial SL), null when not computable.
+  mfeR            Decimal? @map("mfe_r")
+  /// MAE in R (adverse distance), null when not computable.
+  maeR            Decimal? @map("mae_r")
+  /// Minutes spent in profit / in loss (candle closes vs entry price).
+  timeInProfitMin Int?     @map("time_in_profit_min")
+  timeInLossMin   Int?     @map("time_in_loss_min")
+  /// Price came within 90 % of the planned RR target without touching TP.
+  almostTp        Boolean  @default(false) @map("almost_tp")
+  computedAt      DateTime @default(now()) @map("computed_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  trade Trade @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, computedAt])
+  @@map("trade_lifecycle_stats")
+}
+
+/// Daily trader quality score snapshot (0-100) with its four components.
+/// Written by the daily cron (all users) and by GET /api/analytics/advanced
+/// (today's row, idempotent upsert). History in the UI is a deterministic
+/// month-end replay over closed trades — snapshots only freeze the value.
+model TraderScoreSnapshot {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  /// Day (UTC midnight) the snapshot describes.
+  date        DateTime @map("date")
+  /// Composite score 0-100.
+  score       Int
+  /// Components, each 0-25.
+  discipline  Int
+  edge        Int
+  consistency Int
+  risk        Int
+  /// Closed trades the score is based on.
+  tradeCount  Int      @map("trade_count")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("trader_score_snapshots")
+}
+
+/// Detected trade anomaly (robust MAD z-score on R or on log-duration).
+/// Recomputed by GET /api/analytics/advanced (idempotent refresh for the
+/// trades in scope). No entry-time alerts are ever raised from these rows.
+model TradeAnomaly {
+  id         String   @id @default(cuid())
+  tradeId    String   @map("trade_id")
+  userId     String   @map("user_id")
+  /// R_OUTLIER | DURATION_OUTLIER
+  kind       String
+  /// high (|z| >= 3) | moderate (|z| >= 2)
+  severity   String
+  zScore     Decimal  @map("z_score")
+  detectedAt DateTime @default(now()) @map("detected_at")
+
+  trade Trade @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tradeId, kind])
+  @@index([userId, detectedAt])
+  @@map("trade_anomalies")
+}
+
+/// Weekly improvement plan (MRT wave 1) — one row per generated action of
+/// the current week (Monday-Sunday). The title and target are snapshots of
+/// the rule output at generation time; `done` is the user's own checkbox
+/// state for that week. Rows are upserted on every GET and stale rows of
+/// the week (rules that no longer fire) are removed, so the table always
+/// mirrors the live plan. No grade data is stored here.
+model WeeklyPlanAction {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  /// Monday of the week, UTC midnight.
+  weekStart DateTime @map("week_start")
+  /// Stable rule key from the engine (worst-session, worst-hour, ...).
+  rule      String
+  /// Snapshot of the generated action title at generation time.
+  title     String
+  /// Snapshot of the measurable target at generation time.
+  target    String
+  done      Boolean  @default(false)
+  doneAt    DateTime? @map("done_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekStart, rule])
+  @@index([userId, weekStart])
+  @@map("weekly_plan_actions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v2.5 Module 9 — Discord / Telegram integrations (Prompt 9)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// One outbound destination owned by a user: a Discord webhook URL or a
+/// Telegram bot token (+ chat id). The secret is stored ONLY as AES-256-GCM
+/// ciphertext (see src/lib/integrations/crypto.ts) and is never returned by
+/// any API — only secretHint (display only) ever reaches the client.
+model IntegrationEndpoint {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  /// DISCORD_WEBHOOK | TELEGRAM_BOT
+  type  String
+  label String
+  /// AES-256-GCM ciphertext, format "v1:<iv hex>:<tag hex>:<cipher hex>".
+  secretEncrypted String @map("secret_encrypted")
+  /// Display hint only: "discord.com" for Discord, last 4 chars of the
+  /// token ("••••abcd") for Telegram. Never a usable secret fragment.
+  secretHint String @map("secret_hint")
+  /// Telegram chat id (numeric id or @channelusername). Null for Discord.
+  chatId String? @map("chat_id")
+  isEnabled Boolean @default(true) @map("is_enabled")
+  /// Consecutive failed sends; the endpoint auto-disables at 5.
+  consecutiveFailures Int       @default(0) @map("consecutive_failures")
+  lastErrorAt       DateTime? @map("last_error_at")
+  lastSentAt        DateTime? @map("last_sent_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  user          User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptions IntegrationSubscription[]
+  messages      OutboundMessage[]
+
+  @@index([userId])
+  @@map("integration_endpoints")
+}
+
+/// One event a user wants on one endpoint, with its privacy level and quiet
+/// hours. Created automatically (all 3 events, FULL, enabled) when an
+/// endpoint is added; the user then tunes or disables each row.
+model IntegrationSubscription {
+  id       String @id @default(cuid())
+  userId   String @map("user_id")
+  endpointId String @map("endpoint_id")
+  /// DAILY_SUMMARY | DRAWDOWN_ALERT | PROP_ALERT
+  eventType String @map("event_type")
+  /// FULL | NO_AMOUNTS | MINIMAL
+  privacyLevel String  @default("FULL") @map("privacy_level")
+  /// HH:mm local, null = no quiet hours. Daily summaries are deferred past
+  /// quiet hours; drawdown / prop alerts always go out.
+  quietHoursStart String? @map("quiet_hours_start")
+  quietHoursEnd   String? @map("quiet_hours_end")
+  isEnabled Boolean @default(true) @map("is_enabled")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint IntegrationEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@unique([endpointId, eventType])
+  @@index([userId])
+  @@map("integration_subscriptions")
+}
+
+/// Outbox for outbound Discord / Telegram messages. The cron worker
+/// (/api/cron/integrations) drains PENDING rows; dedupeKey makes every
+/// enqueue idempotent (one daily summary per user, endpoint and day; one
+/// alert per threshold per day). payloadJson holds the structured event
+/// data + privacy level — rendering happens at send time, per endpoint type.
+model OutboundMessage {
+  id         String @id @default(cuid())
+  userId     String @map("user_id")
+  endpointId String @map("endpoint_id")
+  /// DAILY_SUMMARY | DRAWDOWN_ALERT | PROP_ALERT | TEST
+  eventType String @map("event_type")
+  /// e.g. daily-summary:<userId>:<endpointId>:2026-11-17
+  dedupeKey String @unique @map("dedupe_key")
+  /// JSON string: { eventType, privacyLevel, data }
+  payloadJson String @map("payload_json")
+  /// PENDING | SENT | FAILED | DEAD
+  status String @default("PENDING")
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
+  lastError String? @map("last_error")
+  sentAt    DateTime? @map("sent_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint IntegrationEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@index([userId, createdAt])
+  @@map("outbound_messages")
 }

@@ -19,7 +19,7 @@ export async function GET(_req: Request, ctx: Ctx) {
     const mentorCtx = await requireMentorContext(session.user.id, ownerId);
     const result = await getMentorAnalytics(mentorCtx);
     if (!result) {
-      throw new AccessDeniedError("Les analytiques ne sont pas partagées avec vous.");
+      throw new AccessDeniedError("Analytics are not shared with you.");
     }
     return NextResponse.json(result);
   } catch (error) {

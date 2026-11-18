@@ -1,6 +1,6 @@
 /**
  * Locale-aware formatting. The locale is set by the I18nProvider on mount
- * and on every language switch (setFormatLocale) — defaults to fr-CA.
+ * — English only (Phase 3), defaults to en-CA.
  * All functions accept Decimal | number | string and never throw.
  *
  * v2.5 Module 8 — SINGLE CHOKE POINT RULE: fmtMoney / fmtSignedMoney /
@@ -14,9 +14,9 @@ import { toD, type DecimalInput } from "./trading/dec";
 import { getPrivacySnapshot } from "./privacy/store";
 import { privacyMask } from "./privacy/policy";
 
-let currentLocale = "fr-CA";
+let currentLocale = "en-CA";
 
-/** Called by the I18nProvider — keeps every formatter in sync with the UI. */
+/** Called by the I18nProvider - keeps every formatter in sync with the UI. */
 export function setFormatLocale(locale: string): void {
   currentLocale = locale;
 }
@@ -26,16 +26,16 @@ export function getFormatLocale(): string {
   return currentLocale;
 }
 
-export const LOCALE = "fr-CA"; // legacy constant (kept for compatibility)
+export const LOCALE = "en-CA"; // legacy constant (kept for compatibility)
 
 export function fmtNum(
   v: DecimalInput | null | undefined,
   maxDigits = 2,
   minDigits = 0
 ): string {
-  if (v === null || v === undefined) return "—";
+  if (v === null || v === undefined) return "-";
   const d = toD(v);
-  if (!d.isFinite()) return "—";
+  if (!d.isFinite()) return "-";
   return new Intl.NumberFormat(currentLocale, {
     maximumFractionDigits: maxDigits,
     minimumFractionDigits: minDigits,
@@ -47,7 +47,7 @@ export function fmtPrice(
   v: DecimalInput | null | undefined,
   digits = 2
 ): string {
-  if (v === null || v === undefined) return "—";
+  if (v === null || v === undefined) return "-";
   return new Intl.NumberFormat(currentLocale, {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
@@ -60,7 +60,7 @@ export function fmtSigned(
   maxDigits = 2,
   minDigits = 0
 ): string {
-  if (v === null || v === undefined) return "—";
+  if (v === null || v === undefined) return "-";
   const d = toD(v);
   if (d.isZero()) return fmtNum(d, maxDigits, minDigits);
   const body = new Intl.NumberFormat(currentLocale, {
@@ -70,15 +70,15 @@ export function fmtSigned(
   return d.gt(0) ? `+${body}` : `−${body}`;
 }
 
-/** Money with currency code suffix (safe for any code — no Intl currency crash). */
+/** Money with currency code suffix (safe for any code - no Intl currency crash). */
 export function fmtMoney(
   v: DecimalInput | null | undefined,
   currency = "USD",
   maxDigits = 2
 ): string {
-  if (v === null || v === undefined) return "—";
+  if (v === null || v === undefined) return "-";
   const d = toD(v);
-  if (!d.isFinite()) return "—";
+  if (!d.isFinite()) return "-";
   const body = new Intl.NumberFormat(currentLocale, {
     maximumFractionDigits: maxDigits,
     minimumFractionDigits: maxDigits > 0 ? 2 : 0,
@@ -91,7 +91,7 @@ export function fmtSignedMoney(
   currency = "USD",
   maxDigits = 2
 ): string {
-  if (v === null || v === undefined) return "—";
+  if (v === null || v === undefined) return "-";
   const d = toD(v);
   if (d.isZero()) return fmtMoney(d, currency, maxDigits);
   // HIDE mode masks the sign too — the placeholder reveals nothing (§3.1).
@@ -117,7 +117,7 @@ export function fmtPct(
   );
 }
 
-/** Tailwind classes for profit/loss coloring (v2.5 M1 — semantic tokens). */
+/** Tailwind classes for profit/loss coloring (v2.5 M1 - semantic tokens). */
 export function pnlClass(v: DecimalInput | null | undefined): string {
   if (v === null || v === undefined) return "text-muted-foreground";
   const d = toD(v);
@@ -134,9 +134,9 @@ export function fmtDateTimeInTz(
   timezone: string,
   locale?: string
 ): string {
-  if (iso === null || iso === undefined) return "—";
+  if (iso === null || iso === undefined) return "-";
   const d = iso instanceof Date ? iso : new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   try {
     return new Intl.DateTimeFormat(locale ?? currentLocale, {
       dateStyle: "medium",
@@ -157,9 +157,9 @@ export function fmtDateInTz(
   timezone: string,
   locale?: string
 ): string {
-  if (iso === null || iso === undefined) return "—";
+  if (iso === null || iso === undefined) return "-";
   const d = iso instanceof Date ? iso : new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   try {
     return new Intl.DateTimeFormat(locale ?? currentLocale, {
       dateStyle: "medium",
@@ -178,9 +178,9 @@ export function fmtTimeInTz(
   timezone: string,
   locale?: string
 ): string {
-  if (iso === null || iso === undefined) return "—";
+  if (iso === null || iso === undefined) return "-";
   const d = iso instanceof Date ? iso : new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   try {
     return new Intl.DateTimeFormat(locale ?? currentLocale, {
       timeStyle: "short",

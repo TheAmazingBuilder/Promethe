@@ -1,19 +1,29 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import type { SessionPayload } from "@/lib/auth/types";
 import { SessionProvider, useSession } from "./session-context";
 import { AppearanceProvider } from "./appearance-provider";
 import { PrivacyProvider } from "@/components/privacy/privacy-provider";
 import { A11yProvider } from "@/components/a11y/a11y-provider";
+import { TimeProvider } from "@/components/time/time-provider";
 import { AuthScreen } from "@/components/auth/auth-screen";
 import { AppShell } from "./app-shell";
+import { RouterSync } from "./router-sync";
 import { ViewSwitch } from "@/components/views/view-switch";
 import { QueryProvider } from "./query-provider";
 import { PwaRoot } from "@/components/pwa/pwa-root";
 import { QuickFab } from "@/components/quick/quick-fab";
-import { LegalView } from "@/components/legal/legal-view";
-import { useHashRoute } from "@/lib/router";
+import { useRoute } from "@/lib/router";
+
+// Legal pages are public and rendered outside the shell; the view is a
+// separate chunk (also dynamic in view-switch) so logged-out users never
+// download the legal copy with the shell.
+const LegalView = dynamic(
+  () =>
+    import("@/components/legal/legal-view").then((m) => m.LegalView),
+);
 
 /**
  * SPA root: the server passes the initial session (no auth flash), then the
@@ -36,7 +46,10 @@ export function AppRoot({
         <AppearanceProvider>
           <PrivacyProvider>
             <A11yProvider>
-              <AppRootInner defaultSidebarOpen={defaultSidebarOpen} />
+              <TimeProvider>
+                <RouterSync />
+                <AppRootInner defaultSidebarOpen={defaultSidebarOpen} />
+              </TimeProvider>
             </A11yProvider>
           </PrivacyProvider>
         </AppearanceProvider>
@@ -51,12 +64,12 @@ function AppRootInner({
   defaultSidebarOpen: boolean;
 }) {
   const { session } = useSession();
-  const route = useHashRoute();
+  const route = useRoute();
 
   // Legal pages are public (RGPD art. 12): no auth wall, standalone layout.
   if (!session) {
     if (route.view === "legal") {
-      return <LegalView page={route.legalPage ?? "mentions"} standalone />;
+      return <LegalView page={route.legalPage ?? "terms"} standalone />;
     }
     return <AuthScreen />;
   }

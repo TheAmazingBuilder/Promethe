@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * v3 Phase 5 — Invitation landing page, #/invitation/{token}: shows who
+ * v3 Phase 5 — Invitation landing page, /invitation/{token}: shows who
  * invites and the granted permissions, then accept (requires a reserved
  * handle — link to the mentors settings when missing) or decline.
  */
@@ -44,7 +44,7 @@ export function InvitationView({ token }: { token: string }) {
     queryKey: ["invitation-preview", token],
     queryFn: () =>
       apiFetch<{ invitation: ReceivedInvitationDTO }>(
-        `/api/mentor/invitations/${encodeURIComponent(token)}`
+        `/api/v1/mentor/invitations/${encodeURIComponent(token)}`
       ),
     retry: false,
     enabled: done === null,
@@ -55,7 +55,7 @@ export function InvitationView({ token }: { token: string }) {
   async function act(action: "ACCEPT" | "DECLINE"): Promise<void> {
     setBusy(action);
     try {
-      await apiFetch(`/api/mentor/invitations/${encodeURIComponent(token)}`, {
+      await apiFetch(`/api/v1/mentor/invitations/${encodeURIComponent(token)}`, {
         method: "POST",
         body: JSON.stringify({ action }),
       });
@@ -66,9 +66,9 @@ export function InvitationView({ token }: { token: string }) {
       });
     } catch (error) {
       toast({
-        title: "Erreur",
+        title: "Error",
         description:
-          error instanceof ApiClientError ? error.message : "Réessayez.",
+          error instanceof ApiClientError ? error.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -83,7 +83,7 @@ export function InvitationView({ token }: { token: string }) {
           className="mx-auto h-10 w-10 text-emerald-600 dark:text-emerald-400"
           aria-hidden="true"
         />
-        <h2 className="mt-2 text-lg font-semibold tracking-tight">
+        <h2 className="mt-2 text-2xl font-bold tracking-tight">
           {t("title")}
         </h2>
       </div>
@@ -96,7 +96,7 @@ export function InvitationView({ token }: { token: string }) {
               aria-hidden="true"
             />
             <p className="text-sm text-muted-foreground">{t("accepted")}</p>
-            <Button onClick={() => navigate("#/mentor")}>
+            <Button onClick={() => navigate("/mentor")}>
               <GraduationCap className="h-4 w-4" aria-hidden="true" />
               {t("goToMentorSpace")}
             </Button>
@@ -152,7 +152,7 @@ export function InvitationView({ token }: { token: string }) {
                 <button
                   type="button"
                   className="font-medium underline underline-offset-2"
-                  onClick={() => navigate("#/reglages/mentors")}
+                  onClick={() => navigate("/settings/mentors")}
                 >
                   {t("goToHandle")}
                 </button>

@@ -294,7 +294,7 @@ export function PositionSizeCalculator() {
             value={
               result.stopPips
                 ? `${fmtNum(result.stopPips, 1)} ${t("pips")}`
-                : "—"
+                : "-"
             }
             hint={result.stopDist ? fmtPrice(result.stopDist, instrument.digits) : undefined}
           />

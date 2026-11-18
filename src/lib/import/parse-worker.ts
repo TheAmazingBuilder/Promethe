@@ -26,7 +26,7 @@ self.addEventListener("message", (event: MessageEvent<WorkerRequest>) => {
       id,
       ok: false,
       code: error instanceof Error && "code" in error ? String((error as { code: string }).code) : "PARSE_FAILED",
-      message: error instanceof Error ? error.message : "Échec de l'analyse.",
+      message: error instanceof Error ? error.message : "Analysis failed.",
     };
     self.postMessage(response);
   }

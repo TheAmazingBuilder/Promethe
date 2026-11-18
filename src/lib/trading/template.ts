@@ -15,7 +15,7 @@ import type {
   TradingSession,
 } from "./types";
 
-/** Client-safe template shape (API JSON — decimals as strings). */
+/** Client-safe template shape (API JSON - decimals as strings). */
 export interface TradeTemplateData {
   id: string;
   name: string;
@@ -40,9 +40,9 @@ export interface TradeTemplateData {
 export interface TemplateApplyContext {
   /** Lookup list (global presets + user instruments). */
   instruments: Array<InstrumentSpec & { id?: string }>;
-  /** Entry price already typed (optional — pips stay pips until a price exists). */
+  /** Entry price already typed (optional - pips stay pips until a price exists). */
   entryPrice?: DecimalInput | null;
-  /** Direction already chosen by the user — template's own is then ignored. */
+  /** Direction already chosen by the user - template's own is then ignored. */
   direction?: Direction | null;
   /** Default risk % from the template's strategy (fallback when the template has none). */
   strategyDefaultRiskPercent?: DecimalInput | null;

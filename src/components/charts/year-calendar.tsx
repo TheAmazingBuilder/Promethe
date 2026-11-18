@@ -81,7 +81,7 @@ export function YearCalendar({
 
   const data = useQuery({
     queryKey: ["calendar", "year", year],
-    queryFn: async () => apiFetch<YearDaysPayload>(`/api/calendar/year?year=${year}`),
+    queryFn: async () => apiFetch<YearDaysPayload>(`/api/v1/calendar/year?year=${year}`),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -140,7 +140,7 @@ export function YearCalendar({
         const cell = grid.cells[focus.row][focus.col];
         if (cell.inYear) {
           e.preventDefault();
-          navigate(`#/journal/${cell.date}`);
+          navigate(`/journal/${cell.date}`);
         }
         return;
       }
@@ -290,11 +290,11 @@ export function YearCalendar({
                           cursor: cell.inYear ? "pointer" : undefined,
                         }}
                         onMouseEnter={() => setFocus({ row, col })}
-                        onClick={() => cell.inYear && navigate(`#/journal/${cell.date}`)}
+                        onClick={() => cell.inYear && navigate(`/journal/${cell.date}`)}
                       >
                         <title>
                           {cell.inYear
-                            ? `${cell.date} — ${formatDay(cell)}`
+                            ? `${cell.date} - ${formatDay(cell)}`
                             : ""}
                         </title>
                       </rect>
@@ -349,7 +349,7 @@ export function YearCalendar({
             {/* Focus info (accessible) */}
             <div className="min-h-5 text-xs text-muted-foreground" aria-live="polite">
               {focusCell?.inYear
-                ? `${focusCell.date} — ${formatDay(focusCell)}`
+                ? `${focusCell.date} - ${formatDay(focusCell)}`
                 : t("hoverHint")}
             </div>
             <p className="text-xs text-muted-foreground">{t("clickHint")}</p>

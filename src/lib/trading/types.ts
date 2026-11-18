@@ -195,7 +195,7 @@ export const COMMON_CURRENCIES = [
 ] as const;
 
 // ── Labels ──────────────────────────────────────────────────────────────────
-// UI labels live in messages/fr.json + messages/en.json (namespace `trading`),
+// UI labels live in messages/en.json (namespace `trading`),
 // resolved with next-intl: t(`trading.<kind>.<VALUE>`). The exported constants
 // above (DIRECTIONS, ASSET_CLASSES, …) remain the single source of truth for
 // the value sets themselves.

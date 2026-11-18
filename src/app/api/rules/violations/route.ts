@@ -15,7 +15,7 @@ export async function GET(req: Request) {
     sweepRateLimits();
     if (!rateLimit(`rules-violations:${session.user.id}`, 60, 60 * 1000)) {
       return NextResponse.json(
-        { error: "RATE_LIMITED", message: "Trop de requêtes, patientez." },
+        { error: "RATE_LIMITED", message: "Too many requests, please wait." },
         { status: 429 }
       );
     }
@@ -26,7 +26,7 @@ export async function GET(req: Request) {
       return NextResponse.json(
         {
           error: "VALIDATION",
-          message: "Paramètre days invalide.",
+          message: "Invalid days parameter.",
           fieldErrors: zodFieldErrors(parsed.error),
         },
         { status: 422 }

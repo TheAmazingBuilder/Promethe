@@ -15,6 +15,16 @@ import {
   type TradePreview,
 } from "@/lib/trading/calculate";
 import { detectSessionSafe } from "@/lib/trading/session";
+import { resolveConversionRate, type FxRateInput } from "@/lib/tools/fx";
+import {
+  detectSessionFromSettings,
+  type MarketSessionSettingEntry,
+} from "@/lib/tools/market-hours";
+import {
+  getDetectionSettings,
+  listFxRateInputs,
+  resolveExitPlan,
+} from "@/server/tools";
 import type { InstrumentSpec } from "@/lib/trading/types";
 import type {
   CloseTradeInput,
@@ -23,15 +33,30 @@ import type {
   TradePatch,
 } from "@/lib/validations/trade";
 import type {
-  PaginatedDTO,
   TagDTO,
+  TradeAnomalyFlagDTO,
   TradeDetailDTO,
   TradeListItemDTO,
+  TradesListPayload,
 } from "@/lib/trading/dto";
+import {
+  computeGridStats,
+  gridStatsFromCounts,
+  type GridStats,
+} from "@/lib/trades/grid-stats";
 import { evaluateTradeViolations } from "@/server/rules";
+import { checkDrawdownAlerts } from "@/server/integrations/delivery";
 import { refreshTradeSearchText } from "@/server/search-index";
+import { foldText } from "@/lib/search/text";
+import {
+  buildCustomFieldsSchema,
+  parseCustomFields,
+  serializeCustomFields,
+} from "@/lib/custom-fields/validate";
+import { activeCustomFieldDefinitions } from "@/server/custom-fields";
+import { expiryDate, newGroupId } from "@/server/change-log";
 
-/** Validation/ownership errors — mapped to typed API responses by the routes. */
+/** Validation/ownership errors - mapped to typed API responses by the routes. */
 export class TradeValidationError extends Error {
   readonly code: string;
   readonly status: number;
@@ -53,6 +78,31 @@ type TradeRow = Prisma.TradeGetPayload<{
     tags: { include: { tag: true } };
   };
 }>;
+
+/**
+ * Minimal row shape baseItem reads: every trade scalar plus only the
+ * relation fields the list item exposes (symbol/digits, account name,
+ * strategy name + deletedAt for the soft-delete rule, tag id/name/color/
+ * kind + deletedAt). The full include satisfies it — and so does a
+ * narrowed select (dashboard aggregation), so the mapper never sees a
+ * field outside this shape.
+ */
+export type TradeListRow = Omit<
+  TradeRow,
+  "instrument" | "account" | "strategy" | "tags"
+> & {
+  instrument: Pick<TradeRow["instrument"], "symbol" | "digits">;
+  account: Pick<TradeRow["account"], "name">;
+  strategy:
+    | Pick<NonNullable<TradeRow["strategy"]>, "name" | "deletedAt">
+    | null;
+  tags: Array<{
+    tag: Pick<
+      TradeRow["tags"][number]["tag"],
+      "id" | "name" | "color" | "kind" | "deletedAt"
+    >;
+  }>;
+};
 
 type TradeFullRow = Prisma.TradeGetPayload<{
   include: {
@@ -80,7 +130,7 @@ type TradeDetailRow = Omit<
 > & {
   modifications?: TradeFullRow["modifications"];
   eventLinks?: TradeFullRow["eventLinks"];
-  review: { id: string } | null;
+  review: { id: string; playbookMatch: string | null } | null;
 };
 
 /** Shared include for every TradeDetailDTO mapper call site. */
@@ -91,7 +141,7 @@ const DETAIL_INCLUDE = {
   tags: { include: { tag: true } },
   screenshots: { orderBy: { createdAt: "asc" } },
   executions: { orderBy: { time: "asc" } },
-  review: { select: { id: true } },
+  review: { select: { id: true, playbookMatch: true } },
   // v2.5 M2 — price chart overlay sources
   modifications: { orderBy: { time: "asc" } },
   eventLinks: { include: { event: true } },
@@ -117,7 +167,7 @@ export function toInstrumentSpec(row: Instrument): InstrumentSpec {
   };
 }
 
-function baseItem(t: TradeRow): TradeListItemDTO {
+function baseItem(t: TradeListRow): TradeListItemDTO {
   // v2.5 M4 — references to soft-deleted entities are hidden in DTOs: a
   // trashed strategy shows as "none" on the trade until it is restored
   // (the trade itself keeps its strategyId — restore brings it back).
@@ -137,6 +187,8 @@ function baseItem(t: TradeRow): TradeListItemDTO {
     timeframe: t.timeframe,
     session: t.session,
     setupType: t.setupType,
+    setupId: t.setupId,
+    strategyVersion: t.strategyVersion,
     entryTime: t.entryTime.toISOString(),
     exitTime: t.exitTime?.toISOString() ?? null,
     entryPrice: t.entryPrice.toString(),
@@ -156,17 +208,20 @@ function baseItem(t: TradeRow): TradeListItemDTO {
     isDraft: t.isDraft,
     emotionBefore: t.emotionBefore,
     followedPlan: t.followedPlan,
+    grade: t.grade,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
+    currentPrice: s(t.currentPrice),
     tags: t.tags
       .filter((tt) => tt.tag.deletedAt == null)
       .map((tt) => tt.tag)
       .map((tag): TagDTO => ({ id: tag.id, name: tag.name, color: tag.color, kind: tag.kind })),
+    customFields: parseCustomFields(t.customFields),
   };
 }
 
 /** Public row → list-item mapper (reused by the dashboard aggregation). */
-export function toTradeListItem(t: TradeRow): TradeListItemDTO {
+export function toTradeListItem(t: TradeListRow): TradeListItemDTO {
   return baseItem(t);
 }
 
@@ -207,12 +262,15 @@ export function toTradeDetail(t: TradeDetailRow): TradeDetailDTO {
     checklistResults: checklist,
     accountCurrency: t.account.currency,
     accountInitialBalance: t.account.initialBalance.toString(),
+    exitPlanId: t.exitPlanId,
+    playbookMatch: t.review?.playbookMatch ?? null,
+    currentPrice: s(t.currentPrice),
     screenshots: t.screenshots.map((sc) => ({
       id: sc.id,
       label: sc.label,
       caption: sc.caption,
       createdAt: sc.createdAt.toISOString(),
-      url: `/api/uploads/${sc.id}`,
+      url: `/api/v1/uploads/${sc.id}`,
     })),
     executions: t.executions.map((e) => ({
       id: e.id,
@@ -264,6 +322,21 @@ async function resolveStrategy(userId: string, strategyId: string | null | undef
   const strategy = await db.strategy.findFirst({ where: { id: strategyId, userId } });
   if (!strategy) throw new TradeValidationError("STRATEGY_NOT_FOUND", 422);
   return strategy;
+}
+
+/** Playbook setup, owned by the user and attached to the given strategy. */
+async function resolveSetup(
+  userId: string,
+  setupId: string | null | undefined,
+  strategyId: string | null | undefined,
+) {
+  if (!setupId) return null;
+  const setup = await db.setup.findFirst({ where: { id: setupId, userId } });
+  if (!setup) throw new TradeValidationError("SETUP_NOT_FOUND", 422);
+  if (strategyId != null && setup.strategyId !== strategyId) {
+    throw new TradeValidationError("SETUP_STRATEGY_MISMATCH", 422);
+  }
+  return setup;
 }
 
 async function filterOwnTags(userId: string, tagIds: string[]): Promise<string[]> {
@@ -321,6 +394,10 @@ export interface ComputeParams {
   manualNetPnl: string | null | undefined;
   entryTime: Date;
   balanceAtEntry: Decimal | null;
+  /** Stored FxRate table: default conversion when no manual rate is set. */
+  fxRates?: FxRateInput[] | null;
+  /** User DETECTION settings (null = legacy UTC defaults). */
+  detectionSettings?: MarketSessionSettingEntry[] | null;
 }
 
 export function computeDerived(p: ComputeParams) {
@@ -340,6 +417,7 @@ export function computeDerived(p: ComputeParams) {
       swap: p.swap,
       fees: p.fees,
       quoteToAccountRate: p.quoteToAccountRate ?? null,
+      fxRates: p.fxRates ?? null,
       accountCurrency: p.account.currency,
       stopLoss: p.stopLoss,
       takeProfit: p.takeProfit,
@@ -361,10 +439,20 @@ export function computeDerived(p: ComputeParams) {
         : toD(p.stopLoss).minus(toD(p.entryPrice))
       : null;
   if (stopDist && stopDist.gt(0)) {
+    // Manual rate wins; otherwise the stored FxRate table converts the
+    // risk into account currency (1 when no rate is known).
+    const effectiveRate = p.quoteToAccountRate
+      ? toD(p.quoteToAccountRate)
+      : (resolveConversionRate(
+          p.instrument.quoteCurrency ?? "",
+          p.account.currency,
+          p.fxRates ?? [],
+          null
+        ) ?? toD(1));
     riskAmount = stopDist
       .times(toD(p.lots))
       .times(toD(p.instrument.contractSize))
-      .times(p.quoteToAccountRate ? toD(p.quoteToAccountRate) : toD(1));
+      .times(effectiveRate);
     if (p.balanceAtEntry && p.balanceAtEntry.gt(0)) {
       // 6 dp: SQLite NUMERIC affinity truncates longer decimals to float64
       // on storage (e.g. "0.21983288304231124") — round to keep values exact.
@@ -402,7 +490,9 @@ export function computeDerived(p: ComputeParams) {
   const units = toD(p.lots).times(toD(p.instrument.contractSize));
 
   return {
-    session: detectSessionSafe(p.entryTime),
+    session: p.detectionSettings
+      ? detectSessionFromSettings(p.entryTime, p.detectionSettings)
+      : detectSessionSafe(p.entryTime),
     pips: preview ? preview.pips : null,
     points: preview ? preview.points : null,
     grossPnl: preview ? preview.grossPnl : null,
@@ -433,6 +523,11 @@ export function tradeListWhere(
     ...(query.resultType ? { resultType: query.resultType } : {}),
     ...(query.reviewStatus ? { reviewStatus: query.reviewStatus } : {}),
     ...(query.session ? { session: query.session } : {}),
+    ...(query.grade
+      ? query.grade === "UNGRADED"
+        ? { grade: null }
+        : { grade: query.grade }
+      : {}),
     ...(query.timeframe ? { timeframe: query.timeframe } : {}),
     ...(query.accountId ? { accountId: query.accountId } : {}),
     ...(query.strategyId ? { strategyId: query.strategyId } : {}),
@@ -450,22 +545,65 @@ export function tradeListWhere(
       : {}),
     ...(query.search
       ? {
-          OR: [
-            { notes: { contains: query.search } },
-            { preTradeAnalysis: { contains: query.search } },
-            { postTradeReview: { contains: query.search } },
-            { setupType: { contains: query.search } },
-            { instrument: { symbol: { contains: query.search } } },
-          ],
+          // v2.5 Module 4 — accent-insensitive search over the maintained
+          // searchText column (symbol, setup, notes, analyses, lesson,
+          // broker comment, tag names, custom-field values). Multi-term
+          // queries AND the folded terms.
+          AND: foldText(query.search)
+            .split(/\s+/)
+            .filter(Boolean)
+            .map((term) => ({ searchText: { contains: term } })),
+        }
+      : {}),
+    ...(query.customFieldKey && query.customFieldValue
+      ? {
+          // SELECT custom-field filter: exact JSON fragment match.
+          customFields: {
+            contains: `"${query.customFieldKey}":"${query.customFieldValue}"`,
+          },
         }
       : {}),
   };
 }
 
+/**
+ * v2.5 M2 drill-down: local-hour / local-weekday match, timezone-aware.
+ * SQLite has no TZ support, so the filter runs in JS over a bounded
+ * fetch (take 5000) — shared by the list and the stats endpoints.
+ */
+function matchesEntryDrilldown(
+  entryTime: Date,
+  timezone: string,
+  query: Pick<TradeListQuery, "entryHour" | "entryWeekday">
+): boolean {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      hour: "2-digit",
+      hourCycle: "h23",
+      weekday: "short",
+    }).formatToParts(entryTime);
+    const hour = parts.find((p) => p.type === "hour")?.value;
+    const weekday = parts.find((p) => p.type === "weekday")?.value;
+    const hourNum = hour != null ? Number.parseInt(hour, 10) : null;
+    // Intl weekday "short" en-US: Sun..Sat → ISO 1-7 (Mon..Sun)
+    const isoWeekday = weekday
+      ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(weekday) + 1
+      : null;
+    if (query.entryHour != null && hourNum !== query.entryHour) return false;
+    if (query.entryWeekday != null && isoWeekday !== query.entryWeekday) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function listTrades(
   userId: string,
   query: TradeListQuery
-): Promise<PaginatedDTO<TradeListItemDTO>> {
+): Promise<TradesListPayload> {
   const where = tradeListWhere(userId, query);
 
   // v2.5 M2 drill-down: local-hour / local-weekday filters are timezone-aware
@@ -485,30 +623,9 @@ export async function listTrades(
       orderBy: { entryTime: "desc" },
       take: 5000,
     });
-    const filtered = rows.filter((t) => {
-      try {
-        const parts = new Intl.DateTimeFormat("en-US", {
-          timeZone: timezone,
-          hour: "2-digit",
-          hourCycle: "h23",
-          weekday: "short",
-        }).formatToParts(t.entryTime);
-        const hour = parts.find((p) => p.type === "hour")?.value;
-        const weekday = parts.find((p) => p.type === "weekday")?.value;
-        const hourNum = hour != null ? Number.parseInt(hour, 10) : null;
-        // Intl weekday "short" en-US: Sun..Sat → ISO 1-7 (Mon..Sun)
-        const isoWeekday = weekday
-          ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(weekday) + 1
-          : null;
-        if (query.entryHour != null && hourNum !== query.entryHour) return false;
-        if (query.entryWeekday != null && isoWeekday !== query.entryWeekday) {
-          return false;
-        }
-        return true;
-      } catch {
-        return false;
-      }
-    });
+    const filtered = rows.filter((t) =>
+      matchesEntryDrilldown(t.entryTime, timezone, query)
+    );
     const total = filtered.length;
     const pageRows = filtered.slice(
       (query.page - 1) * query.pageSize,
@@ -520,6 +637,10 @@ export async function listTrades(
       pageSize: query.pageSize,
       total,
       totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
+      anomalies: await listAnomalyFlags(
+        userId,
+        pageRows.map((t) => t.id)
+      ),
     };
   }
 
@@ -545,7 +666,110 @@ export async function listTrades(
     pageSize: query.pageSize,
     total,
     totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
+    anomalies: await listAnomalyFlags(
+      userId,
+      rows.map((t) => t.id)
+    ),
   };
+}
+
+/**
+ * Header stats over the WHOLE filtered set (grid view) — aggregated in
+ * SQL instead of paging the list endpoint one page at a time. Same
+ * filters as listTrades, same numbers as computeGridStats over the same
+ * rows (one shared math function, gridStatsFromCounts).
+ *
+ * Drill-down filters (entryHour/entryWeekday) still need the bounded
+ * 5000-row JS-filter path (SQLite has no TZ support) — one narrow query,
+ * still one HTTP call.
+ */
+export async function getGridStats(
+  userId: string,
+  query: TradeListQuery
+): Promise<GridStats> {
+  const where = tradeListWhere(userId, query);
+
+  if (query.entryHour != null || query.entryWeekday != null) {
+    const profile = await db.profile.findUnique({ where: { id: userId } });
+    const timezone = profile?.timezone ?? "UTC";
+    const rows = await db.trade.findMany({
+      where,
+      select: {
+        entryTime: true,
+        resultType: true,
+        netPnl: true,
+        pnlCurrency: true,
+      },
+      orderBy: { entryTime: "desc" },
+      take: 5000,
+    });
+    const filtered = rows.filter((t) =>
+      matchesEntryDrilldown(t.entryTime, timezone, query)
+    );
+    return computeGridStats(
+      filtered.map((t) => ({
+        resultType: t.resultType,
+        netPnl: t.netPnl?.toString() ?? null,
+        pnlCurrency: t.pnlCurrency,
+      }))
+    );
+  }
+
+  const [byResult, total, byCurrency] = await Promise.all([
+    db.trade.groupBy({
+      by: ["resultType"],
+      where,
+      _count: { _all: true },
+    }),
+    db.trade.aggregate({
+      where,
+      _count: { _all: true },
+      _sum: { netPnl: true },
+    }),
+    db.trade.groupBy({
+      by: ["pnlCurrency"],
+      where,
+      _count: { _all: true },
+    }),
+  ]);
+  const resultCounts = new Map(
+    byResult.map((g) => [g.resultType, g._count._all] as const)
+  );
+  return gridStatsFromCounts({
+    count: total._count._all,
+    wins: resultCounts.get("WIN") ?? 0,
+    losses: resultCounts.get("LOSS") ?? 0,
+    breakevens: resultCounts.get("BREAKEVEN") ?? 0,
+    netPnl: total._sum.netPnl?.toString() ?? "0",
+    currencies: new Map(
+      byCurrency.map((g) => [g.pnlCurrency, g._count._all] as const)
+    ),
+  });
+}
+
+/**
+ * Persisted anomaly flags for the given trades (TradeAnomaly rows written
+ * by the advanced analytics computation). One indexed lookup, no
+ * recalculation — the /trades badge column reads these rows instead of
+ * triggering a full analytics run. Empty until an advanced computation
+ * has run at least once; the /analytics/anomalies tab still computes
+ * live and refreshes the rows.
+ */
+async function listAnomalyFlags(
+  userId: string,
+  tradeIds: string[]
+): Promise<TradeAnomalyFlagDTO[]> {
+  if (tradeIds.length === 0) return [];
+  const rows = await db.tradeAnomaly.findMany({
+    where: { userId, tradeId: { in: tradeIds } },
+    select: { tradeId: true, kind: true, severity: true, zScore: true },
+  });
+  return rows.map((r) => ({
+    tradeId: r.tradeId,
+    kind: r.kind,
+    severity: r.severity,
+    zScore: r.zScore.toNumber(),
+  }));
 }
 
 export async function getTradeDetail(
@@ -563,8 +787,27 @@ export async function getTradeDetail(
 
 export interface CreateTradeResult {
   trade: TradeDetailDTO;
-  /** True when the clientMutationId already existed — no new row created. */
+  /** True when the clientMutationId already existed - no new row created. */
   deduplicated: boolean;
+}
+
+/** Validate custom-field values against the live definitions (non-drafts
+ * only) and serialize them in definition order. Unknown keys are dropped.
+ * Drafts skip validation so a half-filled field never blocks saving. */
+async function resolveCustomFields(
+  userId: string,
+  values: Record<string, unknown> | null | undefined,
+  opts: { validate: boolean }
+): Promise<string | null> {
+  if (!values) return null;
+  const defs = await activeCustomFieldDefinitions(userId);
+  if (opts.validate) {
+    const parsed = buildCustomFieldsSchema(defs).safeParse(values);
+    if (!parsed.success) {
+      throw new TradeValidationError("CUSTOM_FIELDS_INVALID");
+    }
+  }
+  return serializeCustomFields(values, defs);
 }
 
 export async function createTrade(
@@ -587,6 +830,14 @@ export async function createTrade(
   ]);
   const tagIds = await filterOwnTags(userId, input.tagIds);
 
+  // Playbook — the setup must belong to the chosen strategy, and the trade
+  // freezes the strategy's current definition version at entry.
+  const setup = await resolveSetup(
+    userId,
+    input.setupId ?? null,
+    input.strategyId ?? null,
+  );
+
   const entryTime = new Date(input.entryTime);
   if (Number.isNaN(entryTime.getTime())) {
     throw new TradeValidationError("INVALID_DATE");
@@ -602,6 +853,19 @@ export async function createTrade(
 
   const balanceAtEntry = await computeBalanceAt(userId, input.accountId, entryTime);
 
+  const customFieldsJson = await resolveCustomFields(userId, input.customFields, {
+    validate: !input.isDraft,
+  });
+
+  // v2.5 Module 5 — stored FX rates feed calcPnL (manual rate still wins)
+  // and the user's DETECTION settings drive the session. Both are
+  // best-effort: missing tools tables fall back to no rates / defaults.
+  const [fxRates, detectionSettings] = await Promise.all([
+    listFxRateInputs(userId),
+    getDetectionSettings(userId),
+  ]);
+  await resolveExitPlan(userId, input.exitPlanId ?? null);
+
   const derived = computeDerived({
     instrument,
     account,
@@ -615,6 +879,8 @@ export async function createTrade(
     swap: input.swap,
     fees: input.fees,
     quoteToAccountRate: input.quoteToAccountRate ?? null,
+    fxRates,
+    detectionSettings,
     pnlSource: input.pnlSource,
     manualNetPnl: input.manualNetPnl ?? null,
     entryTime,
@@ -627,6 +893,8 @@ export async function createTrade(
         userId,
         accountId: input.accountId,
         strategyId: strategy?.id ?? null,
+        setupId: setup?.id ?? null,
+        strategyVersion: strategy?.version ?? null,
         instrumentId: input.instrumentId,
         externalId: null,
         direction: input.direction,
@@ -642,6 +910,8 @@ export async function createTrade(
         exitPrice: closed ? (input.exitPrice ?? null) : null,
         stopLoss: input.stopLoss ?? null,
         takeProfit: input.takeProfit ?? null,
+        exitPlanId: input.exitPlanId ?? null,
+        currentPrice: input.currentPrice ?? null,
         initialStopLoss: input.stopLoss ?? null,
         initialTakeProfit: input.takeProfit ?? null,
         mfePrice: input.mfePrice ?? null,
@@ -673,6 +943,7 @@ export async function createTrade(
         setupQualityRating: input.setupQualityRating ?? null,
         executionRating: input.executionRating ?? null,
         followedPlan: input.followedPlan ?? null,
+        grade: input.grade ?? null,
         reviewStatus: input.reviewStatus,
         isDraft: input.isDraft,
         preTradeAnalysis: input.preTradeAnalysis,
@@ -682,6 +953,7 @@ export async function createTrade(
         checklistResults: input.checklistResults
           ? JSON.stringify(input.checklistResults)
           : null,
+        customFields: customFieldsJson,
         clientMutationId: input.clientMutationId ?? null,
         tags: {
           create: tagIds.map((tagId) => ({ tagId })),
@@ -791,14 +1063,30 @@ export async function updateTrade(
   if (patch.accountId && patch.accountId !== current.accountId) {
     await resolveAccount(userId, patch.accountId);
   }
+  // Changing strategy re-freezes the definition version at the new
+  // strategy's current version; clearing it clears the frozen version.
+  let frozenVersion: number | null | undefined;
   if (patch.strategyId !== undefined) {
-    await resolveStrategy(userId, patch.strategyId ?? null);
+    const nextStrategy = await resolveStrategy(userId, patch.strategyId ?? null);
+    frozenVersion = nextStrategy?.version ?? null;
+  }
+  if (patch.setupId !== undefined) {
+    const effectiveStrategyId =
+      patch.strategyId !== undefined ? patch.strategyId : current.strategyId;
+    await resolveSetup(userId, patch.setupId ?? null, effectiveStrategyId);
   }
   if (patch.instrumentId && patch.instrumentId !== current.instrumentId) {
     await resolveInstrument(userId, patch.instrumentId);
   }
   const tagIds =
     patch.tagIds !== undefined ? await filterOwnTags(userId, patch.tagIds) : null;
+
+  const customFieldsJson =
+    patch.customFields !== undefined
+      ? await resolveCustomFields(userId, patch.customFields, {
+          validate: patch.isDraft !== true,
+        })
+      : undefined;
 
   const closed = status === "CLOSED" && exitPrice != null;
   const balanceAtEntry = patch.accountId
@@ -814,6 +1102,15 @@ export async function updateTrade(
     ? await resolveInstrument(userId, patch.instrumentId)
     : current.instrument;
 
+  // v2.5 Module 5 — stored FX rates + DETECTION settings (best-effort).
+  const [fxRates, detectionSettings] = await Promise.all([
+    listFxRateInputs(userId),
+    getDetectionSettings(userId),
+  ]);
+  if (patch.exitPlanId !== undefined) {
+    await resolveExitPlan(userId, patch.exitPlanId);
+  }
+
   const derived = computeDerived({
     instrument,
     account,
@@ -827,6 +1124,8 @@ export async function updateTrade(
     swap,
     fees,
     quoteToAccountRate: patch.quoteToAccountRate ?? null,
+    fxRates,
+    detectionSettings,
     pnlSource,
     manualNetPnl,
     entryTime,
@@ -845,6 +1144,8 @@ export async function updateTrade(
       data: {
         accountId: patch.accountId ?? undefined,
         strategyId: patch.strategyId !== undefined ? patch.strategyId : undefined,
+        setupId: patch.setupId !== undefined ? patch.setupId : undefined,
+        strategyVersion: frozenVersion,
         instrumentId: patch.instrumentId ?? undefined,
         direction,
         orderType: patch.orderType ?? undefined,
@@ -860,6 +1161,10 @@ export async function updateTrade(
         exitPrice: closed ? exitPrice : null,
         stopLoss,
         takeProfit,
+        exitPlanId:
+          patch.exitPlanId !== undefined ? patch.exitPlanId : undefined,
+        currentPrice:
+          patch.currentPrice !== undefined ? patch.currentPrice : undefined,
         initialStopLoss,
         initialTakeProfit,
         mfePrice: patch.mfePrice !== undefined ? patch.mfePrice : undefined,
@@ -894,6 +1199,7 @@ export async function updateTrade(
         executionRating:
           patch.executionRating !== undefined ? patch.executionRating : undefined,
         followedPlan: patch.followedPlan !== undefined ? patch.followedPlan : undefined,
+        grade: patch.grade !== undefined ? patch.grade : undefined,
         reviewStatus: patch.reviewStatus ?? undefined,
         isDraft: patch.isDraft !== undefined ? patch.isDraft : undefined,
         preTradeAnalysis: patch.preTradeAnalysis ?? undefined,
@@ -906,6 +1212,8 @@ export async function updateTrade(
               ? JSON.stringify(patch.checklistResults)
               : null
             : undefined,
+        customFields:
+          patch.customFields !== undefined ? customFieldsJson : undefined,
       },
     });
     if (tagIds !== null) {
@@ -951,6 +1259,11 @@ export async function closeTrade(
     ? new Decimal(current.accountBalanceAtEntry)
     : await computeBalanceAt(userId, current.accountId, current.entryTime);
 
+  const [fxRates, detectionSettings] = await Promise.all([
+    listFxRateInputs(userId),
+    getDetectionSettings(userId),
+  ]);
+
   const derived = computeDerived({
     instrument: current.instrument,
     account: current.account,
@@ -964,6 +1277,8 @@ export async function closeTrade(
     swap,
     fees,
     quoteToAccountRate: input.quoteToAccountRate ?? null,
+    fxRates,
+    detectionSettings,
     pnlSource,
     manualNetPnl: input.manualNetPnl ?? null,
     entryTime: current.entryTime,
@@ -1011,6 +1326,9 @@ export async function closeTrade(
   if (!trade) throw new TradeValidationError("INTERNAL");
   // Phase 6 — closing realizes the P&L: daily-loss rules re-evaluated.
   await evaluateTradeViolations(userId, current.id);
+  // v2.5 Module 9 — drawdown / prop alerts (best effort: a failure here
+  // must never fail the close; checkDrawdownAlerts never throws).
+  await checkDrawdownAlerts(userId, current.accountId);
   return trade;
 }
 
@@ -1020,9 +1338,45 @@ export async function deleteTrade(userId: string, id: string): Promise<boolean> 
   // Soft delete: children (executions, screenshots, tags, reviews) and the
   // (accountId, externalId) key are KEPT — restore brings everything back.
   // The daily cron purges rows trashed more than 30 days ago.
-  const updated = await db.trade.updateMany({
+  // v2.5 Module 4 — the delete is logged as a one-trade ChangeLog group so
+  // it can be undone from /history (or with Cmd+Z) within 30 days.
+  const current = await db.trade.findFirst({
     where: { id, userId, deletedAt: null },
-    data: { deletedAt: new Date(), deletedBy: userId },
+    select: {
+      id: true,
+      strategyId: true,
+      accountId: true,
+      customFields: true,
+      deletedAt: true,
+      tags: { select: { tagId: true } },
+    },
   });
-  return updated.count > 0;
+  if (!current) return false;
+  const before = {
+    strategyId: current.strategyId,
+    accountId: current.accountId,
+    tagIds: current.tags.map((t) => t.tagId),
+    customFields: parseCustomFields(current.customFields),
+    deletedAt: null as string | null,
+  };
+  await db.$transaction(async (tx) => {
+    await tx.trade.updateMany({
+      where: { id, userId, deletedAt: null },
+      data: { deletedAt: new Date(), deletedBy: userId },
+    });
+    await tx.changeLog.create({
+      data: {
+        userId,
+        groupId: newGroupId(),
+        entity: "TRADE",
+        entityId: id,
+        action: "DELETE",
+        beforeJson: JSON.stringify(before),
+        afterJson: JSON.stringify({ ...before, deletedAt: new Date().toISOString() }),
+        source: "UI",
+        expiresAt: expiryDate(),
+      },
+    });
+  });
+  return true;
 }

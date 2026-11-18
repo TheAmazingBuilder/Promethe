@@ -40,6 +40,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -73,7 +74,7 @@ import { ExportCardDialog } from "@/components/sharing/export-card-dialog";
 import dynamic from "next/dynamic";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-/** v2.5 M2 — lightweight-charts bundle loads only when the tab is opened. */
+/** v2.5 M2 - lightweight-charts bundle loads only when the tab is opened. */
 const LazyPriceChart = dynamic(
   () =>
     import("@/components/charts/price-chart").then(
@@ -82,7 +83,7 @@ const LazyPriceChart = dynamic(
   { ssr: false, loading: () => <Skeleton className="h-[520px] w-full" /> }
 );
 
-/** v2.5 M2 Phase 4 — replay player (lazy). */
+/** v2.5 M2 Phase 4 - replay player (lazy). */
 const LazyReplayPlayer = dynamic(
   () =>
     import("@/components/charts/replay-player").then(
@@ -91,15 +92,26 @@ const LazyReplayPlayer = dynamic(
   { ssr: false, loading: () => <Skeleton className="h-[640px] w-full" /> }
 );
 import { TradeViolationsSection } from "@/components/rules/trade-violations-section";
+import { GaiaLinkedNotesSection } from "@/components/gaia/gaia-linked-notes";
+import {
+  gaiaErrorMessage,
+  newBlockId,
+  useCreateGaiaNote,
+} from "@/components/gaia/gaia-shared";
+import { ExitPlanCompare } from "@/components/tools/exit-plan-compare";
+
 import {
   DirectionBadge,
   DraftBadge,
   Field,
+  GradeBadge,
   ResultBadge,
   StatusBadge,
+  TagsBadges,
   toSpec,
   useTradingLabels,
 } from "@/components/trades/trade-bits";
+import { useSetPlaybookMatch } from "@/hooks/use-playbook";
 import { useToast } from "@/hooks/use-toast";
 import {
   useCloseTrade,
@@ -130,15 +142,17 @@ import {
 } from "@/lib/media/compress";
 import { navigate } from "@/lib/router";
 import { EXIT_REASONS } from "@/lib/trading/types";
+import { confluenceTagsOf } from "@/lib/trading/confluences";
 import type { CloseTradeInput } from "@/lib/validations/trade";
 
-/** Trade detail sheet — read-only fiche with close dialog and screenshot flow. */
+/** Trade detail sheet - read-only fiche with close dialog and screenshot flow. */
 export function TradeDetailView({ tradeId }: { tradeId: string }) {
   // v2.5 M2 — overview / price chart / replay tabs
   const [detailTab, setDetailTab] = React.useState<
     "overview" | "chart" | "replay"
   >("overview");
   const t = useTranslations("trades.detail");
+  const tPlaybook = useTranslations("playbook.tradeDetail");
   const tForm = useTranslations("trades.form");
   const tCommon = useTranslations("common");
   const tRoot = useTranslations();
@@ -151,10 +165,12 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
   const tradeQuery = useTrade(tradeId || null);
   const instruments = useInstruments();
   const updateTrade = useUpdateTrade();
+  const setPlaybookMatch = useSetPlaybookMatch();
   const deleteTrade = useDeleteTrade();
   const closeTrade = useCloseTrade();
   const uploadScreenshot = useUploadScreenshot();
   const deleteScreenshot = useDeleteScreenshot();
+  const createGaiaNote = useCreateGaiaNote();
 
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [closeOpen, setCloseOpen] = React.useState(false);
@@ -274,12 +290,49 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
     );
   };
 
+  // Playbook match — declared at review time, never derived from
+  // followedPlan. The select shows the stored declaration (or "not declared").
+  const onPlaybookMatch = (value: string) => {
+    if (!trade) return;
+    if (value !== "MATCHED" && value !== "PARTIAL" && value !== "OFF_PLAYBOOK") return;
+    setPlaybookMatch.mutate(
+      { tradeId: trade.id, playbookMatch: value },
+      {
+        onSuccess: () => toast({ title: tPlaybook("matchSaved") }),
+        onError: mutationErrorToast,
+      },
+    );
+  };
+
+  // Gaïa: créer une note liée à ce trade puis ouvrir l'éditeur Gaïa.
+  const handleCreateGaiaNote = () => {
+    if (!trade) return;
+    void createGaiaNote
+      .mutateAsync({
+        title: `Note - Trade ${trade.symbol} ${trade.direction}`,
+        blocks: [
+          {
+            id: newBlockId(),
+            type: "ref",
+            text: "",
+            ref: { kind: "TRADE", id: trade.id },
+          },
+          { id: newBlockId(), type: "paragraph", text: "" },
+        ],
+      })
+      .then(
+        (res) => navigate(`/gaia?tab=notes&note=${res.note.id}`),
+        (err: unknown) =>
+          toast({ title: gaiaErrorMessage(err), variant: "destructive" }),
+      );
+  };
+
   const confirmDelete = () => {
     if (!trade) return;
     deleteTrade.mutate(trade.id, {
       onSuccess: () => {
         toast({ title: t("deletedToast") });
-        navigate("#/trades");
+        navigate("/trades");
       },
       onError: mutationErrorToast,
     });
@@ -343,7 +396,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
           variant="ghost"
           size="sm"
           className="-ml-2 text-muted-foreground"
-          onClick={() => navigate("#/trades")}
+          onClick={() => navigate("/trades")}
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           {tCommon("back")}
@@ -362,7 +415,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => navigate("#/trades")}
+                  onClick={() => navigate("/trades")}
                 >
                   {tCommon("back")}
                 </Button>
@@ -389,7 +442,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
           variant="ghost"
           size="sm"
           className="-ml-2 text-muted-foreground"
-          onClick={() => navigate("#/trades")}
+          onClick={() => navigate("/trades")}
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           {tCommon("back")}
@@ -405,7 +458,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => navigate("#/trades")}
+                onClick={() => navigate("/trades")}
               >
                 {tCommon("back")}
               </Button>
@@ -454,11 +507,12 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
         {trade.accountName}
       </Sensitive>,
     ],
-    [t("strategy"), trade.strategyName ?? "—"],
+    [t("strategy"), trade.strategyName ?? "-"],
+    [t("grade"), <GradeBadge key="grade" grade={trade.grade} />],
     [t("sessionLabel"), labels.session(trade.session)],
-    [t("timeframe"), trade.timeframe ?? "—"],
+    [t("timeframe"), trade.timeframe ?? "-"],
     [t("orderType"), labels.orderType(trade.orderType)],
-    [t("setupType"), trade.setupType ?? "—"],
+    [t("setupType"), trade.setupType ?? "-"],
     [t("marketCondition"), labels.marketCondition(trade.marketCondition)],
     ...(trade.exitReason
       ? ([[tForm("exitReason"), labels.exitReason(trade.exitReason)]] as Array<
@@ -476,7 +530,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
         variant="ghost"
         size="sm"
         className="-ml-2 text-muted-foreground"
-        onClick={() => navigate("#/trades")}
+        onClick={() => navigate("/trades")}
       >
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         {tCommon("back")}
@@ -485,10 +539,11 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-2xl font-bold tabular-nums">{trade.symbol}</h2>
+            <h2 className="text-2xl font-bold tracking-tight tabular-nums">{trade.symbol}</h2>
             <DirectionBadge direction={trade.direction} />
             <StatusBadge status={trade.status} />
             <ResultBadge result={trade.resultType} />
+            <GradeBadge grade={trade.grade} />
             {trade.isDraft && <DraftBadge />}
           </div>
           <p className="text-sm text-muted-foreground">
@@ -510,7 +565,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
             <span className="tabular-nums">
               {trade.exitTime
                 ? `${fmtDateTimeInTz(trade.exitTime, timezone)} · ${fmtPrice(trade.exitPrice, digits)}`
-                : "—"}
+                : "-"}
             </span>
           </p>
         </div>
@@ -543,9 +598,28 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
               ? t("reviewUnmark")
               : t("reviewMark")}
           </Button>
+          <Select
+            value={trade.playbookMatch ?? "none"}
+            onValueChange={onPlaybookMatch}
+            disabled={setPlaybookMatch.isPending}
+          >
+            <SelectTrigger
+              className="w-[190px]"
+              aria-label={tPlaybook("playbookMatch")}
+              title={tPlaybook("playbookMatchHint")}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">{tPlaybook("notDeclared")}</SelectItem>
+              <SelectItem value="MATCHED">{tPlaybook("MATCHED")}</SelectItem>
+              <SelectItem value="PARTIAL">{tPlaybook("PARTIAL")}</SelectItem>
+              <SelectItem value="OFF_PLAYBOOK">{tPlaybook("OFF_PLAYBOOK")}</SelectItem>
+            </SelectContent>
+          </Select>
           <Button
             variant="outline"
-            onClick={() => navigate(`#/trades/${trade.id}/edit`)}
+            onClick={() => navigate(`/trades/${trade.id}/edit`)}
           >
             <Pencil className="h-4 w-4" aria-hidden="true" />
             {t("edit")}
@@ -694,6 +768,23 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
         </CardContent>
       </Card>
 
+      {/* ── Confluences (MRT wave 1) — badges, or the honest empty state
+          for trades tagged before confluences existed. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t("confluencesTitle")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {confluenceTagsOf(trade.tags).length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {t("confluencesEmpty")}
+            </p>
+          ) : (
+            <TagsBadges tags={confluenceTagsOf(trade.tags)} max={10} />
+          )}
+        </CardContent>
+      </Card>
+
       {/* ── Rule violations (phase 6, hidden when clean) ── */}
       <TradeViolationsSection tradeId={tradeId} />
 
@@ -780,6 +871,16 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
               </Table>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* ── Exit plan vs real (v2.5 Module 5) ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{tRoot("tools.exitPlanCompareTitle")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ExitPlanCompare trade={trade} />
         </CardContent>
       </Card>
 
@@ -885,7 +986,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
             <InfoRow
               label={t("confidence")}
               value={
-                trade.confidence != null ? `${trade.confidence} / 5` : "—"
+                trade.confidence != null ? `${trade.confidence} / 5` : "-"
               }
             />
             <InfoRow
@@ -893,7 +994,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
               value={
                 trade.setupQualityRating != null
                   ? `${trade.setupQualityRating} / 5`
-                  : "—"
+                  : "-"
               }
             />
             <InfoRow
@@ -901,7 +1002,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
               value={
                 trade.executionRating != null
                   ? `${trade.executionRating} / 5`
-                  : "—"
+                  : "-"
               }
             />
             <InfoRow
@@ -921,7 +1022,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
                     <span className="sr-only">{tCommon("no")}</span>
                   </span>
                 ) : (
-                  "—"
+                  "-"
                 )
               }
             />
@@ -980,6 +1081,15 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
         </CardContent>
       </Card>
 
+      {/* Gaïa: notes liées à ce trade */}
+      <GaiaLinkedNotesSection
+        kind="TRADE"
+        id={trade.id}
+        testidPrefix="trade-detail"
+        creating={createGaiaNote.isPending}
+        onCreateNote={handleCreateGaiaNote}
+      />
+
       {/* ── v3 Phase 5 — comment thread (owner + scoped mentors) ── */}
       {session && (
         <CommentThread
@@ -1025,11 +1135,11 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
               htmlFor="close-exit-time"
               className="sm:col-span-1"
             >
-              <Input
+              <DateField
                 id="close-exit-time"
                 type="datetime-local"
                 value={exitTime}
-                onChange={(e) => setExitTime(e.target.value)}
+                onChange={setExitTime}
               />
             </Field>
             <Field
@@ -1186,7 +1296,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
         open={shareOpen}
         onOpenChange={setShareOpen}
         tradeId={trade.id}
-        defaultTitle={`${trade.symbol} — ${labels.direction(trade.direction)}`}
+        defaultTitle={`${trade.symbol} - ${labels.direction(trade.direction)}`}
       />
       <ExportCardDialog
         open={exportOpen}

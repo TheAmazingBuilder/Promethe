@@ -34,7 +34,7 @@ import type { SensitiveKind } from "@/lib/privacy/types";
 import type { DecimalInput } from "@/lib/trading/dec";
 import { cn } from "@/lib/utils";
 
-/** Internal subscription hook — the store identity changes only on change. */
+/** Internal subscription hook - the store identity changes only on change. */
 function usePrivacySnapshot() {
   return React.useSyncExternalStore(
     subscribePrivacy,
@@ -46,7 +46,7 @@ function usePrivacySnapshot() {
 export interface MoneyProps {
   value: DecimalInput | null | undefined;
   currency?: string;
-  /** Signed form (+/−) — the sign is masked too in HIDE mode. */
+  /** Signed form (+/−) - the sign is masked too in HIDE mode. */
   signed?: boolean;
   maxDigits?: number;
   /** Which scope flag controls this value (default "amount"). */
@@ -101,7 +101,7 @@ export function Money({
 }
 
 export interface SensitiveProps {
-  /** Sensitive kind — picks the scope flag that guards it. */
+  /** Sensitive kind - picks the scope flag that guards it. */
   kind: SensitiveKind;
   children: React.ReactNode;
   className?: string;

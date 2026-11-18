@@ -11,6 +11,7 @@ import { db } from "@/lib/db";
 import { computeGoalProgress, type GoalDef } from "@/lib/trading/goals";
 import type { GoalDTO, GoalsPayload } from "@/lib/trading/dto";
 import type { GoalInput, GoalPatch } from "@/lib/validations/goals";
+import { getDisplayPreferences } from "@/server/display-preferences";
 
 type GoalRow = Prisma.GoalGetPayload<Record<string, never>>;
 
@@ -33,26 +34,61 @@ function toGoalDTO(g: GoalRow): GoalDTO {
 export async function listGoalsWithProgress(
   userId: string
 ): Promise<GoalsPayload> {
-  const [profile, goals, trades, journal] = await Promise.all([
-    db.profile.findUnique({ where: { id: userId } }),
-    db.goal.findMany({ where: { userId }, orderBy: [{ status: "asc" }, { createdAt: "desc" }] }),
-    db.trade.findMany({
-      where: { userId, status: "CLOSED", isDraft: false },
-      select: { exitTime: true, netPnl: true, rMultiple: true },
-    }),
-    db.journalEntry.findMany({
-      where: { userId, disciplineScore: { not: null } },
-      select: { date: true, disciplineScore: true },
-    }),
-  ]);
+  const [profile, goals, trades, reviews, screenshots, journal, prefs] =
+    await Promise.all([
+      db.profile.findUnique({ where: { id: userId } }),
+      db.goal.findMany({ where: { userId }, orderBy: [{ status: "asc" }, { createdAt: "desc" }] }),
+      db.trade.findMany({
+        where: { userId, status: "CLOSED", isDraft: false },
+        select: {
+          id: true,
+          exitTime: true,
+          netPnl: true,
+          rMultiple: true,
+          grade: true,
+          followedPlan: true,
+        },
+      }),
+      // Plan verdicts live on TradeReview (one per trade, declared at
+      // review time), not on Trade: playbookMatch + followedPlan.
+      db.tradeReview.findMany({
+        where: { userId },
+        select: { tradeId: true, playbookMatch: true, followedPlan: true },
+      }),
+      // Trades with at least one screenshot (TRADES_WITH_SCREENSHOT).
+      db.tradeScreenshot.findMany({
+        where: { userId },
+        select: { tradeId: true },
+      }),
+      db.journalEntry.findMany({
+        where: { userId, disciplineScore: { not: null } },
+        select: { date: true, disciplineScore: true },
+      }),
+      getDisplayPreferences(userId),
+    ]);
   const timezone = profile?.timezone ?? "UTC";
   const now = new Date();
+  const screenshotTradeIds = new Set(screenshots.map((s) => s.tradeId));
+  const reviewByTradeId = new Map(
+    reviews.map((r) => [r.tradeId, r] as const)
+  );
 
-  const tradePoints = trades.map((t) => ({
-    exitIso: (t.exitTime ?? new Date(0)).toISOString(),
-    netPnl: t.netPnl?.toString() ?? null,
-    rMultiple: t.rMultiple?.toString() ?? null,
-  }));
+  const tradePoints = trades.map((t) => {
+    const review = reviewByTradeId.get(t.id);
+    return {
+      exitIso: (t.exitTime ?? new Date(0)).toISOString(),
+      netPnl: t.netPnl?.toString() ?? null,
+      rMultiple: t.rMultiple?.toString() ?? null,
+      // Real setup grade (A+ | A | B | C, null = ungraded) from the
+      // wave-3 grades chantier; A_PLUS_WIN_RATE counts A+ trades only.
+      grade: t.grade,
+      // Review verdict wins; the trade's own followedPlan is the fallback
+      // for trades recorded before the Playbook review.
+      playbookMatch: review?.playbookMatch ?? null,
+      followedPlan: review?.followedPlan ?? t.followedPlan ?? null,
+      hasScreenshot: screenshotTradeIds.has(t.id),
+    };
+  });
   const discipline = journal
     .filter((j) => j.disciplineScore != null)
     .map((j) => ({ date: j.date, score: j.disciplineScore as number }));
@@ -63,7 +99,14 @@ export async function listGoalsWithProgress(
       const def = rowToDef(g);
       return {
         ...toGoalDTO(g),
-        progress: computeGoalProgress(def, tradePoints, discipline, now, timezone),
+        progress: computeGoalProgress(
+          def,
+          tradePoints,
+          discipline,
+          now,
+          timezone,
+          prefs.tradingDay
+        ),
       };
     }),
   };

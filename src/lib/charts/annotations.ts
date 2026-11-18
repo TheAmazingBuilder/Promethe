@@ -12,9 +12,9 @@ import { computeTradeStats, type BuilderTrade } from "@/lib/charts/builder";
 
 export interface Annotation {
   id: string;
-  /** ISO timestamp (UTC) — point, or range start when endDate is set. */
+  /** ISO timestamp (UTC) - point, or range start when endDate is set. */
   date: string;
-  /** ISO timestamp (exclusive end) — null = point annotation. */
+  /** ISO timestamp (exclusive end) - null = point annotation. */
   endDate: string | null;
   label: string;
   note: string | null;
@@ -61,7 +61,7 @@ export interface SideStats {
 export interface BeforeAfter {
   before: SideStats;
   after: SideStats;
-  /** True when either side has fewer than 30 trades — "not significant". */
+  /** True when either side has fewer than 30 trades - "not significant". */
   notSignificant: boolean;
 }
 

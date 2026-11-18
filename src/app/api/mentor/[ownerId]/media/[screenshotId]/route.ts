@@ -20,7 +20,7 @@ export async function GET(_req: Request, ctx: Ctx) {
     const media = await readMentorMedia(mentorCtx, screenshotId);
     if (!media) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Capture introuvable." },
+        { error: "NOT_FOUND", message: "Screenshot not found." },
         { status: 404 }
       );
     }

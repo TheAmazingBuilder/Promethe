@@ -1,7 +1,7 @@
 /**
  * v2.5 Module 2 — chart domain Zod schemas (single source of truth).
  *
- * Shared by the chart-builder UI, the /api/charts/* routes and the pure
+ * Shared by the chart-builder UI, the /api/v1/charts/* routes and the pure
  * engines in /src/lib/charts/*. Client-safe: zod only. Conventions follow
  * the trade domain: decimals travel as STRINGS, dates as ISO strings,
  * SQLite has no enums so value sets live here as z.enum over the lib
@@ -144,13 +144,13 @@ export type ChartSort = (typeof CHART_SORTS)[number];
 
 export const chartConfigSchema = z
   .object({
-    /** X dimension (categorical/temporal) — or numeric measure for scatter/histogram. */
+    /** X dimension (categorical/temporal) - or numeric measure for scatter/histogram. */
     x: z.union([z.enum(X_DIMENSIONS), z.enum(NUMERIC_X_MEASURES)]),
-    /** Y measure — omitted for histogram. */
+    /** Y measure - omitted for histogram. */
     y: z.enum(Y_MEASURES).optional(),
     /** Aggregation of the per-trade Y values inside each X category. */
     aggregation: z.enum(AGGREGATIONS).optional(),
-    /** 1-99 — required when aggregation = percentile. */
+    /** 1-99 - required when aggregation = percentile. */
     percentile: z.number().int().min(1).max(99).optional(),
     chartType: z.enum(CHART_TYPES),
     groupBy: z.enum(GROUP_BYS).default("none"),
@@ -165,7 +165,7 @@ export const chartConfigSchema = z
     binCount: z.number().int().min(5).max(60).optional(),
     /** Optional second Y measure on the right axis (bar/line/area only). */
     y2: z.enum(Y_MEASURES).optional(),
-    /** Saved filter context (period + account) — informational replay. */
+    /** Saved filter context (period + account) - informational replay. */
     period: z.enum(["30d", "90d", "ytd", "all"]).default("all"),
     accountId: z.string().nullish(),
   })
@@ -350,7 +350,7 @@ const benchmarkParamsSchema = z
     rPerPeriod: z.number().min(0).max(1000).optional(),
     period: z.enum(BENCHMARK_PERIODS),
     compounding: z.boolean().default(true),
-    /** ISO date — benchmark start (defaults to first trade). */
+    /** ISO date - benchmark start (defaults to first trade). */
     startDate: isoTs.optional(),
     /** Base balance for FIXED_PERCENT (defaults to equity initial). */
     startBalance: z.string().regex(/^\d+(\.\d+)?$/).optional(),
@@ -397,6 +397,16 @@ export const candleWindowQuerySchema = z.object({
 });
 export type CandleWindowQuery = z.infer<typeof candleWindowQuerySchema>;
 
+/**
+ * Batch candle windows (Phase 2 perf, item 7) — one POST carries every
+ * card window of the trades grid instead of one GET per card. At most
+ * 50 windows: a grid page holds 24 cards at most.
+ */
+export const candleBatchRequestSchema = z.object({
+  requests: z.array(candleWindowQuerySchema).min(1).max(50),
+});
+export type CandleBatchRequest = z.infer<typeof candleBatchRequestSchema>;
+
 /** One candle as sent to the client (decimals as strings, time epoch ms UTC). */
 export const candleDtoSchema = z.object({
   time: z.number().int(),
@@ -413,7 +423,7 @@ export const candleImportSchema = z.object({
   timeframe: candleTimeframeSchema,
   /** Declared timezone of the CSV timestamps (IANA name or fixed offset). */
   timezone: z.string().min(1).max(64).default("UTC"),
-  /** CSV text — header row with time/open/high/low/close(/volume) columns. */
+  /** CSV text - header row with time/open/high/low/close(/volume) columns. */
   csv: z.string().min(1).max(8_000_000),
 });
 export type CandleImportInput = z.infer<typeof candleImportSchema>;

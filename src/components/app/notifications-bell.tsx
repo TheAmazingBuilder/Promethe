@@ -39,7 +39,7 @@ export function NotificationsBell() {
     queryKey: ["notifications"],
     queryFn: () =>
       apiFetch<{ notifications: NotificationRow[]; unreadCount: number }>(
-        "/api/notifications"
+        "/api/v1/notifications"
       ),
     refetchInterval: 60_000,
   });
@@ -47,7 +47,7 @@ export function NotificationsBell() {
   async function openItem(row: NotificationRow): Promise<void> {
     setOpen(false);
     if (!row.readAt) {
-      await apiFetch("/api/notifications", {
+      await apiFetch("/api/v1/notifications", {
         method: "PATCH",
         body: JSON.stringify({ id: row.id }),
       }).catch(() => undefined);
@@ -59,7 +59,7 @@ export function NotificationsBell() {
   }
 
   async function markAll(): Promise<void> {
-    await apiFetch("/api/notifications", {
+    await apiFetch("/api/v1/notifications", {
       method: "PATCH",
       body: JSON.stringify({ all: true }),
     }).catch(() => undefined);
@@ -75,7 +75,7 @@ export function NotificationsBell() {
           variant="ghost"
           size="icon"
           className="relative"
-          aria-label={unread > 0 ? `${t("open")} — ${unread}` : t("open")}
+          aria-label={unread > 0 ? `${t("open")} - ${unread}` : t("open")}
         >
           <Bell className="h-4 w-4" aria-hidden="true" />
           {unread > 0 && (

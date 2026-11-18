@@ -22,15 +22,15 @@ function authorized(req: Request): boolean {
 async function handle(req: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || secret.length < 16) {
-    console.error("[cron/daily] CRON_SECRET is missing or too short — refusing to run.");
+    console.error("[cron/daily] CRON_SECRET is missing or too short - refusing to run.");
     return NextResponse.json(
-      { error: "CRON_SECRET_UNSET", message: "CRON_SECRET manquant ou trop court." },
+      { error: "CRON_SECRET_UNSET", message: "CRON_SECRET missing or too short." },
       { status: 503 }
     );
   }
   if (!authorized(req)) {
     return NextResponse.json(
-      { error: "BAD_TOKEN", message: "Jeton cron invalide." },
+      { error: "BAD_TOKEN", message: "Invalid cron token." },
       { status: 401 }
     );
   }

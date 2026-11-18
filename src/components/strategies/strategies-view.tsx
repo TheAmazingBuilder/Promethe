@@ -3,8 +3,8 @@
 /**
  * Strategies view (v1 phase 5) — list with per-strategy stats, full editor
  * (definition + replace-all checklist) and immutable version snapshots.
- * Data: GET /api/strategies?withStats=1 · CRUD /api/strategies[/id] ·
- * POST/GET/DELETE /api/strategies/[id]/versions.
+ * Data: GET /api/v1/strategies?withStats=1 · CRUD /api/v1/strategies[/id] ·
+ * POST/GET/DELETE /api/v1/strategies/[id]/versions.
  */
 import * as React from "react";
 import {
@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import {
   useCreateStrategy,
@@ -62,6 +63,13 @@ import { ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import { pnlClass } from "@/lib/format";
 import { Money } from "@/components/privacy/money";
+import { GaiaLinkedNotesSection } from "@/components/gaia/gaia-linked-notes";
+import {
+  gaiaErrorMessage,
+  newBlockId,
+  useCreateGaiaNote,
+} from "@/components/gaia/gaia-shared";
+import { navigate } from "@/lib/router";
 import { TIMEFRAMES } from "@/lib/trading/types";
 import type { StrategyDTO, StrategyStatsDTO } from "@/lib/trading/dto";
 
@@ -581,6 +589,36 @@ export function StrategiesView() {
   }, [statsData]);
 
   const del = useDeleteStrategy();
+  const createGaiaNote = useCreateGaiaNote();
+  // Id de la stratégie dont une note Gaïa est en cours de création (une
+  // seule création à la fois, le bouton des autres cartes reste actif).
+  const [creatingGaiaFor, setCreatingGaiaFor] = React.useState<string | null>(
+    null,
+  );
+
+  // Gaïa: créer une note liée à la stratégie puis ouvrir l'éditeur.
+  const handleCreateGaiaNote = (s: StrategyDTO) => {
+    setCreatingGaiaFor(s.id);
+    void createGaiaNote
+      .mutateAsync({
+        title: `Note - ${s.name}`,
+        blocks: [
+          {
+            id: newBlockId(),
+            type: "ref",
+            text: "",
+            ref: { kind: "STRATEGY", id: s.id },
+          },
+          { id: newBlockId(), type: "paragraph", text: "" },
+        ],
+      })
+      .then(
+        (res) => navigate(`/gaia?tab=notes&note=${res.note.id}`),
+        (err: unknown) =>
+          toast({ title: gaiaErrorMessage(err), variant: "destructive" }),
+      )
+      .finally(() => setCreatingGaiaFor(null));
+  };
 
   const [editorOpen, setEditorOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<StrategyDTO | null>(null);
@@ -610,19 +648,19 @@ export function StrategiesView() {
   };
 
   return (
-    <section aria-labelledby="strategies-title" className="mx-auto flex max-w-5xl flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 id="strategies-title" className="text-2xl font-bold tracking-tight">
-            {t("title")}
-          </h1>
-          <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        <Button size="sm" onClick={onNew}>
+    <section aria-labelledby="strategies-title" className="flex flex-col gap-6">
+      <PageHeader
+        id="strategies-title"
+        title={t("title")}
+        description={t("subtitle")}
+        className="flex-wrap sm:items-end"
+        actions={
+          <Button size="sm" onClick={onNew}>
           <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
           {t("newStrategy")}
-        </Button>
-      </div>
+          </Button>
+        }
+      />
 
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2">
@@ -723,13 +761,21 @@ export function StrategiesView() {
                       <div>
                         <p className="text-[11px] text-muted-foreground">{t("stats.winRate")}</p>
                         <p className="font-semibold tabular-nums">
-                          {st.winRate != null ? `${Number(st.winRate).toFixed(0)} %` : "—"}
+                          {st.winRate != null ? `${Number(st.winRate).toFixed(0)} %` : "-"}
                         </p>
                       </div>
                     </div>
                   ) : (
                     <p className="text-xs text-muted-foreground">{t("stats.noTrades")}</p>
                   )}
+                  {/* Gaïa: notes liées à cette stratégie */}
+                  <GaiaLinkedNotesSection
+                    kind="STRATEGY"
+                    id={s.id}
+                    testidPrefix={`strategy-${s.id}`}
+                    creating={creatingGaiaFor === s.id}
+                    onCreateNote={() => handleCreateGaiaNote(s)}
+                  />
                 </CardContent>
               </Card>
             );

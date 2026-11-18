@@ -32,7 +32,7 @@ import {
   type ExecutionLike,
 } from "@/lib/trading/executions";
 import { classifyResult, priceDiff, stopDistance, toPips, toPoints } from "@/lib/trading/calculate";
-import { detectSession } from "@/lib/trading/session";
+import { detectSessionForUser } from "@/server/tools";
 import { findPreset } from "@/lib/trading/instruments";
 import type { InstrumentSpec } from "@/lib/trading/types";
 import { notifyInApp } from "@/server/notifications";
@@ -235,10 +235,10 @@ interface RecomputeInput {
   trade: Trade;
   instrument: Instrument;
   account: Account;
-  /** Broker gross profit (account currency) when known — overrides estimates. */
+  /** Broker gross profit (account currency) when known - overrides estimates. */
   brokerGrossPnl?: Decimal | null;
   exitReason?: string | null;
-  /** Transaction client (defaults to the global db — never deadlocks inside
+  /** Transaction client (defaults to the global db - never deadlocks inside
    *  an interactive transaction when provided). */
   tx?: Prisma.TransactionClient;
 }
@@ -458,7 +458,7 @@ async function handlePositionOpened(
       brokerComment: event.comment ?? null,
       source: "EA_SYNC",
       needsDetails: true,
-      session: detectSession(entryTime),
+      session: await detectSessionForUser(connection.userId, entryTime),
       reviewStatus: "NOT_REVIEWED",
       preTradeAnalysis: "",
       postTradeReview: "",
@@ -768,7 +768,7 @@ async function applyPositionClosed(
         brokerComment: p.comment ?? null,
         source: "EA_SYNC",
         needsDetails: true,
-        session: detectSession(entryTime),
+        session: await detectSessionForUser(connection.userId, entryTime),
         reviewStatus: "NOT_REVIEWED",
         preTradeAnalysis: "",
         postTradeReview: "",
@@ -944,9 +944,9 @@ export async function processIngestPayload(
     await notifyInApp({
       userId: connection.userId,
       type: "SYNC_MISMATCH",
-      title: "Connexion MT en conflit",
-      body: `Le terminal « ${connection.label} » envoie des données d'un autre compte (${payload.server} / ${payload.login}). Les événements sont rejetés — vérifiez le token.`,
-      url: "#/reglages/broker-sync",
+      title: "MT connection conflict",
+      body: `The terminal “${connection.label}” is sending data from another account (${payload.server} / ${payload.login}). Events are rejected – check the token.`,
+      url: "/broker-sync",
       dedupeWithinMs: 24 * 60 * 60 * 1000,
     });
     throw new IngestError("LOGIN_MISMATCH", 403);
@@ -1040,8 +1040,8 @@ export async function sweepStaleConnections(now: Date = new Date()): Promise<Sta
           userId: connection.userId,
           type: "SYNC_STALE",
           title: "Synchronisation interrompue",
-          body: `Aucun heartbeat de « ${connection.label} » depuis plus de 30 minutes — MetaTrader est-il ouvert ?`,
-          url: "#/reglages/broker-sync",
+          body: `No heartbeat from “${connection.label}” for over 30 minutes – is MetaTrader open?`,
+          url: "/broker-sync",
           dedupeWithinMs: 6 * 60 * 60 * 1000,
         });
       }

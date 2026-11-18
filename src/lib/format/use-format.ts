@@ -35,19 +35,19 @@ import type { SensitiveKind } from "@/lib/privacy/types";
 import type { DecimalInput } from "@/lib/trading/dec";
 
 export interface FormatApi {
-  /** Money with currency suffix — placeholder in HIDE mode (scope: amounts). */
+  /** Money with currency suffix - placeholder in HIDE mode (scope: amounts). */
   money(v: DecimalInput | null | undefined, currency?: string, maxDigits?: number): string;
-  /** Signed money — placeholder (sign included) in HIDE mode. */
+  /** Signed money - placeholder (sign included) in HIDE mode. */
   signedMoney(v: DecimalInput | null | undefined, currency?: string, maxDigits?: number): string;
-  /** Percentage — placeholder when hidePercentages is on. */
+  /** Percentage - placeholder when hidePercentages is on. */
   pct(v: DecimalInput | null | undefined, maxDigits?: number): string;
-  /** Plain number (counts, R multiples, pips — visible by default). */
+  /** Plain number (counts, R multiples, pips - visible by default). */
   num(v: DecimalInput | null | undefined, maxDigits?: number, minDigits?: number): string;
   /** Signed number (R multiples). */
   signed(v: DecimalInput | null | undefined, maxDigits?: number, minDigits?: number): string;
-  /** Price with instrument decimals — never masked. */
+  /** Price with instrument decimals - never masked. */
   price(v: DecimalInput | null | undefined, digits?: number): string;
-  /** Lot size — placeholder when hideLots is on. */
+  /** Lot size - placeholder when hideLots is on. */
   lots(v: DecimalInput | null | undefined, maxDigits?: number): string;
   /** Current privacy mode ("OFF" | "HIDE" | "BLUR"). */
   privacyMode: string;

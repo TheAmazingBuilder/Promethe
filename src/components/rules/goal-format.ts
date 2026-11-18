@@ -20,6 +20,9 @@ export const METRICS: GoalMetric[] = [
   "PROFIT_FACTOR",
   "TRADE_COUNT",
   "DISCIPLINE_SCORE",
+  "A_PLUS_WIN_RATE",
+  "PLAN_FOLLOW_RATE",
+  "TRADES_WITH_SCREENSHOT",
 ];
 
 export const PERIODS = [
@@ -36,6 +39,7 @@ export const RULE_KIND_LIST = [
   "MAX_TRADES_PER_DAY",
   "MAX_DAILY_LOSS",
   "MAX_RISK_PER_TRADE",
+  "MIN_PLANNED_RR",
   "CUSTOM",
 ] as const;
 
@@ -48,11 +52,13 @@ export function formatGoalValue(
   value: string | null,
   currency: string
 ): string {
-  if (value == null) return "—";
+  if (value == null) return "-";
   switch (metric) {
     case "NET_PNL":
       return fmt.signedMoney(value, currency);
     case "WIN_RATE":
+    case "A_PLUS_WIN_RATE":
+    case "PLAN_FOLLOW_RATE":
       return fmt.pct(value);
     case "AVG_R": {
       const n = Number(value);
@@ -63,6 +69,7 @@ export function formatGoalValue(
       return Number.isFinite(n) ? fmtNum(n) : "∞";
     }
     case "TRADE_COUNT":
+    case "TRADES_WITH_SCREENSHOT":
       return fmtNum(Number(value), 0);
     case "DISCIPLINE_SCORE":
       return `${fmtNum(Number(value))}/5`;
@@ -71,14 +78,14 @@ export function formatGoalValue(
   }
 }
 
-/** Progress bar color — achieved = gain token, close = amber, else primary. */
+/** Progress bar color - achieved = gain token, close = amber, else primary. */
 export function goalBarTone(progressPercent: number, isAchieved: boolean): string {
   if (isAchieved) return "bg-gain";
   if (progressPercent >= 75) return "bg-amber-500";
   return "bg-primary";
 }
 
-/** Rule limit display — count vs money depending on the kind. */
+/** Rule limit display - count vs money vs R:R ratio depending on the kind. */
 export function formatRuleValue(
   fmt: FormatApi,
   kind: string,
@@ -87,6 +94,10 @@ export function formatRuleValue(
 ): string {
   if (kind === "MAX_TRADES_PER_DAY") return fmtNum(Number(value), 0);
   if (kind === "CUSTOM") return value;
+  if (kind === "MIN_PLANNED_RR") {
+    const n = Number(value);
+    return Number.isFinite(n) ? `${fmtNum(n, 2)}:1` : value;
+  }
   return fmt.money(value, currency);
 }
 
@@ -97,8 +108,12 @@ export function formatMeasuredValue(
   measured: string,
   currency: string
 ): string {
-  if (measured === "") return "—";
+  if (measured === "") return "-";
   if (kind === "MAX_TRADES_PER_DAY") return fmtNum(Number(measured), 0);
+  if (kind === "MIN_PLANNED_RR") {
+    const n = Number(measured);
+    return Number.isFinite(n) ? `${fmtNum(n, 2)}:1` : measured;
+  }
   if (kind === "MAX_DAILY_LOSS" || kind === "MAX_RISK_PER_TRADE") {
     return fmt.signedMoney(measured, currency);
   }

@@ -3,7 +3,7 @@
 /**
  * Dashboard violations widget (v1 phase 6) — recent rule violations with the
  * breached limit. Hidden when nothing was violated in the last 30 days.
- * Data: GET /api/rules/violations?days=30.
+ * Data: GET /api/v1/rules/violations?days=30.
  */
 import { ShieldAlert } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -54,7 +54,7 @@ export function ViolationsCard() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate("#/regles")}
+            onClick={() => navigate("/rules")}
           >
             {t("manage")}
           </Button>
@@ -70,7 +70,7 @@ export function ViolationsCard() {
               <button
                 type="button"
                 className="min-w-0 truncate text-left font-medium underline-offset-2 hover:underline"
-                onClick={() => navigate(`#/trades/${v.tradeId}`)}
+                onClick={() => navigate(`/trades/${v.tradeId}`)}
               >
                 {tRules(`kind.${v.kind}`)}
                 {v.trade ? (

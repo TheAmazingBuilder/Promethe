@@ -29,7 +29,7 @@ export async function GET(req: Request) {
     sweepRateLimits();
     if (!rateLimit(`analytics:${session.user.id}`, 60, 60 * 1000)) {
       return NextResponse.json(
-        { error: "RATE_LIMITED", message: "Trop de requêtes, patientez." },
+        { error: "RATE_LIMITED", message: "Too many requests, please wait." },
         { status: 429 }
       );
     }

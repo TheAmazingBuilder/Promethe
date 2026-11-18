@@ -12,6 +12,11 @@ import * as React from "react";
 import { useTranslations } from "next-intl";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  TRADE_GRADE_BADGE_CLASS,
+  isTradeGrade,
+  type TradeGrade,
+} from "@/lib/trading/grades";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -41,7 +46,7 @@ export function useTradingLabels() {
   const tRoot = useTranslations();
   return React.useMemo(() => {
     const pick = (path: string, v: string | null | undefined): string =>
-      v ? tRoot(`${path}.${v}` as Parameters<typeof tRoot>[0]) : "—";
+      v ? tRoot(`${path}.${v}` as Parameters<typeof tRoot>[0]) : "-";
     return {
       direction: (v: string | null | undefined) => pick("trading.direction", v),
       orderType: (v: string | null | undefined) => pick("trading.orderType", v),
@@ -113,6 +118,36 @@ export function ResultBadge({
   return (
     <Badge variant="outline" className={`font-medium ${tone} ${className ?? ""}`}>
       {labels.result(result)}
+    </Badge>
+  );
+}
+
+export function GradeBadge({
+  grade,
+  className,
+}: {
+  grade: string | null | undefined;
+  className?: string;
+}) {
+  const t = useTranslations("grades");
+  if (!grade) {
+    return (
+      <Badge
+        variant="outline"
+        className={`font-normal text-muted-foreground ${className ?? ""}`}
+      >
+        {t("ungraded")}
+      </Badge>
+    );
+  }
+  if (!isTradeGrade(grade)) return null;
+  const g: TradeGrade = grade;
+  return (
+    <Badge
+      variant="outline"
+      className={`font-semibold tabular-nums ${TRADE_GRADE_BADGE_CLASS[g]} ${className ?? ""}`}
+    >
+      {g}
     </Badge>
   );
 }
@@ -189,7 +224,7 @@ export function TagsBadges({
 
 // ── Instruments ──────────────────────────────────────────────────────────────
 
-/** API DTO → engine spec (structurally compatible — explicit for clarity). */
+/** API DTO → engine spec (structurally compatible - explicit for clarity). */
 export function toSpec(dto: InstrumentApiDTO): InstrumentSpec & { id: string } {
   return {
     id: dto.id,

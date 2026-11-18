@@ -70,7 +70,7 @@ export function PermissionsEditor({
         {value.accountScope === "LIST" && (
           <div className="grid gap-1.5 rounded-md border p-2.5 sm:grid-cols-2">
             {accounts.length === 0 && (
-              <p className="text-xs text-muted-foreground">—</p>
+              <p className="text-xs text-muted-foreground">-</p>
             )}
             {accounts.map((account) => (
               <label
@@ -121,7 +121,7 @@ export function PermissionsEditor({
         {value.strategyScope === "LIST" && (
           <div className="grid max-h-40 gap-1.5 overflow-y-auto rounded-md border p-2.5 sm:grid-cols-2">
             {strategies.length === 0 && (
-              <p className="text-xs text-muted-foreground">—</p>
+              <p className="text-xs text-muted-foreground">-</p>
             )}
             {strategies.map((strategy) => (
               <label

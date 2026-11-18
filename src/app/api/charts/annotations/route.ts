@@ -28,7 +28,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: "VALIDATION",
-          message: "Annotation invalide.",
+          message: "Invalid annotation.",
           fieldErrors: zodFieldErrors(parsed.error),
         },
         { status: 422 }

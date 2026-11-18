@@ -36,7 +36,7 @@ export interface ReplayEvent {
 
 export interface ReplaySnapshot {
   state: ReplayState;
-  /** Candles [0..cursor] — strictly no look-ahead. */
+  /** Candles [0..cursor] - strictly no look-ahead. */
   visible: Candle[];
   /** Cursor bar (null before the first step). */
   candle: Candle | null;
@@ -59,7 +59,7 @@ export interface ReplaySnapshot {
   } | null;
   /** Events at or before the cursor (partials, SL moves, news). */
   events: ReplayEvent[];
-  /** A visible bar touched both SL and TP — intrabar ambiguity (see header). */
+  /** A visible bar touched both SL and TP - intrabar ambiguity (see header). */
   slTpBothTouched: boolean;
   /** Seconds between entry and the cursor bar close (0 before entry). */
   timeInTradeSec: number;

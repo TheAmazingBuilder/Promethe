@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * AccessibilityView (v2.5 Module 8, §3.3) — #/reglages/accessibility.
+ * AccessibilityView (v2.5 Module 8, §3.3) — /settings/accessibility.
  *
  * Text scale (80–200 %), contrast modes (Standard / High / System),
  * reduced motion, dyslexia-friendly font, line/letter spacing, focus ring,
@@ -10,6 +10,7 @@
  * LIVE PREVIEW panel that reflects the current settings, plus reset to
  * defaults. WCAG 2.2 AA target (README "Privacy & accessibility").
  */
+import Link from "next/link";
 import * as React from "react";
 import { useTranslations } from "next-intl";
 import {
@@ -43,6 +44,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { PageHeader } from "@/components/ui/page-header";
 import { useA11yPrefs } from "@/components/a11y/a11y-provider";
 import { useFormat } from "@/lib/format/use-format";
 import { TEXT_SCALE_PRESETS } from "@/lib/a11y/preferences";
@@ -83,14 +85,12 @@ export function AccessibilityView() {
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            {t("description")}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
+      <PageHeader
+        title={t("title")}
+        description={t("description")}
+        descriptionClassName="max-w-2xl"
+        actions={
+          <div className="flex shrink-0 items-center gap-2">
           <Badge variant={synced ? "secondary" : "outline"}>
             {synced ? tCommon("save") : t("localOnly")}
           </Badge>
@@ -98,8 +98,9 @@ export function AccessibilityView() {
             <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
             {t("resetDefaults")}
           </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* ── Text scale ── */}
       <Card>
@@ -437,9 +438,9 @@ export function AccessibilityView() {
               <p className="text-sm leading-relaxed">
                 {t("previewBody")}
               </p>
-              <a href="#/reglages/accessibility" className="text-sm underline-offset-4 hover:underline">
+              <Link href="/settings/accessibility" className="text-sm underline-offset-4 hover:underline">
                 {t("previewLink")}
-              </a>
+              </Link>
             </div>
           </div>
           <p className="mt-3 text-xs text-muted-foreground">

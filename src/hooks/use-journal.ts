@@ -12,12 +12,13 @@ import {
 } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 import type {
+  CalendarDayPayload,
   CalendarPayload,
   JournalEntryDTO,
   StrategyDTO,
+  StrategyStatsDTO,
   StrategyVersionDTO,
   PropStatusPayload,
-  TradeStatsDTO,
 } from "@/lib/trading/dto";
 import type { JournalEntryInput } from "@/lib/validations/journal";
 
@@ -33,7 +34,27 @@ export function useCalendar(
   return useQuery({
     queryKey: ["calendar", year, month, account ?? null],
     queryFn: async () =>
-      apiFetch<CalendarPayload>(`/api/calendar?${params.toString()}`),
+      apiFetch<CalendarPayload>(`/api/v1/calendar?${params.toString()}`),
+    staleTime: 60 * 1000,
+  });
+}
+
+// ── Calendar day detail (MRT wave 2) ─────────────────────────────────────────
+
+export function useCalendarDay(
+  date: string | null,
+  account?: string | null,
+) {
+  const params = new URLSearchParams();
+  if (date) params.set("date", date);
+  if (account) params.set("account", account);
+  return useQuery({
+    queryKey: ["calendar", "day", date, account ?? null],
+    queryFn: async () =>
+      apiFetch<CalendarDayPayload>(
+        `/api/v1/calendar/day?${params.toString()}`
+      ),
+    enabled: date != null,
     staleTime: 60 * 1000,
   });
 }
@@ -46,7 +67,7 @@ export function useJournalEntry(date: string) {
     queryFn: async () =>
       (
         await apiFetch<{ entry: JournalEntryDTO | null }>(
-          `/api/journal?date=${encodeURIComponent(date)}`,
+          `/api/v1/journal?date=${encodeURIComponent(date)}`,
         )
       ).entry,
     staleTime: 30 * 1000,
@@ -57,7 +78,7 @@ export function useRecentJournal() {
   return useQuery({
     queryKey: ["journal", "recent"],
     queryFn: async () =>
-      (await apiFetch<{ entries: JournalEntryDTO[] }>("/api/journal")).entries,
+      (await apiFetch<{ entries: JournalEntryDTO[] }>("/api/v1/journal")).entries,
     staleTime: 60 * 1000,
   });
 }
@@ -67,7 +88,7 @@ export function useSaveJournalEntry() {
   return useMutation({
     mutationFn: async (input: JournalEntryInput) =>
       (
-        await apiFetch<{ entry: JournalEntryDTO }>("/api/journal", {
+        await apiFetch<{ entry: JournalEntryDTO }>("/api/v1/journal", {
           method: "PUT",
           body: JSON.stringify(input),
         })
@@ -86,7 +107,7 @@ export function useDeleteJournalEntry() {
   return useMutation({
     mutationFn: async (date: string) => {
       await apiFetch<void>(
-        `/api/journal?date=${encodeURIComponent(date)}`,
+        `/api/v1/journal?date=${encodeURIComponent(date)}`,
         { method: "DELETE" },
       );
     },
@@ -103,7 +124,7 @@ export function usePropStatus(account?: string | null, enabled = true) {
   const qs = account ? `?account=${encodeURIComponent(account)}` : "";
   return useQuery({
     queryKey: ["prop-status", account ?? null],
-    queryFn: async () => apiFetch<PropStatusPayload>(`/api/prop-status${qs}`),
+    queryFn: async () => apiFetch<PropStatusPayload>(`/api/v1/prop-status${qs}`),
     staleTime: 30 * 1000,
     enabled,
   });
@@ -117,7 +138,7 @@ export function useStrategyVersions(strategyId: string | null) {
     queryFn: async () =>
       (
         await apiFetch<{ versions: StrategyVersionDTO[] }>(
-          `/api/strategies/${strategyId}/versions`,
+          `/api/v1/strategies/${strategyId}/versions`,
         )
       ).versions,
     enabled: strategyId != null && strategyId !== "",
@@ -131,7 +152,7 @@ export function useCreateStrategyVersion() {
     mutationFn: async (args: { strategyId: string; note?: string | null }) =>
       (
         await apiFetch<{ version: StrategyVersionDTO }>(
-          `/api/strategies/${args.strategyId}/versions`,
+          `/api/v1/strategies/${args.strategyId}/versions`,
           { method: "POST", body: JSON.stringify({ note: args.note ?? null }) },
         )
       ).version,
@@ -148,7 +169,7 @@ export function useDeleteStrategyVersion() {
   return useMutation({
     mutationFn: async (args: { strategyId: string; versionId: string }) => {
       await apiFetch<void>(
-        `/api/strategies/${args.strategyId}/versions/${args.versionId}`,
+        `/api/v1/strategies/${args.strategyId}/versions/${args.versionId}`,
         { method: "DELETE" },
       );
     },
@@ -162,21 +183,15 @@ export function useDeleteStrategyVersion() {
 
 // ── Strategy CRUD (with checklist, phase 5) ─────────────────────────────────
 
-/** Per-strategy stats (phase 5 view) — separate query key from the selector list. */
+/** Per-strategy stats (phase 5 view) - separate query key from the selector list. */
 export function useStrategiesWithStats() {
   return useQuery({
     queryKey: ["strategies", "stats"],
     queryFn: async () =>
       (
         await apiFetch<{
-          stats: Array<{
-            key: string;
-            name: string;
-            color: string;
-            status: string;
-            stats: TradeStatsDTO;
-          }>;
-        }>("/api/strategies?withStats=1")
+          stats: StrategyStatsDTO[];
+        }>("/api/v1/strategies?withStats=1")
       ).stats,
     staleTime: 60 * 1000,
   });
@@ -193,7 +208,7 @@ export interface StrategyInputBody {
   entryRules?: string | null;
   exitRules?: string | null;
   riskRules?: string | null;
-  /** Replace-all semantics — the FULL list is sent on every write. */
+  /** Replace-all semantics - the FULL list is sent on every write. */
   checklistItems?: Array<{
     label: string;
     category: "ENTRY" | "EXIT" | "RISK" | "CONTEXT";
@@ -207,7 +222,7 @@ export function useCreateStrategy() {
   return useMutation({
     mutationFn: async (input: StrategyInputBody) =>
       (
-        await apiFetch<{ strategy: StrategyDTO }>("/api/strategies", {
+        await apiFetch<{ strategy: StrategyDTO }>("/api/v1/strategies", {
           method: "POST",
           body: JSON.stringify(input),
         })
@@ -223,7 +238,7 @@ export function useUpdateStrategy() {
   return useMutation({
     mutationFn: async (args: { id: string; patch: Partial<StrategyInputBody> }) =>
       (
-        await apiFetch<{ strategy: StrategyDTO }>(`/api/strategies/${args.id}`, {
+        await apiFetch<{ strategy: StrategyDTO }>(`/api/v1/strategies/${args.id}`, {
           method: "PATCH",
           body: JSON.stringify(args.patch),
         })
@@ -239,7 +254,7 @@ export function useDeleteStrategy() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch<void>(`/api/strategies/${id}`, { method: "DELETE" });
+      await apiFetch<void>(`/api/v1/strategies/${id}`, { method: "DELETE" });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["strategies"] });

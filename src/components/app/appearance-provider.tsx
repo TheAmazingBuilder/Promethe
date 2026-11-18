@@ -36,7 +36,7 @@ export interface AppearanceDTO {
 
 interface AppearanceContextValue {
   appearance: AppearanceDTO | null;
-  /** Optimistic PUT — the DOM updates immediately, rolls back on error. */
+  /** Optimistic PUT - the DOM updates immediately, rolls back on error. */
   setAppearance: (input: AppearanceInput) => void;
   /** True while the row is being loaded (first paint). */
   isLoading: boolean;
@@ -148,7 +148,7 @@ export function AppearanceProvider({ children }: { children: React.ReactNode }) 
     }
     let cancelled = false;
     setIsLoading(true);
-    apiFetch<{ appearance: AppearanceDTO }>("/api/appearance")
+    apiFetch<{ appearance: AppearanceDTO }>("/api/v1/appearance")
       .then((payload) => {
         if (!cancelled) setAppearanceState(payload.appearance);
       })
@@ -174,14 +174,14 @@ export function AppearanceProvider({ children }: { children: React.ReactNode }) 
       setAppearanceState((previous) =>
         patchAppearance(previous ?? DEFAULT_APPEARANCE, input)
       );
-      apiFetch<{ appearance: AppearanceDTO }>("/api/appearance", {
+      apiFetch<{ appearance: AppearanceDTO }>("/api/v1/appearance", {
         method: "PUT",
         body: JSON.stringify(input),
       })
         .then((payload) => setAppearanceState(payload.appearance))
         .catch(() => {
           // Roll back to the server truth on failure.
-          apiFetch<{ appearance: AppearanceDTO }>("/api/appearance")
+          apiFetch<{ appearance: AppearanceDTO }>("/api/v1/appearance")
             .then((payload) => setAppearanceState(payload.appearance))
             .catch(() => undefined);
         });

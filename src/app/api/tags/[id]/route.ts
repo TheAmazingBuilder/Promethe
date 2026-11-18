@@ -19,7 +19,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     sweepRateLimits();
     if (!rateLimit(`tags-patch:${session.user.id}`, 30, 60 * 1000)) {
       return NextResponse.json(
-        { error: "RATE_LIMITED", message: "Trop de requêtes, patientez." },
+        { error: "RATE_LIMITED", message: "Too many requests, please wait." },
         { status: 429 }
       );
     }
@@ -29,7 +29,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
       return NextResponse.json(
         {
           error: "VALIDATION",
-          message: "Certains champs sont invalides.",
+          message: "Some fields are invalid.",
           fieldErrors: zodFieldErrors(parsed.error),
         },
         { status: 422 }
@@ -38,7 +38,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const tag = await updateTag(session.user.id, id, parsed.data);
     if (!tag) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Tag introuvable." },
+        { error: "NOT_FOUND", message: "Tag not found." },
         { status: 404 }
       );
     }
@@ -55,14 +55,14 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     sweepRateLimits();
     if (!rateLimit(`tags-delete:${session.user.id}`, 30, 60 * 1000)) {
       return NextResponse.json(
-        { error: "RATE_LIMITED", message: "Trop de requêtes, patientez." },
+        { error: "RATE_LIMITED", message: "Too many requests, please wait." },
         { status: 429 }
       );
     }
     const ok = await deleteTag(session.user.id, id);
     if (!ok) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Tag introuvable." },
+        { error: "NOT_FOUND", message: "Tag not found." },
         { status: 404 }
       );
     }

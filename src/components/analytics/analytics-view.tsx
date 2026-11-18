@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Analytics view (v2 Phase 4) — GET /api/analytics (useAnalytics).
+ * Analytics view (v2 Phase 4) — GET /api/v1/analytics (useAnalytics).
  *
  * Layout: filters (period tabs + account select) → KPI grid → equity curve
  * with drawdown + R distribution → insights « ce qui marche / ce qui coûte »
@@ -18,6 +18,8 @@ import {
   Compass,
   DoorOpen,
   Gauge,
+  Grid3x3,
+  FileText,
   Info,
   LineChart,
   ListChecks,
@@ -32,18 +34,6 @@ import {
   Zap,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -61,17 +51,32 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { PageHeader } from "@/components/ui/page-header";
 import { useA11yPrefs } from "@/components/a11y/a11y-provider";
 import { Money, Sensitive } from "@/components/privacy/money";
 import { useTradingLabels } from "@/components/trades/trade-bits";
+import { MonthlyReportDialog } from "@/components/reports/monthly-report-dialog";
+import dynamic from "next/dynamic";
+import { WhenYouTradeSection } from "@/components/analytics/when-you-trade-section";
+
+// Equity / R-distribution charts (recharts) load on demand after the KPIs
+// and filters - the analytics shell never waits on the chart chunk.
+import type { EquityDatum } from "./analytics-charts";
+const AnalyticsCharts = dynamic(
+  () => import("./analytics-charts").then((m) => m.AnalyticsCharts),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-[340px] w-full" />,
+  }
+);
 import { useSession } from "@/components/app/session-context";
 import { useI18n } from "@/i18n/i18n-provider";
 import { useAccounts, useAnalytics } from "@/hooks/use-trading";
+import { useCustomFields } from "@/hooks/use-productivity";
 import type { AnalyticsPeriod } from "@/lib/validations/analytics";
 import type { GroupStat } from "@/lib/analytics/engine";
 import type { Insight } from "@/lib/analytics/insights";
 import {
-  fmtDateInTz,
   fmtNum,
   fmtSigned,
   pnlClass,
@@ -116,67 +121,8 @@ function KpiCard({
   );
 }
 
-interface EquityDatum {
-  i: number;
-  date: string;
-  equity: number;
-  drawdown: number;
-}
 
-function EquityTooltipContent({
-  active,
-  payload,
-  currency,
-  timezone,
-}: {
-  active?: boolean;
-  payload?: Array<{ payload?: EquityDatum }>;
-  currency: string;
-  timezone: string;
-}) {
-  if (!active) return null;
-  const point = payload?.[0]?.payload;
-  if (!point) return null;
-  return (
-    <div className="rounded-lg border bg-background px-3 py-2 text-xs shadow-md">
-      <p className="font-medium">#{point.i}</p>
-      <p className="text-muted-foreground">
-        {fmtDateInTz(point.date, timezone)}
-      </p>
-      <p className="mt-1 tabular-nums">
-        <Money value={point.equity} currency={currency} kind="balance" />
-      </p>
-      {point.drawdown > 0 ? (
-        <p className={`tabular-nums ${ROSE}`}>
-          −<Money value={point.drawdown} currency={currency} />
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function RDistTooltipContent({
-  active,
-  payload,
-}: {
-  active?: boolean;
-  payload?: Array<{ payload?: { label: string; count: number; totalR: number } }>;
-}) {
-  if (!active) return null;
-  const point = payload?.[0]?.payload;
-  if (!point) return null;
-  return (
-    <div className="rounded-lg border bg-background px-3 py-2 text-xs shadow-md">
-      <p className="font-medium">{point.label}</p>
-      <p className="tabular-nums">{point.count}</p>
-      <p className="tabular-nums text-muted-foreground">
-        Σ {fmtSigned(String(point.totalR))} R
-      </p>
-    </div>
-  );
-}
-
-/** One breakdown dimension — compact rows with a proportional net P&L bar. */
+/** One breakdown dimension - compact rows with a proportional net P&L bar. */
 function BreakdownCard({
   title,
   description,
@@ -241,7 +187,7 @@ function BreakdownCard({
                     <span className="hidden w-16 whitespace-nowrap text-right text-xs text-muted-foreground sm:inline">
                       {e.stats.winRate != null
                         ? fmt.pct(e.stats.winRate)
-                        : "—"}
+                        : "-"}
                     </span>
                     <Money
                       signed
@@ -272,6 +218,7 @@ function BreakdownCard({
 export function AnalyticsView() {
   const { session } = useSession();
   const t = useTranslations("analytics");
+  const tAdv = useTranslations("analytics.advanced");
   const tRoot = useTranslations();
   const labels = useTradingLabels();
   const { locale } = useI18n();
@@ -279,9 +226,13 @@ export function AnalyticsView() {
   const { reducedMotionActive } = useA11yPrefs();
   const [period, setPeriod] = React.useState<AnalyticsPeriod>("30d");
   const [accountId, setAccountId] = React.useState<string>("all");
+  const [reportOpen, setReportOpen] = React.useState(false);
+  const tReports = useTranslations("reports");
 
   const { data: accountsData } = useAccounts();
   const accounts = accountsData ?? [];
+  // v2.5 M4 — labels for the custom-field breakdowns below.
+  const customFieldDefs = (useCustomFields(false).data ?? []);
 
   const effectiveAccount = accountId === "all" ? undefined : accountId;
   const { data, isLoading, isError, refetch } = useAnalytics({
@@ -338,7 +289,7 @@ export function AnalyticsView() {
     const h = Number(key);
     if (!Number.isFinite(h)) return key;
     const two = (n: number) => String(n).padStart(2, "0");
-    return `${two(h)}:00–${two(h + 1)}:59`;
+    return `${two(h)}:00-${two(h + 1)}:59`;
   }, []);
 
   /** Formats raw insight params for i18n interpolation (money, R, labels…). */
@@ -397,10 +348,10 @@ export function AnalyticsView() {
     const streak = s?.currentStreak ?? 0;
     return {
       netPnlTone: s ? pnlClass(s.netPnl) : "text-muted-foreground",
-      winRate: s?.winRate != null ? fmt.pct(s.winRate) : "—",
+      winRate: s?.winRate != null ? fmt.pct(s.winRate) : "-",
       profitFactor:
         pfNum == null
-          ? "—"
+          ? "-"
           : Number.isFinite(pfNum)
             ? fmtNum(pfNum)
             : "∞",
@@ -412,12 +363,12 @@ export function AnalyticsView() {
             : pfNum < 1
               ? ROSE
               : "",
-      expectancy: s?.expectancyR != null ? `${fmtSigned(s.expectancyR)} R` : "—",
+      expectancy: s?.expectancyR != null ? `${fmtSigned(s.expectancyR)} R` : "-",
       expectancyTone:
         s?.expectancyR != null ? pnlClass(s.expectancyR) : "text-muted-foreground",
-      totalR: s?.totalR != null ? `${fmtSigned(s.totalR)} R` : "—",
+      totalR: s?.totalR != null ? `${fmtSigned(s.totalR)} R` : "-",
       maxDrawdownTone: s?.maxDrawdown != null ? ROSE : "",
-      sqn: advanced?.sqn != null ? fmtNum(advanced.sqn) : "—",
+      sqn: advanced?.sqn != null ? fmtNum(advanced.sqn) : "-",
       sqnTone:
         advanced?.sqn == null
           ? ""
@@ -426,15 +377,15 @@ export function AnalyticsView() {
             : Number(advanced.sqn) < 1
               ? ROSE
               : "",
-      tradeCount: s ? fmtNum(s.tradeCount, 0) : "—",
+      tradeCount: s ? fmtNum(s.tradeCount, 0) : "-",
       winsLosses: s
         ? t("kpiWinsLosses", { wins: s.wins, losses: s.losses, be: s.breakevens })
         : null,
-      sharpe: advanced?.sharpe != null ? fmtNum(advanced.sharpe) : "—",
-      sortino: advanced?.sortino != null ? fmtNum(advanced.sortino) : "—",
+      sharpe: advanced?.sharpe != null ? fmtNum(advanced.sharpe) : "-",
+      sortino: advanced?.sortino != null ? fmtNum(advanced.sortino) : "-",
       recovery:
-        advanced?.recoveryFactor != null ? fmtNum(advanced.recoveryFactor) : "—",
-      payoff: advanced?.payoffRatio != null ? fmtNum(advanced.payoffRatio) : "—",
+        advanced?.recoveryFactor != null ? fmtNum(advanced.recoveryFactor) : "-",
+      payoff: advanced?.payoffRatio != null ? fmtNum(advanced.payoffRatio) : "-",
       avgDuration:
         advanced?.avgDurationMin != null
           ? advanced.avgDurationMin >= 60
@@ -443,16 +394,16 @@ export function AnalyticsView() {
                 m: advanced.avgDurationMin % 60,
               })
             : t("durationM", { m: advanced.avgDurationMin })
-          : "—",
-      rCoverage: advanced?.rCoverage != null ? fmt.pct(advanced.rCoverage) : "—",
-      maxWinStreak: s ? fmtNum(s.maxWinStreak, 0) : "—",
-      maxLossStreak: s ? fmtNum(s.maxLossStreak, 0) : "—",
+          : "-",
+      rCoverage: advanced?.rCoverage != null ? fmt.pct(advanced.rCoverage) : "-",
+      maxWinStreak: s ? fmtNum(s.maxWinStreak, 0) : "-",
+      maxLossStreak: s ? fmtNum(s.maxLossStreak, 0) : "-",
       streakText:
         streak > 0
           ? t("streakWin", { count: streak })
           : streak < 0
             ? t("streakLoss", { count: Math.abs(streak) })
-            : "—",
+            : "-",
       streakTone: streak > 0 ? EMERALD : streak < 0 ? ROSE : "",
     };
   }, [stats, advanced, currency, t, fmt]);
@@ -463,19 +414,17 @@ export function AnalyticsView() {
   const showAllCta = !hasAnyTrade && period !== "all";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour="analytics">
       {/* ── Header + filters ── */}
       <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-xl font-bold tracking-tight sm:text-2xl">
-            {t("title")}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {hasAnyTrade
+        <PageHeader
+          title={t("title")}
+          description={
+            hasAnyTrade
               ? t("subtitle", { count: stats.tradeCount })
-              : t("subtitleEmpty")}
-          </p>
-        </div>
+              : t("subtitleEmpty")
+          }
+        />
         {/* a11y (M8 Phase 5): wraps at 200 % text / narrow viewports (WCAG 1.4.10). */}
         <div className="flex flex-wrap items-center gap-2">
           {/* a11y (M8 Phase 5): segmented ToggleGroup, NOT Tabs — a tabset
@@ -518,11 +467,54 @@ export function AnalyticsView() {
             variant="outline"
             size="sm"
             className="ml-auto"
-            onClick={() => navigate("#/analytics/charts")}
+            onClick={() => navigate("/analytics/charts")}
           >
             <LineChart className="h-4 w-4" aria-hidden="true" />
             {t("openChartBuilder")}
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate("/analytics/heatmaps")}
+          >
+            <Grid3x3 className="h-4 w-4" aria-hidden="true" />
+            {tRoot("nav.heatmaps")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setReportOpen(true)}
+          >
+            <FileText className="h-4 w-4" aria-hidden="true" />
+            {tReports("button")}
+          </Button>
+        </div>
+        {/* v2.5 M6 — advanced analytics tabs */}
+        <div className="flex flex-wrap items-center gap-2">
+          {(
+            [
+              "lifecycle",
+              "exits",
+              "quality",
+              "setups",
+              "grades",
+              "sequences",
+              "seasonality",
+              "anomalies",
+              "weekly-plan",
+              "goals",
+              "performance-report",
+            ] as const
+          ).map((tab) => (
+            <Button
+              key={tab}
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`/analytics/${tab}`)}
+            >
+              {tAdv(`tabs.${tab}`)}
+            </Button>
+          ))}
         </div>
       </div>
 
@@ -569,12 +561,12 @@ export function AnalyticsView() {
                 {t("emptyCtaAll")}
               </Button>
             ) : (
-              <Button onClick={() => navigate("#/trades/quick")}>
+              <Button onClick={() => navigate("/trades/quick")}>
                 <Zap className="h-4 w-4" aria-hidden="true" />
                 {t("emptyCtaQuick")}
               </Button>
             )}
-            <Button variant="outline" onClick={() => navigate("#/trades/new")}>
+            <Button variant="outline" onClick={() => navigate("/trades/new")}>
               <Plus className="h-4 w-4" aria-hidden="true" />
               {t("emptyCtaForm")}
             </Button>
@@ -592,7 +584,7 @@ export function AnalyticsView() {
                   stats ? (
                     <Money signed value={stats.netPnl} currency={currency} />
                   ) : (
-                    "—"
+                    "-"
                   )
                 }
                 valueClassName={kpi.netPnlTone}
@@ -623,7 +615,7 @@ export function AnalyticsView() {
                   stats?.maxDrawdown != null ? (
                     <Money value={stats.maxDrawdown} currency={currency} />
                   ) : (
-                    "—"
+                    "-"
                   )
                 }
                 valueClassName={kpi.maxDrawdownTone}
@@ -645,7 +637,7 @@ export function AnalyticsView() {
               <KpiCard
                 compact
                 label={t("kpiStreaks")}
-                value={kpi.streakText || "—"}
+                value={kpi.streakText || "-"}
                 valueClassName={kpi.streakTone}
                 sub={t("streaksMax", {
                   wins: kpi.maxWinStreak,
@@ -663,7 +655,7 @@ export function AnalyticsView() {
                   advanced != null ? (
                     <Money value={advanced.totalFees} currency={currency} />
                   ) : (
-                    "—"
+                    "-"
                   )
                 }
               />
@@ -671,184 +663,25 @@ export function AnalyticsView() {
             </div>
           </section>
 
-          {/* Equity + drawdown (2/3) | R distribution (1/3) */}
-          <div className="grid gap-6 xl:grid-cols-3">
-            <Card className="xl:col-span-2">
-              <CardHeader>
-                <CardTitle className="text-base">{t("equityTitle")}</CardTitle>
-                <CardDescription>
-                  {t("equityDesc", {
-                    amount: fmt.money(data.equityInitialBalance, currency),
-                  })}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div
-                  className="h-[220px] w-full"
-                  role="img"
-                  aria-label={t("equityTitle")}
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart
-                      data={equityData}
-                      margin={{ top: 8, right: 12, bottom: 0, left: 0 }}
-                    >
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        strokeOpacity={0.3}
-                        vertical={false}
-                      />
-                      <XAxis
-                        dataKey="i"
-                        tickFormatter={(value: number) => `#${value}`}
-                        tick={{ fontSize: 11 }}
-                        tickLine={false}
-                        axisLine={false}
-                        minTickGap={32}
-                      />
-                      <YAxis
-                        domain={["auto", "auto"]}
-                        tickFormatter={(value: number) => fmt.money(value, currency, 0)}
-                        tick={{ fontSize: 11 }}
-                        tickLine={false}
-                        axisLine={false}
-                        width={60}
-                      />
-                      <Tooltip
-                        cursor={{ strokeOpacity: 0.4 }}
-                        content={
-                          <EquityTooltipContent
-                            currency={currency}
-                            timezone={timezone}
-                          />
-                        }
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="equity"
-                        stroke="#10b981"
-                        strokeWidth={2}
-                        fill="#10b981"
-                        fillOpacity={0.15}
-                        dot={false}
-                        activeDot={{ r: 4 }}
-                        isAnimationActive={!reducedMotionActive}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-                <div>
-                  <p className="mb-1 text-xs font-medium text-muted-foreground">
-                    {t("drawdownTitle")}
-                  </p>
-                  <div
-                    className="h-[80px] w-full"
-                    role="img"
-                    aria-label={t("drawdownTitle")}
-                  >
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart
-                        data={equityData}
-                        margin={{ top: 4, right: 12, bottom: 0, left: 0 }}
-                      >
-                        <XAxis dataKey="i" hide />
-                        <YAxis
-                          domain={[0, "auto"]}
-                          tickFormatter={(value: number) => fmt.money(value, currency, 0)}
-                          tick={{ fontSize: 10 }}
-                          tickLine={false}
-                          axisLine={false}
-                          width={60}
-                        />
-                        <Tooltip
-                          cursor={{ strokeOpacity: 0.4 }}
-                          content={
-                            <EquityTooltipContent
-                              currency={currency}
-                              timezone={timezone}
-                            />
-                          }
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="drawdown"
-                          stroke="#f43f5e"
-                          strokeWidth={1.5}
-                          fill="#f43f5e"
-                          fillOpacity={0.15}
-                          dot={false}
-                          isAnimationActive={!reducedMotionActive}
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">{t("rdistTitle")}</CardTitle>
-                <CardDescription>
-                  {data.rDistribution.withoutR > 0
-                    ? t("rdistDescMissing", {
-                        count: data.rDistribution.withoutR,
-                      })
-                    : t("rdistDesc")}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div
-                  className="h-[320px] w-full"
-                  role="img"
-                  aria-label={t("rdistTitle")}
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={rDistData}
-                      margin={{ top: 8, right: 4, bottom: 0, left: 0 }}
-                    >
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        strokeOpacity={0.3}
-                        vertical={false}
-                      />
-                      <XAxis
-                        dataKey="label"
-                        tick={{ fontSize: 10 }}
-                        tickLine={false}
-                        axisLine={false}
-                        interval={0}
-                        angle={-35}
-                        textAnchor="end"
-                        height={44}
-                      />
-                      <YAxis
-                        allowDecimals={false}
-                        tick={{ fontSize: 11 }}
-                        tickLine={false}
-                        axisLine={false}
-                        width={32}
-                      />
-                      <Tooltip
-                        cursor={{ fillOpacity: 0.08 }}
-                        content={<RDistTooltipContent />}
-                      />
-                      <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={36} isAnimationActive={!reducedMotionActive}>
-                        {rDistData.map((b) => (
-                          <Cell
-                            key={b.id}
-                            fill={b.negative ? "var(--loss)" : "var(--gain)"}
-                            fillOpacity={0.8}
-                          />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <AnalyticsCharts
+            equityData={equityData}
+            rDistData={rDistData}
+            currency={currency}
+            timezone={timezone}
+            reducedMotion={reducedMotionActive}
+            formatMoney={(v, c, d) => fmt.money(v, c, d)}
+            equityTitle={t("equityTitle")}
+            equityDesc={t("equityDesc", {
+              amount: fmt.money(data.equityInitialBalance, currency),
+            })}
+            drawdownTitle={t("drawdownTitle")}
+            rdistTitle={t("rdistTitle")}
+            rdistDesc={t("rdistDesc")}
+            rdistDescMissing={t("rdistDescMissing", {
+              count: data.rDistribution.withoutR,
+            })}
+            missingCount={data.rDistribution.withoutR}
+          />
 
           {/* Insights — ce qui marche / ce qui coûte / à noter */}
           <section aria-label={t("insightsAria")}>
@@ -1004,8 +837,33 @@ export function AnalyticsView() {
                   k === "yes" ? t("planYes") : t("planNo")
                 }
               />
+              {/* v2.5 M4 — breakdowns per usable-in-analytics custom field. */}
+              {customFieldDefs
+                .filter((d) => d.usableInAnalytics)
+                .map((def) => {
+                  const entries = data.breakdowns.custom?.[def.key] ?? [];
+                  if (entries.length === 0) return null;
+                  return (
+                    <BreakdownCard
+                      key={def.key}
+                      title={def.label}
+                      description={t("bdCustomDesc")}
+                      icon={ListChecks}
+                      entries={entries}
+                      currency={currency}
+                      renderKey={(k) => k}
+                    />
+                  );
+                })}
             </div>
           </section>
+
+          {/* When you trade (MRT wave 2) — hour, weekday, session x weekday. */}
+          <WhenYouTradeSection
+            period={period}
+            accountId={accountId}
+            currency={currency}
+          />
 
           {/* Footer note */}
           <p className="flex flex-wrap items-start gap-2 text-xs text-muted-foreground">
@@ -1014,13 +872,14 @@ export function AnalyticsView() {
             <button
               type="button"
               className="underline underline-offset-2 hover:text-foreground"
-              onClick={() => navigate("#/reglages")}
+              onClick={() => navigate("/settings")}
             >
               {t("currencyNoteLink")}
             </button>
           </p>
         </div>
       )}
+      <MonthlyReportDialog open={reportOpen} onOpenChange={setReportOpen} />
     </div>
   );
 }

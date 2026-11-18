@@ -8,7 +8,7 @@
  * checkbox-chip value pickers fed by the reference data (instruments,
  * strategies, tags, accounts…), an optional formula layer over sub-metrics
  * A/B/C (each with its own aggregate + filters) validated live by the safe
- * parser, and an "Evaluate" preview against POST /api/custom-metrics/preview.
+ * parser, and an "Evaluate" preview against POST /api/v1/custom-metrics/preview.
  */
 import * as React from "react";
 import { useTranslations } from "next-intl";
@@ -152,7 +152,7 @@ const EMPTY_BUILDER: BuilderState = {
   subs: { A: { ...EMPTY_SUB }, B: { ...EMPTY_SUB }, C: { ...EMPTY_SUB } },
 };
 
-/** Strip empty filters/groups — the strict server schema rejects them. */
+/** Strip empty filters/groups - the strict server schema rejects them. */
 function cleanGroups(groups: GroupDraft[]): CustomMetricInput["definition"]["filterGroups"] {
   return groups
     .map((g) => ({
@@ -722,7 +722,7 @@ function FilterGroupsEditor({
   );
 }
 
-/** "instrument is XAUUSD OR EURUSD" — one line per group. */
+/** "instrument is XAUUSD OR EURUSD" - one line per group. */
 function groupSummary(
   group: GroupDraft,
   valueLabel: (field: MetricFilterField, value: string) => string,
@@ -755,10 +755,10 @@ function formatMetricValue(
   currency: string,
   t: ReturnType<typeof useTranslations>
 ): string {
-  if (value == null) return "—";
+  if (value == null) return "-";
   if (value === "inf") return "∞";
   const n = Number(value);
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "-";
   switch (format) {
     case "CURRENCY":
       return fmt.money(n, currency);
@@ -831,7 +831,7 @@ export function CustomMetricBuilder({
     setPreviewing(true);
     try {
       const result = await apiFetch<PreviewResult>(
-        "/api/custom-metrics/preview",
+        "/api/v1/custom-metrics/preview",
         {
           method: "POST",
           body: JSON.stringify(input.definition),
@@ -858,7 +858,7 @@ export function CustomMetricBuilder({
     setSaving(true);
     try {
       const response = await apiFetch<{ metric: { id: string } }>(
-        editing ? `/api/custom-metrics/${editing.id}` : "/api/custom-metrics",
+        editing ? `/api/v1/custom-metrics/${editing.id}` : "/api/v1/custom-metrics",
         {
           method: editing ? "PATCH" : "POST",
           body: JSON.stringify(input),
@@ -1159,7 +1159,7 @@ export function CustomMetricsSection() {
   const onDelete = async (id: string) => {
     setDeletingId(id);
     try {
-      await apiFetch<void>(`/api/custom-metrics/${id}`, { method: "DELETE" });
+      await apiFetch<void>(`/api/v1/custom-metrics/${id}`, { method: "DELETE" });
       toast({ title: t("deletedToast") });
       void metrics.refetch();
     } catch (error) {
@@ -1211,10 +1211,10 @@ export function CustomMetricsSection() {
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{metric.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {aggregate ? t(`aggregate.${aggregate}`) : "—"}
+                    {aggregate ? t(`aggregate.${aggregate}`) : "-"}
                     {" · "}
                     {t(`format.${metric.format}`)}
-                    {metric.description ? ` — ${metric.description}` : ""}
+                    {metric.description ? ` - ${metric.description}` : ""}
                   </p>
                 </div>
                 <div className="flex items-center gap-1">

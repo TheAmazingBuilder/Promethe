@@ -18,14 +18,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const parsed = annotationPatchSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Annotation invalide." },
+        { error: "VALIDATION", message: "Invalid annotation." },
         { status: 422 }
       );
     }
     const annotation = await updateAnnotation(session.user.id, id, parsed.data);
     if (!annotation) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Annotation introuvable." },
+        { error: "NOT_FOUND", message: "Annotation not found." },
         { status: 404 }
       );
     }
@@ -33,7 +33,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   } catch (error) {
     if (error instanceof Error && error.message === "ANNOTATION_INVALID") {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Annotation invalide." },
+        { error: "VALIDATION", message: "Invalid annotation." },
         { status: 422 }
       );
     }
@@ -48,7 +48,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     const deleted = await deleteAnnotation(session.user.id, id);
     if (!deleted) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Annotation introuvable." },
+        { error: "NOT_FOUND", message: "Annotation not found." },
         { status: 404 }
       );
     }

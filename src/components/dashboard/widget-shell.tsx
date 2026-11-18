@@ -278,6 +278,8 @@ export interface WidgetShellProps
   onRemove: () => void;
   onRetry: () => void;
   children: React.ReactNode;
+  /** Position in the grid - drives the staggered entrance delay. */
+  index?: number;
 }
 
 export function WidgetShell({
@@ -293,6 +295,7 @@ export function WidgetShell({
   children,
   className,
   style,
+  index,
   ...rest
 }: WidgetShellProps) {
   const t = useTranslations("dashboards");
@@ -322,10 +325,16 @@ export function WidgetShell({
   return (
     <div
       className={cn(
-        "relative flex h-full min-h-0 flex-col rounded-xl border bg-card text-card-foreground shadow-sm",
+        "widget-enter relative flex h-full min-h-0 flex-col rounded-xl border bg-card text-card-foreground shadow-sm transition-all duration-200 ease-out",
+        // Hover lift only outside edit mode - while dragging, the card stays put.
+        !editMode &&
+          "hover:-translate-y-0.5 hover:border-accent-foreground/25 hover:shadow-md",
         className
       )}
-      style={style}
+      style={{
+        ...style,
+        animationDelay: `${Math.min((index ?? 0) * 40, 320)}ms`,
+      }}
       {...rest}
     >
       {/* Header */}
@@ -349,7 +358,7 @@ export function WidgetShell({
             <button
               type="button"
               className="shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label={`${chipLabel} — ${t("periods.editAria", { name: title })}`}
+              aria-label={`${chipLabel} - ${t("periods.editAria", { name: title })}`}
             >
               <Badge
                 variant="outline"

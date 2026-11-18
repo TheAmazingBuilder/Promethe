@@ -18,14 +18,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const parsed = accountInputSchema.partial().safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Certains champs sont invalides.", fieldErrors: zodFieldErrors(parsed.error) },
+        { error: "VALIDATION", message: "Some fields are invalid.", fieldErrors: zodFieldErrors(parsed.error) },
         { status: 422 }
       );
     }
     const account = await updateAccount(session.user.id, id, parsed.data);
     if (!account) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Compte introuvable." },
+        { error: "NOT_FOUND", message: "Account not found." },
         { status: 404 }
       );
     }
@@ -42,7 +42,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     const ok = await deleteAccount(session.user.id, id);
     if (!ok) {
       return NextResponse.json(
-        { error: "TRADES_ON_ACCOUNT", message: "Ce compte contient des trades — archivage seulement." },
+        { error: "TRADES_ON_ACCOUNT", message: "This account contains trades – archiving only." },
         { status: 422 }
       );
     }

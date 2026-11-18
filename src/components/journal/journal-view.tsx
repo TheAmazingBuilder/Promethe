@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * Journal view (v1 phase 5) — one entry per local day: pre-market plan,
+ * Journal view (v1 phase 5) — one entry per trading day: pre-market plan,
  * post-market review, mood/sleep/discipline scores (1-5), market bias and
- * key lesson. Deep-linkable (#/journal/{date}) from the calendar.
+ * key lesson. Deep-linkable (/journal/{date}) from the calendar.
  */
 import * as React from "react";
 import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
@@ -17,8 +17,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import {
   useCalendar,
@@ -32,6 +34,7 @@ import { fmtDateInTz, pnlClass } from "@/lib/format";
 import { Money } from "@/components/privacy/money";
 import { navigate } from "@/lib/router";
 import { toD } from "@/lib/trading/dec";
+import { useTimePrefs } from "@/components/time/time-provider";
 import type { JournalEntryInput } from "@/lib/validations/journal";
 
 const SCORES = [1, 2, 3, 4, 5] as const;
@@ -42,12 +45,7 @@ function shiftDay(isoDay: string, delta: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function todayIsoDay(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-}
-
-/** Star-less 1-5 score picker — buttons with an active state. */
+/** Star-less 1-5 score picker - buttons with an active state. */
 function ScorePicker({
   label,
   value,
@@ -92,11 +90,18 @@ export function JournalView({ date }: { date?: string }) {
   const t = useTranslations("journalView");
   const tRoot = useTranslations();
   const { toast } = useToast();
-  const today = React.useMemo(() => todayIsoDay(), []);
+  // "Today" is the current TRADING day (user setting, default MIDNIGHT_LOCAL
+  // = the local calendar day) — the entry is keyed by that day, matching
+  // the calendar buckets and the daily P&L shown above the form.
+  const { tradingDayOf, loaded: timeLoaded } = useTimePrefs();
+  const today = React.useMemo(
+    () => tradingDayOf(),
+    [tradingDayOf, timeLoaded]
+  );
   const day = date ?? today;
 
   const { data: entry, isLoading } = useJournalEntry(day);
-  // Day P&L — reuses the calendar month payload (cached, shared with #/calendrier).
+  // Day P&L — reuses the calendar month payload (cached, shared with /calendar).
   const { data: calendarData } = useCalendar(
     Number(day.slice(0, 4)),
     Number(day.slice(5, 7)),
@@ -211,48 +216,52 @@ export function JournalView({ date }: { date?: string }) {
   const isToday = day === today;
 
   return (
-    <section aria-labelledby="journal-title" className="mx-auto flex max-w-4xl flex-col gap-6">
+    <section
+      aria-labelledby="journal-title"
+      data-tour="journal"
+      className="flex flex-col gap-6"
+    >
       {/* Header + day navigation */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 id="journal-title" className="text-2xl font-bold tracking-tight">
-            {t("title")}
-          </h1>
-          <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        id="journal-title"
+        title={t("title")}
+        description={t("subtitle")}
+        className="flex-wrap sm:items-end"
+        actions={
+          <>
           <Button
             variant="outline"
             size="icon"
-            onClick={() => navigate(`#/journal/${shiftDay(day, -1)}`)}
+            onClick={() => navigate(`/journal/${shiftDay(day, -1)}`)}
             aria-label={t("prevDay")}
           >
             <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           </Button>
-          <Input
-            type="date"
+          <DateField
+            id="journal-day"
+            ariaLabel={t("dateLabel")}
+            className="h-9 w-[170px]"
             value={day}
-            onChange={(e) => {
-              if (e.target.value) navigate(`#/journal/${e.target.value}`);
+            onChange={(v) => {
+              if (v) navigate(`/journal/${v}`);
             }}
-            aria-label={t("dateLabel")}
-            className="w-[170px]"
           />
           <Button
             variant="outline"
             size="icon"
-            onClick={() => navigate(`#/journal/${shiftDay(day, 1)}`)}
+            onClick={() => navigate(`/journal/${shiftDay(day, 1)}`)}
             aria-label={t("nextDay")}
           >
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </Button>
           {!isToday ? (
-            <Button variant="outline" size="sm" onClick={() => navigate("#/journal")}>
+            <Button variant="outline" size="sm" onClick={() => navigate("/journal")}>
               {t("today")}
             </Button>
-          ) : null}
-        </div>
-      </div>
+            ) : null}
+          </>
+        }
+      />
 
       {/* Scores + save bar */}
       <Card>

@@ -1,143 +1,441 @@
 "use client";
 
-import { useHashRoute } from "@/lib/router";
+import * as React from "react";
+import dynamic from "next/dynamic";
+import { useRoute } from "@/lib/router";
 import { findNavItem } from "@/components/app/nav";
-import { DashboardsView } from "@/components/dashboard/dashboards-view";
-import { ToolsView } from "./tools-view";
-import { SettingsView } from "./settings-view";
 import { PlaceholderView } from "./placeholder-view";
-import { CalendarView } from "@/components/calendar/calendar-view";
-import { JournalView } from "@/components/journal/journal-view";
-import { StrategiesView } from "@/components/strategies/strategies-view";
-import { RulesView } from "@/components/rules/rules-view";
-import { AccountsView } from "@/components/settings-views/accounts-view";
-import { InstrumentsView } from "@/components/settings-views/instruments-view";
-import { TagsView } from "@/components/settings-views/tags-view";
-import { AnalyticsView } from "@/components/analytics/analytics-view";
-import { ChartBuilderView } from "@/components/charts/chart-builder-view";
-import { HeatmapsView } from "@/components/charts/heatmap-view";
-import { BenchmarkView } from "@/components/charts/benchmark-view";
-import { AnnotationsView } from "@/components/charts/annotations-view";
-import { TradesView } from "@/components/trades/trades-view";
-import { TradeDetailView } from "@/components/trades/trade-detail-view";
-import { TradeFormView } from "@/components/trades/trade-form-view";
-import { QuickTradeView } from "@/components/quick/quick-trade-view";
-import { TemplatesView } from "@/components/templates/templates-view";
-import { BrokerSyncView } from "@/components/broker-sync/broker-sync-view";
-import { ImportView } from "@/components/import/import-view";
-import { ReconciliationView } from "@/components/reconciliation/reconciliation-view";
-import { SharingView } from "@/components/sharing/sharing-view";
-import { MentorsView } from "@/components/mentors/mentors-view";
-import { MentorView } from "@/components/mentor/mentor-view";
-import { MentorOwnerView } from "@/components/mentor/mentor-owner-view";
-import { MentorTradeView } from "@/components/mentor/mentor-trade-view";
-import { InvitationView } from "@/components/mentor/invitation-view";
-import { AccountSettingsView } from "@/components/settings/account-settings-view";
-import { LegalView } from "@/components/legal/legal-view";
-import { FocusView } from "@/components/dashboard/focus-view";
-import { AppearanceView } from "@/components/settings-views/appearance-view";
-import { DashboardsSettingsView } from "@/components/settings-views/dashboards-settings-view";
-import { PrivacyView } from "@/components/settings-views/privacy-view";
-import { AccessibilityView } from "@/components/settings-views/accessibility-view";
-import { TrashView } from "@/components/trash/trash-view";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useA11yPrefs } from "@/components/a11y/a11y-provider";
 
-/** No locked sections remain — phase 7 shipped every placeholder. */
+/**
+ * Sober loading state while a view chunk loads on navigation. Plain
+ * skeleton blocks, no spinner, no animation beyond the skeleton pulse.
+ */
+function ViewLoading() {
+  return (
+    <div aria-busy="true" className="space-y-4" aria-label="Loading view">
+      <Skeleton className="h-8 w-56" />
+      <Skeleton className="h-44 w-full" />
+      <Skeleton className="h-44 w-full" />
+    </div>
+  );
+}
+
+// ── Views, one chunk each ────────────────────────────────────────────────────
+// Every view is loaded on demand (next/dynamic, SSR kept): a page only
+// downloads its own view + the shell, never the other 60+ views. The
+// loading fallback above shows while the chunk loads on navigation.
+const DashboardsView = dynamic(() => import("@/components/dashboard/dashboards-view").then((m) => m.DashboardsView), {
+  loading: () => <ViewLoading />,
+});
+const ToolsView = dynamic(() => import("./tools-view").then((m) => m.ToolsView), {
+  loading: () => <ViewLoading />,
+});
+const SettingsView = dynamic(() => import("./settings-view").then((m) => m.SettingsView), {
+  loading: () => <ViewLoading />,
+});
+const CalendarView = dynamic(() => import("@/components/calendar/calendar-view").then((m) => m.CalendarView), {
+  loading: () => <ViewLoading />,
+});
+const JournalView = dynamic(() => import("@/components/journal/journal-view").then((m) => m.JournalView), {
+  loading: () => <ViewLoading />,
+});
+const GaiaView = dynamic(() => import("@/components/gaia/gaia-view").then((m) => m.GaiaView), {
+  loading: () => <ViewLoading />,
+});
+const StrategiesView = dynamic(() => import("@/components/strategies/strategies-view").then((m) => m.StrategiesView), {
+  loading: () => <ViewLoading />,
+});
+const PlaybookView = dynamic(() => import("@/components/playbook/playbook-view").then((m) => m.PlaybookView), {
+  loading: () => <ViewLoading />,
+});
+const RulesView = dynamic(() => import("@/components/rules/rules-view").then((m) => m.RulesView), {
+  loading: () => <ViewLoading />,
+});
+const AccountsView = dynamic(() => import("@/components/settings-views/accounts-view").then((m) => m.AccountsView), {
+  loading: () => <ViewLoading />,
+});
+const InstrumentsView = dynamic(() => import("@/components/settings-views/instruments-view").then((m) => m.InstrumentsView), {
+  loading: () => <ViewLoading />,
+});
+const TagsView = dynamic(() => import("@/components/settings-views/tags-view").then((m) => m.TagsView), {
+  loading: () => <ViewLoading />,
+});
+const AnalyticsView = dynamic(() => import("@/components/analytics/analytics-view").then((m) => m.AnalyticsView), {
+  loading: () => <ViewLoading />,
+});
+const LifecycleView = dynamic(() => import("@/components/analytics/lifecycle-view").then((m) => m.LifecycleView), {
+  loading: () => <ViewLoading />,
+});
+const ExitsView = dynamic(() => import("@/components/analytics/exits-view").then((m) => m.ExitsView), {
+  loading: () => <ViewLoading />,
+});
+const QualityView = dynamic(() => import("@/components/analytics/quality-view").then((m) => m.QualityView), {
+  loading: () => <ViewLoading />,
+});
+const SetupsView = dynamic(() => import("@/components/analytics/setups-view").then((m) => m.SetupsView), {
+  loading: () => <ViewLoading />,
+});
+const ConfluencesView = dynamic(() => import("@/components/analytics/confluences-view").then((m) => m.ConfluencesView), {
+  loading: () => <ViewLoading />,
+});
+const GradesView = dynamic(() => import("@/components/analytics/grades-view").then((m) => m.GradesView), {
+  loading: () => <ViewLoading />,
+});
+const SequencesView = dynamic(() => import("@/components/analytics/sequences-view").then((m) => m.SequencesView), {
+  loading: () => <ViewLoading />,
+});
+const SeasonalityView = dynamic(() => import("@/components/analytics/seasonality-view").then((m) => m.SeasonalityView), {
+  loading: () => <ViewLoading />,
+});
+const AnomaliesView = dynamic(() => import("@/components/analytics/anomalies-view").then((m) => m.AnomaliesView), {
+  loading: () => <ViewLoading />,
+});
+const WeeklyPlanView = dynamic(() => import("@/components/analytics/weekly-plan-view").then((m) => m.WeeklyPlanView), {
+  loading: () => <ViewLoading />,
+});
+const GoalsView = dynamic(() => import("@/components/analytics/goals-view").then((m) => m.GoalsView), {
+  loading: () => <ViewLoading />,
+});
+const PerformanceReportView = dynamic(() => import("@/components/analytics/performance-report-view").then((m) => m.PerformanceReportView), {
+  loading: () => <ViewLoading />,
+});
+const ChartBuilderView = dynamic(() => import("@/components/charts/chart-builder-view").then((m) => m.ChartBuilderView), {
+  loading: () => <ViewLoading />,
+});
+const HeatmapsView = dynamic(() => import("@/components/charts/heatmap-view").then((m) => m.HeatmapsView), {
+  loading: () => <ViewLoading />,
+});
+const BenchmarkView = dynamic(() => import("@/components/charts/benchmark-view").then((m) => m.BenchmarkView), {
+  loading: () => <ViewLoading />,
+});
+const AnnotationsView = dynamic(() => import("@/components/charts/annotations-view").then((m) => m.AnnotationsView), {
+  loading: () => <ViewLoading />,
+});
+const TradesView = dynamic(() => import("@/components/trades/trades-view").then((m) => m.TradesView), {
+  loading: () => <ViewLoading />,
+});
+const TradeDetailView = dynamic(() => import("@/components/trades/trade-detail-view").then((m) => m.TradeDetailView), {
+  loading: () => <ViewLoading />,
+});
+const TradeFormView = dynamic(() => import("@/components/trades/trade-form-view").then((m) => m.TradeFormView), {
+  loading: () => <ViewLoading />,
+});
+const QuickTradeView = dynamic(() => import("@/components/quick/quick-trade-view").then((m) => m.QuickTradeView), {
+  loading: () => <ViewLoading />,
+});
+const TemplatesView = dynamic(() => import("@/components/templates/templates-view").then((m) => m.TemplatesView), {
+  loading: () => <ViewLoading />,
+});
+const BrokerSyncView = dynamic(() => import("@/components/broker-sync/broker-sync-view").then((m) => m.BrokerSyncView), {
+  loading: () => <ViewLoading />,
+});
+const ImportView = dynamic(() => import("@/components/import/import-view").then((m) => m.ImportView), {
+  loading: () => <ViewLoading />,
+});
+const ReconciliationView = dynamic(() => import("@/components/reconciliation/reconciliation-view").then((m) => m.ReconciliationView), {
+  loading: () => <ViewLoading />,
+});
+const SharingView = dynamic(() => import("@/components/sharing/sharing-view").then((m) => m.SharingView), {
+  loading: () => <ViewLoading />,
+});
+const MentorsView = dynamic(() => import("@/components/mentors/mentors-view").then((m) => m.MentorsView), {
+  loading: () => <ViewLoading />,
+});
+const MentorView = dynamic(() => import("@/components/mentor/mentor-view").then((m) => m.MentorView), {
+  loading: () => <ViewLoading />,
+});
+const MentorOwnerView = dynamic(() => import("@/components/mentor/mentor-owner-view").then((m) => m.MentorOwnerView), {
+  loading: () => <ViewLoading />,
+});
+const MentorTradeView = dynamic(() => import("@/components/mentor/mentor-trade-view").then((m) => m.MentorTradeView), {
+  loading: () => <ViewLoading />,
+});
+const InvitationView = dynamic(() => import("@/components/mentor/invitation-view").then((m) => m.InvitationView), {
+  loading: () => <ViewLoading />,
+});
+const AccountSettingsView = dynamic(() => import("@/components/settings/account-settings-view").then((m) => m.AccountSettingsView), {
+  loading: () => <ViewLoading />,
+});
+const ProfileView = dynamic(() => import("@/components/profile/profile-view").then((m) => m.ProfileView), {
+  loading: () => <ViewLoading />,
+});
+const LegalView = dynamic(() => import("@/components/legal/legal-view").then((m) => m.LegalView), {
+  loading: () => <ViewLoading />,
+});
+const FocusView = dynamic(() => import("@/components/dashboard/focus-view").then((m) => m.FocusView), {
+  loading: () => <ViewLoading />,
+});
+const AppearanceView = dynamic(() => import("@/components/settings-views/appearance-view").then((m) => m.AppearanceView), {
+  loading: () => <ViewLoading />,
+});
+const DashboardsSettingsView = dynamic(() => import("@/components/settings-views/dashboards-settings-view").then((m) => m.DashboardsSettingsView), {
+  loading: () => <ViewLoading />,
+});
+const PrivacyView = dynamic(() => import("@/components/settings-views/privacy-view").then((m) => m.PrivacyView), {
+  loading: () => <ViewLoading />,
+});
+const AccessibilityView = dynamic(() => import("@/components/settings-views/accessibility-view").then((m) => m.AccessibilityView), {
+  loading: () => <ViewLoading />,
+});
+const TimeView = dynamic(() => import("@/components/settings-views/time-view").then((m) => m.TimeView), {
+  loading: () => <ViewLoading />,
+});
+const CustomFieldsView = dynamic(() => import("@/components/settings-views/custom-fields-view").then((m) => m.CustomFieldsView), {
+  loading: () => <ViewLoading />,
+});
+const ShortcutsView = dynamic(() => import("@/components/settings-views/shortcuts-view").then((m) => m.ShortcutsView), {
+  loading: () => <ViewLoading />,
+});
+const IntegrationsView = dynamic(() => import("@/components/settings-views/integrations-view").then((m) => m.IntegrationsView), {
+  loading: () => <ViewLoading />,
+});
+const SearchView = dynamic(() => import("@/components/search/search-view").then((m) => m.SearchView), {
+  loading: () => <ViewLoading />,
+});
+const HistoryView = dynamic(() => import("@/components/history/history-view").then((m) => m.HistoryView), {
+  loading: () => <ViewLoading />,
+});
+const TrashView = dynamic(() => import("@/components/trash/trash-view").then((m) => m.TrashView), {
+  loading: () => <ViewLoading />,
+});
+
+
+/** No locked sections remain - phase 7 shipped every placeholder. */
 const FEATURES: Record<string, string[]> = {};
 
 export function ViewSwitch() {
-  const route = useHashRoute();
+  const route = useRoute();
+  const { reducedMotionActive: reduceMotion } = useA11yPrefs();
+  // Key changes only when the page itself changes - query params (filters,
+  // drill-downs) keep the same view mounted, no transition replay.
+  const viewKey = [
+    route.view,
+    route.id,
+    route.mode,
+    route.ownerId,
+    route.token,
+    route.legalPage,
+    route.journalDate,
+  ]
+    .filter(Boolean)
+    .join("/");
 
+  let view: React.ReactNode;
   switch (route.view) {
     case "dashboard":
-      return <DashboardsView />;
+      view = <DashboardsView />;
+      break;
     case "focus":
-      return <FocusView />;
+      view = <FocusView />;
+      break;
     case "appearance-settings":
-      return <AppearanceView />;
+      view = <AppearanceView />;
+      break;
     case "privacy-settings":
-      return <PrivacyView />;
+      view = <PrivacyView />;
+      break;
     case "accessibility-settings":
-      return <AccessibilityView />;
+      view = <AccessibilityView />;
+      break;
+    case "time-settings":
+      view = <TimeView />;
+      break;
+    case "custom-fields-settings":
+      view = <CustomFieldsView />;
+      break;
+    case "shortcuts-settings":
+      view = <ShortcutsView />;
+      break;
+    case "integrations-settings":
+      view = <IntegrationsView />;
+      break;
+    case "search":
+      view = <SearchView />;
+      break;
+    case "history":
+      view = <HistoryView />;
+      break;
     case "dashboards-settings":
-      return <DashboardsSettingsView />;
+      view = <DashboardsSettingsView />;
+      break;
     case "analytics":
-      return <AnalyticsView />;
+      view = <AnalyticsView />;
+      break;
+    case "analytics-lifecycle":
+      view = <LifecycleView />;
+      break;
+    case "analytics-exits":
+      view = <ExitsView />;
+      break;
+    case "analytics-quality":
+      view = <QualityView />;
+      break;
+    case "analytics-setups":
+      view = <SetupsView />;
+      break;
+    case "analytics-confluences":
+      view = <ConfluencesView />;
+      break;
+    case "analytics-grades":
+      view = <GradesView />;
+      break;
+    case "analytics-sequences":
+      view = <SequencesView />;
+      break;
+    case "analytics-seasonality":
+      view = <SeasonalityView />;
+      break;
+    case "analytics-anomalies":
+      view = <AnomaliesView />;
+      break;
+    case "analytics-weekly-plan":
+      view = <WeeklyPlanView />;
+      break;
+    case "analytics-goals":
+      view = <GoalsView />;
+      break;
+    case "analytics-performance-report":
+      view = <PerformanceReportView />;
+      break;
     case "analytics-charts":
-      return <ChartBuilderView />;
+      view = <ChartBuilderView />;
+      break;
     case "analytics-heatmaps":
-      return <HeatmapsView />;
+      view = <HeatmapsView />;
+      break;
     case "analytics-benchmark":
-      return <BenchmarkView />;
+      view = <BenchmarkView />;
+      break;
     case "analytics-annotations":
-      return <AnnotationsView />;
+      view = <AnnotationsView />;
+      break;
     case "calendar":
-      return <CalendarView />;
+      view = <CalendarView />;
+      break;
     case "journal":
-      return <JournalView date={route.journalDate} />;
+      view = <JournalView date={route.journalDate} />;
+      break;
+    case "gaia":
+      view = <GaiaView />;
+      break;
     case "strategies":
-      return <StrategiesView />;
+      view = <StrategiesView />;
+      break;
+    case "playbook":
+      view = <PlaybookView />;
+      break;
     case "rules":
-      return <RulesView />;
+      view = <RulesView />;
+      break;
     case "accounts":
-      return <AccountsView />;
+      view = <AccountsView />;
+      break;
     case "instruments":
-      return <InstrumentsView />;
+      view = <InstrumentsView />;
+      break;
     case "tags":
-      return <TagsView />;
+      view = <TagsView />;
+      break;
     case "tools":
-      return <ToolsView />;
+      view = <ToolsView />;
+      break;
     case "settings":
-      return <SettingsView />;
+      view = <SettingsView />;
+      break;
     case "trades":
-      return <TradesView />;
+      view = <TradesView />;
+      break;
     case "trade":
-      return <TradeDetailView tradeId={route.id ?? ""} />;
+      view = <TradeDetailView tradeId={route.id ?? ""} />;
+      break;
     case "trade-form":
-      return <TradeFormView mode={route.mode ?? "create"} tradeId={route.id} />;
+      view = <TradeFormView mode={route.mode ?? "create"} tradeId={route.id} />;
+      break;
     case "quick-trade":
-      return <QuickTradeView />;
+      view = <QuickTradeView />;
+      break;
     case "templates":
-      return <TemplatesView />;
+      view = <TemplatesView />;
+      break;
     case "broker-sync":
-      return <BrokerSyncView />;
+      view = <BrokerSyncView />;
+      break;
     case "import":
-      return <ImportView />;
+      view = <ImportView />;
+      break;
     case "reconciliation":
-      return <ReconciliationView />;
+      view = <ReconciliationView />;
+      break;
     case "sharing":
-      return <SharingView />;
+      view = <SharingView />;
+      break;
     case "mentors":
-      return <MentorsView />;
+      view = <MentorsView />;
+      break;
     case "mentor":
-      return <MentorView />;
+      view = <MentorView />;
+      break;
     case "mentor-owner":
-      return <MentorOwnerView ownerId={route.ownerId ?? ""} />;
+      view = <MentorOwnerView ownerId={route.ownerId ?? ""} />;
+      break;
     case "mentor-trade":
-      return (
+      view = (
         <MentorTradeView ownerId={route.ownerId ?? ""} tradeId={route.id ?? ""} />
       );
+      break;
     case "invitation":
-      return <InvitationView token={route.token ?? ""} />;
+      view = <InvitationView token={route.token ?? ""} />;
+      break;
     case "account-settings":
-      return <AccountSettingsView />;
+      view = <AccountSettingsView />;
+      break;
+    case "profile-settings":
+      view = <ProfileView />;
+      break;
     case "trash":
-      return <TrashView />;
+      view = <TrashView />;
+      break;
     case "legal":
-      return <LegalView page={route.legalPage ?? "mentions"} />;
+      view = <LegalView page={route.legalPage ?? "terms"} />;
+      break;
     default: {
       const item = findNavItem(route.view);
       if (!item || item.phase === null) {
-        return <DashboardsView />;
+        view = <DashboardsView />;
+      } else {
+        view = (
+          <PlaceholderView
+            titleKey={item.labelKey}
+            descriptionKey={item.descriptionKey}
+            icon={item.icon}
+            phase={item.phase}
+            featureKeys={FEATURES[route.view] ?? []}
+          />
+        );
       }
-      return (
-        <PlaceholderView
-          titleKey={item.labelKey}
-          descriptionKey={item.descriptionKey}
-          icon={item.icon}
-          phase={item.phase}
-          featureKeys={FEATURES[route.view] ?? []}
-        />
-      );
+      break;
     }
   }
+
+  // Reduced motion: no transition at all, the page just swaps.
+  if (reduceMotion) return <>{view}</>;
+
+  // Short opacity-only fade between pages (150 ms, CSS keyframe in
+  // globals.css). The first mount skips the fade - the dashboard widgets
+  // already have their own entrance animation. Replaces the previous
+  // framer-motion AnimatePresence (same 150 ms, same ease).
+  const firstRender = React.useRef(true);
+  React.useEffect(() => {
+    firstRender.current = false;
+  }, []);
+  return (
+    <div
+      key={viewKey}
+      className={firstRender.current ? undefined : "view-fade-in"}
+    >
+      {view}
+    </div>
+  );
 }

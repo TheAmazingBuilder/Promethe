@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * PrivacyView (v2.5 Module 8, §3.1/§3.2) — #/reglages/privacy.
+ * PrivacyView (v2.5 Module 8, §3.1/§3.2) — /settings/privacy.
  *
  * Every control applies INSTANTLY (privacy store) and persists per device +
  * to the server row (debounced) — no save bar, unlike the appearance view.
@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { PageHeader } from "@/components/ui/page-header";
 import { usePrivacyPreferences } from "@/components/privacy/privacy-provider";
 import type { PrivacyMode, PrivacyScope } from "@/lib/privacy/types";
 import { cn } from "@/lib/utils";
@@ -115,14 +116,12 @@ export function PrivacyView() {
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            {t("description")}
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+      <PageHeader
+        title={t("title")}
+        description={t("description")}
+        descriptionClassName="max-w-2xl"
+        actions={
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
           {isPresenting && (
             <Badge className="gap-1 bg-amber-500/15 text-amber-700 dark:text-amber-300">
               <MonitorPlay className="h-3 w-3" aria-hidden="true" />
@@ -135,8 +134,9 @@ export function PrivacyView() {
           <Badge variant={synced ? "secondary" : "outline"}>
             {synced ? t("saved") : t("saveFailed")}
           </Badge>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* ── Mode ── */}
       <Card>

@@ -5,6 +5,8 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { refreshStrategySearchText } from "@/server/search-index";
+import { createVersion } from "@/server/strategy-versions";
+import { touchesDefinition } from "@/lib/validations/playbook";
 import type {
   AccountDTO,
   SavedViewDTO,
@@ -32,6 +34,33 @@ function parseStringArray(json: string | null): string[] {
   }
 }
 
+function parseJsonObject<T>(json: string | null | undefined): T | null {
+  if (!json) return null;
+  try {
+    const parsed: unknown = JSON.parse(json);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as T)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseJsonArray<T>(json: string | null | undefined): T[] {
+  if (!json) return [];
+  try {
+    const parsed: unknown = JSON.parse(json);
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+const jsonOrNull = (v: unknown): string | null =>
+  v === undefined || v === null ? null : JSON.stringify(v);
+const jsonArrayOrNull = (v: unknown[] | undefined): string | null =>
+  v === undefined ? null : JSON.stringify(v);
+
 type StrategyRow = Prisma.StrategyGetPayload<{
   include: { checklistItems: { orderBy: { order: "asc" } } };
 }>;
@@ -44,6 +73,8 @@ export function toStrategyDTO(s: StrategyRow): StrategyDTO {
     color: s.color,
     status: s.status,
     timeframes: parseStringArray(s.timeframesJson),
+    instruments: parseStringArray(s.instrumentsJson),
+    sessions: parseStringArray(s.sessionsJson),
     defaultRiskPercent: s.defaultRiskPercent?.toString() ?? null,
     targetRR: s.targetRR?.toString() ?? null,
     entryRules: s.entryRules,
@@ -57,6 +88,18 @@ export function toStrategyDTO(s: StrategyRow): StrategyDTO {
       isRequired: c.isRequired,
     })),
     createdAt: s.createdAt.toISOString(),
+    version: s.version,
+    grade: s.grade,
+    detailedDescription: s.detailedDescription,
+    tags: parseStringArray(s.tagsJson),
+    marketProfile: parseJsonObject(s.marketProfileJson),
+    marketConditions: parseStringArray(s.marketConditionsJson),
+    entryConditions: parseJsonArray(s.entryConditionsJson),
+    confirmations: parseJsonArray(s.confirmationsJson),
+    invalidations: parseStringArray(s.invalidationsJson),
+    risk: parseJsonObject(s.riskJson),
+    tradeManagement: parseJsonArray(s.tradeManagementJson),
+    exitPlan: parseJsonArray(s.exitPlanJson),
   };
 }
 
@@ -82,11 +125,24 @@ export async function createStrategy(
       color: input.color,
       status: input.status,
       timeframesJson: JSON.stringify(input.timeframes ?? []),
+      instrumentsJson: jsonArrayOrNull(input.instruments),
+      sessionsJson: jsonArrayOrNull(input.sessions),
       defaultRiskPercent: input.defaultRiskPercent ?? null,
       targetRR: input.targetRR ?? null,
       entryRules: input.entryRules ?? null,
       exitRules: input.exitRules ?? null,
       riskRules: input.riskRules ?? null,
+      grade: input.grade ?? null,
+      detailedDescription: input.detailedDescription ?? null,
+      tagsJson: jsonArrayOrNull(input.tags),
+      marketProfileJson: jsonOrNull(input.marketProfile),
+      marketConditionsJson: jsonArrayOrNull(input.marketConditions),
+      entryConditionsJson: jsonArrayOrNull(input.entryConditions),
+      confirmationsJson: jsonArrayOrNull(input.confirmations),
+      invalidationsJson: jsonArrayOrNull(input.invalidations),
+      riskJson: jsonOrNull(input.risk),
+      tradeManagementJson: jsonArrayOrNull(input.tradeManagement),
+      exitPlanJson: jsonArrayOrNull(input.exitPlan),
       ...(input.checklistItems != null
         ? {
             checklistItems: {
@@ -115,12 +171,24 @@ export async function updateStrategy(
   const existing = await db.strategy.findFirst({ where: { id, userId } });
   if (!existing) return null;
 
+  // Playbook (Euforia §17) — a PATCH touching one of the 13 definition
+  // fields freezes the CURRENT definition into an AUTO snapshot BEFORE the
+  // mutation, then bumps Strategy.version. Presentation fields (name,
+  // status, grade, color, tags) and the checklist mutate in place.
+  const definitionTouched = touchesDefinition(
+    patch as Record<string, unknown>,
+  );
+  if (definitionTouched) {
+    await createVersion(userId, existing.id, "Edited in the Playbook", "AUTO");
+  }
+
   // Checklist replace-all (v1 phase 5): delete + recreate inside the same
   // transaction as the strategy update. Omitted on PATCH → untouched.
   const [updated] = await db.$transaction([
     db.strategy.update({
       where: { id: existing.id },
       data: {
+        version: definitionTouched ? existing.version + 1 : undefined,
         name: patch.name ?? undefined,
         description: patch.description !== undefined ? patch.description : undefined,
         color: patch.color ?? undefined,
@@ -129,12 +197,57 @@ export async function updateStrategy(
           patch.timeframes !== undefined
             ? JSON.stringify(patch.timeframes)
             : undefined,
+        instrumentsJson:
+          patch.instruments !== undefined
+            ? JSON.stringify(patch.instruments)
+            : undefined,
+        sessionsJson:
+          patch.sessions !== undefined
+            ? JSON.stringify(patch.sessions)
+            : undefined,
         defaultRiskPercent:
           patch.defaultRiskPercent !== undefined ? patch.defaultRiskPercent : undefined,
         targetRR: patch.targetRR !== undefined ? patch.targetRR : undefined,
         entryRules: patch.entryRules !== undefined ? patch.entryRules : undefined,
         exitRules: patch.exitRules !== undefined ? patch.exitRules : undefined,
         riskRules: patch.riskRules !== undefined ? patch.riskRules : undefined,
+        grade: patch.grade !== undefined ? patch.grade : undefined,
+        detailedDescription:
+          patch.detailedDescription !== undefined
+            ? patch.detailedDescription
+            : undefined,
+        tagsJson:
+          patch.tags !== undefined ? JSON.stringify(patch.tags) : undefined,
+        marketProfileJson:
+          patch.marketProfile !== undefined
+            ? jsonOrNull(patch.marketProfile)
+            : undefined,
+        marketConditionsJson:
+          patch.marketConditions !== undefined
+            ? JSON.stringify(patch.marketConditions)
+            : undefined,
+        entryConditionsJson:
+          patch.entryConditions !== undefined
+            ? JSON.stringify(patch.entryConditions)
+            : undefined,
+        confirmationsJson:
+          patch.confirmations !== undefined
+            ? JSON.stringify(patch.confirmations)
+            : undefined,
+        invalidationsJson:
+          patch.invalidations !== undefined
+            ? JSON.stringify(patch.invalidations)
+            : undefined,
+        riskJson:
+          patch.risk !== undefined ? jsonOrNull(patch.risk) : undefined,
+        tradeManagementJson:
+          patch.tradeManagement !== undefined
+            ? JSON.stringify(patch.tradeManagement)
+            : undefined,
+        exitPlanJson:
+          patch.exitPlan !== undefined
+            ? JSON.stringify(patch.exitPlan)
+            : undefined,
       },
     }),
     ...(patch.checklistItems != null
@@ -246,6 +359,11 @@ export function toAccountDTO(a: AccountRow): AccountDTO {
     profitTarget: a.profitTarget?.toString() ?? null,
     drawdownType: a.drawdownType,
     startDate: a.startDate?.toISOString() ?? null,
+    marginCallLevel: a.marginCallLevel?.toString() ?? null,
+    stopOutLevel: a.stopOutLevel?.toString() ?? null,
+    serverTimezoneMode: a.serverTimezoneMode,
+    serverTimezone: a.serverTimezone,
+    serverFixedOffsetMinutes: a.serverFixedOffsetMinutes,
     createdAt: a.createdAt.toISOString(),
   };
 }
@@ -277,6 +395,11 @@ export async function createAccount(
       profitTarget: input.profitTarget ?? null,
       drawdownType: input.drawdownType ?? null,
       startDate: input.startDate ? new Date(input.startDate) : null,
+      marginCallLevel: input.marginCallLevel ?? null,
+      stopOutLevel: input.stopOutLevel ?? null,
+      serverTimezoneMode: input.serverTimezoneMode ?? "IANA",
+      serverTimezone: input.serverTimezone ?? null,
+      serverFixedOffsetMinutes: input.serverFixedOffsetMinutes ?? null,
     },
   });
   return toAccountDTO(created);
@@ -307,6 +430,22 @@ export async function updateAccount(
           : undefined,
       profitTarget: patch.profitTarget !== undefined ? patch.profitTarget : undefined,
       drawdownType: patch.drawdownType !== undefined ? patch.drawdownType : undefined,
+      marginCallLevel:
+        patch.marginCallLevel !== undefined ? patch.marginCallLevel : undefined,
+      stopOutLevel:
+        patch.stopOutLevel !== undefined ? patch.stopOutLevel : undefined,
+      serverTimezoneMode:
+        patch.serverTimezoneMode != null
+          ? patch.serverTimezoneMode
+          : undefined,
+      serverTimezone:
+        patch.serverTimezone !== undefined
+          ? patch.serverTimezone
+          : undefined,
+      serverFixedOffsetMinutes:
+        patch.serverFixedOffsetMinutes !== undefined
+          ? patch.serverFixedOffsetMinutes
+          : undefined,
       startDate:
         patch.startDate !== undefined
           ? patch.startDate
@@ -409,21 +548,67 @@ export async function updateTag(
 
 // ── Saved views (named filter presets) ──────────────────────────────────────
 
+/** Parse the optional JSON columns/sort/grouping of a SavedView row. */
+function parseViewJson<T>(raw: string | null | undefined, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function toSavedViewDTO(row: {
+  id: string;
+  page: string;
+  name: string;
+  filtersJson: string;
+  columnsJson: string | null;
+  sortJson: string | null;
+  groupingJson: string | null;
+  entity: string | null;
+  isPinned: boolean;
+  isDefault: boolean;
+  order: number;
+  createdAt: Date;
+  updatedAt: Date;
+}): SavedViewDTO {
+  return {
+    id: row.id,
+    page: row.page,
+    name: row.name,
+    filters: parseViewJson<Record<string, unknown>>(row.filtersJson, {}),
+    columns: parseViewJson<string[] | null>(row.columnsJson, null),
+    sort: parseViewJson<Array<{ id: string; desc: boolean }> | null>(
+      row.sortJson,
+      null
+    ),
+    grouping: parseViewJson<Record<string, unknown> | null>(
+      row.groupingJson,
+      null
+    ),
+    entity: row.entity,
+    isPinned: row.isPinned,
+    isDefault: row.isDefault,
+    order: row.order,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
 export async function listSavedViews(
   userId: string,
   page: string
 ): Promise<SavedViewDTO[]> {
   const rows = await db.savedView.findMany({
     where: { userId, page },
-    orderBy: { createdAt: "desc" },
+    orderBy: [
+      { isPinned: "desc" },
+      { order: "asc" },
+      { createdAt: "desc" },
+    ],
   });
-  return rows.map((v) => ({
-    id: v.id,
-    page: v.page,
-    name: v.name,
-    filters: JSON.parse(v.filtersJson) as Record<string, unknown>,
-    createdAt: v.createdAt.toISOString(),
-  }));
+  return rows.map(toSavedViewDTO);
 }
 
 export async function createSavedView(
@@ -431,25 +616,153 @@ export async function createSavedView(
   input: z.infer<typeof savedViewInputSchema>
 ): Promise<SavedViewDTO> {
   const json = JSON.stringify(input.filters);
-  // Upsert semantics: same (page, name) → replace filters.
+  // Upsert semantics: same (page, name) → replace the view state.
   const existing = await db.savedView.findFirst({
     where: { userId, page: input.page, name: input.name },
   });
-  const row = existing
-    ? await db.savedView.update({
-        where: { id: existing.id },
-        data: { filtersJson: json },
-      })
-    : await db.savedView.create({
-        data: { userId, page: input.page, name: input.name, filtersJson: json },
-      });
-  return {
-    id: row.id,
-    page: row.page,
-    name: row.name,
-    filters: JSON.parse(row.filtersJson) as Record<string, unknown>,
-    createdAt: row.createdAt.toISOString(),
+  const data = {
+    filtersJson: json,
+    columnsJson:
+      input.columns !== undefined && input.columns !== null
+        ? JSON.stringify(input.columns)
+        : undefined,
+    sortJson:
+      input.sort !== undefined && input.sort !== null
+        ? JSON.stringify(input.sort)
+        : undefined,
+    groupingJson:
+      input.grouping !== undefined && input.grouping !== null
+        ? JSON.stringify(input.grouping)
+        : undefined,
+    isPinned: input.isPinned ?? undefined,
   };
+  const row = existing
+    ? await db.savedView.update({ where: { id: existing.id }, data })
+    : await db.savedView.create({
+        data: {
+          userId,
+          page: input.page,
+          name: input.name,
+          ...data,
+          order: input.order ?? (await nextViewOrder(userId, input.page)),
+        },
+      });
+  if (input.isDefault) {
+    await unsetOtherDefaults(userId, input.page, row.id);
+    return toSavedViewDTO(
+      await db.savedView.update({
+        where: { id: row.id },
+        data: { isDefault: true },
+      })
+    );
+  }
+  return toSavedViewDTO(row);
+}
+
+async function nextViewOrder(userId: string, page: string): Promise<number> {
+  const last = await db.savedView.findFirst({
+    where: { userId, page },
+    orderBy: { order: "desc" },
+    select: { order: true },
+  });
+  return (last?.order ?? 0) + 10;
+}
+
+async function unsetOtherDefaults(
+  userId: string,
+  page: string,
+  exceptId: string
+): Promise<void> {
+  await db.savedView.updateMany({
+    where: { userId, page, id: { not: exceptId }, isDefault: true },
+    data: { isDefault: false },
+  });
+}
+
+export async function updateSavedView(
+  userId: string,
+  id: string,
+  patch: {
+    name?: string;
+    filters?: Record<string, unknown>;
+    columns?: string[] | null;
+    sort?: Array<{ id: string; desc: boolean }> | null;
+    grouping?: Record<string, unknown> | null;
+    isPinned?: boolean;
+    isDefault?: boolean;
+    order?: number;
+  }
+): Promise<SavedViewDTO | null> {
+  const existing = await db.savedView.findFirst({ where: { id, userId } });
+  if (!existing) return null;
+  if (patch.isDefault) {
+    await unsetOtherDefaults(userId, existing.page, id);
+  }
+  const row = await db.savedView.update({
+    where: { id },
+    data: {
+      name: patch.name ?? undefined,
+      filtersJson:
+        patch.filters !== undefined ? JSON.stringify(patch.filters) : undefined,
+      columnsJson:
+        patch.columns !== undefined
+          ? patch.columns === null
+            ? null
+            : JSON.stringify(patch.columns)
+          : undefined,
+      sortJson:
+        patch.sort !== undefined
+          ? patch.sort === null
+            ? null
+            : JSON.stringify(patch.sort)
+          : undefined,
+      groupingJson:
+        patch.grouping !== undefined
+          ? patch.grouping === null
+            ? null
+            : JSON.stringify(patch.grouping)
+          : undefined,
+      isPinned: patch.isPinned ?? undefined,
+      isDefault: patch.isDefault ?? undefined,
+      order: patch.order ?? undefined,
+    },
+  });
+  return toSavedViewDTO(row);
+}
+
+export async function duplicateSavedView(
+  userId: string,
+  id: string
+): Promise<SavedViewDTO | null> {
+  const existing = await db.savedView.findFirst({ where: { id, userId } });
+  if (!existing) return null;
+  let name = `${existing.name} (copie)`;
+  let suffix = 2;
+  while (
+    await db.savedView.findFirst({
+      where: { userId, page: existing.page, name },
+      select: { id: true },
+    })
+  ) {
+    name = `${existing.name} (copie ${suffix})`;
+    suffix += 1;
+  }
+  const row = await db.savedView.create({
+    data: {
+      userId,
+      page: existing.page,
+      name,
+      filtersJson: existing.filtersJson,
+      columnsJson: existing.columnsJson,
+      sortJson: existing.sortJson,
+      groupingJson: existing.groupingJson,
+      entity: existing.entity,
+      isPinned: false,
+      isDefault: false,
+      order: await nextViewOrder(userId, existing.page),
+    },
+  });
+  return toSavedViewDTO(row);
 }
 
 export async function deleteSavedView(userId: string, id: string): Promise<boolean> {

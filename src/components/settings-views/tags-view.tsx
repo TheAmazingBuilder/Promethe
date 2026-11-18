@@ -2,8 +2,8 @@
 
 /**
  * Tags view (v1 phase 7) — user tags grouped by kind (SETUP / MISTAKE /
- * CONTEXT / CUSTOM) with full CRUD; global presets are listed read-only with
- * a badge. Data: GET/POST /api/tags · PATCH/DELETE /api/tags/[id].
+ * CONTEXT / CONFLUENCE / CUSTOM) with full CRUD; global presets are listed read-only with
+ * a badge. Data: GET/POST /api/v1/tags · PATCH/DELETE /api/v1/tags/[id].
  */
 import * as React from "react";
 import { Lock, Pencil, Plus, Tags, Trash2 } from "lucide-react";
@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import {
   useCreateTag,
@@ -47,7 +48,7 @@ import { ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import type { TagDTO } from "@/lib/trading/dto";
 
-const KINDS = ["SETUP", "MISTAKE", "CONTEXT", "CUSTOM"] as const;
+const KINDS = ["SETUP", "MISTAKE", "CONTEXT", "CONFLUENCE", "CUSTOM"] as const;
 type Kind = (typeof KINDS)[number];
 
 type TagRow = TagDTO & { isPreset?: boolean };
@@ -229,16 +230,16 @@ export function TagsView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        <Button className="shrink-0" onClick={onCreate}>
+      <PageHeader
+        title={t("title")}
+        description={t("subtitle")}
+        actions={
+          <Button className="shrink-0" onClick={onCreate}>
           <Plus className="h-4 w-4" aria-hidden="true" />
           {t("add")}
-        </Button>
-      </div>
+          </Button>
+        }
+      />
 
       {isLoading ? (
         <Skeleton className="h-56 w-full rounded-xl" />

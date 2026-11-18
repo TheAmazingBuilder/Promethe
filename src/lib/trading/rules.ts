@@ -6,17 +6,21 @@
  * updated (P&L/risk can change on close/edit) and rewrites the violations
  * attached to THAT trade (delete-then-insert, idempotent).
  *
- * Semantics (documented — mirrors the calendar's local-day attribution):
+ * Semantics (documented — mirrors the calendar's trading-day attribution):
  * - MAX_TRADES_PER_DAY  : violation when the count of non-draft trades
- *   OPENED on the same local day (user TZ, entry time) as the trade,
+ *   OPENED on the same trading day (user setting, entry time) as the trade,
  *   including the trade itself, EXCEEDS the limit (count > value).
- * - MAX_DAILY_LOSS      : violation when the net P&L of the same local day
+ * - MAX_DAILY_LOSS      : violation when the net P&L of the same trading day
  *   as the trade's EXIT (closed trades only, exit-day attribution — same
  *   convention as the P&L calendar), including this trade, is ≤ −value.
  *   Evaluated only on CLOSED trades.
  * - MAX_RISK_PER_TRADE  : violation when the trade's own risk amount
  *   (riskAmount) EXCEEDS the limit (risk > value). Open trades count —
  *   the risk is known at entry.
+ * - MIN_PLANNED_RR      : WARNING when the trade's planned reward:risk
+ *   (plannedRR) is BELOW the limit (plannedRR < value, e.g. 1.5).
+ *   Warning only, never a block: like every rule here it only records a
+ *   violation row — nothing in the app blocks a trade on a rule.
  * - CUSTOM              : documentation-only rule, never auto-detected.
  *
  * Rule values are positive decimal strings (account currency for money
@@ -28,6 +32,7 @@ export const RULE_KINDS = [
   "MAX_TRADES_PER_DAY",
   "MAX_DAILY_LOSS",
   "MAX_RISK_PER_TRADE",
+  "MIN_PLANNED_RR",
   "CUSTOM",
 ] as const;
 
@@ -42,17 +47,20 @@ export interface RuleDef {
   isActive: boolean;
 }
 
-/** The trade under evaluation, with its local-day keys precomputed. */
+/** The trade under evaluation, with its trading-day keys precomputed. */
 export interface RuleTradeContext {
   status: string; // OPEN | CLOSED
   isDraft: boolean;
-  /** Local calendar day (YYYY-MM-DD, user TZ) of the ENTRY time. */
+  /** Trading day (YYYY-MM-DD, user setting) of the ENTRY time. */
   entryLocalDay: string;
-  /** Local calendar day of the EXIT time — null while the trade is open. */
+  /** Trading day of the EXIT time - null while the trade is open. */
   exitLocalDay: string | null;
-  /** Risk at entry (account currency) — null when unknown. */
+  /** Risk at entry (account currency) - null when unknown. */
   riskAmount: string | null;
-  /** Realized net P&L — null while open. */
+  /** Planned reward:risk (e.g. "1.5" = 1.5:1) - null when unknown.
+   *  Optional for callers that predate the MIN_PLANNED_RR gate. */
+  plannedRR?: string | null;
+  /** Realized net P&L - null while open. */
   netPnl: string | null;
 }
 
@@ -129,6 +137,23 @@ function violatesMaxRiskPerTrade(
   };
 }
 
+function violatesMinPlannedRR(
+  rule: RuleDef,
+  trade: RuleTradeContext
+): RuleViolationResult | null {
+  if (trade.plannedRR == null) return null;
+  const limit = toD(rule.value);
+  if (limit.lte(0)) return null;
+  const rr = toD(trade.plannedRR);
+  if (!rr.lt(limit)) return null;
+  return {
+    ruleId: rule.id,
+    kind: "MIN_PLANNED_RR",
+    measured: rr.toString(),
+    limit: limit.toString(),
+  };
+}
+
 /**
  * Evaluate all rules against one trade. Draft trades are never evaluated
  * (they are not real positions yet). CUSTOM rules never fire — they are
@@ -156,6 +181,11 @@ export function evaluateRules(
       }
       case "MAX_RISK_PER_TRADE": {
         const v = violatesMaxRiskPerTrade(rule, trade);
+        if (v) violations.push(v);
+        break;
+      }
+      case "MIN_PLANNED_RR": {
+        const v = violatesMinPlannedRR(rule, trade);
         if (v) violations.push(v);
         break;
       }

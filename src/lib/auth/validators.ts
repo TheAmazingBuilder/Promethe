@@ -81,7 +81,7 @@ export type LoginInput = z.infer<typeof loginSchema>;
 export type SignupInput = z.infer<typeof signupSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
-/** Flatten a ZodError into { field: messages[] } — compatible zod 3 & 4. */
+/** Flatten a ZodError into { field: messages[] } - compatible zod 3 & 4. */
 export function zodFieldErrors(error: z.ZodError): Record<string, string[]> {
   const out: Record<string, string[]> = {};
   for (const issue of error.issues) {

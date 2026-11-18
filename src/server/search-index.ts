@@ -10,6 +10,12 @@ import {
   buildStrategySearchText,
   buildTradeSearchText,
 } from "@/lib/search/text";
+import { foldText } from "@/lib/search/text";
+import {
+  customFieldsSearchText,
+  parseCustomFields,
+} from "@/lib/custom-fields/validate";
+import { activeCustomFieldDefinitions } from "@/server/custom-fields";
 
 /** Recompute Trade.searchText from the stored row (symbol, tags included). */
 export async function refreshTradeSearchText(tradeId: string): Promise<void> {
@@ -18,21 +24,25 @@ export async function refreshTradeSearchText(tradeId: string): Promise<void> {
     include: { instrument: { select: { symbol: true } }, tags: { include: { tag: true } } },
   });
   if (!row) return;
+  // v2.5 Module 4 — custom-field values are searchable too.
+  const defs = await activeCustomFieldDefinitions(row.userId);
+  const customText = customFieldsSearchText(parseCustomFields(row.customFields), defs);
   await db.trade.update({
     where: { id: tradeId },
     data: {
-      searchText: buildTradeSearchText({
-        symbol: row.instrument.symbol,
-        setupType: row.setupType,
-        notes: row.notes,
-        preTradeAnalysis: row.preTradeAnalysis,
-        postTradeReview: row.postTradeReview,
-        lessonLearned: row.lessonLearned,
-        brokerComment: row.brokerComment,
-        tagNames: row.tags
-          .filter((tt) => tt.tag.deletedAt == null)
-          .map((tt) => tt.tag.name),
-      }),
+      searchText:
+        buildTradeSearchText({
+          symbol: row.instrument.symbol,
+          setupType: row.setupType,
+          notes: row.notes,
+          preTradeAnalysis: row.preTradeAnalysis,
+          postTradeReview: row.postTradeReview,
+          lessonLearned: row.lessonLearned,
+          brokerComment: row.brokerComment,
+          tagNames: row.tags
+            .filter((tt) => tt.tag.deletedAt == null)
+            .map((tt) => tt.tag.name),
+        }) + (customText ? ` ${foldText(customText)}` : ""),
     },
   });
 }

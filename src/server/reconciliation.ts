@@ -112,7 +112,7 @@ export async function runMatcherForAccount(
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2002"
       ) {
-        continue; // concurrent creation — fine
+        continue; // concurrent creation - fine
       }
       throw error;
     }
@@ -451,7 +451,7 @@ export async function undoMerge(userId: string, mergeLogId: string): Promise<{ r
   });
   if (!log) throw new ReconciliationError("MERGE_LOG_NOT_FOUND", 404);
   if (log.expiresAt.getTime() < Date.now()) {
-    throw new ReconciliationError("MERGE_UNDO_EXPIRED", 410, "Undo disponible 30 jours.");
+    throw new ReconciliationError("MERGE_UNDO_EXPIRED", 410, "Undo available for 30 days.");
   }
 
   const snapshot = JSON.parse(log.absorbedTradeSnapshot) as MergeSnapshot;

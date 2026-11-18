@@ -45,7 +45,7 @@ async function apiJson<T>(url: string, init?: RequestInit): Promise<T> {
     | (T & { error?: string; message?: string })
     | null;
   if (!res.ok) {
-    throw new Error(body?.message || "Erreur");
+    throw new Error(body?.message || "Error");
   }
   return body as T;
 }
@@ -78,7 +78,7 @@ export function CommentThread({
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["comments", tradeId],
-    queryFn: () => apiJson<CommentsPayloadDTO>(`/api/trades/${tradeId}/comments`),
+    queryFn: () => apiJson<CommentsPayloadDTO>(`/api/v1/trades/${tradeId}/comments`),
     retry: false,
   });
 
@@ -108,7 +108,7 @@ export function CommentThread({
     if (!text || !canComment) return;
     setSending(true);
     try {
-      await apiJson(`/api/trades/${tradeId}/comments`, {
+      await apiJson(`/api/v1/trades/${tradeId}/comments`, {
         method: "POST",
         body: JSON.stringify({ body: text, parentId: replyTo?.id ?? null }),
       });
@@ -118,8 +118,8 @@ export function CommentThread({
       await queryClient.invalidateQueries({ queryKey: ["mentor-space"] });
     } catch (err) {
       toast({
-        title: "Erreur",
-        description: err instanceof Error ? err.message : "Réessayez.",
+        title: "Error",
+        description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -355,7 +355,7 @@ function CommentItem({
     if (!text) return;
     setSaving(true);
     try {
-      await apiJson(`/api/trades/${tradeId}/comments/${comment.id}`, {
+      await apiJson(`/api/v1/trades/${tradeId}/comments/${comment.id}`, {
         method: "PATCH",
         body: JSON.stringify({ body: text }),
       });
@@ -363,8 +363,8 @@ function CommentItem({
       await queryClient.invalidateQueries({ queryKey: ["comments", tradeId] });
     } catch (err) {
       toast({
-        title: "Erreur",
-        description: err instanceof Error ? err.message : "Réessayez.",
+        title: "Error",
+        description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -374,14 +374,14 @@ function CommentItem({
 
   async function remove(): Promise<void> {
     try {
-      await apiJson(`/api/trades/${tradeId}/comments/${comment.id}`, {
+      await apiJson(`/api/v1/trades/${tradeId}/comments/${comment.id}`, {
         method: "DELETE",
       });
       await queryClient.invalidateQueries({ queryKey: ["comments", tradeId] });
     } catch (err) {
       toast({
-        title: "Erreur",
-        description: err instanceof Error ? err.message : "Réessayez.",
+        title: "Error",
+        description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
     }
@@ -526,7 +526,7 @@ function CommentItem({
   );
 }
 
-/** Restricted markdown — raw HTML escaped, links hardened. */
+/** Restricted markdown - raw HTML escaped, links hardened. */
 export function CommentMarkdown({ body }: { body: string }) {
   return (
     <ReactMarkdown

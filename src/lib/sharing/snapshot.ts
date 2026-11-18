@@ -25,7 +25,7 @@ import type {
   ShareLinkMode,
 } from "./types";
 
-/** Raw trade snapshot (before URL injection) — what lands in snapshotJson. */
+/** Raw trade snapshot (before URL injection) - what lands in snapshotJson. */
 export interface TradeSnapshotStored {
   kind: "TRADE";
   title: string;
@@ -51,7 +51,7 @@ export async function buildTradeSnapshot(
   if (!detail) return null;
 
   const redacted = redactTrade(detail as unknown as Record<string, unknown>, policy);
-  // Drop the owner-scoped /api/uploads URLs — public rendering goes through
+  // Drop the owner-scoped /api/v1/uploads URLs — public rendering goes through
   // the token-scoped media proxy, injected at resolve time.
   const trade = { ...redacted.trade };
   delete trade.screenshots;
@@ -93,7 +93,7 @@ export function redactReportPayload(
   policy: RedactionPolicy
 ): ReportSnapshotStored {
   const stats = redactStats(raw.stats, policy);
-  delete stats.currency; // account-ish info — reports are currency-neutral
+  delete stats.currency; // account-ish info - reports are currency-neutral
 
   const curve = redactEquityCurve(
     raw.equity.points.map((p) => ({ time: p.time, value: p.value })),
@@ -159,7 +159,7 @@ export function toPublicPayload(
   if (snapshot.kind === "TRADE") {
     const screenshots: PublicScreenshotRef[] = snapshot.screenshotRefs.map((ref) => ({
       ...ref,
-      url: `/api/public/media/${encodeURIComponent(rawToken)}/${encodeURIComponent(ref.id)}`,
+      url: `/api/v1/public/media/${encodeURIComponent(rawToken)}/${encodeURIComponent(ref.id)}`,
     }));
     const payload: PublicTradePayload = {
       kind: "TRADE",

@@ -82,7 +82,7 @@ function toAppearanceDTO(row: AppearanceRow): AppearanceDTO {
   };
 }
 
-/** Read the user's appearance row — created with defaults on first read. */
+/** Read the user's appearance row - created with defaults on first read. */
 export async function getAppearance(userId: string): Promise<AppearanceDTO> {
   const existing = await db.userAppearance.findUnique({ where: { userId } });
   if (existing) return toAppearanceDTO(existing);

@@ -10,7 +10,7 @@ import type {
 } from "@/lib/redaction";
 import type { ShareLinkStatus } from "./types";
 
-/** Stored-row shape (subset of the Prisma model — keeps the helper pure). */
+/** Stored-row shape (subset of the Prisma model - keeps the helper pure). */
 export interface ShareLinkRowLike {
   revokedAt: Date | null;
   expiresAt: Date;
@@ -32,44 +32,37 @@ export function isShareLinkUsable(row: ShareLinkRowLike, now = new Date()): bool
 
 // ── policy summary (management list) ─────────────────────────────────────────
 
-const SUMMARY_KEYS: Array<[keyof RedactionPolicy, "fr" | "en", string]> = [
-  ["hideAmounts", "fr", "montants"],
-  ["hideAmounts", "en", "amounts"],
-  ["hideAccountInfo", "fr", "compte"],
-  ["hideAccountInfo", "en", "account"],
-  ["hideNotes", "fr", "notes"],
-  ["hideNotes", "en", "notes"],
-  ["hideScreenshots", "fr", "captures"],
-  ["hideScreenshots", "en", "screenshots"],
-  ["hideStrategyName", "fr", "stratégie"],
-  ["hideStrategyName", "en", "strategy"],
-  ["hideExactTimes", "fr", "heures"],
-  ["hideExactTimes", "en", "times"],
-  ["hidePsychology", "fr", "psychologie"],
-  ["hidePsychology", "en", "psychology"],
+const SUMMARY_KEYS: Array<[keyof RedactionPolicy, string]> = [
+  ["hideAmounts", "amounts"],
+  ["hideAccountInfo", "account"],
+  ["hideNotes", "notes"],
+  ["hideScreenshots", "screenshots"],
+  ["hideStrategyName", "strategy"],
+  ["hideExactTimes", "times"],
+  ["hidePsychology", "psychology"],
 ];
 
-/** Comma list of what the policy hides — "rien" / "nothing" when empty. */
-export function policySummary(policy: RedactionPolicy, locale: "fr" | "en"): string {
-  const hidden = SUMMARY_KEYS.filter(([key, l]) => l === locale && policy[key]).map(
-    ([, , label]) => label
+/** Comma list of what the policy hides - "nothing hidden" when empty. */
+export function policySummary(policy: RedactionPolicy): string {
+  const hidden = SUMMARY_KEYS.filter(([key]) => policy[key]).map(
+    ([, label]) => label
   );
   if (hidden.length === 0) {
-    return locale === "fr" ? "rien de masqué" : "nothing hidden";
+    return "nothing hidden";
   }
-  return (locale === "fr" ? "masqué : " : "hidden: ") + hidden.join(", ");
+  return "hidden: " + hidden.join(", ");
 }
 
-/** Max expiry is 10 years — privacy by default: links always expire. */
+/** Max expiry is 10 years - privacy by default: links always expire. */
 export const MAX_EXPIRY_DAYS = 3650;
 
 export const EXPIRY_OPTIONS = [7, 30, 90, 365, 3650] as const;
 
-export function expiryLabel(days: number, locale: "fr" | "en"): string {
-  if (days === 7) return locale === "fr" ? "7 jours" : "7 days";
-  if (days === 30) return locale === "fr" ? "30 jours" : "30 days";
-  if (days === 90) return locale === "fr" ? "90 jours" : "90 days";
-  if (days === 365) return locale === "fr" ? "1 an" : "1 year";
-  if (days === 3650) return locale === "fr" ? "10 ans (max)" : "10 years (max)";
-  return locale === "fr" ? `${days} jours` : `${days} days`;
+export function expiryLabel(days: number): string {
+  if (days === 7) return "7 days";
+  if (days === 30) return "30 days";
+  if (days === 90) return "90 days";
+  if (days === 365) return "1 year";
+  if (days === 3650) return "10 years (max)";
+  return `${days} days`;
 }

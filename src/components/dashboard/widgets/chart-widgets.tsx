@@ -4,8 +4,8 @@
  * v2.5 Module 2 Phase 7 — chart dashboard widgets (spec §5).
  *
  * Three SELF-FETCHING widgets (hasLoader: false — the batched dashboard
- * payload is ignored): they pull their data through /api/charts/* and
- * /api/calendar/year with TanStack Query and reuse the Module 2 chart
+ * payload is ignored): they pull their data through /api/v1/charts/* and
+ * /api/v1/calendar/year with TanStack Query and reuse the Module 2 chart
  * engines/components wholesale (buildChart + ChartPreview, buildMatrix +
  * HeatmapMatrix, buildYearGrid + compact SVG).
  *
@@ -45,12 +45,12 @@ import {
   type YearCell,
   type YearDayStats,
 } from "@/lib/charts/yearGrid";
+import { ChartPreview } from "@/components/charts/chart-preview";
 import {
-  ChartPreview,
   formatCategoryKey,
   yMeasureFormat,
   type MeasureFormatKind,
-} from "@/components/charts/chart-preview";
+} from "@/components/charts/chart-format";
 import { HeatmapMatrix } from "@/components/charts/heatmap-matrix";
 import {
   heatmapWidgetConfigSchema,
@@ -68,7 +68,7 @@ import {
 
 // ── Shared helpers ───────────────────────────────────────────────────────────
 
-/** Drill-down → #/trades?… (same contract as the full builder/heatmap views). */
+/** Drill-down → /trades?… (same contract as the full builder/heatmap views). */
 function useDrill() {
   return React.useCallback(
     (drills: Array<{ dimension: XDimension; value: string }>) => {
@@ -81,7 +81,7 @@ function useDrill() {
           }
         }
       }
-      navigate(parts.length > 0 ? `#/trades?${parts.join("&")}` : "#/trades");
+      navigate(parts.length > 0 ? `/trades?${parts.join("&")}` : "/trades");
     },
     []
   );
@@ -93,7 +93,7 @@ function useTradeDrillEvent(enabled: boolean) {
     if (!enabled) return;
     const handler = (e: Event) => {
       const id = (e as CustomEvent<string>).detail;
-      if (id) navigate(`#/trades/${encodeURIComponent(id)}`);
+      if (id) navigate(`/trades/${encodeURIComponent(id)}`);
     };
     window.addEventListener("tj:chart-drill-trade", handler);
     return () => window.removeEventListener("tj:chart-drill-trade", handler);
@@ -316,7 +316,7 @@ export function YearCalendarWidget() {
   const year = React.useMemo(() => new Date().getFullYear(), []);
   const data = useQuery({
     queryKey: ["calendar", "year", year],
-    queryFn: async () => apiFetch<YearDaysPayload>(`/api/calendar/year?year=${year}`),
+    queryFn: async () => apiFetch<YearDaysPayload>(`/api/v1/calendar/year?year=${year}`),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -387,7 +387,7 @@ export function YearCalendarWidget() {
         const cell = grid.cells[focus.row]?.[focus.col];
         if (cell?.inYear) {
           e.preventDefault();
-          navigate(`#/journal/${cell.date}`);
+          navigate(`/journal/${cell.date}`);
         }
         return;
       }
@@ -446,7 +446,7 @@ export function YearCalendarWidget() {
                   strokeWidth={isFocus ? 1.5 : 0}
                   style={{ cursor: cell.inYear ? "pointer" : undefined }}
                   onMouseEnter={() => setFocus({ row, col })}
-                  onClick={() => cell.inYear && navigate(`#/journal/${cell.date}`)}
+                  onClick={() => cell.inYear && navigate(`/journal/${cell.date}`)}
                 >
                   <title>{titleOf(cell)}</title>
                 </rect>
@@ -458,7 +458,7 @@ export function YearCalendarWidget() {
       {/* Focus info (accessible, non-color) */}
       <div className="min-h-4 text-xs text-muted-foreground" aria-live="polite">
         {focusCell?.inYear
-          ? `${focusCell.date} — ${titleOf(focusCell)}`
+          ? `${focusCell.date} - ${titleOf(focusCell)}`
           : tYear("hoverHint")}
       </div>
     </div>

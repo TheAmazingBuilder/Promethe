@@ -64,7 +64,7 @@ export function InstrumentsBrowser() {
     setError(null);
     setInstruments(null);
     try {
-      const res = await fetch("/api/instruments");
+      const res = await fetch("/api/v1/instruments");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as { instruments: InstrumentRow[] };
       setInstruments(data.instruments);

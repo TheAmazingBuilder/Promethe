@@ -25,15 +25,18 @@ const FIXTURE_AMOUNTS = [
   "1234.56",
   "1 234,56",
   "1\u202f234,56",
+  "1,234.56",
   "USD",
   "987,65",
+  "987.65",
   "42 000",
+  "42,000",
   "42000",
   "EUR",
 ];
 
 function renderWithI18n(ui: React.ReactElement) {
-  return render(<I18nProvider initialLocale="en">{ui}</I18nProvider>);
+  return render(<I18nProvider>{ui}</I18nProvider>);
 }
 
 function assertNoAmounts(container: HTMLElement) {

@@ -9,7 +9,7 @@
  * trades closed from Nov 1 (or the goal's start date, if later) to now.
  *
  * Conventions (same as the analytics engine / calendar):
- * - Closed non-draft trades, P&L attributed to the LOCAL day of the exit
+ * - Closed non-draft trades, P&L attributed to the TRADING day of the exit
  *   time (the same convention as the P&L calendar).
  * - Win = netPnl > 0, loss = netPnl < 0, breakeven otherwise.
  * - profitFactor: grossWin / |grossLoss|, "Infinity" when there are wins
@@ -18,7 +18,12 @@
  * - Every value is a decimal string at the boundary — never a float.
  */
 import { toD, D0, type Decimal } from "@/lib/trading/dec";
-import { localDateInTz, weekdayIndex } from "@/lib/analytics/calendar";
+import { weekdayIndex } from "@/lib/analytics/calendar";
+import {
+  DEFAULT_TRADING_DAY,
+  getTradingDay,
+  type TradingDaySettings,
+} from "@/lib/time/trading-day";
 
 export const GOAL_METRICS = [
   "NET_PNL",
@@ -27,6 +32,12 @@ export const GOAL_METRICS = [
   "PROFIT_FACTOR",
   "TRADE_COUNT",
   "DISCIPLINE_SCORE",
+  // MRT wave 3 — Goals: win rate on A+ setups, plan-follow rate and
+  // trades logged with a screenshot. All three are computed from the
+  // trades themselves, never typed by hand.
+  "A_PLUS_WIN_RATE",
+  "PLAN_FOLLOW_RATE",
+  "TRADES_WITH_SCREENSHOT",
 ] as const;
 
 export const GOAL_PERIODS = [
@@ -58,6 +69,22 @@ export interface GoalTradePoint {
   exitIso: string;
   netPnl: string | null;
   rMultiple: string | null;
+  /**
+   * Setup grade (A+ | A | B | C) when the trade was graded, null when
+   * ungraded. The server passes the real Trade.grade; A_PLUS_WIN_RATE
+   * counts A+ trades only and honestly reports "no graded trades yet"
+   * (null) instead of a misleading 0% when none are graded.
+   */
+  grade?: string | null;
+  /**
+   * Playbook match (MATCHED | PARTIAL | OFF_PLAYBOOK) and the legacy
+   * followedPlan flag. playbookMatch wins when present; followedPlan
+   * is the fallback for trades recorded before the Playbook.
+   */
+  playbookMatch?: string | null;
+  followedPlan?: boolean | null;
+  /** True when at least one screenshot is attached to the trade. */
+  hasScreenshot?: boolean;
 }
 
 /** Journal discipline score on a local day (1-5). */
@@ -72,9 +99,17 @@ export interface GoalProgress {
   windowStartDay: string;
   /** Exclusive local end day (day AFTER the last day of the window). */
   windowEndDay: string;
-  /** Current metric value — null when the metric has no data yet. */
+  /** Current metric value - null when the metric has no data yet. */
   currentValue: string | null;
   targetValue: string;
+  /**
+   * Eligible sample the metric was computed from inside the window:
+   * window trades for most metrics, graded trades for A_PLUS_WIN_RATE,
+   * trades with a plan verdict for PLAN_FOLLOW_RATE, journal days for
+   * DISCIPLINE_SCORE. 0 means "nothing to measure yet" - the UI shows
+   * an honest empty state instead of a 0% bar.
+   */
+  sampleSize: number;
   /** 0-100, clamped; 0 when there is no data. */
   progressPercent: number;
   isAchieved: boolean;
@@ -108,18 +143,19 @@ function yearStart(day: string): string {
 }
 
 /**
- * Evaluation window for a goal, in local days: [start, end). Rolling
- * periods anchor on the CURRENT week/month/quarter/year (in the user's
- * timezone), then clamp to the goal's own startDate / endDate. Invalid
- * timezones fall back to UTC (localDateInTz returns null → we use the UTC
- * day, which Intl-in-UTC reproduces exactly).
+ * Evaluation window for a goal, in trading days: [start, end). Rolling
+ * periods anchor on the CURRENT week/month/quarter/year, then clamp to the
+ * goal's own startDate / endDate. "Today" is the user's TRADING day
+ * (default MIDNIGHT_LOCAL = the local calendar day, i.e. the previous
+ * behaviour).
  */
 export function goalWindow(
   goal: Pick<GoalDef, "period" | "startDate" | "endDate">,
   now: Date,
-  timezone: string
+  timezone: string,
+  tradingDay: TradingDaySettings = DEFAULT_TRADING_DAY
 ): { startDay: string; endDay: string; today: string } {
-  const today = localDateInTz(now, timezone) ?? now.toISOString().slice(0, 10);
+  const today = getTradingDay(now, timezone, tradingDay);
 
   let start: string;
   let end: string;
@@ -176,28 +212,31 @@ function computeMetric(
   metric: GoalMetric,
   trades: GoalTradePoint[],
   discipline: GoalDisciplinePoint[]
-): string | null {
+): { value: string | null; sampleSize: number } {
   switch (metric) {
     case "NET_PNL": {
       let sum = D0;
       for (const t of trades) sum = sum.plus(toD(t.netPnl ?? 0));
-      return sum.toString();
+      return { value: sum.toString(), sampleSize: trades.length };
     }
     case "TRADE_COUNT":
-      return String(trades.length);
+      return { value: String(trades.length), sampleSize: trades.length };
     case "WIN_RATE": {
-      if (trades.length === 0) return null;
+      if (trades.length === 0) return { value: null, sampleSize: 0 };
       const wins = trades.filter((t) => toD(t.netPnl ?? 0).gt(0)).length;
-      return toD(wins).div(trades.length).times(100).toString();
+      return {
+        value: toD(wins).div(trades.length).times(100).toString(),
+        sampleSize: trades.length,
+      };
     }
     case "AVG_R": {
       const rs = trades
         .map((t) => (t.rMultiple == null ? null : toD(t.rMultiple)))
         .filter((r): r is Decimal => r !== null);
-      if (rs.length === 0) return null;
+      if (rs.length === 0) return { value: null, sampleSize: 0 };
       let sum = D0;
       for (const r of rs) sum = sum.plus(r);
-      return sum.div(rs.length).toString();
+      return { value: sum.div(rs.length).toString(), sampleSize: rs.length };
     }
     case "PROFIT_FACTOR": {
       let grossWin = D0;
@@ -207,43 +246,88 @@ function computeMetric(
         if (pnl.gt(0)) grossWin = grossWin.plus(pnl);
         else if (pnl.lt(0)) grossLoss = grossLoss.plus(pnl.abs());
       }
-      if (grossWin.isZero() && grossLoss.isZero()) return null;
-      if (grossLoss.isZero()) return "Infinity";
-      return grossWin.div(grossLoss).toString();
+      if (grossWin.isZero() && grossLoss.isZero())
+        return { value: null, sampleSize: 0 };
+      if (grossLoss.isZero())
+        return { value: "Infinity", sampleSize: trades.length };
+      return {
+        value: grossWin.div(grossLoss).toString(),
+        sampleSize: trades.length,
+      };
     }
     case "DISCIPLINE_SCORE": {
-      if (discipline.length === 0) return null;
+      if (discipline.length === 0) return { value: null, sampleSize: 0 };
       let sum = D0;
       for (const d of discipline) sum = sum.plus(d.score);
-      return sum.div(discipline.length).toString();
+      return {
+        value: sum.div(discipline.length).toString(),
+        sampleSize: discipline.length,
+      };
+    }
+    case "A_PLUS_WIN_RATE": {
+      // Only graded trades count. Zero graded trades is "no data",
+      // never a 0% win rate: the goal has nothing to measure yet.
+      const graded = trades.filter((t) => t.grade === "A+");
+      if (graded.length === 0) return { value: null, sampleSize: 0 };
+      const wins = graded.filter((t) => toD(t.netPnl ?? 0).gt(0)).length;
+      return {
+        value: toD(wins).div(graded.length).times(100).toString(),
+        sampleSize: graded.length,
+      };
+    }
+    case "PLAN_FOLLOW_RATE": {
+      // Eligible = the trade carries a plan verdict (playbookMatch, or
+      // the legacy followedPlan flag). playbookMatch wins when present.
+      const eligible = trades.filter(
+        (t) => t.playbookMatch != null || t.followedPlan != null
+      );
+      if (eligible.length === 0) return { value: null, sampleSize: 0 };
+      const followed = eligible.filter(
+        (t) =>
+          t.playbookMatch === "MATCHED" ||
+          (t.playbookMatch == null && t.followedPlan === true)
+      ).length;
+      return {
+        value: toD(followed).div(eligible.length).times(100).toString(),
+        sampleSize: eligible.length,
+      };
+    }
+    case "TRADES_WITH_SCREENSHOT": {
+      const withShot = trades.filter((t) => t.hasScreenshot === true).length;
+      return { value: String(withShot), sampleSize: trades.length };
     }
   }
 }
 
 /**
  * Full progression for one goal. Trades are filtered to the window by the
- * LOCAL day of their exit time; discipline scores by their journal date.
+ * TRADING day of their exit time; discipline scores by their journal date
+ * (journal entries are keyed by trading day, so the two stay aligned).
  */
 export function computeGoalProgress(
   goal: GoalDef,
   trades: GoalTradePoint[],
   discipline: GoalDisciplinePoint[],
   now: Date,
-  timezone: string
+  timezone: string,
+  tradingDay: TradingDaySettings = DEFAULT_TRADING_DAY
 ): GoalProgress {
-  const { startDay, endDay, today } = goalWindow(goal, now, timezone);
+  const { startDay, endDay, today } = goalWindow(goal, now, timezone, tradingDay);
 
   const inWindow: GoalTradePoint[] = [];
   for (const t of trades) {
-    const local = localDateInTz(new Date(t.exitIso), timezone);
-    if (local == null) continue;
+    const local = getTradingDay(new Date(t.exitIso), timezone, tradingDay);
     if (local >= startDay && local < endDay) inWindow.push(t);
   }
   const disciplineWindow = discipline.filter(
     (d) => d.date >= startDay && d.date < endDay
   );
 
-  const currentValue = computeMetric(goal.metric, inWindow, disciplineWindow);
+  const { value: currentValue, sampleSize } = computeMetric(
+    goal.metric,
+    inWindow,
+    disciplineWindow
+  );
   const target = toD(goal.targetValue);
   const current = currentValue == null ? null : toD(currentValue);
   const isAchieved = current != null && current.gte(target) && target.gt(0);
@@ -264,6 +348,7 @@ export function computeGoalProgress(
     windowEndDay: endDay,
     currentValue,
     targetValue: target.toString(),
+    sampleSize,
     progressPercent,
     isAchieved,
     isExpired:
@@ -271,4 +356,26 @@ export function computeGoalProgress(
       goal.endDate < today &&
       !isAchieved,
   };
+}
+
+/**
+ * Deep link to the trades behind a goal, or null when there is nothing
+ * to show (sample of 0). The trades list filters on ENTRY day while the
+ * goal window is built on EXIT trading day, so the link covers the
+ * trades entered in the window: exact for same-day trades, which is the
+ * common case in this journal. dateTo is the window's exclusive end
+ * day, which pairs with the server's `lte: new Date(dateTo)` (midnight)
+ * to include the whole last day. No dateTo for all-time goals.
+ */
+export function goalDrilldownHref(
+  progress: Pick<GoalProgress, "windowStartDay" | "windowEndDay" | "sampleSize">
+): string | null {
+  if (progress.sampleSize <= 0) return null;
+  const params = new URLSearchParams({
+    dateFrom: progress.windowStartDay,
+  });
+  if (progress.windowEndDay !== FAR_FUTURE_DAY) {
+    params.set("dateTo", progress.windowEndDay);
+  }
+  return `/trades?${params.toString()}`;
 }

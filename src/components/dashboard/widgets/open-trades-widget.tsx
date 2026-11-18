@@ -1,6 +1,6 @@
 "use client";
 
-/** open-trades widget — the open positions table ported from the old view. */
+/** open-trades widget - the open positions table ported from the old view. */
 import { useTranslations } from "next-intl";
 import {
   Table,
@@ -58,7 +58,7 @@ export function OpenTradesWidget({
               <TableRow
                 key={p.id}
                 className="cursor-pointer"
-                onClick={() => navigate(`#/trades/${p.id}`)}
+                onClick={() => navigate(`/trades/${p.id}`)}
               >
                 <TableCell>
                   <span className="flex items-center gap-2">
@@ -94,7 +94,7 @@ export function OpenTradesWidget({
                   ) : p.riskPercent ? (
                     fmt.pct(p.riskPercent)
                   ) : (
-                    "—"
+                    "-"
                   )}
                 </TableCell>
                 <TableCell className="text-muted-foreground">

@@ -1,11 +1,13 @@
 "use client";
 
 /**
- * v3 Phase 6 — Legal pages: #/legal/mentions, #/legal/confidentialite,
- * #/legal/cookies. Public (rendered even when logged out — AppRoot routes
+ * v3 Phase 6 — Legal pages: /legal/terms, /legal/privacy,
+ * /legal/cookies. Public (rendered even when logged out — AppRoot routes
  * here instead of the auth screen), i18n FR/EN, content parameterised by the
- * LEGAL_* server values (public /api/legal endpoint, no personal data).
+ * LEGAL_* server values (public /api/v1/legal endpoint, no personal data).
  */
+import Link from "next/link";
+import { PageHeader } from "@/components/ui/page-header";
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
@@ -26,8 +28,8 @@ interface LegalIdentity {
 type LegalPage = NonNullable<AppRoute["legalPage"]>;
 
 const PAGES: { id: LegalPage; icon: typeof ScrollText; labelKey: string }[] = [
-  { id: "mentions", icon: ScrollText, labelKey: "tabMentions" },
-  { id: "confidentialite", icon: ShieldCheck, labelKey: "tabPrivacy" },
+  { id: "terms", icon: ScrollText, labelKey: "tabMentions" },
+  { id: "privacy", icon: ShieldCheck, labelKey: "tabPrivacy" },
   { id: "cookies", icon: Cookie, labelKey: "tabCookies" },
 ];
 
@@ -38,7 +40,7 @@ interface Section {
 }
 
 const SECTIONS: Record<LegalPage, Section[]> = {
-  mentions: [
+  terms: [
     { titleKey: "m.editor", bodyKeys: ["m.editorBody"] },
     { titleKey: "m.contact", bodyKeys: ["m.contactBody"] },
     { titleKey: "m.hosting", bodyKeys: ["m.hostingBody"] },
@@ -47,7 +49,7 @@ const SECTIONS: Record<LegalPage, Section[]> = {
     // v2.5 M2 Phase 7 — lightweight-charts / Recharts attribution.
     { titleKey: "m.licenses", bodyKeys: ["m.licensesBody"] },
   ],
-  confidentialite: [
+  privacy: [
     { titleKey: "p.controller", bodyKeys: ["p.controllerBody"] },
     { titleKey: "p.data", bodyKeys: ["p.dataBody"] },
     { titleKey: "p.law", bodyKeys: ["p.lawBody"] },
@@ -72,15 +74,15 @@ export function LegalView({ page, standalone = false }: { page: LegalPage; stand
   const t = useTranslations("legal");
   const identity = useQuery({
     queryKey: ["legal", "identity"],
-    queryFn: () => apiFetch<LegalIdentity>("/api/legal"),
+    queryFn: () => apiFetch<LegalIdentity>("/api/v1/legal"),
     staleTime: 60 * 60 * 1000,
   });
 
   const values = {
-    entity: identity.data?.entityName ?? "—",
-    contact: identity.data?.contactEmail ?? "—",
-    address: identity.data?.address ?? "—",
-    privacy: identity.data?.privacyContact ?? "—",
+    entity: identity.data?.entityName ?? "-",
+    contact: identity.data?.contactEmail ?? "-",
+    address: identity.data?.address ?? "-",
+    privacy: identity.data?.privacyContact ?? "-",
     authority: identity.data?.supervisoryAuthority ?? "CNIL",
   };
 
@@ -91,9 +93,9 @@ export function LegalView({ page, standalone = false }: { page: LegalPage; stand
           const active = p.id === page;
           const Icon = p.icon;
           return (
-            <a
+            <Link
               key={p.id}
-              href={`#/legal/${p.id}`}
+              href={`/legal/${p.id}`}
               aria-current={active ? "page" : undefined}
               className={cn(
                 "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
@@ -104,15 +106,13 @@ export function LegalView({ page, standalone = false }: { page: LegalPage; stand
             >
               <Icon className="h-4 w-4" aria-hidden="true" />
               {t(p.labelKey)}
-            </a>
+            </Link>
           );
         })}
       </nav>
 
-      <article className="space-y-6">
-        <h1 className="text-xl font-semibold tracking-tight">
-          {t(`title.${page}`)}
-        </h1>
+      <article className="max-w-prose space-y-6">
+        <PageHeader title={t(`title.${page}`)} />
         {SECTIONS[page].map((section) => (
           <section key={section.titleKey} className="space-y-1.5">
             <h2 className="text-sm font-semibold text-foreground">
@@ -133,7 +133,7 @@ export function LegalView({ page, standalone = false }: { page: LegalPage; stand
   );
 
   if (!standalone) {
-    return <div className="mx-auto max-w-2xl">{content}</div>;
+    return <div>{content}</div>;
   }
 
   // Logged-out layout: brand + content + back link, footer at the bottom.
@@ -142,13 +142,13 @@ export function LegalView({ page, standalone = false }: { page: LegalPage; stand
       <header className="border-b">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3.5 sm:px-6">
           <BrandMark />
-          <a
-            href="#/"
+          <Link
+            href="/"
             className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             {t("backToApp")}
-          </a>
+          </Link>
         </div>
       </header>
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8 sm:px-6">

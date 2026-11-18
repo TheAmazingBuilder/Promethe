@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * v3 Phase 5 — One mentee's journal, #/mentor/{ownerId}: persistent read-only
+ * v3 Phase 5 — One mentee's journal, /mentor/{ownerId}: persistent read-only
  * banner, tabs (trades / journal / analytics). Every payload comes scoped +
  * redacted from the server; journal/analytics show a permission notice when
- * the owner disabled them. Trades navigate to #/mentor/{ownerId}/trades/{id}.
+ * the owner disabled them. Trades navigate to /mentor/{ownerId}/trades/{id}.
  */
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -68,7 +68,7 @@ export function MentorOwnerView({ ownerId }: { ownerId: string }) {
   const home = useQuery({
     queryKey: ["mentor-space"],
     queryFn: () =>
-      apiFetch<{ mentees: MenteeSummaryDTO[] }>("/api/mentor"),
+      apiFetch<{ mentees: MenteeSummaryDTO[] }>("/api/v1/mentor"),
   });
   const mentee = home.data?.mentees.find((m) => m.ownerId === ownerId);
 
@@ -78,7 +78,7 @@ export function MentorOwnerView({ ownerId }: { ownerId: string }) {
         variant="ghost"
         size="sm"
         className="gap-2 text-muted-foreground"
-        onClick={() => navigate("#/mentor")}
+        onClick={() => navigate("/mentor")}
       >
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         {t("backToMentees")}
@@ -135,7 +135,7 @@ function MentorTradesTable({ ownerId }: { ownerId: string }) {
     queryKey: ["mentor-trades", ownerId, page],
     queryFn: () =>
       apiFetch<MentorTradesPage>(
-        `/api/mentor/${ownerId}/trades?page=${page}&pageSize=20`
+        `/api/v1/mentor/${ownerId}/trades?page=${page}&pageSize=20`
       ),
     retry: false,
   });
@@ -160,7 +160,7 @@ function MentorTradesTable({ ownerId }: { ownerId: string }) {
             <li key={String(r.id)}>
               <button
                 type="button"
-                onClick={() => navigate(`#/mentor/${ownerId}/trades/${r.id}`)}
+                onClick={() => navigate(`/mentor/${ownerId}/trades/${r.id}`)}
                 className="flex w-full flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-left text-sm transition-colors hover:bg-accent"
               >
                 <span className="flex flex-wrap items-center gap-2">
@@ -238,7 +238,7 @@ function MentorJournalList({ ownerId }: { ownerId: string }) {
   const t = useTranslations("mentorSpace");
   const journal = useQuery({
     queryKey: ["mentor-journal", ownerId],
-    queryFn: () => apiFetch<MentorJournal>(`/api/mentor/${ownerId}/journal`),
+    queryFn: () => apiFetch<MentorJournal>(`/api/v1/mentor/${ownerId}/journal`),
     retry: false,
   });
 
@@ -299,7 +299,7 @@ function MentorAnalyticsCard({ ownerId }: { ownerId: string }) {
   const t = useTranslations("mentorSpace");
   const analytics = useQuery({
     queryKey: ["mentor-analytics", ownerId],
-    queryFn: () => apiFetch<MentorAnalytics>(`/api/mentor/${ownerId}/analytics`),
+    queryFn: () => apiFetch<MentorAnalytics>(`/api/v1/mentor/${ownerId}/analytics`),
     retry: false,
   });
 
@@ -318,7 +318,7 @@ function MentorAnalyticsCard({ ownerId }: { ownerId: string }) {
   const kpis = (data.kpisAllTime ?? {}) as Record<string, unknown>;
   const stat = (key: string): string => {
     const value = kpis[key];
-    return value === undefined || value === null ? "—" : String(value);
+    return value === undefined || value === null ? "-" : String(value);
   };
 
   const width = 640;
@@ -348,7 +348,7 @@ function MentorAnalyticsCard({ ownerId }: { ownerId: string }) {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">
-              Equity — {data.equityUnit === "PERCENT" ? "%" : data.equityUnit}
+              Equity - {data.equityUnit === "PERCENT" ? "%" : data.equityUnit}
             </CardTitle>
           </CardHeader>
           <CardContent>

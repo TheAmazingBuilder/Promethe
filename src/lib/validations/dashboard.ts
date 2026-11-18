@@ -65,7 +65,7 @@ export const dashboardCreateSchema = z
   .object({
     name: z.string().trim().min(1).max(40),
     icon: z.string().trim().min(1).max(40).default("layout-dashboard"),
-    /** Built-in template key — creates the widgets from the blueprint. */
+    /** Built-in template key - creates the widgets from the blueprint. */
     templateKey: z.string().trim().min(1).max(40).optional(),
   })
   .strict();
@@ -120,7 +120,7 @@ export const dashboardDataQuerySchema = z
 
 // ── Import / export ──────────────────────────────────────────────────────────
 
-/** Max import payload size (bytes) — oversized files rejected safely. */
+/** Max import payload size (bytes) - oversized files rejected safely. */
 export const DASHBOARD_IMPORT_MAX_BYTES = 256 * 1024;
 
 const importWidgetSchema = z
@@ -143,7 +143,7 @@ const importDashboardSchema = z
 
 export const dashboardImportSchema = z
   .object({
-    /** File format version — v1 since the module's first release. */
+    /** File format version - v1 since the module's first release. */
     version: z.literal(1),
     /** ISO production date of the export (informational). */
     exportedAt: z.string().max(40).optional(),
@@ -219,7 +219,7 @@ export const metricAggregateSchema = z.enum([
   "payoffRatio",
 ]);
 
-/** Formula over sub-metrics — safe hand-written parser (see lib/metrics). */
+/** Formula over sub-metrics - safe hand-written parser (see lib/metrics). */
 export const metricFormulaSchema = z
   .object({
     /** Expression referencing A/B/C sub-metric names. */

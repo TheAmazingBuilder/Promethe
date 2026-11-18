@@ -36,14 +36,17 @@ import { useA11yPrefs } from "@/components/a11y/a11y-provider";
 import { useTradingLabels } from "@/components/trades/trade-bits";
 import { useI18n } from "@/i18n/i18n-provider";
 import {
-  MONTH_KEY_LIST,
-  WEEKDAY_KEY_LIST,
   type ChartDatum,
   type ChartResult,
   type ScatterPoint,
 } from "@/lib/charts/builder";
-import type { ChartConfig, XDimension, YMeasure } from "@/lib/validations/charts";
+import type { ChartConfig, XDimension } from "@/lib/validations/charts";
 import { fmtNum } from "@/lib/format";
+import {
+  formatCategoryKey,
+  formatMeasureValue,
+  type MeasureFormatKind,
+} from "./chart-format";
 
 // ── Colors (semantic tokens — never hard-coded) ──────────────────────────────
 
@@ -78,105 +81,6 @@ const SIGNED_MEASURES: readonly string[] = [
   "points",
   "expectancy",
 ];
-
-// ── Category key formatting ──────────────────────────────────────────────────
-
-/** Localize a raw category key (weekday/month names via Intl, buckets via i18n). */
-export function formatCategoryKey(
-  dimension: XDimension | string,
-  key: string,
-  locale: string,
-  tBucket: (k: string) => string
-): string {
-  switch (dimension) {
-    case "dayOfWeek": {
-      const idx = WEEKDAY_KEY_LIST.indexOf(key);
-      if (idx >= 0) {
-        return new Intl.DateTimeFormat(locale, { weekday: "short" }).format(
-          new Date(2024, 0, 8 + idx) // 2024-01-08 = Monday
-        );
-      }
-      return key;
-    }
-    case "month": {
-      const idx = MONTH_KEY_LIST.indexOf(key);
-      if (idx >= 0) {
-        return new Intl.DateTimeFormat(locale, { month: "short" }).format(
-          new Date(2024, idx, 1)
-        );
-      }
-      return key;
-    }
-    case "hourOfDay":
-      return `${key}h`;
-    case "holdingTimeBucket":
-      return safeT(tBucket, `hold_${key}`, key);
-    case "lotSizeBucket":
-      return safeT(tBucket, `lot_${key.replace(/\./g, "_")}`, key);
-    case "riskPercentBucket":
-      return safeT(tBucket, `risk_${key.replace(/\./g, "_")}`, key);
-    case "week":
-      return `W${key}`;
-    default:
-      return key;
-  }
-}
-
-/** t() wrapper that falls back to the raw key when the message is missing. */
-function safeT(t: (k: string) => string, key: string, fallback: string): string {
-  try {
-    const v = t(key);
-    return v === key ? fallback : v;
-  } catch {
-    return fallback;
-  }
-}
-
-// ── Value formatting (by measure format) ─────────────────────────────────────
-
-export type MeasureFormatKind =
-  | "R"
-  | "CURRENCY"
-  | "PIPS"
-  | "POINTS"
-  | "LOTS"
-  | "PERCENT"
-  | "NUMBER"
-  | "DURATION";
-
-export function formatMeasureValue(
-  v: number | null | undefined,
-  format: MeasureFormatKind,
-  currency?: string
-): string {
-  if (v == null || !Number.isFinite(v)) return "—";
-  switch (format) {
-    case "CURRENCY":
-      return new Intl.NumberFormat(undefined, {
-        style: "currency",
-        currency: currency ?? "USD",
-        maximumFractionDigits: 0,
-      }).format(v);
-    case "R":
-      return `${fmtNum(v, 2)} R`;
-    case "PIPS":
-      return `${fmtNum(v, 1)} pips`;
-    case "POINTS":
-      return `${fmtNum(v, 1)} pts`;
-    case "LOTS":
-      return `${fmtNum(v, 2)} lots`;
-    case "PERCENT":
-      return `${fmtNum(v, 1)} %`;
-    case "DURATION": {
-      const min = Math.round(v);
-      if (min < 60) return `${min} min`;
-      if (min < 1440) return `${fmtNum(min / 60, 1)} h`;
-      return `${fmtNum(min / 1440, 1)} d`;
-    }
-    default:
-      return fmtNum(v, 2);
-  }
-}
 
 // ── Tooltip ──────────────────────────────────────────────────────────────────
 
@@ -231,7 +135,7 @@ function ChartTooltip({
       ))}
       <p className="mt-1 border-t pt-1 text-muted-foreground">
         {t("sampleSize")}: {datum.total}
-        {datum.lowSample ? ` — ${t("lowSample")}` : ""}
+        {datum.lowSample ? ` - ${t("lowSample")}` : ""}
       </p>
     </div>
   );
@@ -280,7 +184,7 @@ export interface ChartPreviewProps {
   yFormat: MeasureFormatKind;
   y2Format: MeasureFormatKind;
   onDrill?: (drill: { dimension: XDimension; value: string }) => void;
-  /** Chart body height in px — defaults to 340 (builder page size).
+  /** Chart body height in px - defaults to 340 (builder page size).
    *  Dashboard widgets pass their grid-derived height. */
   height?: number;
 }
@@ -751,7 +655,7 @@ function HistogramPreview({
                   {fmtNum(bin.from, 2)} → {fmtNum(bin.to, 2)}
                 </p>
                 <p className="text-muted-foreground">
-                  {bin.count} ({fmtNum(pct, 1)} %) — {formatMeasureValue(bin.from, xFormat)}
+                  {bin.count} ({fmtNum(pct, 1)} %) - {formatMeasureValue(bin.from, xFormat)}
                 </p>
                 <p className="text-muted-foreground">{t("tradesInBin")}</p>
               </div>
@@ -981,136 +885,4 @@ function BoxPlotPreview({
       )}
     </svg>
   );
-}
-
-// ── Table fallback (accessibility) ───────────────────────────────────────────
-
-export function ChartTable({
-  result,
-  formatKey,
-  yFormat,
-  y2Format,
-  currency,
-  t,
-}: {
-  result: ChartResult;
-  formatKey: (key: string) => string;
-  yFormat: MeasureFormatKind;
-  y2Format: MeasureFormatKind;
-  currency: string;
-  t: (k: string) => string;
-}) {
-  if (result.chartType === "scatter") {
-    return (
-      <div className="max-h-96 overflow-y-auto rounded-md border">
-        <table className="w-full text-xs">
-          <thead className="sticky top-0 bg-muted">
-            <tr>
-              <th className="px-3 py-2 text-left font-medium">x</th>
-              <th className="px-3 py-2 text-left font-medium">y</th>
-              <th className="px-3 py-2 text-left font-medium">{t("sampleSize")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {result.points.slice(0, 400).map((p, i) => (
-              <tr key={i} className="border-t">
-                <td className="px-3 py-1.5 font-mono">{fmtNum(p.x, 2)}</td>
-                <td className="px-3 py-1.5 font-mono">{fmtNum(p.y, 2)}</td>
-                <td className="px-3 py-1.5 text-muted-foreground">{p.group}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  }
-  if (result.chartType === "histogram") {
-    return (
-      <div className="max-h-96 overflow-y-auto rounded-md border">
-        <table className="w-full text-xs">
-          <thead className="sticky top-0 bg-muted">
-            <tr>
-              <th className="px-3 py-2 text-left font-medium">{t("binFrom")}</th>
-              <th className="px-3 py-2 text-left font-medium">{t("binTo")}</th>
-              <th className="px-3 py-2 text-left font-medium">{t("count")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {result.histogram.map((b, i) => (
-              <tr key={i} className="border-t">
-                <td className="px-3 py-1.5 font-mono">{fmtNum(b.from, 2)}</td>
-                <td className="px-3 py-1.5 font-mono">{fmtNum(b.to, 2)}</td>
-                <td className="px-3 py-1.5 font-mono">{b.count}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  }
-  const seriesKeys = result.series.map((s) => s.key);
-  return (
-    <div className="max-h-96 overflow-y-auto rounded-md border">
-      <table className="w-full text-xs">
-        <thead className="sticky top-0 bg-muted">
-          <tr>
-            <th className="px-3 py-2 text-left font-medium">{t("category")}</th>
-            {seriesKeys.map((k) => (
-              <th key={k} className="px-3 py-2 text-right font-medium">
-                {k === "all" ? "" : k}
-              </th>
-            ))}
-            <th className="px-3 py-2 text-right font-medium">{t("sampleSize")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {result.data.map((d) => (
-            <tr key={d.key} className="border-t">
-              <td className="px-3 py-1.5">{formatKey(d.key)}</td>
-              {seriesKeys.map((k) => (
-                <td
-                  key={k}
-                  className={`px-3 py-1.5 text-right font-mono ${
-                    (d.values[k] ?? 0) >= 0 ? "text-gain" : "text-loss"
-                  }`}
-                >
-                  {formatMeasureValue(d.values[k], yFormat, currency)}
-                </td>
-              ))}
-              <td className="px-3 py-1.5 text-right text-muted-foreground">
-                {d.total}
-                {d.lowSample ? " ⚠" : ""}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/** Y2 measure format resolution helper for the parent. */
-export function yMeasureFormat(m: YMeasure | undefined): MeasureFormatKind {
-  switch (m) {
-    case "netPnl":
-      return "CURRENCY";
-    case "pips":
-      return "PIPS";
-    case "points":
-      return "POINTS";
-    case "lots":
-      return "LOTS";
-    case "riskPercent":
-    case "winRate":
-      return "PERCENT";
-    case "rMultiple":
-    case "expectancy":
-    case "mfeR":
-    case "maeR":
-      return "R";
-    case "avgHoldingTime":
-      return "DURATION";
-    default:
-      return "NUMBER";
-  }
 }

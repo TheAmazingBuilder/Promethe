@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * v3 Phase 5 — Mentor space home, #/mentor: mentee cards (new trades,
+ * v3 Phase 5 — Mentor space home, /mentor: mentee cards (new trades,
  * unreviewed, unread comments badges) + received invitations
  * (accept requires a reserved handle).
  */
@@ -28,6 +28,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 import { navigate } from "@/lib/router";
@@ -45,14 +46,16 @@ export function MentorView() {
   );
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-          <GraduationCap className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-          {t("title")}
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title={
+          <span className="inline-flex items-center gap-2">
+            <GraduationCap className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+            {t("title")}
+          </span>
+        }
+        description={t("subtitle")}
+      />
 
       {home.isLoading ? (
         <div className="flex justify-center py-12">
@@ -60,7 +63,7 @@ export function MentorView() {
         </div>
       ) : home.error ? (
         <p className="text-sm text-rose-600 dark:text-rose-400">
-          {home.error instanceof Error ? home.error.message : "—"}
+          {home.error instanceof Error ? home.error.message : "-"}
         </p>
       ) : (
         <>
@@ -82,7 +85,7 @@ export function MentorView() {
                     <li key={mentee.ownerId}>
                       <button
                         type="button"
-                        onClick={() => navigate(`#/mentor/${mentee.ownerId}`)}
+                        onClick={() => navigate(`/mentor/${mentee.ownerId}`)}
                         className="flex w-full flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors hover:bg-accent"
                       >
                         <div className="min-w-0">
@@ -103,7 +106,7 @@ export function MentorView() {
                             {t("lastVisit")} :{" "}
                             {mentee.lastViewedAt
                               ? format(new Date(mentee.lastViewedAt), "d MMM yyyy HH:mm")
-                              : "—"}
+                              : "-"}
                           </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5">
@@ -163,13 +166,13 @@ function InvitationsCard({
     setBusy(token);
     try {
       if (action === "ACCEPT") {
-        await apiFetch(`/api/mentor/invitations/${encodeURIComponent(token)}`, {
+        await apiFetch(`/api/v1/mentor/invitations/${encodeURIComponent(token)}`, {
           method: "POST",
           body: JSON.stringify({ action }),
         });
         toast({ title: t("accepted") });
       } else {
-        await apiFetch(`/api/mentor/invitations/${encodeURIComponent(token)}`, {
+        await apiFetch(`/api/v1/mentor/invitations/${encodeURIComponent(token)}`, {
           method: "POST",
           body: JSON.stringify({ action }),
         });
@@ -178,9 +181,9 @@ function InvitationsCard({
       await queryClient.invalidateQueries({ queryKey: ["mentor-space"] });
     } catch (error) {
       toast({
-        title: "Erreur",
+        title: "Error",
         description:
-          error instanceof ApiClientError ? error.message : "Réessayez.",
+          error instanceof ApiClientError ? error.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -251,7 +254,7 @@ function InvitationsCard({
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => navigate("#/reglages/mentors")}
+                  onClick={() => navigate("/settings/mentors")}
                 >
                   {t("requiresHandle")}
                 </Button>

@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -29,7 +30,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { useI18n } from "@/i18n/i18n-provider";
 import { useCreateShareLink } from "@/hooks/use-sharing";
 import type { SharePolicyInput } from "@/lib/sharing/types";
 import type { ShareLinkInput } from "@/lib/validations/sharing";
@@ -94,7 +94,6 @@ export function ShareDialog({
   defaultTitle,
 }: ShareDialogProps) {
   const t = useTranslations("shareDialog");
-  const { locale } = useI18n();
   const { toast } = useToast();
   const create = useCreateShareLink();
 
@@ -172,7 +171,7 @@ export function ShareDialog({
       return;
     }
     const base = {
-      title: title.trim() || defaultTitle?.trim() || "TradeJournal",
+      title: title.trim() || defaultTitle?.trim() || "Promethe",
       mode,
       policy,
       expiresInDays: expiry,
@@ -297,21 +296,19 @@ export function ShareDialog({
                 {periodPreset === "custom" && (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <Label htmlFor="period-start">Début</Label>
-                      <Input
+                      <Label htmlFor="period-start">Start</Label>
+                      <DateField
                         id="period-start"
-                        type="date"
                         value={customStart}
-                        onChange={(e) => setCustomStart(e.target.value)}
+                        onChange={setCustomStart}
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="period-end">Fin</Label>
-                      <Input
+                      <Label htmlFor="period-end">End</Label>
+                      <DateField
                         id="period-end"
-                        type="date"
                         value={customEnd}
-                        onChange={(e) => setCustomEnd(e.target.value)}
+                        onChange={setCustomEnd}
                       />
                     </div>
                   </div>
@@ -419,7 +416,7 @@ export function ShareDialog({
                   <SelectContent>
                     {EXPIRY_OPTIONS.map((days) => (
                       <SelectItem key={days} value={String(days)}>
-                        {expiryLabel(days, locale)}
+                        {expiryLabel(days)}
                       </SelectItem>
                     ))}
                   </SelectContent>

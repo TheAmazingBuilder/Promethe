@@ -19,7 +19,7 @@ export async function GET(_req: Request, ctx: Ctx) {
     const result = await getMentorTradeDetail(mentorCtx, tradeId);
     if (!result) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Trade introuvable dans ce périmètre." },
+        { error: "NOT_FOUND", message: "Trade not found in this scope." },
         { status: 404 }
       );
     }

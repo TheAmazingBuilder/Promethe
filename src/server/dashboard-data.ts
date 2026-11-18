@@ -1,15 +1,24 @@
 /**
  * Dashboard widget data loader (v2.5 Module 1, spec §4.4).
  *
- * One POST /api/dashboards/[id]/data call resolves EVERY widget of a
+ * One POST /api/v1/dashboards/[id]/data call resolves EVERY widget of a
  * dashboard: the closed-trade dataset is fetched ONCE (rich rows reused by
  * the analytics engine AND the custom-metric evaluator), then each widget
  * gets its period resolved (global filter + per-widget override), its
  * account scope (override ?? global) and its typed payload. Failures are
  * isolated per widget ({ data: null, error: code }) — one broken widget
  * never blanks the whole dashboard.
+ *
+ * Phase 2 perf — the dataset is NOT the whole history: the SQL query is
+ * bounded by the union window (earliest instant any widget reads,
+ * comparison windows included) and the union of account scopes, and the
+ * relations carry only the fields the mappers read. OPEN rows are loaded
+ * once up front (only when an open-trades widget exists) instead of one
+ * re-findMany per widget. The whole payload is cached 45 s server-side
+ * (key: user + dashboard + preset + account — never another user's data).
  */
 import type { Prisma } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { D0, Decimal, toD } from "@/lib/trading/dec";
 import {
@@ -18,6 +27,7 @@ import {
   sortChronologically,
   type EquityPoint,
   type GroupStat,
+  type StatTrade,
   type TradeStats,
 } from "@/lib/analytics/engine";
 import {
@@ -33,7 +43,6 @@ import {
   buildMonthGrid,
   computeMonthSummary,
   isoDayBetween,
-  localDateInTz,
   monthBounds,
   type CalendarDay,
   type MonthSummary,
@@ -58,6 +67,12 @@ import {
 } from "@/lib/metrics/evaluator";
 import type { OpenPositionDTO, TradeListItemDTO } from "@/lib/trading/dto";
 import { toTradeListItem } from "@/server/trades";
+import { getDisplayPreferences } from "@/server/display-preferences";
+import {
+  getTradingDay,
+  tradingDayOfTrade,
+  type TradingDaySettings,
+} from "@/lib/time/trading-day";
 import { getPropStatus } from "@/server/prop-status";
 import { getSyncOverview } from "@/server/broker-sync";
 import { listGoalsWithProgress } from "@/server/goals";
@@ -78,30 +93,34 @@ export interface Requirements {
 
 export async function getRequirements(userId: string): Promise<Requirements> {
   const now = new Date();
-  const [prop, news, sync, activeGoal, rule, metric] = await Promise.all([
-    db.propChallenge.findFirst({
-      where: { userId, status: "IN_PROGRESS" },
-      select: { id: true },
-    }),
-    db.economicEvent.findFirst({
-      where: { scheduledAt: { gte: now }, OR: [{ userId: null }, { userId }] },
-      select: { id: true },
-    }),
-    db.brokerConnection.findFirst({
-      where: { userId, status: { not: "REVOKED" } },
-      select: { id: true },
-    }),
-    db.goal.findFirst({ where: { userId, status: "ACTIVE" }, select: { id: true } }),
-    db.tradingRule.findFirst({ where: { userId }, select: { id: true } }),
-    db.customMetric.findFirst({ where: { userId }, select: { id: true } }),
-  ]);
+  // One batch round-trip (was 6 findFirst in Promise.all + 1 sequential
+  // count). Array-form $transaction is a single read batch.
+  const [prop, news, sync, activeGoal, rule, metric, savedChartCount] =
+    await db.$transaction([
+      db.propChallenge.findFirst({
+        where: { userId, status: "IN_PROGRESS" },
+        select: { id: true },
+      }),
+      db.economicEvent.findFirst({
+        where: { scheduledAt: { gte: now }, OR: [{ userId: null }, { userId }] },
+        select: { id: true },
+      }),
+      db.brokerConnection.findFirst({
+        where: { userId, status: { not: "REVOKED" } },
+        select: { id: true },
+      }),
+      db.goal.findFirst({ where: { userId, status: "ACTIVE" }, select: { id: true } }),
+      db.tradingRule.findFirst({ where: { userId }, select: { id: true } }),
+      db.customMetric.findFirst({ where: { userId }, select: { id: true } }),
+      db.savedChart.count({ where: { userId } }),
+    ]);
   return {
     prop: prop != null,
     news: news != null,
     sync: sync != null,
     goals: activeGoal != null || rule != null,
     metrics: metric != null,
-    savedCharts: (await db.savedChart.count({ where: { userId } })) > 0,
+    savedCharts: savedChartCount > 0,
   };
 }
 
@@ -134,6 +153,9 @@ export interface KpiBlock {
 
 export interface KpiWidgetData extends KpiBlock {
   compare: KpiBlock | null;
+  /** Cumulative net P&L per trade, chronological - mini equity curve used
+      for the KPI sparklines (capped at 30 points). */
+  sparkline: string[];
 }
 
 export interface CurveWidgetData {
@@ -172,10 +194,20 @@ export interface CustomMetricWidgetData {
 // ── Trade dataset ────────────────────────────────────────────────────────────
 
 const TRADE_INCLUDE = {
-  instrument: true,
-  account: true,
-  strategy: true,
-  tags: { include: { tag: true } },
+  // Phase 2 perf — only the relation fields the mappers read (baseItem /
+  // toDashboardTrade / toOpenPositionDTO): symbol + digits, account name,
+  // strategy name + deletedAt (soft-delete rule), tag id/name/color/kind
+  // + deletedAt. Trade scalars stay full (no type churn).
+  instrument: { select: { symbol: true, digits: true } },
+  account: { select: { name: true } },
+  strategy: { select: { name: true, deletedAt: true } },
+  tags: {
+    select: {
+      tag: {
+        select: { id: true, name: true, color: true, kind: true, deletedAt: true },
+      },
+    },
+  },
 } as const;
 
 type TradeRow = Prisma.TradeGetPayload<{ include: typeof TRADE_INCLUDE }>;
@@ -188,7 +220,7 @@ type AccountRow = Prisma.AccountGetPayload<Record<string, never>>;
  * list-item DTOs.
  */
 interface DashboardTrade extends AnalyticsTrade {
-  /** Narrowed from StatTrade's optional — always set by the mapper below. */
+  /** Narrowed from StatTrade's optional - always set by the mapper below. */
   strategyName: string | null;
   pips: string | null;
   riskPercent: string | null;
@@ -196,7 +228,7 @@ interface DashboardTrade extends AnalyticsTrade {
   row: TradeRow;
 }
 
-/** Local calendar parts in `timezone` — null on invalid TZ (same as analytics). */
+/** Local calendar parts in `timezone` - null on invalid TZ (same as analytics). */
 function localParts(
   date: Date,
   timezone: string
@@ -224,9 +256,15 @@ function localParts(
   }
 }
 
-function toDashboardTrade(t: TradeRow, timezone: string): DashboardTrade {
+function toDashboardTrade(
+  t: TradeRow,
+  timezone: string,
+  tradingDay: TradingDaySettings
+): DashboardTrade {
   const exit = t.exitTime ?? t.entryTime;
-  const exitLocal = localParts(exit, timezone);
+  // Daily attribution follows the user's TRADING day (default MIDNIGHT_LOCAL
+  // = the local calendar day). Weekday/hour stay on the local ENTRY time.
+  const tradingDayOfExit = getTradingDay(exit, timezone, tradingDay);
   const entryLocal = localParts(t.entryTime, timezone);
   return {
     id: t.id,
@@ -253,7 +291,7 @@ function toDashboardTrade(t: TradeRow, timezone: string): DashboardTrade {
     commission: t.commission?.toString() ?? null,
     swap: t.swap?.toString() ?? null,
     fees: t.fees?.toString() ?? null,
-    localDate: exitLocal?.date ?? null,
+    localDate: tradingDayOfExit,
     localWeekday:
       entryLocal != null ? weekdayOfIsoDate(entryLocal.date) : null,
     localHour: entryLocal?.hour ?? null,
@@ -350,13 +388,33 @@ function computeKpiExtras(sample: DashboardTrade[], stats: TradeStats): KpiExtra
   };
 }
 
-function computeKpiBlock(sample: DashboardTrade[]): KpiBlock {
-  const stats = computeTradeStats(sample);
+function computeKpiBlock(
+  sample: DashboardTrade[],
+  dayOf: (t: StatTrade) => string
+): KpiBlock {
+  const stats = computeTradeStats(sample, { dayOf });
   return {
     stats,
     advanced: computeAdvancedStats(sample, stats),
     extras: computeKpiExtras(sample, stats),
   };
+}
+
+/** Cumulative net P&L per trade, chronological, capped at 30 points
+    (downsampled, always keeping the final point). */
+function computeSparkline(sample: DashboardTrade[]): string[] {
+  let cum = D0;
+  const points = sortChronologically(sample).map((t) => {
+    cum = cum.plus(toD(t.netPnl ?? 0));
+    return cum.toString();
+  });
+  if (points.length <= 30) return points;
+  const step = Math.ceil(points.length / 30);
+  const down = points.filter((_, i) => i % step === 0);
+  if (down[down.length - 1] !== points[points.length - 1]) {
+    down.push(points[points.length - 1]);
+  }
+  return down;
 }
 
 // ── Journal prompts (deterministic daily rotation) ───────────────────────────
@@ -402,6 +460,14 @@ interface WidgetContext {
   accounts: AccountRow[];
   /** strategy name → color (strategy-table merge, same as getDashboard). */
   strategyColors: Map<string, string>;
+  /** Trading-day key function for day-bucketed widgets (KPI "trading days",
+   * P&L calendar, journal prompt). */
+  dayOf: (t: StatTrade) => string;
+  /** Today's TRADING day (journal prompt, P&L calendar month window). */
+  todayTradingDay: string;
+  /** OPEN rows, loaded once up front (only when an open-trades widget
+   * exists) — the widget filters them by account in memory. */
+  openRows: TradeRow[];
 }
 
 async function computeWidgetData(
@@ -422,8 +488,12 @@ async function computeWidgetData(
           ? applyComparePeriod(scoped, period)
           : null;
       const data: KpiWidgetData = {
-        ...computeKpiBlock(sample),
-        compare: compareSample != null ? computeKpiBlock(compareSample) : null,
+        ...computeKpiBlock(sample, ctx.dayOf),
+        compare:
+          compareSample != null
+            ? computeKpiBlock(compareSample, ctx.dayOf)
+            : null,
+        sparkline: computeSparkline(sample),
       };
       return data;
     }
@@ -484,9 +554,7 @@ async function computeWidgetData(
         daily.set(day, bucket);
       }
 
-      const todayLocal =
-        localDateInTz(new Date(), ctx.timezone) ??
-        new Date().toISOString().slice(0, 10);
+      const todayLocal = ctx.todayTradingDay;
       let y = Number(todayLocal.slice(0, 4));
       let m = Number(todayLocal.slice(5, 7));
       for (let i = 1; i < monthCount; i++) {
@@ -535,16 +603,12 @@ async function computeWidgetData(
     }
 
     case "open-trades": {
-      const openRows = await db.trade.findMany({
-        where: {
-          userId: ctx.userId,
-          status: "OPEN",
-          isDraft: false,
-          ...(account != null ? { accountId: account.id } : {}),
-        },
-        include: TRADE_INCLUDE,
-        orderBy: { entryTime: "desc" },
-      });
+      // Rows were loaded once up front (see loadDashboardData); the
+      // widget only filters them by its account scope — no re-findMany.
+      const openRows =
+        account != null
+          ? ctx.openRows.filter((t) => t.accountId === account.id)
+          : ctx.openRows;
       return { openPositions: openRows.map(toOpenPositionDTO) };
     }
 
@@ -626,9 +690,7 @@ async function computeWidgetData(
     }
 
     case "journal-prompt": {
-      const todayLocal =
-        localDateInTz(new Date(), ctx.timezone) ??
-        new Date().toISOString().slice(0, 10);
+      const todayLocal = ctx.todayTradingDay;
       const entry = await db.journalEntry.findFirst({
         where: { userId: ctx.userId, date: todayLocal },
         select: { id: true },
@@ -733,18 +795,39 @@ async function computeWidgetData(
 
 // ── Entry point ──────────────────────────────────────────────────────────────
 
-export async function getDashboardData(
+/** Widget types that read the closed-trade dataset (period-filtered). */
+const CLOSED_DATASET_WIDGETS: ReadonlySet<string> = new Set([
+  "kpi-strip",
+  "single-kpi",
+  "period-compare",
+  "equity-curve",
+  "drawdown-curve",
+  "pnl-calendar",
+  "recent-trades",
+  "session-performance",
+  "weekday-performance",
+  "hour-performance",
+  "strategy-table",
+  "instrument-table",
+  "r-histogram",
+  "win-loss",
+  "streak",
+  "custom-metric",
+]);
+
+async function loadDashboardData(
   userId: string,
   dashboardId: string,
   query: { preset: PeriodPreset; accountId: string | null }
 ): Promise<DashboardWidgetDataPayload> {
-  const [profile, accounts, dashboardRow] = await Promise.all([
+  const [profile, accounts, dashboardRow, prefs] = await Promise.all([
     db.profile.findUnique({ where: { id: userId } }),
     db.account.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
     db.dashboard.findFirst({
       where: { id: dashboardId, userId },
       include: { widgets: { orderBy: { createdAt: "asc" } } },
     }),
+    getDisplayPreferences(userId),
   ]);
   if (!dashboardRow) {
     throw new DashboardValidationError("DASHBOARD_NOT_FOUND", 404);
@@ -752,19 +835,106 @@ export async function getDashboardData(
 
   const timezone = profile?.timezone ?? "UTC";
   const currency = profile?.baseCurrency ?? "USD";
+  // Day-bucketed widgets (KPI "trading days", P&L calendar, journal prompt)
+  // follow the user's TRADING day (default MIDNIGHT_LOCAL = previous
+  // behaviour).
+  const dayOf = tradingDayOfTrade(timezone, prefs.tradingDay);
+  const todayTradingDay = getTradingDay(new Date(), timezone, prefs.tradingDay);
   const globalAccount =
     query.accountId != null
       ? (accounts.find((a) => a.id === query.accountId) ?? null)
       : null;
+  const dto = toDashboardDTO(dashboardRow);
 
-  // The dataset is fetched ONCE — unscoped — so a widget accountOverride can
-  // REPLACE the global account filter (override semantics) instead of
-  // intersecting it. Per-widget scoping happens in memory.
-  const [closedRows, strategyRows, requirements] = await Promise.all([
-    db.trade.findMany({
-      where: { userId, status: "CLOSED", isDraft: false },
-      include: TRADE_INCLUDE,
-    }),
+  // Resolve every loader widget's period + account once, up front. The
+  // trade dataset only needs the UNION window (earliest instant any
+  // closed-dataset widget reads — comparison windows included) and the
+  // UNION of account scopes; anything outside it is filtered out in SQL,
+  // not in JS. A widget with no account (global null, no override) makes
+  // its dataset unfiltered — one such widget disables the account scope.
+  const now = new Date();
+  const resolved: Array<{
+    widget: DashboardWidgetDTO;
+    account: AccountRow | null;
+    period: ResolvedPeriod;
+  }> = [];
+  let cutoff: string | null = null;
+  const closedAccountIds = new Set<string>();
+  let closedAnyUnfiltered = false;
+  const openAccountIds = new Set<string>();
+  let openAnyUnfiltered = false;
+  let needsClosed = false;
+  let needsOpen = false;
+  for (const widget of dto.widgets) {
+    const definition = getWidgetDefinition(widget.type);
+    if (!definition || !definition.hasLoader) {
+      // Static widget (sticky-note, quick-actions) or unknown type → the
+      // client renders it from config alone.
+      continue;
+    }
+    const account =
+      widget.accountOverride != null
+        ? (accounts.find((a) => a.id === widget.accountOverride) ?? null)
+        : globalAccount;
+    const period = resolvePeriod(
+      { preset: query.preset, accountId: widget.accountOverride ?? null },
+      widget.periodOverride,
+      timezone,
+      now,
+      prefs.tradingDay
+    );
+    resolved.push({ widget, account, period });
+    if (widget.type === "open-trades") {
+      needsOpen = true;
+      if (account != null) openAccountIds.add(account.id);
+      else openAnyUnfiltered = true;
+      continue;
+    }
+    if (!CLOSED_DATASET_WIDGETS.has(widget.type)) continue;
+    needsClosed = true;
+    if (account != null) closedAccountIds.add(account.id);
+    else closedAnyUnfiltered = true;
+    const from = period.compareFrom ?? period.from;
+    if (from != null && (cutoff == null || from < cutoff)) cutoff = from;
+  }
+
+  // The dataset is fetched ONCE — scoped in SQL — so a widget
+  // accountOverride can REPLACE the global account filter (override
+  // semantics) instead of intersecting it. Per-widget scoping still
+  // happens in memory (same code as before). Skipped entirely when no
+  // widget reads that dataset.
+  const [closedRows, openRows, strategyRows, requirements] = await Promise.all([
+    needsClosed
+      ? db.trade.findMany({
+          where: {
+            userId,
+            status: "CLOSED",
+            isDraft: false,
+            ...(cutoff != null
+              ? { exitTime: { gte: new Date(cutoff) } }
+              : {}),
+            ...(!closedAnyUnfiltered && closedAccountIds.size > 0
+              ? { accountId: { in: [...closedAccountIds] } }
+              : {}),
+          },
+          include: TRADE_INCLUDE,
+          orderBy: { exitTime: "asc" },
+        })
+      : Promise.resolve([] as TradeRow[]),
+    needsOpen
+      ? db.trade.findMany({
+          where: {
+            userId,
+            status: "OPEN",
+            isDraft: false,
+            ...(!openAnyUnfiltered && openAccountIds.size > 0
+              ? { accountId: { in: [...openAccountIds] } }
+              : {}),
+          },
+          include: TRADE_INCLUDE,
+          orderBy: { entryTime: "desc" },
+        })
+      : Promise.resolve([] as TradeRow[]),
     db.strategy.findMany({
       where: { userId },
       select: { name: true, color: true },
@@ -772,8 +942,9 @@ export async function getDashboardData(
     getRequirements(userId),
   ]);
 
-  const trades = closedRows.map((t) => toDashboardTrade(t, timezone));
-  const dto = toDashboardDTO(dashboardRow);
+  const trades = closedRows.map((t) =>
+    toDashboardTrade(t, timezone, prefs.tradingDay)
+  );
 
   const ctx: WidgetContext = {
     userId,
@@ -781,34 +952,20 @@ export async function getDashboardData(
     timezone,
     accounts,
     strategyColors: new Map(strategyRows.map((s) => [s.name, s.color])),
+    dayOf,
+    todayTradingDay,
+    openRows,
   };
 
   const widgets: Record<string, { data: unknown | null; error: string | null }> =
     {};
 
-  for (const widget of dto.widgets) {
-    const definition = getWidgetDefinition(widget.type);
-    if (!definition || !definition.hasLoader) {
-      // Static widget (sticky-note, quick-actions) or unknown type → the
-      // client renders it from config alone.
-      widgets[widget.id] = { data: null, error: null };
-      continue;
-    }
-
+  for (const { widget, account, period } of resolved) {
     try {
-      const account =
-        widget.accountOverride != null
-          ? (accounts.find((a) => a.id === widget.accountOverride) ?? null)
-          : globalAccount;
       const scoped =
         account != null
           ? trades.filter((t) => t.accountId === account.id)
           : trades;
-      const period = resolvePeriod(
-        { preset: query.preset, accountId: widget.accountOverride ?? null },
-        widget.periodOverride,
-        timezone
-      );
       const sample = applyPeriod(scoped, period);
       widgets[widget.id] = {
         data: await computeWidgetData(ctx, widget, account, scoped, sample, period),
@@ -828,6 +985,13 @@ export async function getDashboardData(
     }
   }
 
+  // Static widgets (no loader) render from config alone.
+  for (const widget of dto.widgets) {
+    if (widgets[widget.id] == null) {
+      widgets[widget.id] = { data: null, error: null };
+    }
+  }
+
   return {
     currency,
     timezone,
@@ -835,4 +999,41 @@ export async function getDashboardData(
     widgets,
     requirements,
   };
+}
+
+/**
+ * Server cache (45 s) — same rule as the advanced analytics (item 2):
+ * the key is user + dashboard + preset + account, so one user's data can
+ * never be served to another. A dashboard edit or a new trade takes up
+ * to 45 s to show here (same staleness as the advanced cache).
+ */
+const getDashboardDataCachedInner = unstable_cache(
+  async (
+    userId: string,
+    dashboardId: string,
+    preset: PeriodPreset,
+    accountId: string | null
+  ) => loadDashboardData(userId, dashboardId, { preset, accountId }),
+  ["dashboard-data"],
+  { revalidate: 45 }
+);
+
+export async function getDashboardData(
+  userId: string,
+  dashboardId: string,
+  query: { preset: PeriodPreset; accountId: string | null }
+): Promise<DashboardWidgetDataPayload> {
+  try {
+    return await getDashboardDataCachedInner(
+      userId,
+      dashboardId,
+      query.preset,
+      query.accountId
+    );
+  } catch {
+    // unstable_cache needs a Next request scope (route handlers); outside
+    // one (tests, scripts) fall back to the direct load — same data, no
+    // cache. A DB failure still throws from the direct load below.
+    return loadDashboardData(userId, dashboardId, query);
+  }
 }

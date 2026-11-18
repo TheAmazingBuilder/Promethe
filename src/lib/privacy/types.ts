@@ -33,7 +33,7 @@ export interface PrivacyScope {
   hideAccountNames: boolean;
   /** Broker name / server / login. */
   hideBrokerInfo: boolean;
-  /** Percentages (default false — win rate stays visible). */
+  /** Percentages (default false - win rate stays visible). */
   hidePercentages: boolean;
   /** R multiples & pips (default false). */
   hideRAndPips: boolean;

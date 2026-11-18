@@ -4,7 +4,7 @@
  * Registers the new charts as dashboard widgets through the Module 1
  * extension point registerWidget() — the dashboard core is untouched.
  * All three are SELF-FETCHING (hasLoader: false): they pull their data
- * through the /api/charts/* endpoints directly.
+ * through the /api/v1/charts/* endpoints directly.
  *
  * Imported for its side effects by the widget catalog, the widget
  * renderer, the dashboards view, the server-side dashboard validation
@@ -24,7 +24,7 @@ export const HEATMAP_DIM_KEYS = X_DIMENSIONS.filter(
 ) as unknown as [XDimension, ...XDimension[]];
 
 export const savedChartWidgetConfigSchema = z.object({
-  /** SavedChart id — empty until the user picks one. */
+  /** SavedChart id - empty until the user picks one. */
   chartId: z.string().default(""),
 });
 
@@ -41,7 +41,7 @@ export const yearCalendarWidgetConfigSchema = z.object({}).strict();
 
 let registered = false;
 
-/** Idempotent — imported for side effects by the catalog and the renderer. */
+/** Idempotent - imported for side effects by the catalog and the renderer. */
 export function registerChartWidgets(): void {
   if (registered) return;
   registered = true;

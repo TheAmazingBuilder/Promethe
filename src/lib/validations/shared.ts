@@ -25,6 +25,36 @@ export {
 } from "./trade";
 
 export {
+  setupInputSchema,
+  setupPatchSchema,
+  playbookRuleInputSchema,
+  playbookRulePatchSchema,
+  checklistTemplateInputSchema,
+  checklistTemplatePatchSchema,
+  playbookMatchSchema,
+  instantiateTemplateSchema,
+  duplicateStrategySchema,
+  marketProfileSchema,
+  entryConditionSchema,
+  confirmationSchema,
+  managementRuleSchema,
+  exitRuleSchema,
+  strategyRiskSchema,
+  MARKET_CONDITIONS_PLAYBOOK,
+  ENTRY_CONDITION_CATEGORIES,
+  CONFIRMATION_TYPES,
+  EXIT_TYPES,
+  PLAYBOOK_RULE_CATEGORIES,
+  PLAYBOOK_SESSIONS,
+  TRADING_DAYS,
+  STRATEGY_GRADES,
+  STRATEGY_STATUSES,
+  PLAYBOOK_MATCHES,
+  STRATEGY_DEFINITION_FIELDS,
+  touchesDefinition,
+} from "./playbook";
+
+export {
   journalEntrySchema,
   journalQuerySchema,
   journalDeleteQuerySchema,
@@ -41,8 +71,20 @@ export {
   magicMappingSchema,
 } from "./sync";
 
-export { analyticsQuerySchema, ANALYTICS_PERIODS } from "./analytics";
-export type { AnalyticsPeriod, AnalyticsQuery } from "./analytics";
+export {
+  analyticsQuerySchema,
+  ANALYTICS_PERIODS,
+  weeklyPlanQuerySchema,
+  weeklyPlanToggleSchema,
+  WEEKLY_PLAN_RULES,
+} from "./analytics";
+export type {
+  AnalyticsPeriod,
+  AnalyticsQuery,
+  WeeklyPlanQuery,
+  WeeklyPlanRule,
+  WeeklyPlanToggle,
+} from "./analytics";
 
 export {
   sharePolicySchema,
@@ -95,7 +137,52 @@ export type {
   WidgetPatchInput,
 } from "./dashboard";
 
+export {
+  searchQuerySchema,
+  bulkTradesSchema,
+  customFieldDefinitionInputSchema,
+  customFieldDefinitionPatchSchema,
+  tableColumnsInputSchema,
+  shortcutUpsertSchema,
+  savedViewPatchSchema,
+} from "./productivity";
+export type {
+  SearchQuery,
+  BulkTradesInput,
+  CustomFieldDefinitionInput,
+  CustomFieldDefinitionPatch,
+  TableColumnsInput,
+  ShortcutUpsertInput,
+  SavedViewPatch,
+} from "./productivity";
+
 export { zodFieldErrors };
+
+// v2.5 Module 5 — trading tools
+export {
+  toolScenarioInputSchema,
+  toolScenarioPatchSchema,
+  fxRateInputSchema,
+  fxRatePatchSchema,
+  fxRatesImportSchema,
+  marketSessionSettingInputSchema,
+  marketSessionSettingPatchSchema,
+  exitPlanInputSchema,
+  exitPlanPatchSchema,
+  exposureSettingsSchema,
+} from "./tools";
+export type {
+  ToolScenarioInput,
+  ToolScenarioPatch,
+  FxRateInput,
+  FxRatePatch,
+  FxRatesImportInput,
+  MarketSessionSettingInput,
+  MarketSessionSettingPatch,
+  ExitPlanInput,
+  ExitPlanPatch,
+  ExposureSettingsInput,
+} from "./tools";
 
 // v2.5 Module 8 — privacy, accessibility & time zones
 export {

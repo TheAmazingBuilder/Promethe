@@ -39,7 +39,7 @@ export interface TradeSearchFields {
   tagNames?: string[];
 }
 
-/** Trade.searchText — notes, analyses, lesson, setup, symbol, tags, comment. */
+/** Trade.searchText - notes, analyses, lesson, setup, symbol, tags, comment. */
 export function buildTradeSearchText(f: TradeSearchFields): string {
   return joinFolded([
     f.symbol,
@@ -61,7 +61,7 @@ export interface JournalSearchFields {
   marketBias?: string | null;
 }
 
-/** JournalEntry.searchText — plan, review, lesson, bias, date. */
+/** JournalEntry.searchText - plan, review, lesson, bias, date. */
 export function buildJournalSearchText(f: JournalSearchFields): string {
   return joinFolded([
     f.date,
@@ -80,7 +80,7 @@ export interface StrategySearchFields {
   riskRules?: string | null;
 }
 
-/** Strategy.searchText — name, description, all rule bodies. */
+/** Strategy.searchText - name, description, all rule bodies. */
 export function buildStrategySearchText(f: StrategySearchFields): string {
   return joinFolded([
     f.name,

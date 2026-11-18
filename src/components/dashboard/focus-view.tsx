@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * FocusView (v2.5 Module 1, spec §2) — distraction-free trading mode (#/focus).
+ * FocusView (v2.5 Module 1, spec §2) — distraction-free trading mode (/focus).
  *
  * A centered, low-chrome column inside the app shell: big clock in the
  * profile timezone, open session badges, and CONFIGURABLE blocks (rules,
@@ -133,7 +133,7 @@ function RulesBlock() {
                 {rule.description ? (
                   <span className="text-muted-foreground">
                     {" "}
-                    — {rule.description}
+                    - {rule.description}
                   </span>
                 ) : null}
               </span>
@@ -422,7 +422,7 @@ function OpenTradesBlock({ hideAmounts }: { hideAmounts: boolean }) {
               <li key={trade.id}>
                 <button
                   type="button"
-                  onClick={() => navigate(`#/trades/${trade.id}`)}
+                  onClick={() => navigate(`/trades/${trade.id}`)}
                   className="flex w-full items-center justify-between gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-accent"
                 >
                   <span className="flex min-w-0 items-center gap-2">
@@ -503,7 +503,7 @@ function ActionsBlock() {
       <Button
         size="lg"
         className="h-14 text-base"
-        onClick={() => navigate("#/trades/quick")}
+        onClick={() => navigate("/trades/quick")}
       >
         <Zap className="h-5 w-5" aria-hidden="true" />
         {t("actionQuickTrade")}
@@ -512,7 +512,7 @@ function ActionsBlock() {
         size="lg"
         variant="outline"
         className="h-14 text-base"
-        onClick={() => navigate("#/trades")}
+        onClick={() => navigate("/trades")}
       >
         <ShieldCheck className="h-5 w-5" aria-hidden="true" />
         {t("actionCloseTrade")}
@@ -521,7 +521,7 @@ function ActionsBlock() {
         size="lg"
         variant="outline"
         className="h-14 text-base"
-        onClick={() => navigate("#/journal")}
+        onClick={() => navigate("/journal")}
       >
         <NotebookPen className="h-5 w-5" aria-hidden="true" />
         {t("actionLogNote")}
@@ -717,14 +717,14 @@ export function FocusView() {
   const show = (block: FocusBlock) => blocks.includes(block);
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-6">
+    <div className="w-full space-y-6">
       {/* Chrome: exit + configure */}
       <div className="flex items-center justify-between">
         <Button
           variant="ghost"
           size="sm"
           className="gap-2 text-muted-foreground"
-          onClick={() => navigate("#/")}
+          onClick={() => navigate("/")}
         >
           <X className="h-4 w-4" aria-hidden="true" />
           {t("exit")}

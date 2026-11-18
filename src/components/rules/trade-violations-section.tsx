@@ -3,7 +3,7 @@
 /**
  * Rule violations attached to one trade (v1 phase 6) — read-only section of
  * the trade detail. Hidden when the trade respects every rule.
- * Data: GET /api/trades/[id]/violations.
+ * Data: GET /api/v1/trades/[id]/violations.
  */
 import { ShieldAlert } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -57,7 +57,7 @@ export function TradeViolationsSection({ tradeId }: { tradeId: string }) {
                 {tRules(`kind.${v.kind}`)}
                 {v.description ? (
                   <span className="ml-1.5 font-normal text-muted-foreground">
-                    — {v.description}
+                    - {v.description}
                   </span>
                 ) : null}
               </span>

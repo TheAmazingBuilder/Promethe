@@ -2,74 +2,40 @@
  * Generic CSV export of the trade list (v1 phase 6) — pure & client-safe.
  *
  * MT4/MT5-style flat spreadsheet: one row per trade, decimals as-is (exact
- * strings from the DTO boundary), localized headers FR/EN (same language
- * negotiation as the import parser). RFC 4180 quoting; \r\n line endings
- * for Excel friendliness. The API layer prepends the UTF-8 BOM.
+ * strings from the DTO boundary), English headers. RFC 4180 quoting; \r\n
+ * line endings for Excel friendliness. The API layer prepends the UTF-8 BOM.
  */
 import type { TradeListItemDTO } from "@/lib/trading/dto";
 
-export type CsvLocale = "fr" | "en";
-
-const HEADERS: Record<CsvLocale, string[]> = {
-  fr: [
-    "ID",
-    "Compte",
-    "Stratégie",
-    "Symbole",
-    "Direction",
-    "Type d'ordre",
-    "Statut",
-    "Timeframe",
-    "Session",
-    "Setup",
-    "Date d'entrée",
-    "Date de sortie",
-    "Prix d'entrée",
-    "Prix de sortie",
-    "Stop loss",
-    "Take profit",
-    "Lots",
-    "Risque %",
-    "Pips",
-    "P&L net",
-    "Devise",
-    "R",
-    "Résultat",
-    "Raison de sortie",
-    "Émotion avant",
-    "Plan suivi",
-    "Brouillon",
-  ],
-  en: [
-    "ID",
-    "Account",
-    "Strategy",
-    "Symbol",
-    "Direction",
-    "Order type",
-    "Status",
-    "Timeframe",
-    "Session",
-    "Setup",
-    "Entry date",
-    "Exit date",
-    "Entry price",
-    "Exit price",
-    "Stop loss",
-    "Take profit",
-    "Lots",
-    "Risk %",
-    "Pips",
-    "Net P&L",
-    "Currency",
-    "R",
-    "Result",
-    "Exit reason",
-    "Emotion before",
-    "Followed plan",
-    "Draft",
-  ],
-};
+const HEADERS: string[] = [
+  "ID",
+  "Account",
+  "Strategy",
+  "Symbol",
+  "Direction",
+  "Order type",
+  "Status",
+  "Timeframe",
+  "Session",
+  "Setup",
+  "Entry date",
+  "Exit date",
+  "Entry price",
+  "Exit price",
+  "Stop loss",
+  "Take profit",
+  "Lots",
+  "Risk %",
+  "Pips",
+  "Net P&L",
+  "Currency",
+  "R",
+  "Result",
+  "Exit reason",
+  "Emotion before",
+  "Followed plan",
+  "Draft",
+];
 
 /** RFC 4180 field escaping. */
 function csvField(value: string | null | undefined): string {
@@ -79,19 +45,14 @@ function csvField(value: string | null | undefined): string {
   return s;
 }
 
-function yn(v: boolean | null | undefined, locale: CsvLocale): string {
+function yn(v: boolean | null | undefined): string {
   if (v == null) return "";
-  const yes = locale === "fr" ? "oui" : "yes";
-  const no = locale === "fr" ? "non" : "no";
-  return v ? yes : no;
+  return v ? "yes" : "no";
 }
 
 /** Full CSV document for the given rows. */
-export function tradesToCsv(
-  rows: TradeListItemDTO[],
-  locale: CsvLocale
-): string {
-  const lines: string[] = [HEADERS[locale].map(csvField).join(",")];
+export function tradesToCsv(rows: TradeListItemDTO[]): string {
+  const lines: string[] = [HEADERS.map(csvField).join(",")];
   for (const t of rows) {
     lines.push(
       [
@@ -120,8 +81,8 @@ export function tradesToCsv(
         t.resultType,
         t.exitReason,
         t.emotionBefore,
-        t.followedPlan == null ? null : yn(t.followedPlan, locale),
-        yn(t.isDraft, locale),
+        t.followedPlan == null ? null : yn(t.followedPlan),
+        yn(t.isDraft),
       ]
         .map(csvField)
         .join(",")

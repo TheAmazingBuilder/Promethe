@@ -3,7 +3,7 @@
 /**
  * PROP breach-risk widget (v1 phase 5) — daily loss / total drawdown limits
  * with progress bars, profit target progress and current equity. Hidden when
- * the user has no PROP account. Data: GET /api/prop-status.
+ * the user has no PROP account. Data: GET /api/v1/prop-status.
  */
 import { AlertTriangle, CheckCircle2, ShieldAlert, Target } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -146,7 +146,7 @@ export function PropStatusCard() {
           ) : (
             <CheckCircle2 className="h-4 w-4 text-gain" aria-hidden="true" />
           )}
-          {t("title")} — <Sensitive kind="account">{account.name}</Sensitive>
+          {t("title")} - <Sensitive kind="account">{account.name}</Sensitive>
           <Badge
             variant="secondary"
             className={`ml-auto ${toneOf(status.overall)}`}

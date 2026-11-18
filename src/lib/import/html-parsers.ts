@@ -198,7 +198,7 @@ export function parseMt4Html(html: string): ParseResult {
 
   return {
     format: "MT4_HTML",
-    formatLabel: "Relevé détaillé MT4 (HTML)",
+    formatLabel: "Detailed MT4 statement (HTML)",
     trades,
     cash,
     warnings,
@@ -278,7 +278,7 @@ export function parseMt5Html(html: string): ParseResult {
 
   return {
     format: "MT5_HTML",
-    formatLabel: "Rapport d'historique MT5 (HTML)",
+    formatLabel: "MT5 history report (HTML)",
     trades,
     cash,
     warnings,

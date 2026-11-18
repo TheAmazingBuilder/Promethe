@@ -1,9 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import * as React from "react";
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
-import { Check, ChevronRight, LayoutDashboard, Monitor, Moon, Palette, ShieldCheck, Sun } from "lucide-react";
+import { Accessibility, Check, ChevronRight, Clock, Compass, EyeOff, History, Keyboard, LayoutDashboard, LayoutTemplate, Link2, ListPlus, Monitor, Moon, Palette, Plug, Send, ShieldCheck, Sun, Trash2, Users } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -21,12 +22,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PageHeader } from "@/components/ui/page-header";
 import { useSession } from "@/components/app/session-context";
+import { useTour } from "@/components/tour/guided-tour";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import { COMMON_CURRENCIES } from "@/lib/trading/types";
+import { COMMON_TIMEZONES } from "@/lib/time/zones";
 import { cn } from "@/lib/utils";
+import { MarketSessionsSettingsCard } from "@/components/tools/market-sessions-settings";
 
 const THEME_OPTIONS = [
   { value: "light", labelKey: "themeLight", icon: Sun },
@@ -34,39 +39,10 @@ const THEME_OPTIONS = [
   { value: "system", labelKey: "themeSystem", icon: Monitor },
 ] as const;
 
-/** Common IANA timezones — the current profile tz is always offered. */
-const TIMEZONES = [
-  "UTC",
-  "America/Toronto",
-  "America/New_York",
-  "America/Chicago",
-  "America/Vancouver",
-  "America/Los_Angeles",
-  "America/Mexico_City",
-  "America/Sao_Paulo",
-  "Europe/London",
-  "Europe/Paris",
-  "Europe/Brussels",
-  "Europe/Zurich",
-  "Europe/Frankfurt",
-  "Europe/Madrid",
-  "Europe/Lisbon",
-  "Europe/Amsterdam",
-  "Africa/Casablanca",
-  "Africa/Lagos",
-  "Africa/Johannesburg",
-  "Asia/Dubai",
-  "Asia/Moscow",
-  "Asia/Kolkata",
-  "Asia/Singapore",
-  "Asia/Hong_Kong",
-  "Asia/Shanghai",
-  "Asia/Tokyo",
-  "Australia/Sydney",
-  "Pacific/Auckland",
-];
+/** Common IANA timezones - the current profile tz is always offered. */
+const TIMEZONES = COMMON_TIMEZONES;
 
-/** Profile editor — PATCH /api/profile, then refresh the global session. */
+/** Profile editor - PATCH /api/v1/profile, then refresh the global session. */
 function ProfileEditorCard() {
   const { session, setSession } = useSession();
   const t = useTranslations("settings");
@@ -100,7 +76,7 @@ function ProfileEditorCard() {
       const result = await apiFetch<{
         user: { id: string; email: string };
         profile: typeof session.profile;
-      }>("/api/profile", {
+      }>("/api/v1/profile", {
         method: "PATCH",
         body: JSON.stringify({
           displayName: name.trim(),
@@ -206,6 +182,9 @@ export function SettingsView() {
   const { session } = useSession();
   const { theme, setTheme } = useTheme();
   const t = useTranslations("settings");
+  const tNav = useTranslations("nav");
+  const tTour = useTranslations("tour");
+  const { start: startTour } = useTour();
   const { toast } = useToast();
   const [mounted, setMounted] = React.useState(false);
 
@@ -215,13 +194,12 @@ export function SettingsView() {
   const { profile } = session;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader title={t("title")} description={t("subtitle")} />
 
       <ProfileEditorCard />
+
+      <MarketSessionsSettingsCard />
 
       <Card>
         <CardHeader>
@@ -276,7 +254,7 @@ export function SettingsView() {
               </p>
             </div>
             <Button variant="outline" size="sm" asChild>
-              <a href="#/comptes">{t("manageAccounts")}</a>
+              <Link href="/accounts">{t("manageAccounts")}</Link>
             </Button>
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
@@ -285,8 +263,22 @@ export function SettingsView() {
         </CardContent>
       </Card>
 
-      <a
-        href="#/reglages/compte"
+      <Link
+        href="/settings/profile"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <ShieldCheck className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{t("profileLink")}</p>
+            <p className="text-xs text-muted-foreground">{t("profileLinkDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </Link>
+
+      <Link
+        href="/settings/account"
         className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
       >
         <div className="flex items-center gap-3">
@@ -297,10 +289,10 @@ export function SettingsView() {
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </a>
+      </Link>
 
-      <a
-        href="#/reglages/appearance"
+      <Link
+        href="/settings/appearance"
         className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
       >
         <div className="flex items-center gap-3">
@@ -311,10 +303,10 @@ export function SettingsView() {
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </a>
+      </Link>
 
-      <a
-        href="#/reglages/dashboards"
+      <Link
+        href="/settings/dashboards"
         className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
       >
         <div className="flex items-center gap-3">
@@ -325,7 +317,190 @@ export function SettingsView() {
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </a>
+      </Link>
+
+      <Link
+        href="/settings/templates"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <LayoutTemplate className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{tNav("templates")}</p>
+            <p className="text-xs text-muted-foreground">{tNav("templatesDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </Link>
+
+      <Link
+        href="/broker-sync"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <Plug className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{tNav("brokerSync")}</p>
+            <p className="text-xs text-muted-foreground">{tNav("brokerSyncDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </Link>
+
+      <Link
+        href="/settings/integrations"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <Send className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{tNav("integrations")}</p>
+            <p className="text-xs text-muted-foreground">{tNav("integrationsDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </Link>
+
+      <Link
+        href="/settings/sharing"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <Link2 className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{tNav("sharing")}</p>
+            <p className="text-xs text-muted-foreground">{tNav("sharingDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </Link>
+
+      <Link
+        href="/settings/mentors"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <Users className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{tNav("mentors")}</p>
+            <p className="text-xs text-muted-foreground">{tNav("mentorsDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </Link>
+
+      <Link
+        href="/settings/privacy"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <EyeOff className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{tNav("privacy")}</p>
+            <p className="text-xs text-muted-foreground">{tNav("privacyDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </Link>
+
+      <Link
+        href="/settings/accessibility"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <Accessibility className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{tNav("accessibility")}</p>
+            <p className="text-xs text-muted-foreground">{tNav("accessibilityDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </Link>
+
+      <Link
+        href="/settings/time"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <Clock className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{tNav("time")}</p>
+            <p className="text-xs text-muted-foreground">{tNav("timeDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </Link>
+
+      <Link
+        href="/settings/custom-fields"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <ListPlus className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{t("customFieldsLink")}</p>
+            <p className="text-xs text-muted-foreground">{t("customFieldsLinkDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </Link>
+
+      <Link
+        href="/settings/shortcuts"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <Keyboard className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{t("shortcutsLink")}</p>
+            <p className="text-xs text-muted-foreground">{t("shortcutsLinkDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </Link>
+
+      <Link
+        href="/history"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <History className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{t("historyLink")}</p>
+            <p className="text-xs text-muted-foreground">{t("historyLinkDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </Link>
+
+      <Link
+        href="/trash"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <Trash2 className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{tNav("trash")}</p>
+            <p className="text-xs text-muted-foreground">{tNav("trashDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </Link>
+
+      <button
+        type="button"
+        onClick={startTour}
+        className="flex w-full items-center justify-between gap-4 rounded-lg border p-4 text-left transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <Compass className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{tTour("restart")}</p>
+            <p className="text-xs text-muted-foreground">{tTour("restartDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </button>
     </div>
   );
 }

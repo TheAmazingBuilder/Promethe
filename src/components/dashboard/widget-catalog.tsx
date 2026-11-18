@@ -31,9 +31,12 @@ import {
   type DashboardDTO,
 } from "@/lib/dashboard/types";
 import { findFreeSlot } from "@/lib/dashboard/layout";
+import { WidgetPreview } from "./widget-preview";
 // Registers the v2.5 M2 chart widgets (saved-chart / heatmap / year-calendar)
 // before the catalog lists definitions — idempotent side-effect import.
 import "@/lib/dashboard/register-chart-widgets";
+import "@/lib/dashboard/register-risk-reward-widgets";
+import "@/lib/dashboard/register-mrt-wave2-widgets";
 
 export function WidgetCatalog({
   open,
@@ -164,39 +167,45 @@ export function WidgetCatalog({
                       return (
                         <li
                           key={def.type}
-                          className="flex items-start gap-3 rounded-lg border p-3"
+                          className="rounded-lg border p-3"
                         >
-                          <def.icon
-                            className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
-                            aria-hidden="true"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium">
-                              {tRoot(def.nameKey)}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {tRoot(def.descriptionKey)}
-                            </p>
-                            {unmet && unmet.length > 0 ? (
-                              <p className="mt-1 text-xs text-muted-foreground/80">
-                                {t("catalog.requires")}{" "}
-                                {unmet
-                                  .map((req) => t(`requires.${req}`))
-                                  .join(", ")}
+                          <div className="flex items-start gap-3">
+                            <def.icon
+                              className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+                              aria-hidden="true"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium">
+                                {tRoot(def.nameKey)}
                               </p>
-                            ) : null}
+                              <p className="text-xs text-muted-foreground">
+                                {tRoot(def.descriptionKey)}
+                              </p>
+                              {unmet && unmet.length > 0 ? (
+                                <p className="mt-1 text-xs text-muted-foreground/80">
+                                  {t("catalog.requires")}{" "}
+                                  {unmet
+                                    .map((req) => t(`requires.${req}`))
+                                    .join(", ")}
+                                </p>
+                              ) : null}
+                            </div>
+                            <Button
+                              size="icon"
+                              className="h-8 w-8 shrink-0"
+                              disabled={disabled}
+                              onClick={() => add(def)}
+                              aria-label={t("catalog.add", {
+                                name: tRoot(def.nameKey),
+                              })}
+                            >
+                              <Plus className="h-4 w-4" aria-hidden="true" />
+                            </Button>
                           </div>
-                          <Button
-                            size="icon"
-                            className="h-8 w-8 shrink-0"
-                            disabled={disabled}
-                            onClick={() => add(def)}
-                            aria-label={t("catalog.add", {
-                              name: tRoot(def.nameKey),
-                            })}
-                          >
-                            <Plus className="h-4 w-4" aria-hidden="true" />
-                          </Button>
+                          <WidgetPreview
+                            type={def.type}
+                            className={disabled ? "mt-2 opacity-40" : "mt-2"}
+                          />
                         </li>
                       );
                     })}

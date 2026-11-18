@@ -3,16 +3,14 @@
 /**
  * Rules & goals view (v1 phase 6) — three tabs: measurable goals with live
  * progress, trading rules CRUD (auto re-evaluation on edit), recent
- * violations. Data: /api/goals · /api/rules · /api/rules/violations.
+ * violations. Data: /api/v1/goals · /api/v1/rules · /api/v1/rules/violations.
  */
 import * as React from "react";
 import {
   AlertTriangle,
   CheckCircle2,
   ListChecks,
-  Pause,
   Pencil,
-  Play,
   Plus,
   Target,
   Trash2,
@@ -38,6 +36,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Progress } from "@/components/ui/progress";
 import {
   Select,
@@ -48,12 +47,12 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { useSession } from "@/components/app/session-context";
 import {
   useCreateGoal,
   useCreateRule,
-  useDeleteGoal,
   useDeleteRule,
   useGoals,
   useRules,
@@ -67,16 +66,15 @@ import { fmtDateInTz, pnlClass } from "@/lib/format";
 import { useFormat } from "@/lib/format/use-format";
 import { Money } from "@/components/privacy/money";
 import { navigate } from "@/lib/router";
+import { GoalCard } from "@/components/rules/goal-card";
 import {
-  formatGoalValue,
   formatMeasuredValue,
   formatRuleValue,
-  goalBarTone,
   METRICS,
   PERIODS,
   RULE_KIND_LIST,
 } from "@/components/rules/goal-format";
-import type { GoalDTO, GoalWithProgressDTO, RuleDTO } from "@/lib/trading/dto";
+import type { GoalDTO, RuleDTO } from "@/lib/trading/dto";
 import type { GoalInput, RuleInput } from "@/lib/validations/goals";
 
 // ── Goal editor dialog ──────────────────────────────────────────────────────
@@ -192,7 +190,12 @@ function GoalEditor({
   };
 
   const targetHint =
-    form.metric === "WIN_RATE" || form.metric === "DISCIPLINE_SCORE" ? t("targetHintPct") : t("targetHintAmount");
+    form.metric === "WIN_RATE" ||
+    form.metric === "A_PLUS_WIN_RATE" ||
+    form.metric === "PLAN_FOLLOW_RATE" ||
+    form.metric === "DISCIPLINE_SCORE"
+      ? t("targetHintPct")
+      : t("targetHintAmount");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -294,22 +297,20 @@ function GoalEditor({
               <label className="text-xs font-medium text-muted-foreground" htmlFor="goal-start">
                 {t("startDate")}
               </label>
-              <Input
+              <DateField
                 id="goal-start"
-                type="date"
                 value={form.startDate}
-                onChange={(e) => set("startDate", e.target.value)}
+                onChange={(v) => set("startDate", v)}
               />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground" htmlFor="goal-end">
                 {t("endDate")}
               </label>
-              <Input
+              <DateField
                 id="goal-end"
-                type="date"
                 value={form.endDate}
-                onChange={(e) => set("endDate", e.target.value)}
+                onChange={(v) => set("endDate", v)}
               />
             </div>
           </div>
@@ -327,153 +328,6 @@ function GoalEditor({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-// ── Goal card ───────────────────────────────────────────────────────────────
-
-function GoalCard({
-  goal,
-  currency,
-  onEdit,
-}: {
-  goal: GoalWithProgressDTO;
-  currency: string;
-  onEdit: () => void;
-}) {
-  const t = useTranslations("goalsView");
-  const { toast } = useToast();
-  const fmt = useFormat();
-  const update = useUpdateGoal();
-  const del = useDeleteGoal();
-  const [confirmOpen, setConfirmOpen] = React.useState(false);
-
-  const paused = goal.status === "PAUSED";
-  const { progress } = goal;
-
-  const onToggle = async () => {
-    try {
-      await update.mutateAsync({
-        id: goal.id,
-        patch: { status: paused ? "ACTIVE" : "PAUSED" },
-      });
-      toast({ title: paused ? t("resumedToast") : t("pausedToast") });
-    } catch {
-      toast({ title: t("errorToast"), variant: "destructive" });
-    }
-  };
-
-  const onDelete = async () => {
-    try {
-      await del.mutateAsync(goal.id);
-      toast({ title: t("deletedToast") });
-      setConfirmOpen(false);
-    } catch {
-      toast({ title: t("errorToast"), variant: "destructive" });
-    }
-  };
-
-  return (
-    <Card className={paused ? "opacity-60" : undefined}>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          {progress.isAchieved ? (
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" aria-hidden="true" />
-          ) : (
-            <Target className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-          )}
-          <span className="truncate">{goal.name}</span>
-          {paused && <Badge variant="secondary">{t("status.PAUSED")}</Badge>}
-          {progress.isExpired && !progress.isAchieved && (
-            <Badge className="bg-rose-500/15 text-rose-700 dark:text-rose-400">
-              {t("status.EXPIRED")}
-            </Badge>
-          )}
-        </CardTitle>
-        <CardDescription>
-          {t(`metric.${goal.metric}`)} · {t(`period.${goal.period}`)}
-          {goal.endDate ? ` · ${t("until")} ${fmtDateInTz(goal.endDate, "UTC")}` : ""}
-        </CardDescription>
-        <CardAction>
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" aria-label={t("pauseResume")} onClick={() => void onToggle()}>
-              {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-            </Button>
-            <Button variant="ghost" size="icon" aria-label={t("edit")} onClick={onEdit}>
-              <Pencil className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={t("delete")}
-              onClick={() => setConfirmOpen(true)}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="flex items-baseline justify-between gap-2">
-          <p className="text-2xl font-bold tabular-nums">
-            {formatGoalValue(fmt, goal.metric, progress.currentValue, currency)}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {t("targetLabel")} {formatGoalValue(fmt, goal.metric, progress.targetValue, currency)}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
-            <div
-              className={`h-full rounded-full transition-all ${goalBarTone(
-                progress.progressPercent,
-                progress.isAchieved
-              )}`}
-              style={{ width: `${Math.max(2, progress.progressPercent)}%` }}
-              role="progressbar"
-              aria-valuenow={progress.progressPercent}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={goal.name}
-            />
-          </div>
-          <span className="w-12 shrink-0 text-right text-sm font-semibold tabular-nums">
-            {Math.round(progress.progressPercent)}%
-          </span>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {t("window", {
-            from: fmtDateInTz(progress.windowStartDay, "UTC"),
-            to: fmtDateInTz(
-              progress.windowEndDay === "9999-12-31"
-                ? new Date().toISOString()
-                : progress.windowEndDay,
-              "UTC"
-            ),
-          })}
-        </p>
-        {goal.description ? (
-          <p className="text-sm text-muted-foreground">{goal.description}</p>
-        ) : null}
-
-        <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-          <DialogContent className="sm:max-w-sm">
-            <DialogHeader>
-              <DialogTitle>{t("confirmDeleteTitle")}</DialogTitle>
-              <DialogDescription>{t("confirmDeleteDesc")}</DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setConfirmOpen(false)}>
-                {t("cancel")}
-              </Button>
-              <Button variant="destructive" onClick={() => void onDelete()}>
-                {t("delete")}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -598,14 +452,18 @@ function RuleEditor({
           {!isCustom && (
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground" htmlFor="rule-value">
-                {isCount ? t("valueCount") : t("valueAmount", { currency })}
+                {isCount
+                  ? t("valueCount")
+                  : form.kind === "MIN_PLANNED_RR"
+                    ? t("valueRatio")
+                    : t("valueAmount", { currency })}
               </label>
               <Input
                 id="rule-value"
                 inputMode="decimal"
                 value={form.value}
                 onChange={(e) => set("value", e.target.value)}
-                placeholder={isCount ? "3" : "500"}
+                placeholder={isCount ? "3" : form.kind === "MIN_PLANNED_RR" ? "1.5" : "500"}
               />
             </div>
           )}
@@ -699,12 +557,11 @@ export function RulesView() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
+      <PageHeader
+        title={t("title")}
+        description={t("subtitle")}
+        actions={
+          <div className="flex shrink-0 items-center gap-2">
           <Button variant="outline" onClick={() => openRuleEditor(null)}>
             <ListChecks className="h-4 w-4" aria-hidden="true" />
             <span className="hidden sm:inline">{t("rules.add")}</span>
@@ -713,8 +570,9 @@ export function RulesView() {
             <Plus className="h-4 w-4" aria-hidden="true" />
             {t("addGoal")}
           </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       <Tabs defaultValue="goals" className="gap-4">
         <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
@@ -922,7 +780,7 @@ export function RulesView() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => navigate(`#/trades/${v.tradeId}`)}
+                          onClick={() => navigate(`/trades/${v.tradeId}`)}
                         >
                           {t("violations.viewTrade")}
                         </Button>

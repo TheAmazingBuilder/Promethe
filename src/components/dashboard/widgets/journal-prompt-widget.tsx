@@ -1,6 +1,6 @@
 "use client";
 
-/** journal-prompt widget — daily prompt + "Open journal" CTA + entry check. */
+/** journal-prompt widget - daily prompt + "Open journal" CTA + entry check. */
 import { BookOpen, CheckCircle2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ export function JournalPromptWidget({ data }: { data: unknown }) {
         {prompt ? `“${prompt}”` : t("journalPromptEmpty")}
       </blockquote>
       <div className="flex items-center gap-2">
-        <Button size="sm" onClick={() => navigate("#/journal")}>
+        <Button size="sm" onClick={() => navigate("/journal")}>
           <BookOpen className="h-4 w-4" aria-hidden="true" />
           {t("journalPromptOpen")}
         </Button>

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * AppearanceView (v2.5 Module 1, spec §1) — #/reglages/appearance.
+ * AppearanceView (v2.5 Module 1, spec §1) — /settings/appearance.
  *
  * Palette (6 presets + custom with a WCAG contrast checker + auto-adjust),
  * density, chart palette — everything with a LIVE PREVIEW that reflects the
@@ -11,17 +11,9 @@
  * as it will after saving. Save bar is sticky at the bottom of the view.
  */
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-} from "recharts";
 import { Check, RotateCcw, Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,6 +27,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { useA11yPrefs } from "@/components/a11y/a11y-provider";
 import {
@@ -54,6 +47,18 @@ import {
   type PaletteKey,
 } from "@/lib/dashboard/appearance";
 import { cn } from "@/lib/utils";
+
+// Palette preview chart (recharts) loads on demand after the settings form.
+const AppearancePreviewChart = dynamic(
+  () =>
+    import("./appearance-preview-chart").then(
+      (m) => m.AppearancePreviewChart
+    ),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-36 w-full" />,
+  }
+);
 
 // ── WCAG helpers ─────────────────────────────────────────────────────────────
 
@@ -159,7 +164,7 @@ export function AppearanceView() {
 
   if (!mounted || isLoading) {
     return (
-      <div className="mx-auto max-w-2xl space-y-6">
+      <div className="space-y-6">
         <Skeleton className="h-8 w-56" />
         <Skeleton className="h-64 w-full rounded-xl" />
         <Skeleton className="h-44 w-full rounded-xl" />
@@ -232,11 +237,8 @@ export function AppearanceView() {
     : undefined;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 pb-24">
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-      </div>
+    <div className="space-y-6 pb-24">
+      <PageHeader title={t("title")} description={t("subtitle")} />
 
       {/* ── 1. Live preview ── */}
       <Card>
@@ -251,39 +253,10 @@ export function AppearanceView() {
             style={previewStyle}
             className="space-y-4 rounded-lg border bg-background p-4"
           >
-            <div className="h-36 w-full" role="img" aria-label={t("previewChart")}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={[
-                    { name: "A", v: 12 },
-                    { name: "B", v: 19 },
-                    { name: "C", v: 8 },
-                    { name: "D", v: 24 },
-                    { name: "E", v: 15 },
-                  ]}
-                  margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    strokeOpacity={0.3}
-                    vertical={false}
-                  />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 10 }}
-                    tickLine={false}
-                    axisLine={false}
-                    interval={0}
-                  />
-                  <Tooltip cursor={{ fillOpacity: 0.1 }} />
-                  <Bar dataKey="v" radius={[3, 3, 0, 0]} maxBarSize={40} isAnimationActive={!reducedMotionActive}>
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <Cell key={n} fill={`var(--chart-${n})`} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <AppearancePreviewChart
+              label={t("previewChart")}
+              reducedMotion={reducedMotionActive}
+            />
             <table className="w-full text-sm">
               <caption className="sr-only">{t("previewTable")}</caption>
               <thead>
@@ -524,7 +497,7 @@ export function AppearanceView() {
 
       {/* ── Save bar ── */}
       <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <p className="text-xs text-muted-foreground">
             {dirty ? t("unsavedHint") : t("savedHint")}
           </p>

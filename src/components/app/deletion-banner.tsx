@@ -6,6 +6,7 @@
  * scheduled destructive action must never be out of sight. One lightweight
  * query, refetched every 5 minutes.
  */
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { format } from "date-fns";
@@ -28,14 +29,14 @@ export function DeletionBanner() {
 
   const deletion = useQuery({
     queryKey: ["account", "deletion"],
-    queryFn: () => apiFetch<{ state: DeletionState }>("/api/account/deletion"),
+    queryFn: () => apiFetch<{ state: DeletionState }>("/api/v1/account/deletion"),
     refetchInterval: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
 
   const cancel = useMutation({
     mutationFn: () =>
-      apiFetch<{ state: DeletionState }>("/api/account/deletion", {
+      apiFetch<{ state: DeletionState }>("/api/v1/account/deletion", {
         method: "DELETE",
       }),
     onSuccess: () => {
@@ -75,12 +76,12 @@ export function DeletionBanner() {
           )}
           {t("cancelButton")}
         </Button>
-        <a
-          href="#/reglages/compte"
+        <Link
+          href="/settings/account"
           className="text-sm font-medium underline underline-offset-4"
         >
           {t("bannerLink")}
-        </a>
+        </Link>
       </AlertDescription>
     </Alert>
   );

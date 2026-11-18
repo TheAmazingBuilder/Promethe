@@ -34,14 +34,16 @@ export interface AnalyticsTrade extends StatTrade {
   commission: string | null;
   swap: string | null;
   fees: string | null;
-  /** Local calendar date (YYYY-MM-DD) of the EXIT — P&L attribution. */
+  /** Local calendar date (YYYY-MM-DD) of the EXIT - P&L attribution. */
   localDate: string | null;
-  /** Local weekday of the ENTRY 1 (Monday) → 7 (Sunday) — decision dimension. */
+  /** Local weekday of the ENTRY 1 (Monday) → 7 (Sunday) - decision dimension. */
   localWeekday: number | null;
-  /** Local entry hour 0-23 — decision dimension. */
+  /** Local entry hour 0-23 - decision dimension. */
   localHour: number | null;
   /** Trade duration in minutes (exit − entry), null while open. */
   durationMin: number | null;
+  /** Custom-field values, keyed by definition key (v2.5 Module 4 §4.7). */
+  customFields?: Record<string, unknown> | null;
 }
 
 // ── Advanced KPIs ────────────────────────────────────────────────────────────
@@ -55,7 +57,7 @@ export interface AdvancedStats {
   sortino: string | null;
   /** net P&L / max drawdown (> 0 means the curve recovered). */
   recoveryFactor: string | null;
-  /** avgWin / avgLoss — null when one side is missing. */
+  /** avgWin / avgLoss - null when one side is missing. */
   payoffRatio: string | null;
   /** Mean trade duration in minutes. */
   avgDurationMin: number | null;
@@ -165,7 +167,7 @@ export function computeAdvancedStats(
 // ── R-multiple distribution ──────────────────────────────────────────────────
 
 export interface RDistBucket {
-  /** Stable bucket id — labels are i18n keys (analytics.rdist.{id}). */
+  /** Stable bucket id - labels are i18n keys (analytics.rdist.{id}). */
   id: string;
   /** Inclusive lower bound, null = -∞. */
   from: number | null;
@@ -226,8 +228,14 @@ export interface Breakdowns {
   setup: GroupStat[];
   exit: GroupStat[];
   emotion: GroupStat[];
-  /** Followed the plan — keys "yes" / "no". */
+  /** Followed the plan - keys "yes" / "no". */
   plan: GroupStat[];
+  /**
+   * Custom-field breakdowns (v2.5 Module 4 §4.7) - only for definitions
+   * flagged usableInAnalytics. Keyed by definition key; each entry is a
+   * GroupStat[] over the field's values. Absent when no such definition.
+   */
+  custom?: Record<string, GroupStat[]>;
 }
 
 /** Weekday index (1 = Monday … 7 = Sunday) from an ISO date. */
@@ -237,8 +245,11 @@ export function weekdayOfIsoDate(isoDate: string): number {
   return d.getUTCDay() === 0 ? 7 : d.getUTCDay();
 }
 
-export function computeBreakdowns(trades: AnalyticsTrade[]): Breakdowns {
-  return {
+export function computeBreakdowns(
+  trades: AnalyticsTrade[],
+  customDefs?: Array<{ key: string; label: string }>
+): Breakdowns {
+  const out: Breakdowns = {
     strategy: groupStats(trades, (t) => t.strategyName),
     symbol: groupStats(trades, (t) => t.symbol),
     session: groupStats(trades, (t) => t.session),
@@ -256,6 +267,18 @@ export function computeBreakdowns(trades: AnalyticsTrade[]): Breakdowns {
       t.followedPlan == null ? null : t.followedPlan ? "yes" : "no"
     ),
   };
+  if (customDefs && customDefs.length > 0) {
+    const custom: Record<string, GroupStat[]> = {};
+    for (const def of customDefs) {
+      custom[def.key] = groupStats(trades, (t) => {
+        const v = t.customFields?.[def.key];
+        if (v === null || v === undefined || v === "") return null;
+        return Array.isArray(v) ? v.map(String).join(", ") : String(v);
+      });
+    }
+    out.custom = custom;
+  }
+  return out;
 }
 
 // ── Insights — « ce qui marche / ce qui coûte » ─────────────────────────────
@@ -263,10 +286,10 @@ export function computeBreakdowns(trades: AnalyticsTrade[]): Breakdowns {
 export type InsightTone = "good" | "bad" | "info";
 
 export interface Insight {
-  /** i18n key suffix — analytics.insights.{rule}. */
+  /** i18n key suffix - analytics.insights.{rule}. */
   rule: string;
   tone: InsightTone;
-  /** Interpolation params (raw values — formatted by the view). */
+  /** Interpolation params (raw values - formatted by the view). */
   params: Record<string, string | number>;
   /** Sort weight, higher first within a tone. */
   weight: number;
@@ -298,8 +321,8 @@ function dimParams(g: GroupStat): Record<string, string | number> {
   return {
     count: g.stats.tradeCount,
     netPnl: g.stats.netPnl,
-    winRate: g.stats.winRate ?? "—",
-    avgR: g.stats.avgR ?? "—",
+    winRate: g.stats.winRate ?? "-",
+    avgR: g.stats.avgR ?? "-",
   };
 }
 

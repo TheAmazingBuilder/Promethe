@@ -25,14 +25,24 @@ import {
 } from "@/components/ui/sidebar";
 import { ModeToggle } from "@/components/mode-toggle";
 import { PrivacyToggle } from "@/components/privacy/privacy-toggle";
+import { MultiZoneClock } from "@/components/time/multi-zone-clock";
 import { BrandMark } from "./brand";
 import { NavList } from "./nav-list";
 import { UserMenu } from "./user-menu";
 import { CommandMenu } from "./command-menu";
+import { TourProvider } from "@/components/tour/guided-tour";
+import { ShortcutsProvider } from "@/components/shortcuts/shortcuts-provider";
+import { useShortcuts } from "@/hooks/use-productivity";
+import {
+  effectiveKeys,
+  isTypingTarget,
+  matchesChord,
+} from "@/lib/shortcuts/registry";
 import { NotificationsBell } from "./notifications-bell";
 import { DeletionBanner } from "./deletion-banner";
 import { findNavItem } from "./nav";
-import { navigate, useHashRoute, type ViewId } from "@/lib/router";
+import { navigate, useRoute, type ViewId } from "@/lib/router";
+import Link from "next/link";
 
 /**
  * Application shell — shadcn collapsible sidebar (icon rail) + two-tone
@@ -47,11 +57,14 @@ export function AppShell({
   children: React.ReactNode;
   defaultSidebarOpen?: boolean;
 }) {
-  const route = useHashRoute();
+  const route = useRoute();
   const t = useTranslations("shell");
   const tRoot = useTranslations();
   const tPhase = useTranslations("common");
   const [commandOpen, setCommandOpen] = React.useState(false);
+  // v2.5 Module 4 — stored shortcut overrides (defaults while loading).
+  const shortcuts = useShortcuts();
+  const overrides = shortcuts.data ?? [];
 
   const activeNavView: ViewId =
     route.view === "trade" || route.view === "trade-form"
@@ -60,57 +73,48 @@ export function AppShell({
         ? "mentor"
         : route.view;
   const navItem = findNavItem(activeNavView);
-  const pageTitle = navItem ? tRoot(navItem.labelKey) : "TradeJournal";
+  const pageTitle = navItem ? tRoot(navItem.labelKey) : "Promethe";
 
-  // ⌘K / Ctrl+K toggles the command palette.
+  // ⌘K / Ctrl+K toggles the command palette (chord is reassignable).
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setCommandOpen((v) => !v);
-      }
+      if (!matchesChord(event, effectiveKeys("command-palette", overrides))) return;
+      event.preventDefault();
+      setCommandOpen((v) => !v);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [overrides]);
 
   // Bare "f"/"F" enters focus mode (v2.5 M1) — no modifiers, not while
   // typing in a field and no overlay open (pragmatic dialog check).
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "f" && event.key !== "F") return;
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-      const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.tagName === "SELECT" ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
+      if (!matchesChord(event, effectiveKeys("focus-mode", overrides))) return;
+      if (isTypingTarget(event.target)) return;
       if (document.querySelector("[data-state=open]") != null) return;
-      if (window.location.hash === "#/focus") return;
+      if (route.view === "focus") return;
       event.preventDefault();
-      navigate("#/focus");
+      navigate("/focus");
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [overrides, route.view]);
 
   return (
-    <SidebarProvider defaultOpen={defaultSidebarOpen}>
+    <TourProvider>
+      <ShortcutsProvider>
+      <SidebarProvider defaultOpen={defaultSidebarOpen}>
       {/* ── Sidebar (black brand block + nav, collapses to an icon rail) ── */}
       <Sidebar collapsible="icon" aria-label={t("sidebarLabel")}>
         <SidebarHeader className="border-b border-sidebar-border">
           <div className="flex h-14 items-center px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
-            <a href="#/" aria-label="TradeJournal — Home" className="min-w-0">
+            <Link href="/" aria-label="Promethe - Home" className="min-w-0">
               <BrandMark />
-            </a>
+            </Link>
           </div>
         </SidebarHeader>
-        <SidebarContent>
+        <SidebarContent data-tour="nav">
           <NavList activeView={activeNavView} />
         </SidebarContent>
         <SidebarFooter className="border-t border-sidebar-border px-4 py-3">
@@ -137,7 +141,7 @@ export function AppShell({
               <BreadcrumbList className="sm:gap-2.5">
                 <BreadcrumbItem className="hidden sm:inline-flex">
                   <BreadcrumbLink asChild>
-                    <a href="#/">{t("breadcrumbHome")}</a>
+                    <Link href="/">{t("breadcrumbHome")}</Link>
                   </BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="hidden sm:inline-flex" />
@@ -160,11 +164,17 @@ export function AppShell({
             </Breadcrumb>
             <h1 className="sr-only">{pageTitle}</h1>
             <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
+              {/* v2.5 M8 — discreet multi-zone clock (local + first extra
+                  zone), hidden below the lg breakpoint so the bar stays
+                  light on small screens. */}
+              <div className="hidden lg:flex">
+                <MultiZoneClock variant="compact" />
+              </div>
               <Button
                 variant="ghost"
                 size="sm"
                 className="gap-2 text-muted-foreground hidden sm:inline-flex"
-                onClick={() => navigate("#/focus")}
+                onClick={() => navigate("/focus")}
                 aria-label={t("focus")}
                 title={t("focusHint")}
               >
@@ -179,7 +189,7 @@ export function AppShell({
               >
                 <Search className="h-4 w-4" aria-hidden="true" />
                 <span className="hidden text-xs sm:inline">{t("search")}</span>
-                <span className="sr-only">— {t("openCommandMenu")}</span>
+                <span className="sr-only">- {t("openCommandMenu")}</span>
                 <kbd className="hidden rounded border bg-muted px-1.5 font-mono text-[10px] sm:inline" aria-hidden="true">
                   ⌘K
                 </kbd>
@@ -202,30 +212,30 @@ export function AppShell({
         <footer className="mt-auto border-t bg-background">
           <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-1.5 px-4 py-3.5 text-xs text-muted-foreground sm:flex-row sm:px-6">
             <p>
-              <span className="font-medium text-foreground">TradeJournal</span>{" "}
+              <span className="font-medium text-foreground">Promethe</span>{" "}
               {t("footerLeft")}
             </p>
             <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-              <a
-                href="#/legal/mentions"
+              <Link
+                href="/legal/terms"
                 className="underline-offset-4 hover:text-foreground hover:underline"
               >
                 {t("legalMentions")}
-              </a>
+              </Link>
               <span aria-hidden="true">·</span>
-              <a
-                href="#/legal/confidentialite"
+              <Link
+                href="/legal/privacy"
                 className="underline-offset-4 hover:text-foreground hover:underline"
               >
                 {t("legalPrivacy")}
-              </a>
+              </Link>
               <span aria-hidden="true">·</span>
-              <a
-                href="#/legal/cookies"
+              <Link
+                href="/legal/cookies"
                 className="underline-offset-4 hover:text-foreground hover:underline"
               >
                 {t("legalCookies")}
-              </a>
+              </Link>
               <span aria-hidden="true" className="hidden sm:inline">·</span>
               <p className="tabular-nums">{t("footerRight")}</p>
             </div>
@@ -234,6 +244,8 @@ export function AppShell({
       </SidebarInset>
 
       <CommandMenu open={commandOpen} onOpenChange={setCommandOpen} />
-    </SidebarProvider>
+      </SidebarProvider>
+      </ShortcutsProvider>
+    </TourProvider>
   );
 }

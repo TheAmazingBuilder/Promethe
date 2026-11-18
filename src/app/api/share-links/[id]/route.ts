@@ -15,7 +15,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     const ok = await revokeShareLink(session.user.id, id);
     if (!ok) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Lien de partage introuvable." },
+        { error: "NOT_FOUND", message: "Share link not found." },
         { status: 404 }
       );
     }

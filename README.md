@@ -1,4 +1,4 @@
-# TradeJournal — Journal de trading & analytique de stratégies
+# Promethe — Journal de trading & analytique de stratégies
 
 Application web multi-utilisateur de journal de trading, conçue pour un trader
 principal actif sur **XAUUSD (or)** et **Forex** : pips, points, lots, tailles de
@@ -73,7 +73,7 @@ Form, TanStack Table, date-fns.
   `tj_locale` au premier rendu (pas de flash, `<html lang>` correct), puis le
   `I18nProvider` côté client bascule **instantanément** (les deux catalogues
   sont embarqués) et persiste vers le cookie + `Profile.locale` (best-effort
-  `PATCH /api/profile` ; l'inscription transmet la langue courante).
+  `PATCH /api/v1/profile` ; l'inscription transmet la langue courante).
 - **Synchronisation cross-device** : à la connexion, le cookie est aligné sur
   `Profile.locale`.
 - **Commutateurs** : section « Langue » dans Réglages (persistée) + toggle
@@ -271,7 +271,7 @@ Compte démo : `demo@tradejournal.app` / `demo1234`.
     `{ rule, tone, params, weight }` — les paramètres bruts sont formatés
     par la vue (monnaie, %, R, libellés i18n), jamais de texte construit
     côté serveur.
-- **API** `GET /api/analytics` (`/src/server/analytics.ts`) : filtres
+- **API** `GET /api/v1/analytics` (`/src/server/analytics.ts`) : filtres
   `period` (30 j / 90 j / année / tout, défaut 30 j) et `account`
   (optionnel, vérifié contre les comptes de l'utilisateur — fallback
   silencieux vers « tous »). Weekday/heure/date locale calculés côté
@@ -455,7 +455,7 @@ v1/v2, documentées dans le tableau en tête de README) :
   scopable par connexion).
 - **Statuts** : PENDING / ACTIVE / STALE (30 min en semaine, 72 h le
   week-end FX — jamais d'alerte le week-end) / MISMATCH / REVOKED ; sweep
-  à l'ouverture de l'app (`/api/broker-sync/overview`) + notification
+  à l'ouverture de l'app (`/api/v1/broker-sync/overview`) + notification
   SYNC_STALE in-app (service de notification minimal v3).
 - **EAs** : `ea/MT5/TradeJournalSync.mq5` (OnTradeTransaction + OnTimer +
   outbox persistant FILE_COMMON + backoff exponentiel + MFE/MAE + backfill
@@ -568,7 +568,7 @@ un message actionnable — aucun import silencieux de données erronées.
   tables). Invalide/expiré/révoqué/limite → **même page générique** (aucun
   signal d'existence pour un sondeur). Rate-limit par hash de jeton
   (240/h) et par IP hachée (120/h) — jamais d'IP brute stockée.
-- **Proxy média public** (`/api/public/media/[token]/[screenshotId]`) : les
+- **Proxy média public** (`/api/v1/public/media/[token]/[screenshotId]`) : les
   captures passent par le jeton — chaque `<img>` re-valide le lien, donc
   **révoquer le lien tue instantanément les captures partagées** (vérifié).
   La politique `hideScreenshots` et le mode SNAPSHOT (captures figées à la
@@ -632,7 +632,7 @@ un message actionnable — aucun import silencieux de données erronées.
   des montants), `!canViewJournal` → `hideNotes` + `hidePsychology`,
   `!canViewScreenshots` → captures absentes. Les heures exactes restent
   visibles (un mentor n'est pas le web public). Les captures passent par
-  `/api/mentor/{ownerId}/media/{id}` qui re-valide l'accès, la permission
+  `/api/v1/mentor/{ownerId}/media/{id}` qui re-valide l'accès, la permission
   ET le scope du trade à CHAQUE requête — révoquer tue les images.
 - **Commentaires & mentions** (`/src/server/comments.ts`) : fil sur la
   fiche trade (vue propriétaire ET mentor), markdown restreint rendu par
@@ -650,7 +650,7 @@ un message actionnable — aucun import silencieux de données erronées.
   liens profonds selon le rôle (`#/trades/{id}` vs `#/mentor/{ownerId}/…`).
 - **Read-states & badges** : `CommentReadState` par utilisateur/trade —
   ouvrir le fil le marque lu ; badge non-lus côté propriétaire
-  (`/api/comments/unread`, borné aux 500 trades / 1000 commentaires
+  (`/api/v1/comments/unread`, borné aux 500 trades / 1000 commentaires
   récents) et par mentee (200 trades) ; surlignage des commentaires plus
   récents que la dernière lecture.
 - **UI** : `#/reglages/mentors` (handle + nom public, invitation avec
@@ -706,7 +706,7 @@ un message actionnable — aucun import silencieux de données erronées.
   (broker/partages/invitations) ni d'ids de session vivants. Décimaux
   sérialisés en chaînes exactes, dates en ISO. Cooldown 24 h (bucket DB
   clé HMAC), `DataExportLog` (FULL, taille, version de schéma).
-  `GET /api/account/export` renvoie le ZIP, `/history` l'historique.
+  `GET /api/v1/account/export` renvoie le ZIP, `/history` l'historique.
 - **Suppression de compte (art. 17)** (`/src/server/account-deletion.ts`) :
   planification après **ré-authentification par mot de passe** (scrypt
   verify — une session détournée ne peut pas programmer l'irréversible),
@@ -740,7 +740,7 @@ un message actionnable — aucun import silencieux de données erronées.
   `#/legal/cookies`) : rendues **même déconnecté** (AppRoot route vers la vue
   standalone au lieu de l'écran d'auth — pas de mur de connexion pour
   l'information légale, art. 12), identité éditable via `LEGAL_*`
-  (`/api/legal` public, fallbacks neutres — la page rend toujours), contenu
+  (`/api/v1/legal` public, fallbacks neutres — la page rend toujours), contenu
   structuré i18n FR/EN : responsable, données collectées (dont la politique
   IP : jamais d'IP en clair, HMAC + pepper), bases légales, durées de
   conservation alignées sur le cron, droits + modalités d'exercice in-app,
@@ -810,10 +810,10 @@ un message actionnable — aucun import silencieux de données erronées.
     transaction réécrit toutes les lignes `TradeRuleViolation`.
   - `note` = JSON machine-readable `{ kind, measured, limit }` — l'i18n
     se fait à l'affichage.
-- **API** : `GET/POST /api/goals`, `PATCH/DELETE /api/goals/[id]`,
-  `GET/POST /api/rules`, `PATCH/DELETE /api/rules/[id]` (ré-évaluation
-  en cascade), `GET /api/rules/violations?days=30` (plafonné à 100),
-  `GET /api/trades/[id]/violations`, `GET /api/trades/export` (CSV de la
+- **API** : `GET/POST /api/v1/goals`, `PATCH/DELETE /api/v1/goals/[id]`,
+  `GET/POST /api/v1/rules`, `PATCH/DELETE /api/v1/rules/[id]` (ré-évaluation
+  en cascade), `GET /api/v1/rules/violations?days=30` (plafonné à 100),
+  `GET /api/v1/trades/[id]/violations`, `GET /api/v1/trades/export` (CSV de la
   liste FILTRÉE — même traduction filtres → where que la liste ;
   `?lang=fr|en` pour les en-têtes localisés, BOM UTF-8 + CRLF pour
   Excel, plafond 10 000 lignes + en-tête `X-Trades-Truncated`).
@@ -853,11 +853,11 @@ un message actionnable — aucun import silencieux de données erronées.
   (associations en cascade) ; presets globaux listés readonly.
 - **Éditeur de profil (réglages)** — nom affiché, fuseau horaire (liste
   IANA courante, la valeur actuelle toujours proposée), devise de base ;
-  `PATCH /api/profile` puis rafraîchissement de la session globale (les
+  `PATCH /api/v1/profile` puis rafraîchissement de la session globale (les
   jours locaux calendrier/journal/règles suivent immédiatement).
-- **APIs** : `PATCH/DELETE /api/tags/[id]`, `GET /api/instruments`
-  (presets + customs du caller, auth optionnelle), `POST /api/instruments`,
-  `PATCH/DELETE /api/instruments/[id]` ; `isPreset` exposé sur les DTOs
+- **APIs** : `PATCH/DELETE /api/v1/tags/[id]`, `GET /api/v1/instruments`
+  (presets + customs du caller, auth optionnelle), `POST /api/v1/instruments`,
+  `PATCH/DELETE /api/v1/instruments/[id]` ; `isPreset` exposé sur les DTOs
   tags et instruments ; erreurs typées `INSTRUMENT_DUPLICATE`,
   `INSTRUMENT_PIP_INVALID`, `INSTRUMENT_HAS_TRADES`.
 - **i18n FR/EN complet** (`accountsView`, `instrumentsView`, `tagsView`,
@@ -875,7 +875,7 @@ un message actionnable — aucun import silencieux de données erronées.
    puis `bun run db:migrate` (les `Decimal` deviennent `decimal(65,30)`,
    les listes JSON restent des `String`). ⚠️ **Pause du projet Supabase
    après ~7 jours d'inactivité** (plan gratuit) : prévoir un ping
-   hebdomadaire (cron `GET /api/legal` ou uptime monitor) ou accepter le
+   hebdomadaire (cron `GET /api/v1/legal` ou uptime monitor) ou accepter le
    cold-start ~30 s.
 2. **Vercel (framework Next.js)** — importer le repo, ajouter
    `DATABASE_URL` + les variables de session (voir `.env.example`), déployer.
@@ -1021,7 +1021,7 @@ valides, tailles dans les bornes), anti-couleurs-codées-en-dur, plus les
 - Engines purs `/src/lib/charts/` : `builder.ts` (Phase 1), `price.ts`,
   `replay.ts` (Phases 3-4), `benchmark.ts`, `yearGrid.ts` (Phase 5),
   heatmap (Phase 2) — tous testés unitairement.
-- `/api/charts/*` : `data` (payload builder), `saved` CRUD ; annotations et
+- `/api/v1/charts/*` : `data` (payload builder), `saved` CRUD ; annotations et
   benchmarks dans leurs phases.
 - Route hash `#/analytics/charts` (+ `heatmaps`, `annotations` à venir),
   entrée de nav « Chart builder », deep-link depuis #/analytics.
@@ -1030,7 +1030,7 @@ valides, tailles dans les bornes), anti-couleurs-codées-en-dur, plus les
 
 ### Decisions (Phase 1 — builder)
 
-- **Payload builder** : `GET /api/charts/data` renvoie les trades clôturés
+- **Payload builder** : `GET /api/v1/charts/data` renvoie les trades clôturés
   filtrés (cap 5000 + flag `truncated`), dimensions locales précalculées,
   MFE/MAE convertis en R côté serveur (`excursionR`). Le moteur pur tourne
   CÔTÉ CLIENT : chaque changement de config re-render instantanément sans
@@ -1119,12 +1119,12 @@ creuses (n=0 aux intersections existantes).
   un pixel 1×1 et relit les octets RGBA — le round-trip `fillStyle` seul
   conserve la sérialisation lab(). L'AttributionLogoWidget parse textColor
   même désactivé → tout passe par la normalisation.
-- **Fenêtre & ré-échantillonnage** : `GET /api/charts/candles` renvoie les
+- **Fenêtre & ré-échantillonnage** : `GET /api/v1/charts/candles` renvoie les
   lignes au timeframe le plus FIN stocké ≤ celui demandé (cap 6000 barres,
   les dernières de la fenêtre) ; le client ré-échantillonne via `resample()`
   (buckets UTC absolus — pas d'ambiguïté DST ; trous/week-end préservés).
   `storedTimeframes` est renvoyé pour l'aide à la sélection.
-- **Import CSV** : `POST /api/charts/candles/import` — papaparse côté serveur,
+- **Import CSV** : `POST /api/v1/charts/candles/import` — papaparse côté serveur,
   colonne time flexible (unix s/ms, « AAAA-MM-JJ HH:mm », ISO), fuseau
   DÉCLARÉ (IANA ou ±HH:MM) converti en UTC avec offset recalculé PAR LIGNE
   (DST), dédoublonnage sur (instrument, tf, openTime) — `skipDuplicates`
@@ -1220,7 +1220,7 @@ candles vides → erreur.
   intensité 0.25 + 0.75·ratio^0.6).
 - Serveur `getYearDays` : agrégats journaliers de l'année (jours locaux à la
   clôture, même convention que la vue mois) + journal rempli + score de
-  discipline. `GET /api/calendar/year?year&account`.
+  discipline. `GET /api/v1/calendar/year?year&account`.
 - UI : toggle Mois/Année dans #/calendrier, sélecteur d'année (6 ans),
   sélecteur de métrique, SVG custom (cells cliquables → #/journal/{date},
   navigation clavier flèches + Entrée, focus visible), labels de mois
@@ -1266,7 +1266,7 @@ avertissement petit échantillon.
 - `register-chart-widgets.ts` enregistre les trois charts via le point
   d'extension Module 1 `registerWidget()` — le cœur du dashboard n'est pas
   touché. Tous SELF-FETCHING (`hasLoader: false`) : ils tirent leurs données
-  de `/api/charts/*` et `/api/calendar/year` via TanStack Query.
+  de `/api/v1/charts/*` et `/api/v1/calendar/year` via TanStack Query.
 - **saved-chart** (analysis, requis `savedCharts` — le catalogue désactive
   le bouton tant qu'aucun chart n'est enregistré) : valide le config stocké
   avec `chartConfigSchema` (double garde avec l'engine), honore le contexte
@@ -1451,7 +1451,7 @@ target/badging + dictée · 8. Polish (i18n, a11y, perfs).
   BLUR est purement CSS (`data-privacy="blur"` sur `<html>` + `.sensitive`).
 - **Persistance double (§2)** : localStorage par appareil (application
   instantanée, pre-paint script) + ligne `UserDisplayPreference` par utilisateur
-  (sync debounced via `PUT /api/display-preferences`, patches partiels — les
+  (sync debounced via `PUT /api/v1/display-preferences`, patches partiels — les
   slices privacy / a11y / time ne s'écrasent pas entre elles). À la première
   utilisation sur un appareil la valeur serveur est adoptée ; ensuite
   l'appareil gagne (override par appareil).

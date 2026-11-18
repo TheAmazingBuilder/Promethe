@@ -66,7 +66,7 @@ export function PeriodCompareWidget({
   const label = t(`kpi.${metric === "tradeCount" ? "tradeCount" : metric}`);
 
   const formatMetric = (raw: string | null): React.ReactNode => {
-    if (raw == null || !toD(raw).isFinite()) return "—";
+    if (raw == null || !toD(raw).isFinite()) return "-";
     if (current.kind === "money")
       return <Money signed value={raw} currency={currency} />;
     if (current.kind === "pct") return fmt.pct(raw);

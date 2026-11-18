@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * v2.5 Module 2 — cross-heatmaps page (#/analytics/heatmaps, spec §4.4).
+ * v2.5 Module 2 — cross-heatmaps page (/analytics/heatmaps, spec §4.4).
  *
  * Preset dimension pairs (day × hour, session × instrument, strategy ×
  * emotion, weekday × session, instrument × strategy, regime × strategy) plus
@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/ui/page-header";
 import { navigate } from "@/lib/router";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import {
@@ -55,7 +56,7 @@ import {
 } from "@/lib/charts/export-png";
 import type { XDimension } from "@/lib/validations/charts";
 import { HeatmapMatrix } from "./heatmap-matrix";
-import { formatCategoryKey, yMeasureFormat } from "./chart-preview";
+import { formatCategoryKey, yMeasureFormat } from "./chart-format";
 
 /** Categorical dimensions usable on a heatmap axis. */
 const HEATMAP_DIMS = X_DIMENSION_DEFS.filter(
@@ -141,7 +142,7 @@ export function HeatmapsView() {
     if (unfilterable.length > 0) {
       toast({ description: t("preview.drillNotFilterable") });
     }
-    navigate(parts.length > 0 ? `#/trades?${parts.join("&")}` : "#/trades");
+    navigate(parts.length > 0 ? `/trades?${parts.join("&")}` : "/trades");
   };
 
   const exportCsv = () => {
@@ -159,23 +160,23 @@ export function HeatmapsView() {
   return (
     <div className="space-y-6">
       {/* Header + sub-nav */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{tHeat("title")}</h1>
-          <p className="text-sm text-muted-foreground">{tHeat("description")}</p>
-        </div>
-        <div className="flex gap-1" role="tablist" aria-label={t("tabs.charts")}>
-          <Button variant="outline" size="sm" onClick={() => navigate("#/analytics")}>
+      <PageHeader
+        title={tHeat("title")}
+        description={tHeat("description")}
+        actions={
+          <div className="flex gap-1" role="tablist" aria-label={t("tabs.charts")}>
+          <Button variant="outline" size="sm" onClick={() => navigate("/analytics")}>
             {t("tabs.overview")}
           </Button>
-          <Button variant="outline" size="sm" onClick={() => navigate("#/analytics/charts")}>
+          <Button variant="outline" size="sm" onClick={() => navigate("/analytics/charts")}>
             {t("tabs.charts")}
           </Button>
           <Button variant="secondary" size="sm" aria-current="page">
             {t("tabs.heatmaps")}
           </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* Config */}
       <Card>
@@ -322,7 +323,7 @@ export function HeatmapsView() {
         <CardHeader className="flex-row items-start justify-between space-y-0">
           <div className="space-y-1.5">
             <CardTitle className="text-base">
-              {t(`dimensions.${rowDim}` as never)} × {t(`dimensions.${colDim}` as never)} —{" "}
+              {t(`dimensions.${rowDim}` as never)} × {t(`dimensions.${colDim}` as never)} -{" "}
               {t(`measures.${metric === "expectancyR" ? "expectancy" : metric === "avgR" ? "rMultiple" : metric}` as never)}
             </CardTitle>
             <CardDescription>{tHeat("matrixDesc", { minSample })}</CardDescription>
@@ -425,7 +426,7 @@ function HeatmapTable({
   tHeat: (k: string) => string;
 }) {
   const fmt = (v: number | null) => {
-    if (v == null) return "—";
+    if (v == null) return "-";
     switch (format) {
       case "CURRENCY":
         return new Intl.NumberFormat(locale, {
@@ -472,7 +473,7 @@ function HeatmapTable({
                         : "text-loss"
                   }`}
                 >
-                  {c.n === 0 ? "—" : `${fmt(c.value)} (${c.n}${c.lowSample ? "⚠" : ""})`}
+                  {c.n === 0 ? "-" : `${fmt(c.value)} (${c.n}${c.lowSample ? "⚠" : ""})`}
                 </td>
               ))}
               <td className="px-3 py-1.5 text-right font-mono">

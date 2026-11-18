@@ -5,7 +5,7 @@
  * retention: list by entity, search, single/bulk restore, permanent
  * delete, empty trash, days-remaining badge.
  *
- * Data: GET /api/trash · POST /api/trash (restore | delete | empty).
+ * Data: GET /api/v1/trash · POST /api/v1/trash (restore | delete | empty).
  */
 import * as React from "react";
 import {
@@ -28,6 +28,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
@@ -90,7 +91,7 @@ export function TrashView() {
     queryKey: ["trash", entity, debounced],
     queryFn: () =>
       apiFetch<TrashListResponse>(
-        `/api/trash?entity=${entity === "ALL" ? "" : entity}${debounced ? `&search=${encodeURIComponent(debounced)}` : ""}`
+        `/api/v1/trash?entity=${entity === "ALL" ? "" : entity}${debounced ? `&search=${encodeURIComponent(debounced)}` : ""}`
       ),
   });
 
@@ -107,7 +108,7 @@ export function TrashView() {
     setBusy(true);
     try {
       const result = await apiFetch<{ restored?: number; deleted?: number }>(
-        "/api/trash",
+        "/api/v1/trash",
         { method: "POST", body: JSON.stringify(body) }
       );
       toast({
@@ -150,28 +151,31 @@ export function TrashView() {
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-semibold">
+      <PageHeader
+        title={
+          <span className="inline-flex items-center gap-2">
             <Trash2 className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
             {t("title")}
-          </h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            {t("description")}
-          </p>
-        </div>
-        {counts.total > 0 && (
-          <Button
-            variant="outline"
-            className="shrink-0 text-destructive hover:text-destructive"
-            onClick={() => setConfirmEmpty(true)}
-            disabled={busy}
-          >
+          </span>
+        }
+        description={t("description")}
+        descriptionClassName="max-w-2xl"
+        actions={
+          <>
+            {counts.total > 0 && (
+              <Button
+                variant="outline"
+                className="shrink-0 text-destructive hover:text-destructive"
+                onClick={() => setConfirmEmpty(true)}
+                disabled={busy}
+              >
             <Trash2 className="h-4 w-4" aria-hidden="true" />
             {t("emptyButton")}
-          </Button>
-        )}
-      </div>
+            </Button>
+            )}
+          </>
+        }
+      />
 
       {/* ── Filters: entity chips + search ── */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">

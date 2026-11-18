@@ -28,7 +28,7 @@ import type {
   CustomMetricPatch,
 } from "@/lib/validations/dashboard";
 
-/** Spec §4.6 — max saved metrics per user. */
+/** Spec §4.6 - max saved metrics per user. */
 export const MAX_CUSTOM_METRICS = 50;
 
 type MetricRow = Prisma.CustomMetricGetPayload<Record<string, never>>;
@@ -160,7 +160,7 @@ const PREVIEW_INCLUDE = {
 
 type PreviewTradeRow = Prisma.TradeGetPayload<{ include: typeof PREVIEW_INCLUDE }>;
 
-/** Local calendar parts in `timezone` — null on invalid TZ (same as dashboard-data). */
+/** Local calendar parts in `timezone` - null on invalid TZ (same as dashboard-data). */
 function localParts(
   date: Date,
   timezone: string

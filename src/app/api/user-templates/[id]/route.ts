@@ -3,7 +3,7 @@ import { requireUser } from "@/server/session";
 import { apiError } from "@/server/api";
 import { deleteUserTemplate } from "@/server/dashboards";
 
-/** DELETE /api/user-templates/[id] — remove a saved blueprint. */
+/** DELETE /api/user-templates/[id] - remove a saved blueprint. */
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function DELETE(_req: Request, ctx: Ctx) {
@@ -13,7 +13,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     const ok = await deleteUserTemplate(session.user.id, id);
     if (!ok) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Modèle introuvable." },
+        { error: "NOT_FOUND", message: "Template not found." },
         { status: 404 }
       );
     }

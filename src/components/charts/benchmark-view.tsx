@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * v2.5 Module 2 — benchmark comparison page (#/analytics/benchmark, spec §4.5).
+ * v2.5 Module 2 — benchmark comparison page (/analytics/benchmark, spec §4.5).
  *
  * Overlays the realized equity curve against a benchmark (fixed % per period
  * compounding/linear, fixed R per period, or an imported custom CSV series),
@@ -58,6 +58,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { PageHeader } from "@/components/ui/page-header";
 import { Money } from "@/components/privacy/money";
 import { useA11yPrefs } from "@/components/a11y/a11y-provider";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
@@ -111,20 +112,20 @@ export function BenchmarkView() {
   const analytics = useQuery({
     queryKey: ["analytics", "all", "all"],
     queryFn: async () =>
-      apiFetch<AnalyticsPayload>("/api/analytics?period=all"),
+      apiFetch<AnalyticsPayload>("/api/v1/analytics?period=all"),
     staleTime: 60 * 1000,
   });
   const benchmarks = useQuery({
     queryKey: ["charts", "benchmarks"],
     queryFn: async () =>
       (await apiFetch<{ benchmarks: BenchmarkProfileDTO[] }>(
-        "/api/charts/benchmarks"
+        "/api/v1/charts/benchmarks"
       )).benchmarks,
     staleTime: 60 * 1000,
   });
   const deleteBenchmark = useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch(`/api/charts/benchmarks/${id}`, { method: "DELETE" });
+      await apiFetch(`/api/v1/charts/benchmarks/${id}`, { method: "DELETE" });
     },
     onSuccess: () => {
       setSelectedId("default");
@@ -218,13 +219,12 @@ export function BenchmarkView() {
   return (
     <div className="space-y-6">
       {/* Header + sub-nav */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
-          <p className="text-sm text-muted-foreground">{t("description")}</p>
-        </div>
-        <div className="flex gap-1" role="tablist">
-          <Button variant="outline" size="sm" onClick={() => navigate("#/analytics")}>
+      <PageHeader
+        title={t("title")}
+        description={t("description")}
+        actions={
+          <div className="flex gap-1" role="tablist">
+          <Button variant="outline" size="sm" onClick={() => navigate("/analytics")}>
             {tCommon("back")}
           </Button>
           <Button
@@ -235,8 +235,9 @@ export function BenchmarkView() {
           >
             <RefreshCw aria-hidden="true" />
           </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* Profile selector */}
       <Card>
@@ -358,7 +359,7 @@ export function BenchmarkView() {
                   value={
                     comparison.gapAtEnd != null
                       ? `${comparison.gapAtEnd >= 0 ? "+" : ""}${fmtNum(comparison.gapAtEnd, 1)}`
-                      : "—"
+                      : "-"
                   }
                   tone={
                     comparison.gapAtEnd == null
@@ -373,7 +374,7 @@ export function BenchmarkView() {
                   value={
                     comparison.beatRate != null
                       ? fmt.pct(comparison.beatRate, 0)
-                      : "—"
+                      : "-"
                   }
                 />
                 <StatCell
@@ -562,7 +563,7 @@ function CreateBenchmarkDialog({
               .filter((p) => /^\d{4}-\d{2}-\d{2}$/.test(p.date) && Number.isFinite(p.value))
           : undefined;
       const res = await apiFetch<{ benchmark: BenchmarkProfileDTO }>(
-        "/api/charts/benchmarks",
+        "/api/v1/charts/benchmarks",
         {
           method: "POST",
           body: JSON.stringify({

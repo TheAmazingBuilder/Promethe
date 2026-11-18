@@ -21,7 +21,7 @@ import { zodFieldErrors } from "@/lib/validations/shared";
 
 type Ctx = { params: Promise<{ token: string }> };
 
-/** GET — preview the invitation (owner + permissions) without acting on it. */
+/** GET - preview the invitation (owner + permissions) without acting on it. */
 export async function GET(_req: Request, ctx: Ctx) {
   try {
     const session = await requireUser();
@@ -43,7 +43,7 @@ export async function POST(req: Request, ctx: Ctx) {
       return NextResponse.json(
         {
           error: "VALIDATION",
-          message: "Action invalide.",
+          message: "Invalid action.",
           fieldErrors: zodFieldErrors(parsed.error),
         },
         { status: 422 }

@@ -5,7 +5,7 @@
  * challenge fields (daily loss / total drawdown %, profit target,
  * STATIC | TRAILING, start date). Accounts with trades are never deleted
  * (409 TRADES_ON_ACCOUNT) — deactivate instead.
- * Data: GET/POST /api/accounts · PATCH/DELETE /api/accounts/[id].
+ * Data: GET/POST /api/v1/accounts · PATCH/DELETE /api/v1/accounts/[id].
  */
 import * as React from "react";
 import { Pencil, Plus, Trash2, Wallet } from "lucide-react";
@@ -29,6 +29,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -39,9 +40,11 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import {
   useAccounts,
+  useAccountsHealth,
   useCreateAccount,
   useDeleteAccount,
   useUpdateAccount,
@@ -49,8 +52,14 @@ import {
 } from "@/hooks/use-trading";
 import { ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
+import { COMMON_TIMEZONES } from "@/lib/time/zones";
+import {
+  brokerClock,
+  brokerZoneLabel,
+  type BrokerTimeConfig,
+} from "@/lib/time/broker-time";
 import { Money, Sensitive } from "@/components/privacy/money";
-import type { AccountDTO } from "@/lib/trading/dto";
+import type { AccountDTO, AccountHealthDTO } from "@/lib/trading/dto";
 
 const CURRENCIES = ["USD", "EUR", "GBP", "CAD", "CHF", "AUD", "NZD", "JPY"] as const;
 const TYPES = ["LIVE", "DEMO", "PROP", "BACKTEST"] as const;
@@ -68,6 +77,9 @@ const EMPTY: AccountInputBody = {
   profitTarget: null,
   drawdownType: null,
   startDate: null,
+  serverTimezoneMode: "IANA",
+  serverTimezone: null,
+  serverFixedOffsetMinutes: null,
 };
 
 function toForm(a: AccountDTO): AccountInputBody {
@@ -91,6 +103,13 @@ function toForm(a: AccountDTO): AccountInputBody {
         ? a.drawdownType
         : null,
     startDate: a.startDate ? a.startDate.slice(0, 10) : null,
+    serverTimezoneMode:
+      a.serverTimezoneMode === "FIXED_OFFSET" ||
+      a.serverTimezoneMode === "NY_CLOSE"
+        ? a.serverTimezoneMode
+        : "IANA",
+    serverTimezone: a.serverTimezone,
+    serverFixedOffsetMinutes: a.serverFixedOffsetMinutes,
   };
 }
 
@@ -142,6 +161,16 @@ function AccountEditor({
           form.type === "PROP" && form.startDate
             ? form.startDate
             : null,
+        // Broker server clock: only the fields of the chosen mode are kept.
+        serverTimezoneMode: form.serverTimezoneMode ?? "IANA",
+        serverTimezone:
+          form.serverTimezoneMode === "IANA"
+            ? (form.serverTimezone ?? "UTC")
+            : null,
+        serverFixedOffsetMinutes:
+          form.serverTimezoneMode === "FIXED_OFFSET"
+            ? form.serverFixedOffsetMinutes
+            : null,
       };
       if (editing) {
         await update.mutateAsync({ id: editing.id, patch: payload });
@@ -167,6 +196,25 @@ function AccountEditor({
   };
 
   const isProp = form.type === "PROP";
+
+  // Broker server clock preview (recomputed on every render — the dialog
+  // re-renders on each keystroke, so the preview stays close to live).
+  const serverConfig: BrokerTimeConfig = {
+    mode: form.serverTimezoneMode ?? "IANA",
+    timezone: form.serverTimezone,
+    fixedOffsetMinutes: form.serverFixedOffsetMinutes,
+  };
+  const serverNow = brokerClock(serverConfig, new Date());
+  const serverLabel = brokerZoneLabel(serverConfig);
+  const serverTzOptions =
+    form.serverTimezone != null &&
+    !COMMON_TIMEZONES.includes(form.serverTimezone)
+      ? [form.serverTimezone, ...COMMON_TIMEZONES]
+      : COMMON_TIMEZONES;
+  const offsetHours =
+    form.serverFixedOffsetMinutes == null
+      ? ""
+      : String(form.serverFixedOffsetMinutes / 60);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -280,6 +328,89 @@ function AccountEditor({
             </div>
           </div>
 
+          {/* ── Broker server time (v2.5 M8) ── */}
+          <div className="space-y-3 rounded-lg border border-dashed p-3">
+            <p className="text-xs font-semibold text-muted-foreground">
+              {t("serverTimeSection")}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t("serverTimeHint")}
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="acc-server-mode">{t("serverTimeMode")}</Label>
+                <Select
+                  value={form.serverTimezoneMode ?? "IANA"}
+                  onValueChange={(v) =>
+                    set(
+                      "serverTimezoneMode",
+                      v as NonNullable<AccountInputBody["serverTimezoneMode"]>
+                    )
+                  }
+                >
+                  <SelectTrigger id="acc-server-mode">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="IANA">{t("serverTimeModeIana")}</SelectItem>
+                    <SelectItem value="FIXED_OFFSET">{t("serverTimeModeFixed")}</SelectItem>
+                    <SelectItem value="NY_CLOSE">{t("serverTimeModeNyClose")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.serverTimezoneMode === "IANA" ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="acc-server-tz">{t("serverTimeZone")}</Label>
+                  <Select
+                    value={form.serverTimezone ?? "UTC"}
+                    onValueChange={(v) => set("serverTimezone", v)}
+                  >
+                    <SelectTrigger id="acc-server-tz">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {serverTzOptions.map((tz) => (
+                        <SelectItem key={tz} value={tz}>
+                          {tz}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : form.serverTimezoneMode === "FIXED_OFFSET" ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="acc-server-offset">{t("serverTimeOffset")}</Label>
+                  <Input
+                    id="acc-server-offset"
+                    inputMode="decimal"
+                    value={offsetHours}
+                    onChange={(e) => {
+                      const raw = e.target.value.trim().replace(",", ".");
+                      if (raw === "" || raw === "+" || raw === "-") {
+                        set("serverFixedOffsetMinutes", null);
+                        return;
+                      }
+                      const hours = Number(raw);
+                      if (!Number.isFinite(hours)) return;
+                      const minutes = Math.round(hours * 60);
+                      set(
+                        "serverFixedOffsetMinutes",
+                        Math.max(-720, Math.min(840, minutes))
+                      );
+                    }}
+                    placeholder="+2"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    {t("serverTimeOffsetHint")}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+            <p className="text-xs text-muted-foreground tabular-nums" role="status">
+              {t("serverTimeNow", { time: serverNow, zone: serverLabel })}
+            </p>
+          </div>
+
           {isProp && (
             <div className="space-y-3 rounded-lg border border-dashed p-3">
               <p className="text-xs font-semibold text-muted-foreground">
@@ -345,14 +476,13 @@ function AccountEditor({
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="acc-start">{t("startDate")}</Label>
-                  <Input
+                  <DateField
                     id="acc-start"
-                    type="date"
                     value={form.startDate ?? ""}
-                    onChange={(e) =>
+                    onChange={(v) =>
                       set(
                         "startDate",
-                        e.target.value.trim() === "" ? null : e.target.value
+                        v.trim() === "" ? null : v
                       )
                     }
                   />
@@ -394,17 +524,69 @@ function typeBadgeClass(type: string): string {
   }
 }
 
+/**
+ * Account health badge (MRT wave 2, chantier 4) — the status comes from
+ * GET /api/v1/accounts/health, computed from the real closed trades
+ * (see src/lib/accounts/health.ts for the thresholds). An account with
+ * no closed trade never reads as Growing: it gets the neutral outline
+ * badge instead.
+ */
+function HealthBadge({ record }: { record: AccountHealthDTO | undefined }) {
+  const t = useTranslations("accountHealth");
+  if (!record) return null;
+
+  const variant =
+    record.status === "growing"
+      ? "default"
+      : record.status === "stable"
+        ? "secondary"
+        : record.status === "in-drawdown"
+          ? "destructive"
+          : "outline";
+  const label =
+    record.status === "growing"
+      ? t("growing")
+      : record.status === "stable"
+        ? t("stable")
+        : record.status === "in-drawdown"
+          ? t("inDrawdown")
+          : t("noTrades");
+  const title =
+    record.status === "growing"
+      ? t("hintGrowing")
+      : record.status === "stable"
+        ? t("hintStable")
+        : record.status === "in-drawdown"
+          ? record.drawdownUsagePercent != null
+            ? t("hintDrawdownLimit", {
+                pct: record.drawdownPercent ?? 0,
+                usage: record.drawdownUsagePercent,
+              })
+            : t("hintDrawdown", { pct: record.drawdownPercent ?? 0 })
+          : undefined;
+
+  return (
+    <Badge variant={variant} title={title}>
+      {label}
+    </Badge>
+  );
+}
+
 export function AccountsView() {
   const t = useTranslations("accountsView");
   const tRoot = useTranslations();
   const { toast } = useToast();
   const accounts = useAccounts();
+  const health = useAccountsHealth();
   const del = useDeleteAccount();
 
   const [editorOpen, setEditorOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<AccountDTO | null>(null);
 
   const list = accounts.data ?? [];
+  const healthByAccount = new Map(
+    (health.data ?? []).map((h) => [h.accountId, h])
+  );
 
   const onEdit = (a: AccountDTO) => {
     setEditing(a);
@@ -434,16 +616,16 @@ export function AccountsView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        <Button className="shrink-0" onClick={onCreate}>
+      <PageHeader
+        title={t("title")}
+        description={t("subtitle")}
+        actions={
+          <Button className="shrink-0" onClick={onCreate}>
           <Plus className="h-4 w-4" aria-hidden="true" />
           {t("add")}
-        </Button>
-      </div>
+          </Button>
+        }
+      />
 
       {accounts.isLoading ? (
         <div className="grid gap-4 md:grid-cols-2">
@@ -474,6 +656,7 @@ export function AccountsView() {
                   <Badge className={typeBadgeClass(a.type)}>
                     {t(`type.${a.type}`)}
                   </Badge>
+                  <HealthBadge record={healthByAccount.get(a.id)} />
                   {!a.isActive && (
                     <Badge variant="secondary">{t("inactiveBadge")}</Badge>
                   )}
@@ -521,7 +704,7 @@ export function AccountsView() {
                       <dd className="font-medium tabular-nums">
                         {a.maxDailyLossPercent
                           ? `−${a.maxDailyLossPercent}%`
-                          : "—"}
+                          : "-"}
                       </dd>
                     </div>
                     <div>
@@ -531,7 +714,7 @@ export function AccountsView() {
                           ? `−${a.maxTotalDrawdownPercent}%${
                               a.drawdownType === "TRAILING" ? " ↗" : ""
                             }`
-                          : "—"}
+                          : "-"}
                       </dd>
                     </div>
                     <div>
@@ -542,14 +725,14 @@ export function AccountsView() {
                         {a.profitTarget ? (
                           <Money value={a.profitTarget} currency={a.currency} />
                         ) : (
-                          "—"
+                          "-"
                         )}
                       </dd>
                     </div>
                     <div>
                       <dt className="text-muted-foreground">{t("propStart")}</dt>
                       <dd className="font-medium tabular-nums">
-                        {a.startDate ? a.startDate.slice(0, 10) : "—"}
+                        {a.startDate ? a.startDate.slice(0, 10) : "-"}
                       </dd>
                     </div>
                   </dl>

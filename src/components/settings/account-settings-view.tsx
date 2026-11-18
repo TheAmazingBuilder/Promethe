@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * v3 Phase 6 — Account, data portability & deletion, #/reglages/compte.
+ * v3 Phase 6 — Account, data portability & deletion, /settings/account.
  *
  * Three cards:
  *  1. Export — full ZIP download (RGPD art. 20), 24 h cooldown, history.
@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PageHeader } from "@/components/ui/page-header";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -72,7 +73,7 @@ interface ConsentRow {
 }
 
 function fmtSize(bytes: number | null): string {
-  if (bytes == null) return "—";
+  if (bytes == null) return "-";
   if (bytes < 1024) return `${bytes} o`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Ko`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
@@ -90,17 +91,17 @@ export function AccountSettingsView() {
   const history = useQuery({
     queryKey: ["account", "export-history"],
     queryFn: () =>
-      apiFetch<{ history: ExportHistoryRow[] }>("/api/account/export/history"),
+      apiFetch<{ history: ExportHistoryRow[] }>("/api/v1/account/export/history"),
   });
 
   const deletion = useQuery({
     queryKey: ["account", "deletion"],
-    queryFn: () => apiFetch<{ state: DeletionState }>("/api/account/deletion"),
+    queryFn: () => apiFetch<{ state: DeletionState }>("/api/v1/account/deletion"),
   });
 
   const consents = useQuery({
     queryKey: ["account", "consents"],
-    queryFn: () => apiFetch<{ consents: ConsentRow[] }>("/api/account/consents"),
+    queryFn: () => apiFetch<{ consents: ConsentRow[] }>("/api/v1/account/consents"),
   });
 
   const refreshDeletion = () => {
@@ -110,7 +111,7 @@ export function AccountSettingsView() {
   // Download via fetch (not <a href>) to surface cooldown errors as toasts.
   const download = useMutation({
     mutationFn: async () => {
-      const res = await fetch("/api/account/export");
+      const res = await fetch("/api/v1/account/export");
       if (res.ok) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
@@ -163,7 +164,7 @@ export function AccountSettingsView() {
 
   const schedule = useMutation({
     mutationFn: (pwd: string) =>
-      apiFetch<{ state: DeletionState }>("/api/account/deletion", {
+      apiFetch<{ state: DeletionState }>("/api/v1/account/deletion", {
         method: "POST",
         body: JSON.stringify({ password: pwd }),
       }),
@@ -190,7 +191,7 @@ export function AccountSettingsView() {
 
   const cancel = useMutation({
     mutationFn: () =>
-      apiFetch<{ state: DeletionState }>("/api/account/deletion", {
+      apiFetch<{ state: DeletionState }>("/api/v1/account/deletion", {
         method: "DELETE",
       }),
     onSuccess: () => {
@@ -223,14 +224,16 @@ export function AccountSettingsView() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-          <ShieldCheck className="h-5 w-5 text-emerald-600" aria-hidden="true" />
-          {t("title")}
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title={
+          <span className="inline-flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-emerald-600" aria-hidden="true" />
+            {t("title")}
+          </span>
+        }
+        description={t("subtitle")}
+      />
 
       {/* ── 1. Data export ─────────────────────────────────────────────── */}
       <Card>

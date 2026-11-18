@@ -46,6 +46,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { useAccounts } from "@/hooks/use-trading";
 import {
@@ -111,7 +112,7 @@ export function ImportView() {
         setProgress({
           phase: "error",
           percent: 0,
-          message: error instanceof Error ? error.message : "Analyse impossible.",
+          message: error instanceof Error ? error.message : "Analysis failed.",
         });
       } finally {
         setParsing(false);
@@ -144,7 +145,7 @@ export function ImportView() {
       setProgress({
         phase: "error",
         percent: 0,
-        message: error instanceof Error ? error.message : "Import impossible.",
+        message: error instanceof Error ? error.message : "Import failed.",
       });
     }
   };
@@ -152,11 +153,8 @@ export function ImportView() {
   const busy = progress.phase === "uploading" || progress.phase === "completing";
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader title={t("title")} description={t("subtitle")} />
 
       {/* Drop zone */}
       <div

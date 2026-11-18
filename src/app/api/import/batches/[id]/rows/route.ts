@@ -17,7 +17,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const parsed = importChunkSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Chunk invalide.", fieldErrors: zodFieldErrors(parsed.error) },
+        { error: "VALIDATION", message: "Invalid chunk.", fieldErrors: zodFieldErrors(parsed.error) },
         { status: 422 }
       );
     }

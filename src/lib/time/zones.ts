@@ -126,7 +126,7 @@ export function nyCloseBrokerOffsetMinutes(instant: Date): number {
   return offsetMinutesOfTz(instant, "America/New_York") + 420;
 }
 
-/** "GMT+3", "GMT−5:30" — human label for a fixed offset in minutes. */
+/** "GMT+3", "GMT−5:30" - human label for a fixed offset in minutes. */
 export function formatOffsetLabel(offsetMinutes: number): string {
   const sign = offsetMinutes < 0 ? "−" : "+";
   const abs = Math.abs(offsetMinutes);
@@ -146,17 +146,15 @@ export type ClockFormat = "12H" | "24H" | "LOCALE";
 
 /**
  * Formats a time-of-day honoring the user's 12H/24H/LOCALE preference.
- * `locale` drives the LOCALE fallback (fr → 24H style, en → 12H style).
+ * English only (Phase 3): the LOCALE fallback is the 12H style.
  */
 export function formatClock(
   hour: number,
   minute: number,
   format: ClockFormat,
-  locale: string
+  _locale: string
 ): string {
-  const use12 =
-    format === "12H" ||
-    (format === "LOCALE" && !locale.toLowerCase().startsWith("fr"));
+  const use12 = format === "12H" || format === "LOCALE";
   if (!use12) {
     return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
   }
@@ -169,3 +167,39 @@ export function formatClock(
 export function offsetLabelOfTz(instant: Date, tz: string): string {
   return formatOffsetLabel(offsetMinutesOfTz(instant, tz));
 }
+
+/**
+ * Common IANA timezones offered in the settings UI (profile timezone,
+ * extra zones, rollover zone). The user's current zone is always offered
+ * in addition when it is not in this list.
+ */
+export const COMMON_TIMEZONES: readonly string[] = [
+  "UTC",
+  "America/Toronto",
+  "America/New_York",
+  "America/Chicago",
+  "America/Vancouver",
+  "America/Los_Angeles",
+  "America/Mexico_City",
+  "America/Sao_Paulo",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Brussels",
+  "Europe/Zurich",
+  "Europe/Frankfurt",
+  "Europe/Madrid",
+  "Europe/Lisbon",
+  "Europe/Amsterdam",
+  "Africa/Casablanca",
+  "Africa/Lagos",
+  "Africa/Johannesburg",
+  "Asia/Dubai",
+  "Asia/Moscow",
+  "Asia/Kolkata",
+  "Asia/Singapore",
+  "Asia/Hong_Kong",
+  "Asia/Shanghai",
+  "Asia/Tokyo",
+  "Australia/Sydney",
+  "Pacific/Auckland",
+];

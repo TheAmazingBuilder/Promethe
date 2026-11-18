@@ -52,7 +52,7 @@ export function UserMenu() {
         <Button
           variant="ghost"
           className="h-9 gap-2 px-2"
-          aria-label={`${t("userMenu")} — ${initials(displayName)} ${displayName}`}
+          aria-label={`${t("userMenu")} - ${initials(displayName)} ${displayName}`}
         >
           <Avatar className="h-7 w-7">
             <AvatarFallback className="bg-emerald-500/15 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
@@ -79,7 +79,7 @@ export function UserMenu() {
           </p>
         </div>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => navigate("#/reglages")}>
+        <DropdownMenuItem onClick={() => navigate("/settings")}>
           <Settings aria-hidden="true" />
           {tRoot("nav.settings")}
         </DropdownMenuItem>

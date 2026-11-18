@@ -3,7 +3,7 @@ import { requireUser } from "@/server/session";
 import { apiError } from "@/server/api";
 import { deleteBenchmark } from "@/server/charts";
 
-/** DELETE /api/charts/benchmarks/[id] — remove (404 when not owned). */
+/** DELETE /api/charts/benchmarks/[id] - remove (404 when not owned). */
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function DELETE(_req: Request, ctx: Ctx) {
@@ -13,7 +13,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     const deleted = await deleteBenchmark(session.user.id, id);
     if (!deleted) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Benchmark introuvable." },
+        { error: "NOT_FOUND", message: "Benchmark not found." },
         { status: 404 }
       );
     }

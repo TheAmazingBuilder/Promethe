@@ -22,7 +22,7 @@ export function cleanText(input: string): string {
 export function parseNumber(raw: string | null | undefined): string | null {
   if (raw === null || raw === undefined) return null;
   let s = cleanText(String(raw)).trim();
-  if (!s || s === "—" || s === "-" || s === "–") return null;
+  if (!s || s === "-" || s === "-" || s === "-") return null;
 
   // Accounting negative: (123.45)
   let negative = false;

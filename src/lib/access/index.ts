@@ -20,7 +20,7 @@ import {
 
 export * from "./types";
 
-/** Full-access owner context — requireUser() wraps this (session-based). */
+/** Full-access owner context - requireUser() wraps this (session-based). */
 export function ownerContext(userId: string): AccessContext {
   return {
     viewerId: userId,
@@ -38,7 +38,7 @@ export function mentorContext(
   scope: AccessScope
 ): AccessContext {
   if (mentorId === ownerId) {
-    throw new AccessDeniedError("Auto-mentorat impossible : utilisez le compte propriétaire.");
+    throw new AccessDeniedError("Self-mentorship is not possible: use the owner account.");
   }
   return {
     viewerId: mentorId,

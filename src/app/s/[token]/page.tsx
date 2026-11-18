@@ -24,12 +24,7 @@ import {
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { clientIpFrom, hashIp, hashToken } from "@/lib/tokens";
 import { MESSAGES } from "@/i18n/dictionaries";
-import {
-  DEFAULT_LOCALE,
-  intlLocale,
-  isAppLocale,
-  type AppLocale,
-} from "@/i18n/config";
+import { DEFAULT_LOCALE, intlLocale, type AppLocale } from "@/i18n/config";
 import type {
   PublicReportPayload,
   PublicSharePayload,
@@ -41,16 +36,11 @@ export const dynamic = "force-dynamic";
 
 type PageProps = {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ lang?: string }>;
 };
 
-// ── locale resolution: explicit ?lang= only (EN default, no cookie) ────────
+// ── English only (Phase 3): no ?lang= parameter, no locale resolution ──────
 
-async function resolveLocale(searchParams: { lang?: string }): Promise<AppLocale> {
-  return isAppLocale(searchParams.lang) ? searchParams.lang : DEFAULT_LOCALE;
-}
-
-/** Deduped resolution — generateMetadata and the page share ONE call. */
+/** Deduped resolution - generateMetadata and the page share ONE call. */
 const resolve = cache((token: string) =>
   resolveShareLink(token, { countView: false })
 );
@@ -60,18 +50,17 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const result = await resolve(token);
   const title =
     result.ok && result.payload.title
-      ? `${result.payload.title} — TradeJournal`
-      : "TradeJournal — Shared link";
+      ? `${result.payload.title} - Promethe`
+      : "Promethe - Shared link";
   return {
     title,
     robots: { index: false, follow: false, nocache: true },
   };
 }
 
-export default async function SharedPage({ params, searchParams }: PageProps) {
+export default async function SharedPage({ params }: PageProps) {
   const { token } = await params;
-  const sp = await searchParams;
-  const locale = await resolveLocale(sp);
+  const locale = DEFAULT_LOCALE;
   const m = MESSAGES[locale].publicShare;
 
   // ── rate limits (hashed keys only) ──
@@ -116,14 +105,14 @@ export default async function SharedPage({ params, searchParams }: PageProps) {
 
 // ── GONE view ────────────────────────────────────────────────────────────────
 
-function GoneView({ m, locale }: { m: (typeof MESSAGES)["fr"]["publicShare"]; locale: AppLocale }) {
+function GoneView({ m, locale }: { m: (typeof MESSAGES)["en"]["publicShare"]; locale: AppLocale }) {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-4 py-16 text-center">
         <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full border bg-card">
           <span className="text-2xl" aria-hidden="true">🔒</span>
         </div>
-        <h1 className="text-xl font-semibold tracking-tight">{m.goneTitle}</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{m.goneTitle}</h1>
         <p className="mt-2 text-sm text-muted-foreground">{m.goneBody}</p>
         <p className="mt-1 text-xs text-muted-foreground/70">{m.gonePrivacy}</p>
         <Link
@@ -136,7 +125,7 @@ function GoneView({ m, locale }: { m: (typeof MESSAGES)["fr"]["publicShare"]; lo
       <footer className="mt-auto border-t bg-card/40">
         <div className="mx-auto max-w-md px-4 py-4 text-center">
           <p className="text-xs text-muted-foreground">
-            TradeJournal — {locale === "fr" ? "journal de trading" : "trading journal"}
+            Promethe - trading journal
           </p>
         </div>
       </footer>
@@ -156,14 +145,14 @@ function nf(locale: AppLocale, digits = 2, signed = false) {
 
 function fmtNum(locale: AppLocale, value: unknown, digits = 2, signed = false): string {
   const n = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "-";
   return nf(locale, digits, signed).format(n);
 }
 
 function fmtDate(locale: AppLocale, iso: unknown): string {
-  if (typeof iso !== "string") return "—";
+  if (typeof iso !== "string") return "-";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   return new Intl.DateTimeFormat(intlLocale(locale), {
     dateStyle: "medium",
     timeZone: "UTC",
@@ -171,9 +160,9 @@ function fmtDate(locale: AppLocale, iso: unknown): string {
 }
 
 function fmtDateTime(locale: AppLocale, iso: unknown): string {
-  if (typeof iso !== "string") return "—";
+  if (typeof iso !== "string") return "-";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   return new Intl.DateTimeFormat(intlLocale(locale), {
     dateStyle: "medium",
     timeStyle: "short",
@@ -202,7 +191,7 @@ function ViewHeader({
 }: {
   title: string;
   payload: PublicSharePayload;
-  m: (typeof MESSAGES)["fr"]["publicShare"];
+  m: (typeof MESSAGES)["en"]["publicShare"];
   locale: AppLocale;
 }) {
   return (
@@ -217,7 +206,7 @@ function ViewHeader({
           </span>
         )}
       </div>
-      <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
+      <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
       <p className="text-xs text-muted-foreground">
         {payload.mode === "LIVE" ? m.liveHint : m.snapshotHint} ·{" "}
         {m.capturedAt.replace("{date}", fmtDateTime(locale, payload.capturedAt))}
@@ -235,13 +224,13 @@ function TradeView({
 }: {
   payload: PublicTradePayload;
   locale: AppLocale;
-  m: (typeof MESSAGES)["fr"]["publicShare"];
+  m: (typeof MESSAGES)["en"]["publicShare"];
 }) {
   const t = MESSAGES[locale].trading;
   const tr = payload.trade;
   const v = m.values;
 
-  const symbol = str(tr.symbol) ?? "—";
+  const symbol = str(tr.symbol) ?? "-";
   const direction = str(tr.direction);
   const status = str(tr.status);
   const resultType = str(tr.resultType);
@@ -278,7 +267,7 @@ function TradeView({
 
   const digits = typeof tr.digits === "number" ? tr.digits : 5;
   const fmtPrice = (x: unknown) =>
-    x === null || x === undefined ? "—" : fmtNum(locale, x, digits);
+    x === null || x === undefined ? "-" : fmtNum(locale, x, digits);
 
   const levels: Array<[string, string]> = [
     [v.entryPrice, fmtPrice(tr.entryPrice)],
@@ -391,7 +380,7 @@ function TradeView({
                       ? ` · ${fmtPrice(tr.exitPrice)}`
                       : ""
                   }`
-                : "—"}
+                : "-"}
             </dd>
           </div>
         </dl>
@@ -492,7 +481,7 @@ function TradeView({
               const type = str(ex.type);
               const typeLabel = type
                 ? t.executionType[type as keyof typeof t.executionType] ?? type
-                : "—";
+                : "-";
               return (
                 <li
                   key={i}
@@ -533,7 +522,7 @@ function TradeView({
                     className="w-full rounded-lg border"
                   />
                   <figcaption className="text-xs text-muted-foreground">
-                    {[label, shot.caption].filter(Boolean).join(" — ")}
+                    {[label, shot.caption].filter(Boolean).join(" - ")}
                   </figcaption>
                 </figure>
               );
@@ -630,7 +619,7 @@ function ReportView({
 }: {
   payload: PublicReportPayload;
   locale: AppLocale;
-  m: (typeof MESSAGES)["fr"]["publicShare"];
+  m: (typeof MESSAGES)["en"]["publicShare"];
 }) {
   const r = m.report;
   const s = payload.stats;
@@ -638,13 +627,13 @@ function ReportView({
 
   const kpis: Array<{ label: string; value: string; tone?: string }> = [
     { label: r.trades, value: num(s.tradeCount, 0) },
-    { label: r.winRate, value: s.winRate != null ? `${num(s.winRate, 1)} %` : "—" },
+    { label: r.winRate, value: s.winRate != null ? `${num(s.winRate, 1)} %` : "-" },
     {
       label: r.profitFactor,
-      value: s.profitFactor === "Infinity" ? "∞" : s.profitFactor != null ? num(s.profitFactor, 2) : "—",
+      value: s.profitFactor === "Infinity" ? "∞" : s.profitFactor != null ? num(s.profitFactor, 2) : "-",
     },
-    { label: r.avgR, value: s.avgR != null ? `${num(s.avgR, 2, true)} R` : "—", tone: pnlTone(s.avgR) },
-    { label: r.expectancyR, value: s.expectancyR != null ? `${num(s.expectancyR, 2, true)} R` : "—", tone: pnlTone(s.expectancyR) },
+    { label: r.avgR, value: s.avgR != null ? `${num(s.avgR, 2, true)} R` : "-", tone: pnlTone(s.avgR) },
+    { label: r.expectancyR, value: s.expectancyR != null ? `${num(s.expectancyR, 2, true)} R` : "-", tone: pnlTone(s.expectancyR) },
   ];
   if (s.netPnl !== undefined) {
     kpis.push({ label: r.netPnl, value: num(s.netPnl, 2, true), tone: pnlTone(s.netPnl) });
@@ -689,7 +678,7 @@ function ReportView({
               <td className="py-2 pr-3 font-medium">{row.name}</td>
               <td className="py-2 pr-3 text-right tabular-nums">{num(row.tradeCount, 0)}</td>
               <td className="py-2 pr-3 text-right tabular-nums">
-                {row.winRate != null ? `${num(row.winRate, 1)} %` : "—"}
+                {row.winRate != null ? `${num(row.winRate, 1)} %` : "-"}
               </td>
               {showPnl && (
                 <td className={`py-2 pr-3 text-right tabular-nums ${pnlTone(row.netPnl)}`}>
@@ -697,7 +686,7 @@ function ReportView({
                 </td>
               )}
               <td className={`py-2 text-right tabular-nums ${pnlTone(row.totalR)}`}>
-                {row.totalR != null ? `${num(row.totalR, 2, true)} R` : "—"}
+                {row.totalR != null ? `${num(row.totalR, 2, true)} R` : "-"}
               </td>
             </tr>
           ))}

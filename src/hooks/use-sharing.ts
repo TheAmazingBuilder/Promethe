@@ -17,7 +17,7 @@ export function useShareLinks() {
   return useQuery({
     queryKey: ["share-links"],
     queryFn: () =>
-      apiFetch<{ links: ShareLink[] }>("/api/share-links").then((d) => d.links),
+      apiFetch<{ links: ShareLink[] }>("/api/v1/share-links").then((d) => d.links),
   });
 }
 
@@ -25,7 +25,7 @@ export function useCreateShareLink() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (input: ShareLinkInput) =>
-      apiFetch<CreatedShareLink>("/api/share-links", {
+      apiFetch<CreatedShareLink>("/api/v1/share-links", {
         method: "POST",
         body: JSON.stringify(input),
       }),
@@ -39,7 +39,7 @@ export function useRevokeShareLink() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      apiFetch<{ revoked: boolean }>(`/api/share-links/${id}`, {
+      apiFetch<{ revoked: boolean }>(`/api/v1/share-links/${id}`, {
         method: "DELETE",
       }),
     onSuccess: () => {

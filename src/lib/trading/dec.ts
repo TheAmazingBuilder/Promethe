@@ -36,7 +36,7 @@ export const D1 = new Decimal(1);
 export const D10 = new Decimal(10);
 export const D100 = new Decimal(100);
 
-/** Round DOWN to a step (e.g. lot step 0.01) — never risk more than requested. */
+/** Round DOWN to a step (e.g. lot step 0.01) - never risk more than requested. */
 export function floorToStep(v: DecimalInput, step: DecimalInput): Decimal {
   const s = toD(step);
   if (s.lte(0)) return toD(v);

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * v2.5 Module 2 — annotation manager (#/analytics/annotations, spec §4.7).
+ * v2.5 Module 2 — annotation manager (/analytics/annotations, spec §4.7).
  *
  * The equity curve annotated with the user's annotations (vertical lines for
  * points, translucent bands for ranges — vertical bands in time). Create by
@@ -47,6 +47,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -58,6 +59,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/ui/page-header";
 import { Money, Sensitive } from "@/components/privacy/money";
 import { useA11yPrefs } from "@/components/a11y/a11y-provider";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
@@ -108,13 +110,13 @@ export function AnnotationsView() {
     queryKey: ["charts", "annotations"],
     queryFn: async () =>
       (await apiFetch<{ annotations: Annotation[] }>(
-        "/api/charts/annotations"
+        "/api/v1/charts/annotations"
       )).annotations,
     staleTime: 60 * 1000,
   });
   const removeAnnotation = useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch(`/api/charts/annotations/${id}`, { method: "DELETE" });
+      await apiFetch(`/api/v1/charts/annotations/${id}`, { method: "DELETE" });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["charts", "annotations"] });
@@ -192,21 +194,21 @@ export function AnnotationsView() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
-          <p className="text-sm text-muted-foreground">{t("description")}</p>
-        </div>
-        <div className="flex gap-1">
-          <Button variant="outline" size="sm" onClick={() => navigate("#/analytics")}>
+      <PageHeader
+        title={t("title")}
+        description={t("description")}
+        actions={
+          <div className="flex gap-1">
+          <Button variant="outline" size="sm" onClick={() => navigate("/analytics")}>
             {tCommon("back")}
           </Button>
           <Button variant="outline" size="sm" onClick={() => setCreating(new Date().toISOString())}>
             <Plus aria-hidden="true" />
             {t("create")}
           </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* Annotated equity chart */}
       <Card>
@@ -527,7 +529,7 @@ function fmtSide(
   fmt: FormatApi,
   currency: string
 ): string {
-  if (v == null) return "—";
+  if (v == null) return "-";
   if (row.pct) return fmt.pct(v, 1);
   if (row.r) return `${fmtNum(v, 2)} R`;
   if (row.money) return fmt.money(v, currency, 0);
@@ -596,12 +598,12 @@ function AnnotationDialog({
         strategyId: scope === "STRATEGY" ? strategyId || null : null,
       };
       if (annotation) {
-        await apiFetch(`/api/charts/annotations/${annotation.id}`, {
+        await apiFetch(`/api/v1/charts/annotations/${annotation.id}`, {
           method: "PATCH",
           body: JSON.stringify(body),
         });
       } else {
-        await apiFetch("/api/charts/annotations", {
+        await apiFetch("/api/v1/charts/annotations", {
           method: "POST",
           body: JSON.stringify(body),
         });
@@ -668,11 +670,10 @@ function AnnotationDialog({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ann-end">{t("endDateLabel")}</Label>
-              <Input
+              <DateField
                 id="ann-end"
-                type="date"
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                onChange={setEndDate}
               />
             </div>
           </div>

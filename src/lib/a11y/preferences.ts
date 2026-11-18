@@ -14,12 +14,12 @@ export type FontFamilyChoice = "DEFAULT" | "DYSLEXIA_FRIENDLY" | "MONO_NUMBERS";
 export type FocusRingStyle = "STANDARD" | "ENHANCED";
 
 export interface A11yPreferences {
-  /** Root font-size percent, 80–200 (WCAG 1.4.4 reflow-safe scaling). */
+  /** Root font-size percent, 80-200 (WCAG 1.4.4 reflow-safe scaling). */
   textScale: number;
   contrastMode: ContrastMode;
   reducedMotion: ReducedMotionMode;
   fontFamily: FontFamilyChoice;
-  /** Line-height percent 100–200 (null = theme default). */
+  /** Line-height percent 100-200 (null = theme default). */
   lineHeight: number | null;
   /** Letter-spacing per-mille −50…200 (null = theme default). */
   letterSpacing: number | null;
@@ -176,7 +176,7 @@ function setBoolAttr(
   else root.removeAttribute(name);
 }
 
-/** Reads localStorage (browser only) — null when absent/invalid. */
+/** Reads localStorage (browser only) - null when absent/invalid. */
 export function readStoredA11y(): A11yPreferences | null {
   if (typeof window === "undefined") return null;
   try {

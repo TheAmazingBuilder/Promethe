@@ -25,7 +25,7 @@ export interface BenchmarkParams {
   rPerPeriod?: number;
   period: BenchmarkPeriodUnit;
   compounding: boolean;
-  /** ISO date — benchmark start. */
+  /** ISO date - benchmark start. */
   startDate: string;
   /** Base balance for percent benchmarks (defaults to the equity start). */
   startBalance?: string;

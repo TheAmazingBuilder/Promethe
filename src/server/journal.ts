@@ -102,7 +102,7 @@ export async function deleteJournalEntry(
   return updated.count > 0;
 }
 
-/** Days (YYYY-MM-DD) with a journal entry — calendar markers. */
+/** Days (YYYY-MM-DD) with a journal entry - calendar markers. */
 export async function journalDays(
   userId: string,
   first: string,

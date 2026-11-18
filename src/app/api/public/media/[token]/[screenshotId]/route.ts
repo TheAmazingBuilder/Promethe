@@ -27,7 +27,7 @@ export async function GET(req: Request, ctx: Ctx) {
     );
     if (!ipLimit.allowed) {
       return NextResponse.json(
-        { error: "RATE_LIMITED", message: "Trop de requêtes. Réessayez plus tard." },
+        { error: "RATE_LIMITED", message: "Too many requests. Please try again later." },
         { status: 429, headers: { "Retry-After": "60" } }
       );
     }
@@ -38,7 +38,7 @@ export async function GET(req: Request, ctx: Ctx) {
     );
     if (!tokenLimit.allowed) {
       return NextResponse.json(
-        { error: "RATE_LIMITED", message: "Trop de requêtes. Réessayez plus tard." },
+        { error: "RATE_LIMITED", message: "Too many requests. Please try again later." },
         { status: 429, headers: { "Retry-After": "60" } }
       );
     }

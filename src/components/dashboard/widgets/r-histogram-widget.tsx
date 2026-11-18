@@ -1,6 +1,6 @@
 "use client";
 
-/** r-histogram widget — trade count per R bucket (labels reused from analytics). */
+/** r-histogram widget - trade count per R bucket (labels reused from analytics). */
 import * as React from "react";
 import { useTranslations } from "next-intl";
 import {

@@ -26,7 +26,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     sweepRateLimits();
     if (!rateLimit(`instruments-patch:${session.user.id}`, 30, 60 * 1000)) {
       return NextResponse.json(
-        { error: "RATE_LIMITED", message: "Trop de requêtes, patientez." },
+        { error: "RATE_LIMITED", message: "Too many requests, please wait." },
         { status: 429 }
       );
     }
@@ -36,7 +36,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
       return NextResponse.json(
         {
           error: "VALIDATION",
-          message: "Certains champs sont invalides.",
+          message: "Some fields are invalid.",
           fieldErrors: zodFieldErrors(parsed.error),
         },
         { status: 422 }
@@ -45,7 +45,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const instrument = await updateInstrument(session.user.id, id, parsed.data);
     if (!instrument) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Instrument introuvable." },
+        { error: "NOT_FOUND", message: "Instrument not found." },
         { status: 404 }
       );
     }
@@ -62,7 +62,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     sweepRateLimits();
     if (!rateLimit(`instruments-delete:${session.user.id}`, 20, 60 * 1000)) {
       return NextResponse.json(
-        { error: "RATE_LIMITED", message: "Trop de requêtes, patientez." },
+        { error: "RATE_LIMITED", message: "Too many requests, please wait." },
         { status: 429 }
       );
     }
@@ -72,14 +72,14 @@ export async function DELETE(_req: Request, ctx: Ctx) {
         {
           error: "INSTRUMENT_HAS_TRADES",
           message:
-            "Des trades référencent cet instrument — suppression impossible.",
+            "Trades reference this instrument – deletion not possible.",
         },
         { status: 409 }
       );
     }
     if (!result) {
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Instrument introuvable." },
+        { error: "NOT_FOUND", message: "Instrument not found." },
         { status: 404 }
       );
     }

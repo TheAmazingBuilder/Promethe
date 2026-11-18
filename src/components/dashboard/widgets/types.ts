@@ -29,6 +29,8 @@ export interface KpiBlock {
 
 export interface KpiWidgetData extends KpiBlock {
   compare: KpiBlock | null;
+  /** Cumulative net P&L per trade, chronological (may be absent in older payloads). */
+  sparkline?: string[] | null;
 }
 
 // ── Curves ───────────────────────────────────────────────────────────────────

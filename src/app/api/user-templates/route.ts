@@ -3,7 +3,7 @@ import { requireUser } from "@/server/session";
 import { apiError } from "@/server/api";
 import { listUserTemplates } from "@/server/dashboards";
 
-/** GET /api/user-templates — the user's saved dashboard blueprints. */
+/** GET /api/user-templates - the user's saved dashboard blueprints. */
 export async function GET() {
   try {
     const session = await requireUser();

@@ -10,7 +10,7 @@
  */
 import { scopeFlagFor, type PrivacyPreferences, type SensitiveKind } from "./types";
 
-/** Width-stable placeholder (always the same 4 bullets — §3.1). */
+/** Width-stable placeholder (always the same 4 bullets - §3.1). */
 export const PRIVACY_PLACEHOLDER = "••••";
 
 /** True when `kind` must be masked in HIDE mode / blurred in BLUR mode. */

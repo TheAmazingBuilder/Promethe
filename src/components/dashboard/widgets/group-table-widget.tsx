@@ -92,7 +92,7 @@ export function GroupTableWidget({
                 {fmtNum(g.stats.tradeCount, 0)}
               </TableCell>
               <TableCell className="text-right tabular-nums">
-                {g.stats.winRate != null ? fmt.pct(g.stats.winRate) : "—"}
+                {g.stats.winRate != null ? fmt.pct(g.stats.winRate) : "-"}
               </TableCell>
               <TableCell
                 className={`text-right tabular-nums ${pnlClass(g.stats.netPnl)}`}

@@ -29,7 +29,7 @@ export type ExportRequestResult =
   | { ok: true; bytes: Uint8Array; fileName: string; sizeBytes: number }
   | { ok: false; code: "USER_NOT_FOUND" | "RATE_LIMITED"; retryAfterMs?: number };
 
-/** Rounds dates to ISO strings, decimals to strings — JSON-safe snapshot. */
+/** Rounds dates to ISO strings, decimals to strings - JSON-safe snapshot. */
 function plain<T>(rows: T): unknown {
   return JSON.parse(JSON.stringify(rows));
 }
@@ -298,7 +298,7 @@ export async function buildUserExport(userId: string): Promise<{
   };
 
   const manifest = {
-    application: "TradeJournal",
+    application: "Promethe",
     schemaVersion: EXPORT_SCHEMA_VERSION,
     exportedAt: exportedAt.toISOString(),
     user: { email: user.email, createdAt: user.createdAt.toISOString() },
@@ -306,57 +306,55 @@ export async function buildUserExport(userId: string): Promise<{
     missingScreenshotFiles: missingFiles,
     // Transparency: what is NOT in the archive and why (art. 12 RGPD).
     excluded: [
-      "passwordHash — one-way scrypt hash, never disclosed",
-      "tokenHash (broker connections, share links, mentor invitations) — server-side HMAC digests, useless without the pepper",
-      "authSession ids — live bearer credentials",
-      "raw tokens of any kind — never stored by the app",
+      "passwordHash - one-way scrypt hash, never disclosed",
+      "tokenHash (broker connections, share links, mentor invitations) - server-side HMAC digests, useless without the pepper",
+      "authSession ids - live bearer credentials",
+      "raw tokens of any kind - never stored by the app",
     ],
   };
 
   const readme = [
-    "TradeJournal — Export complet de vos donnees (RGPD art. 20)",
-    "TradeJournal — Full export of your data (GDPR art. 20)",
+    "Promethe - Full export of your data (GDPR art. 20)",
     "",
-    `Genere le / Generated: ${exportedAt.toISOString()}`,
-    `Version du format / Schema version: ${EXPORT_SCHEMA_VERSION}`,
+    `Generated: ${exportedAt.toISOString()}`,
+    `Schema version: ${EXPORT_SCHEMA_VERSION}`,
     "",
-    "Contenu / Contents:",
-    "  manifest.json        inventaire de l'export (compteurs, exclusions)",
-    "  profile.json         compte, profil, sessions (metadonnees)",
-    "  accounts.json        comptes de trading",
-    "  instruments.json     instruments utilises",
+    "Contents:",
+    "  manifest.json        export inventory (counts, exclusions)",
+    "  profile.json         account, profile, sessions (metadata)",
+    "  accounts.json        trading accounts",
+    "  instruments.json     instruments used",
     "  strategies.json      strategies + checklists + versions",
-    "  tags.json            etiquettes",
-    "  trades.json          trades + executions, captures, revues, violations,",
-    "                       modifications, contexte de marche",
-    "  screenshots/         fichiers de captures originaux (WebP)",
-    "  journal.json         entrees de journal",
-    "  rules.json           regles de trading",
-    "  goals.json           objectifs",
-    "  views.json           vues sauvegardees",
-    "  templates.json       modeles de trade",
-    "  cash.json            transactions de caisse",
-    "  reviews.json         gabarits de questions de revue",
-    "  reports.json         rapports + reglages de rapports",
-    "  scenarios.json       scenarios + simulations Monte Carlo",
-    "  calendar.json        evenements economiques + liste de suivi",
-    "  propfirms.json       prop firms, challenges, phases, paiements, depenses",
-    "  sync.json            connexions broker, journaux de synchro, mappings,",
-    "                      snapshots d'equite, imports, candidats, fusions",
-    "  sharing.json         liens de partage (metadonnees)",
-    "  mentoring.json       acces mentor (accordes/detenus), invitations,",
-    "                      journal d'acces",
-    "  comments.json        commentaires (rediges + recus) et mentions",
-    "  notifications.json   notifications in-app",
-    "  misc.json            abonnements push, rappels, synchro hors-ligne,",
-    "                      etats de lecture",
-    "  consents.json        consentements (CGU, confidentialite)",
-    "  exports.json         historique de vos exports",
-    "  deletion.json        demande de suppression en cours (le cas echeant)",
+    "  tags.json            tags",
+    "  trades.json          trades + executions, screenshots, reviews, violations,",
+    "                       changes, market context",
+    "  screenshots/         original screenshot files (WebP)",
+    "  journal.json         journal entries",
+    "  rules.json           trading rules",
+    "  goals.json           goals",
+    "  views.json           saved views",
+    "  templates.json       trade templates",
+    "  cash.json            cash transactions",
+    "  reviews.json         review question templates",
+    "  reports.json         reports + report settings",
+    "  scenarios.json       scenarios + Monte Carlo simulations",
+    "  calendar.json        economic events + watchlist",
+    "  propfirms.json       prop firms, challenges, phases, payouts, expenses",
+    "  sync.json            broker connections, sync logs, mappings,",
+    "                      equity snapshots, imports, candidates, merges",
+    "  sharing.json         share links (metadata)",
+    "  mentoring.json       mentor access (granted/held), invitations,",
+    "                      access log",
+    "  comments.json        comments (written + received) and mentions",
+    "  notifications.json   in-app notifications",
+    "  misc.json            push subscriptions, reminders, offline sync,",
+    "                      read states",
+    "  consents.json        consents (Terms, privacy)",
+    "  exports.json         your export history",
+    "  deletion.json        pending deletion request (if any)",
     "",
-    "Exclusions de secrets / Excluded secrets: voir manifest.json.",
-    "Les montants sont des chaines decimales exactes / Amounts are exact",
-    "decimal strings — never floating point.",
+    "Excluded secrets: see manifest.json.",
+    "Amounts are exact decimal strings - never floating point.",
   ].join("\n");
 
   // ── Assemble the ZIP ──────────────────────────────────────────────────────
@@ -440,7 +438,7 @@ export async function buildUserExport(userId: string): Promise<{
     "consents.json": jsonEntry(plain(consentRecords)),
     "exports.json": jsonEntry(plain(dataExportLogs)),
     "deletion.json": jsonEntry(
-      plain(deletionRequest ?? { note: "Aucune demande de suppression / No deletion request" })
+      plain(deletionRequest ?? { note: "No deletion request" })
     ),
   };
   for (const file of files) entries[file.zipPath] = file.bytes;

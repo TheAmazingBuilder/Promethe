@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * v3 Phase 5 — Mentors management (owner side), #/reglages/mentors.
+ * v3 Phase 5 — Mentors management (owner side), /settings/mentors.
  *
  * Handle reservation, invitation creation (link shown ONCE), active accesses
  * (scope edit / pause / revoke — immediate effect), pending invitations and
@@ -47,6 +47,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHeader } from "@/components/ui/page-header";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 import { useSession } from "@/components/app/session-context";
@@ -79,18 +80,18 @@ export function MentorsView() {
 
   const overview = useQuery({
     queryKey: ["mentors-overview"],
-    queryFn: () => apiFetch<MentorsOverview>("/api/mentors"),
+    queryFn: () => apiFetch<MentorsOverview>("/api/v1/mentors"),
   });
 
   const accounts = useQuery({
     queryKey: ["accounts"],
     queryFn: () =>
-      apiFetch<{ accounts: RefOption[] }>("/api/accounts"),
+      apiFetch<{ accounts: RefOption[] }>("/api/v1/accounts"),
   });
   const strategies = useQuery({
     queryKey: ["strategies"],
     queryFn: () =>
-      apiFetch<{ strategies: RefOption[] }>("/api/strategies"),
+      apiFetch<{ strategies: RefOption[] }>("/api/v1/strategies"),
   });
 
   function refresh(): void {
@@ -102,14 +103,16 @@ export function MentorsView() {
   const strategyOptions = strategies.data?.strategies ?? [];
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-          <Users className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-          {t("title")}
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title={
+          <span className="inline-flex items-center gap-2">
+            <Users className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+            {t("title")}
+          </span>
+        }
+        description={t("subtitle")}
+      />
 
       {overview.isLoading ? (
         <div className="flex justify-center py-12">
@@ -172,7 +175,7 @@ function HandleCard({
   async function save(): Promise<void> {
     setSaving(true);
     try {
-      const updated = await apiFetch<SessionPayload>("/api/profile/handle", {
+      const updated = await apiFetch<SessionPayload>("/api/v1/profile/handle", {
         method: "PUT",
         body: JSON.stringify({
           handle: handle.trim().toLowerCase(),
@@ -184,9 +187,9 @@ function HandleCard({
       onSaved();
     } catch (error) {
       toast({
-        title: "Erreur",
+        title: "Error",
         description:
-          error instanceof ApiClientError ? error.message : "Réessayez.",
+          error instanceof ApiClientError ? error.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -272,7 +275,7 @@ function InviteCard({
   async function submit(): Promise<void> {
     setSending(true);
     try {
-      const result = await apiFetch<{ inviteUrl: string }>("/api/mentors", {
+      const result = await apiFetch<{ inviteUrl: string }>("/api/v1/mentors", {
         method: "POST",
         body: JSON.stringify({ email: email.trim().toLowerCase(), permissions }),
       });
@@ -282,9 +285,9 @@ function InviteCard({
       toast({ title: t("inviteCreated") });
     } catch (error) {
       toast({
-        title: "Erreur",
+        title: "Error",
         description:
-          error instanceof ApiClientError ? error.message : "Réessayez.",
+          error instanceof ApiClientError ? error.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -377,13 +380,13 @@ function PendingInvitationsCard({
   async function revoke(id: string): Promise<void> {
     setBusy(id);
     try {
-      await apiFetch(`/api/mentors/invitations/${id}`, { method: "DELETE" });
+      await apiFetch(`/api/v1/mentors/invitations/${id}`, { method: "DELETE" });
       onChanged();
     } catch (error) {
       toast({
-        title: "Erreur",
+        title: "Error",
         description:
-          error instanceof ApiClientError ? error.message : "Réessayez.",
+          error instanceof ApiClientError ? error.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -561,16 +564,16 @@ function AccessActions({
   async function patch(body: Record<string, unknown>): Promise<void> {
     setBusy(true);
     try {
-      await apiFetch(`/api/mentors/${access.id}`, {
+      await apiFetch(`/api/v1/mentors/${access.id}`, {
         method: "PATCH",
         body: JSON.stringify(body),
       });
       onChanged();
     } catch (error) {
       toast({
-        title: "Erreur",
+        title: "Error",
         description:
-          error instanceof ApiClientError ? error.message : "Réessayez.",
+          error instanceof ApiClientError ? error.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -581,13 +584,13 @@ function AccessActions({
   async function revoke(): Promise<void> {
     setBusy(true);
     try {
-      await apiFetch(`/api/mentors/${access.id}`, { method: "DELETE" });
+      await apiFetch(`/api/v1/mentors/${access.id}`, { method: "DELETE" });
       onChanged();
     } catch (error) {
       toast({
-        title: "Erreur",
+        title: "Error",
         description:
-          error instanceof ApiClientError ? error.message : "Réessayez.",
+          error instanceof ApiClientError ? error.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -653,7 +656,7 @@ function EditAccessDialog({
   async function save(): Promise<void> {
     setSaving(true);
     try {
-      await apiFetch(`/api/mentors/${access.id}`, {
+      await apiFetch(`/api/v1/mentors/${access.id}`, {
         method: "PATCH",
         body: JSON.stringify({ permissions }),
       });
@@ -661,9 +664,9 @@ function EditAccessDialog({
       onClose();
     } catch (error) {
       toast({
-        title: "Erreur",
+        title: "Error",
         description:
-          error instanceof ApiClientError ? error.message : "Réessayez.",
+          error instanceof ApiClientError ? error.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -676,7 +679,7 @@ function EditAccessDialog({
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {t("edit")} — {access.mentorDisplayName}
+            {t("edit")} - {access.mentorDisplayName}
           </DialogTitle>
           <DialogDescription>{t("invitePermissions")}</DialogDescription>
         </DialogHeader>

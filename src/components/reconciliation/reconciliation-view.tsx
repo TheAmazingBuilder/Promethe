@@ -50,6 +50,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PageHeader } from "@/components/ui/page-header";
 import { cn } from "@/lib/utils";
 import type { CandidateDTO } from "@/server/reconciliation";
 
@@ -62,8 +63,8 @@ interface MergeLogDTO {
 }
 
 function formatTime(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString("fr-FR", {
+  if (!iso) return "-";
+  return new Date(iso).toLocaleString("en-CA", {
     dateStyle: "short",
     timeStyle: "short",
   });
@@ -136,16 +137,16 @@ function TradeColumn({
     [t("entryTime"), formatTime(trade.entryTime)],
     [t("entryPrice"), trade.entryPrice],
     [t("exitTime"), formatTime(trade.exitTime)],
-    [t("exitPrice"), trade.exitPrice ?? "—"],
+    [t("exitPrice"), trade.exitPrice ?? "-"],
     [t("lots"), trade.lots],
   ];
   if ("netPnl" in trade) {
-    rows.push([t("netPnl"), trade.netPnl ?? "—"]);
-    rows.push([t("pips"), trade.pips ?? "—"]);
+    rows.push([t("netPnl"), trade.netPnl ?? "-"]);
+    rows.push([t("pips"), trade.pips ?? "-"]);
     rows.push([t("source"), trade.source === "EA_SYNC" ? "EA" : "Import"]);
   } else {
-    rows.push([t("strategy"), trade.strategyName ?? "—"]);
-    rows.push([t("journal"), trade.hasNotes ? "✓" : "—"]);
+    rows.push([t("strategy"), trade.strategyName ?? "-"]);
+    rows.push([t("journal"), trade.hasNotes ? "✓" : "-"]);
     rows.push([t("screenshots"), String(trade.screenshotCount)]);
   }
 
@@ -254,8 +255,8 @@ export function ReconciliationView() {
     try {
       const query = accountFilter !== "ALL" ? `?accountId=${accountFilter}` : "";
       const [candidateResult, logResult] = await Promise.all([
-        apiFetch<{ candidates: CandidateDTO[] }>(`/api/reconciliation${query}`),
-        apiFetch<{ logs: MergeLogDTO[] }>("/api/reconciliation/undo"),
+        apiFetch<{ candidates: CandidateDTO[] }>(`/api/v1/reconciliation${query}`),
+        apiFetch<{ logs: MergeLogDTO[] }>("/api/v1/reconciliation/undo"),
       ]);
       setCandidates(candidateResult.candidates);
       setMergeLogs(logResult.logs);
@@ -273,7 +274,7 @@ export function ReconciliationView() {
   const onAction = async (id: string, action: "MERGE" | "REJECT" | "KEEP_SEPARATE") => {
     setBusyId(id);
     try {
-      await apiFetch(`/api/reconciliation/${id}/resolve`, {
+      await apiFetch(`/api/v1/reconciliation/${id}/resolve`, {
         method: "POST",
         body: JSON.stringify({ action }),
       });
@@ -298,7 +299,7 @@ export function ReconciliationView() {
   const onBulkMerge = async () => {
     setBulkBusy(true);
     try {
-      const result = await apiFetch<{ merged: number }>("/api/reconciliation/bulk-merge", {
+      const result = await apiFetch<{ merged: number }>("/api/v1/reconciliation/bulk-merge", {
         method: "POST",
       });
       toast({ title: t("toast.bulkMerged", { n: result.merged }) });
@@ -314,7 +315,7 @@ export function ReconciliationView() {
   const onUndo = async (mergeLogId: string) => {
     setBusyId(mergeLogId);
     try {
-      await apiFetch("/api/reconciliation/undo", {
+      await apiFetch("/api/v1/reconciliation/undo", {
         method: "POST",
         body: JSON.stringify({ mergeLogId }),
       });
@@ -341,13 +342,13 @@ export function ReconciliationView() {
   }, [candidates]);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+    <div className="space-y-6">
+      <PageHeader
+        title={t("title")}
+        description={t("subtitle")}
+        className="flex-wrap"
+        actions={
+          <div className="flex flex-wrap gap-2">
           <Select value={accountFilter} onValueChange={setAccountFilter}>
             <SelectTrigger className="w-44" aria-label={t("filterAccount")}>
               <SelectValue />
@@ -364,8 +365,9 @@ export function ReconciliationView() {
           <Button variant="outline" size="icon" aria-label={t("refresh")} onClick={() => void load()}>
             <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
           </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {loading ? (
         <div className="flex justify-center py-12">

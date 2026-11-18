@@ -33,7 +33,7 @@ export async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
     const errBody: ApiErrorBody =
       body && typeof body === "object" && "error" in body
         ? (body as ApiErrorBody)
-        : { error: "NETWORK", message: "Réponse invalide du serveur." };
+        : { error: "NETWORK", message: "Invalid server response." };
     throw new ApiClientError(errBody, res.status);
   }
 

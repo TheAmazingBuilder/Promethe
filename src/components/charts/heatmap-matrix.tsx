@@ -13,8 +13,8 @@ import * as React from "react";
 import { useTranslations } from "next-intl";
 import { cellColor, type MatrixResult } from "@/lib/charts/heatmap";
 import type { XDimension } from "@/lib/validations/charts";
-import type { MeasureFormatKind } from "./chart-preview";
-import { formatCategoryKey } from "./chart-preview";
+import type { MeasureFormatKind } from "./chart-format";
+import { formatCategoryKey } from "./chart-format";
 import { fmtNum } from "@/lib/format";
 
 export interface HeatmapMatrixProps {
@@ -22,7 +22,7 @@ export interface HeatmapMatrixProps {
   format: MeasureFormatKind;
   currency: string;
   locale: string;
-  /** Drill-down handler — receives the dimension(s) to filter on. */
+  /** Drill-down handler - receives the dimension(s) to filter on. */
   onDrill?: (drills: Array<{ dimension: XDimension; value: string }>) => void;
   /** Localize bucket-ish keys. */
   tBucket: (k: string) => string;
@@ -53,7 +53,7 @@ export function HeatmapMatrix({
 
   const fmtVal = React.useCallback(
     (v: number | null) => {
-      if (v == null) return "—";
+      if (v == null) return "-";
       switch (format) {
         case "CURRENCY":
           return new Intl.NumberFormat(locale, {
@@ -212,7 +212,7 @@ export function HeatmapMatrix({
                         onClick={() => onDrill && hasData && drillAt(ri, ci)}
                       >
                         <title>
-                          {`${formatKey(result.rowDim, row.key)} × ${formatKey(result.colDim, cell.colKey)} — ${fmtVal(cell.value)} (n=${cell.n})`}
+                          {`${formatKey(result.rowDim, row.key)} × ${formatKey(result.colDim, cell.colKey)} - ${fmtVal(cell.value)} (n=${cell.n})`}
                         </title>
                       </rect>
                       {cell.lowSample && hasData && (
@@ -307,7 +307,7 @@ export function HeatmapMatrix({
                       >
                         {result.colTotalsN[ci] > 0
                           ? fmtNum(result.colTotals[ci] ?? 0, 0)
-                          : "—"}
+                          : "-"}
                       </text>
                     </g>
                   );
@@ -388,7 +388,7 @@ export function HeatmapMatrix({
               {formatKey(result.rowDim, focusCell.rowKey)} ×{" "}
               {formatKey(result.colDim, focusCell.colKey)}:
             </span>{" "}
-            {fmtVal(focusCell.value)} — {t("nTrades", { count: focusCell.n })}
+            {fmtVal(focusCell.value)} - {t("nTrades", { count: focusCell.n })}
             {focusCell.n > 0 && (
               <>
                 {" "}

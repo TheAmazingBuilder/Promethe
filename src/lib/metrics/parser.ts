@@ -34,7 +34,7 @@ export class FormulaParseError extends Error {
 const MAX_TOKENS = 64;
 const MAX_DEPTH = 12;
 
-/** Tokenize — throws FormulaParseError on unexpected characters. */
+/** Tokenize - throws FormulaParseError on unexpected characters. */
 export function tokenizeFormula(input: string): FormulaToken[] {
   const tokens: FormulaToken[] = [];
   let i = 0;

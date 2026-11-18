@@ -23,7 +23,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
       return NextResponse.json(
         {
           error: "VALIDATION",
-          message: "Commentaire invalide.",
+          message: "Invalid comment.",
           fieldErrors: zodFieldErrors(parsed.error),
         },
         { status: 422 }

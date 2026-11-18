@@ -34,6 +34,7 @@ export function toInstrumentDTO(i: InstrumentRow): InstrumentDTO {
     tickSize: i.tickSize?.toString() ?? null,
     tickValue: i.tickValue?.toString() ?? null,
     isActive: i.isActive,
+    marketTimezone: i.marketTimezone,
   };
 }
 
@@ -93,6 +94,7 @@ export async function createInstrument(
       tickSize: input.tickSize ?? null,
       tickValue: input.tickValue ?? null,
       isActive: input.isActive,
+      marketTimezone: input.marketTimezone ?? null,
     },
   });
   return toInstrumentDTO(created);
@@ -129,6 +131,9 @@ export async function updateInstrument(
         ? { tickValue: patch.tickValue ?? null }
         : {}),
       ...(patch.isActive != null ? { isActive: patch.isActive } : {}),
+      ...(patch.marketTimezone !== undefined
+        ? { marketTimezone: patch.marketTimezone ?? null }
+        : {}),
     },
   });
   return toInstrumentDTO(updated);

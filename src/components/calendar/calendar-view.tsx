@@ -3,7 +3,7 @@
 /**
  * Calendar view (v1 phase 5) — month grid of daily net P&L with journal
  * markers, month summary and day streaks. Clicking a day deep-links to its
- * journal entry (#/journal/{date}). Data: GET /api/calendar.
+ * journal entry (/journal/{date}). Data: GET /api/v1/calendar.
  */
 import * as React from "react";
 import { BookOpen, ChevronLeft, ChevronRight } from "lucide-react";
@@ -27,32 +27,57 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PageHeader } from "@/components/ui/page-header";
+import { CalendarDayDetailPanel } from "@/components/calendar/calendar-day-detail";
 import { useAccounts } from "@/hooks/use-trading";
 import { useCalendar } from "@/hooks/use-journal";
+import { useTimePrefs } from "@/components/time/time-provider";
 import { pnlClass } from "@/lib/format";
 import { useFormat } from "@/lib/format/use-format";
-import { navigate } from "@/lib/router";
 import { toD } from "@/lib/trading/dec";
 
 const EMERALD_BG = "bg-gain-subtle";
 const ROSE_BG = "bg-loss-subtle";
 
-function todayIsoDay(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-}
-
 export function CalendarView() {
   const t = useTranslations("calendar");
   const fmt = useFormat();
-  const today = React.useMemo(() => todayIsoDay(), []);
+  // "Today" is the current TRADING day (user setting, default MIDNIGHT_LOCAL
+  // = the local calendar day). The server buckets the P&L by the same day.
+  const { tradingDayOf, loaded: timeLoaded } = useTimePrefs();
+  const today = React.useMemo(
+    () => tradingDayOf(),
+    [tradingDayOf, timeLoaded]
+  );
   const [cursor, setCursor] = React.useState(() => {
     const [y, m] = today.split("-").map(Number);
     return { year: y, month: m };
   });
+  // Once the server row arrives the trading day can shift to another month
+  // (e.g. NY close after 17:00 on the last day of the month) — follow it.
+  const initialMonthRef = React.useRef(`${cursor.year}-${cursor.month}`);
+  React.useEffect(() => {
+    if (!timeLoaded) return;
+    const [y, m] = today.split("-").map(Number);
+    const key = `${y}-${m}`;
+    if (initialMonthRef.current !== key) {
+      initialMonthRef.current = key;
+      setCursor({ year: y, month: m });
+    }
+    // Runs once when the time preferences finish loading.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeLoaded]);
   const [accountId, setAccountId] = React.useState<string>("all");
   // v2.5 M2 — year (contribution calendar) vs month mode.
   const [mode, setMode] = React.useState<"month" | "year">("month");
+  // MRT wave 2 — selected day for the detail panel below the grid. Clicking
+  // a day selects it (no longer deep-links to the journal: the panel links
+  // there). The selection clears when the month or account changes, so the
+  // panel never shows a day from another view.
+  const [selectedDay, setSelectedDay] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    setSelectedDay(null);
+  }, [cursor.year, cursor.month, accountId]);
 
   const { data: accountsData } = useAccounts();
   const accounts = accountsData ?? [];
@@ -86,17 +111,16 @@ export function CalendarView() {
   return (
     <section aria-labelledby="calendar-title" className="mx-auto flex max-w-6xl flex-col gap-6">
       {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 id="calendar-title" className="text-2xl font-bold tracking-tight">
-            {t("title")}
-          </h1>
-          <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        {/* a11y (M8 Phase 5): wraps at 200 % text / narrow viewports (WCAG 1.4.10). */}
-        <div className="flex flex-wrap items-center gap-2">
+      <PageHeader
+        id="calendar-title"
+        title={t("title")}
+        description={t("subtitle")}
+        className="flex-wrap sm:items-end"
+        actions={
+          <>
+            {/* a11y (M8 Phase 5): wraps at 200 % text / narrow viewports (WCAG 1.4.10). */}
           {/* v2.5 M2 — month / year mode toggle. a11y (M8 Phase 5): a
-              segmented ToggleGroup, NOT Tabs — a tabset without panels dangles
+              segmented ToggleGroup, NOT Tabs - a tabset without panels dangles
               aria-controls (aria-valid-attr-value). */}
           <ToggleGroup
             type="single"
@@ -128,8 +152,9 @@ export function CalendarView() {
           <Button variant="outline" size="sm" onClick={goToday}>
             {t("today")}
           </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         {/* Year contribution calendar (v2.5 M2) */}
@@ -194,11 +219,13 @@ export function CalendarView() {
                     const day = data?.days?.[cell.date];
                     const pnl = day && day.tradeCount > 0 ? toD(day.netPnl) : null;
                     const isToday = cell.date === today;
+                    const isSelected = selectedDay === cell.date;
                     return (
                       <button
                         key={cell.date}
                         type="button"
-                        onClick={() => navigate(`#/journal/${cell.date}`)}
+                        onClick={() => setSelectedDay(cell.date)}
+                        aria-pressed={isSelected}
                         aria-label={[
                           // a11y (M8 Phase 5): axe's label-content-name-mismatch
                           // requires the VISIBLE text tokens (day number, P&L,
@@ -216,14 +243,15 @@ export function CalendarView() {
                           `${monthNames[Number(cell.date.slice(5, 7)) - 1]} ${cell.date.slice(0, 4)}`,
                         ]
                           .filter(Boolean)
-                          .join(" — ")}
+                          .join(" - ")}
                         className={[
                           "relative flex min-h-[64px] flex-col justify-between rounded-lg border p-1.5 text-left transition-colors",
                           // a11y (M8 Phase 5): AA-safe dimming — a dashed border
                           // + muted background instead of opacity-40 text
                           // (blended color failed color-contrast).
                           cell.inMonth ? "" : "border-dashed bg-muted/30",
-                          isToday ? "ring-2 ring-primary ring-offset-1 ring-offset-background" : "",
+                          isToday && !isSelected ? "ring-2 ring-primary ring-offset-1 ring-offset-background" : "",
+                          isSelected ? "ring-2 ring-emerald-500 ring-offset-1 ring-offset-background" : "",
                           pnl ? (pnl.gt(0) ? EMERALD_BG : pnl.lt(0) ? ROSE_BG : "") : "",
                           "hover:bg-muted/60",
                         ].join(" ")}
@@ -240,7 +268,7 @@ export function CalendarView() {
                               className={`text-xs font-semibold ${pnlClass(day.netPnl)}`}
                             />
                             {/* a11y (M8 Phase 5): axe concatenates span text
-                                without element boundaries — "USD" + "1 trade"
+                                without element boundaries - "USD" + "1 trade"
                                 would mash into "USD1" and break the label
                                 token match. A real space text node keeps the
                                 tokens separate (visually nil in flex gap). */}
@@ -301,7 +329,7 @@ export function CalendarView() {
               <div>
                 <p className="text-xs text-muted-foreground">{t("summary.tradingDays")}</p>
                 <p className="font-semibold tabular-nums">
-                  {summary?.tradingDays ?? "—"}
+                  {summary?.tradingDays ?? "-"}
                 </p>
               </div>
               <div>
@@ -309,7 +337,7 @@ export function CalendarView() {
                 <p className="font-semibold tabular-nums">
                   {summary?.greenRate != null
                     ? fmt.pct(summary.greenRate, 0)
-                    : "—"}
+                    : "-"}
                 </p>
               </div>
               <div>
@@ -323,7 +351,7 @@ export function CalendarView() {
                       currency={currency}
                     />
                   ) : (
-                    "—"
+                    "-"
                   )}
                 </p>
               </div>
@@ -338,7 +366,7 @@ export function CalendarView() {
                       currency={currency}
                     />
                   ) : (
-                    "—"
+                    "-"
                   )}
                 </p>
               </div>
@@ -350,7 +378,7 @@ export function CalendarView() {
               <CardTitle className="text-base">{t("streaks.title")}</CardTitle>
               <CardDescription className="tabular-nums">
                 {streaks == null
-                  ? "—"
+                  ? "-"
                   : streaks.current > 0
                     ? t("streaks.currentWin", { count: streaks.current })
                     : streaks.current < 0
@@ -362,13 +390,13 @@ export function CalendarView() {
               <div>
                 <p className="text-xs text-muted-foreground">{t("streaks.longestWin")}</p>
                 <p className="font-semibold text-gain tabular-nums">
-                  {streaks ? t("streaks.days", { count: streaks.longestWin }) : "—"}
+                  {streaks ? t("streaks.days", { count: streaks.longestWin }) : "-"}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">{t("streaks.longestLoss")}</p>
                 <p className="font-semibold text-loss tabular-nums">
-                  {streaks ? t("streaks.days", { count: streaks.longestLoss }) : "—"}
+                  {streaks ? t("streaks.days", { count: streaks.longestLoss }) : "-"}
                 </p>
               </div>
             </CardContent>
@@ -378,13 +406,23 @@ export function CalendarView() {
           data.summary.tradingDays === 0 &&
           Object.keys(data.days).length === 0 ? (
             <p className="text-center text-sm text-muted-foreground">
-              {t("emptyTitle")} — {t("emptyDesc")}
+              {t("emptyTitle")} - {t("emptyDesc")}
             </p>
           ) : null}
         </div>
         </>
         )}
       </div>
+
+      {/* MRT wave 2 — day-detail panel, below the grid. */}
+      {mode === "month" && selectedDay ? (
+        <CalendarDayDetailPanel
+          date={selectedDay}
+          accountId={effectiveAccount}
+          timezone={data?.timezone ?? "UTC"}
+          onClose={() => setSelectedDay(null)}
+        />
+      ) : null}
     </section>
   );
 }

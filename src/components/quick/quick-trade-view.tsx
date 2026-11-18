@@ -27,6 +27,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -37,6 +38,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   AccountSelect,
   Field,
@@ -352,14 +354,12 @@ export function QuickTradeView() {
     recordTemplateUse.mutate(tpl.id);
   }
 
-  // ── Auto-apply ?template=<id> from the hash (templates "use" action) ──
+  // ── Auto-apply ?template=<id> from the query string (templates "use" action) ──
   React.useEffect(() => {
     if (autoTemplateRef.current || !templates) return;
     autoTemplateRef.current = true;
-    const hash = typeof window === "undefined" ? "" : window.location.hash;
-    const qIndex = hash.indexOf("?");
-    if (qIndex === -1) return;
-    const id = new URLSearchParams(hash.slice(qIndex + 1)).get("template");
+    if (typeof window === "undefined") return;
+    const id = new URLSearchParams(window.location.search).get("template");
     if (!id) return;
     const tpl = templates.find((x) => x.id === id);
     if (tpl) applyTemplate(tpl);
@@ -455,7 +455,7 @@ export function QuickTradeView() {
 
       // Persist quick-entry defaults (fire and forget).
       const prefs = session?.profile.preferences ?? {};
-      void apiFetch("/api/profile", {
+      void apiFetch("/api/v1/profile", {
         method: "PATCH",
         body: JSON.stringify({
           preferences: {
@@ -534,11 +534,8 @@ export function QuickTradeView() {
       : null;
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-4">
-      <div className="space-y-1 text-center sm:text-left">
-        <h2 className="text-xl font-bold tracking-tight sm:text-2xl">{t("title")}</h2>
-        <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
-      </div>
+    <div className="w-full space-y-4">
+      <PageHeader title={t("title")} description={t("subtitle")} />
 
       <Card>
         <CardHeader className="pb-3">
@@ -548,7 +545,7 @@ export function QuickTradeView() {
             <Select
               value={templateId}
               onValueChange={(id) => {
-                if (!id) return; // spurious Radix empty sync — ignore
+                if (!id) return; // spurious Radix empty sync - ignore
                 const tpl = templates?.find((x) => x.id === id);
                 if (tpl) applyTemplate(tpl);
               }}
@@ -660,12 +657,12 @@ export function QuickTradeView() {
               />
             </Field>
             <Field label={t("entryTime")} htmlFor="qt-entry-time">
-              <Input
+              <DateField
                 id="qt-entry-time"
                 type="datetime-local"
                 value={isoToLocalInput(form.entryTime)}
-                onChange={(e) =>
-                  set("entryTime", localInputToIso(e.target.value) ?? "")
+                onChange={(v) =>
+                  set("entryTime", localInputToIso(v) ?? "")
                 }
               />
             </Field>
@@ -759,7 +756,7 @@ export function QuickTradeView() {
                     className="min-h-10"
                     aria-label={t("riskAmountAria")}
                   >
-                    {accountCurrency || "—"}
+                    {accountCurrency || "-"}
                   </ToggleGroupItem>
                   <ToggleGroupItem
                     value="lots"
@@ -878,7 +875,7 @@ export function QuickTradeView() {
                           currency={accountCurrency}
                         />
                       ) : (
-                        "—"
+                        "-"
                       )}
                     </dd>
                   </div>
@@ -889,7 +886,7 @@ export function QuickTradeView() {
                     <dd className="font-semibold tabular-nums">
                       {preview?.plannedRR
                         ? `1 : ${fmtNum(preview.plannedRR, 2)}`
-                        : "—"}
+                        : "-"}
                     </dd>
                   </div>
                 </dl>

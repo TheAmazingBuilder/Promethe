@@ -1,6 +1,6 @@
 "use client";
 
-/** win-loss widget — donut chart with center total + legend with counts. */
+/** win-loss widget - donut chart with center total + legend with counts. */
 import * as React from "react";
 import { useTranslations } from "next-intl";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";

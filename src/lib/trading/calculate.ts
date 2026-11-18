@@ -14,6 +14,10 @@
  */
 import { D0, D1, D100, Decimal, floorToStep, toD, type DecimalInput } from "./dec";
 import type { Direction, InstrumentSpec, ResultType } from "./types";
+import {
+  resolveConversionRate,
+  type FxRateInput,
+} from "@/lib/tools/fx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Price differences, pips & points
@@ -142,6 +146,12 @@ export interface PnlInput {
   fees?: DecimalInput;
   /** quote → account conversion rate. null/1 = no conversion. */
   quoteToAccountRate?: DecimalInput | null;
+  /**
+   * Stored FxRate table (v2.5 Module 5). Used as the default conversion
+   * when no explicit `quoteToAccountRate` is given: the manual rate
+   * always wins when it is set.
+   */
+  fxRates?: FxRateInput[] | null;
   /** Account currency code, used for the isEstimate flag. */
   accountCurrency?: string | null;
 }
@@ -170,7 +180,15 @@ export function calcPnL(input: PnlInput): PnlResult {
   const units = toD(input.lots).times(toD(instrument.contractSize));
   const grossQuote = diff.times(units);
 
-  const rate = input.quoteToAccountRate == null ? null : toD(input.quoteToAccountRate);
+  const rate =
+    input.quoteToAccountRate == null
+      ? resolveConversionRate(
+          instrument.quoteCurrency ?? "",
+          input.accountCurrency ?? "",
+          input.fxRates ?? [],
+          null
+        )
+      : toD(input.quoteToAccountRate);
   const converted = rate !== null && !rate.eq(D1);
   const gross = rate ? grossQuote.times(rate) : grossQuote;
 
@@ -229,7 +247,7 @@ export function classifyResult(
 
 export interface PositionSizeInput {
   accountBalance: DecimalInput;
-  /** Risk as % of balance — used when riskAmount is not provided. */
+  /** Risk as % of balance - used when riskAmount is not provided. */
   riskPercent?: DecimalInput | null;
   /** Fixed risk amount in ACCOUNT currency (overrides riskPercent). */
   riskAmount?: DecimalInput | null;
@@ -429,4 +447,132 @@ export function previewTrade(input: TradePreviewInput): TradePreview {
     riskAmount,
     riskPercent,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Risk:reward & win rate (Phase 2 — Risk/Reward module)
+//
+// Standard formulas (same as the Euforia risk engine: decimal.js only,
+// never JS floats):
+//  - Risk-Reward Ratio = Take Profit distance / Stop-loss distance
+//    (plannedRR / realizedRR above).
+//  - Win rate = % of closed trades with a profit.
+//  - Required win rate for a given R:R: p* = 1 / (1 + RR)
+//    (1:1 → 50%, 1:2 → 33.3%, 1:3 → 25%, 1:4 → 20%, 1:5 → 16.7%).
+//  - Expectancy per trade: E = p·gain − (1−p)·loss, in R or in money.
+//  - The higher the win rate, the less risk a trader needs to take:
+//    a high R:R stays profitable at a low win rate, a low R:R needs
+//    a high win rate to break even.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Win-rate thresholds shown as columns of the R:R × win-rate table. */
+export const RR_TABLE_WIN_RATES = [0.2, 0.3, 0.4, 0.5, 0.6] as const;
+/** R:R rows shown in the table (1:1 … 5:1). */
+export const RR_TABLE_RATIOS = [1, 2, 3, 4, 5] as const;
+
+/**
+ * Required win rate (fraction 0–1) to break even at a given reward:risk.
+ * E = p·RR − (1−p) = 0  ⟹  p* = 1 / (1 + RR). null when RR ≤ 0.
+ */
+export function requiredWinRate(rr: DecimalInput): Decimal | null {
+  const r = toD(rr);
+  if (r.lte(0)) return null;
+  return D1.div(D1.plus(r));
+}
+
+/** Expectancy per trade in R: E = p·RR − (1−p). null on invalid inputs. */
+export function expectancyR(
+  winRate: DecimalInput,
+  rr: DecimalInput
+): Decimal | null {
+  const p = toD(winRate);
+  const r = toD(rr);
+  if (p.lt(0) || p.gt(1) || r.lt(0)) return null;
+  return p.times(r).minus(D1.minus(p));
+}
+
+export interface ExpectancyMoneyInput {
+  /** Win rate as a fraction 0–1. */
+  winRate: DecimalInput;
+  /** Average winning trade, account currency, positive. */
+  avgWin: DecimalInput;
+  /** Average losing trade, account currency, positive (magnitude). */
+  avgLoss: DecimalInput;
+}
+
+/** Expectancy per trade in money: E = p·avgWin − (1−p)·avgLoss. */
+export function expectancyMoney(input: ExpectancyMoneyInput): Decimal | null {
+  const p = toD(input.winRate);
+  const win = toD(input.avgWin);
+  const loss = toD(input.avgLoss);
+  if (p.lt(0) || p.gt(1) || win.lt(0) || loss.lt(0)) return null;
+  return p.times(win).minus(D1.minus(p).times(loss));
+}
+
+export type RrCellStatus = "profitable" | "breakeven" | "losing";
+
+/**
+ * Status of one R:R × win-rate cell, from the sign of the expectancy.
+ * Exact break-even (E = 0) is the only "breakeven" cell — e.g. 1:1 at 50%
+ * and 4:1 at 20% — everything else is profitable or losing.
+ */
+export function classifyRrCell(
+  rr: DecimalInput,
+  winRate: DecimalInput
+): RrCellStatus {
+  const e = expectancyR(winRate, rr);
+  if (e === null) return "losing";
+  if (e.gt(0)) return "profitable";
+  if (e.eq(0)) return "breakeven";
+  return "losing";
+}
+
+export interface CompoundProjectionInput {
+  startingBalance: DecimalInput;
+  /** Expectancy per trade in R (e.g. 0.2 R). */
+  expectancyR: DecimalInput;
+  /** Risk per trade as a fraction of balance (e.g. 0.01 = 1%). */
+  riskPerTrade: DecimalInput;
+  tradesPerMonth: DecimalInput;
+  months: DecimalInput;
+}
+
+/**
+ * Compounding projection: month-end balances, starting balance included
+ * as the first point. Each month adds
+ * expectancyR × riskPerTrade × tradesPerMonth (fraction of the balance).
+ *
+ * This is a PROJECTION, not a promise: it assumes a constant expectancy
+ * and constant risk, which never happens in real trading. The UI must
+ * say so next to every number this produces.
+ * Returns [] when any input is invalid (balance ≤ 0, expectancy < −1,
+ * risk < 0, trades/month ≤ 0, months outside 1–120).
+ */
+export function compoundProjection(
+  input: CompoundProjectionInput
+): Decimal[] {
+  const start = toD(input.startingBalance);
+  const expR = toD(input.expectancyR);
+  const risk = toD(input.riskPerTrade);
+  const perMonth = toD(input.tradesPerMonth);
+  const months = toD(input.months);
+  if (
+    start.lte(0) ||
+    expR.lt(-1) ||
+    risk.lt(0) ||
+    perMonth.lte(0) ||
+    months.lt(1) ||
+    months.gt(120) ||
+    !months.isInteger()
+  ) {
+    return [];
+  }
+  const monthlyReturn = expR.times(risk).times(perMonth);
+  const points: Decimal[] = [start];
+  let balance = start;
+  for (let m = 0; m < months.toNumber(); m++) {
+    balance = balance.times(D1.plus(monthlyReturn));
+    points.push(balance);
+  }
+  return points;
 }

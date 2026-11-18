@@ -72,6 +72,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { useAccounts, useStrategies } from "@/hooks/use-trading";
 import {
@@ -83,6 +84,7 @@ import {
   useRevokeConnection,
   useRotateConnection,
   useSymbolMappings,
+  useSyncOverview,
   useUpdateConnection,
   useUpsertSymbolMapping,
   type BrokerConnection,
@@ -126,14 +128,14 @@ function CopyField({ label, value }: { label: string; value: string }) {
           type="button"
           variant="outline"
           size="icon"
-          aria-label={copied ? "Copié" : "Copier"}
+          aria-label={copied ? "Copied" : "Copy"}
           onClick={async () => {
             try {
               await navigator.clipboard.writeText(value);
               setCopied(true);
               setTimeout(() => setCopied(false), 2000);
             } catch {
-              toast({ title: "Copie impossible", description: "Copiez manuellement." });
+              toast({ title: "Copy failed", description: "Copiez manuellement." });
             }
           }}
         >
@@ -155,8 +157,8 @@ function TokenOnceDialog({
   const appUrl =
     typeof window !== "undefined" ? window.location.origin : "";
   const eaFile = created?.connection.platform === "MT4"
-    ? "/ea/TradeJournalSync.mq4"
-    : "/ea/TradeJournalSync.mq5";
+    ? "/ea/PrometheSync.mq4"
+    : "/ea/PrometheSync.mq5";
 
   return (
     <Dialog open={created !== null} onOpenChange={(open) => !open && onClose()}>
@@ -181,7 +183,7 @@ function TokenOnceDialog({
                   className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-4"
                 >
                   <Download className="h-3 w-3" aria-hidden="true" />
-                  {created.connection.platform === "MT4" ? "TradeJournalSync.mq4" : "TradeJournalSync.mq5"}
+                  {created.connection.platform === "MT4" ? "PrometheSync.mq4" : "PrometheSync.mq5"}
                 </a>
               </li>
               <li>{t("step2")}</li>
@@ -189,6 +191,7 @@ function TokenOnceDialog({
                 {t("step3", { url: appUrl })}
               </li>
               <li>{t("step4")}</li>
+              <li>{t("step5")}</li>
             </ol>
           </div>
         )}
@@ -290,11 +293,11 @@ function ConnectionCard({ connection }: { connection: BrokerConnection }) {
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
           <div>
             <dt className="text-xs text-muted-foreground">{t("fields.server")}</dt>
-            <dd className="truncate font-medium">{connection.brokerServer ?? "—"}</dd>
+            <dd className="truncate font-medium">{connection.brokerServer ?? "-"}</dd>
           </div>
           <div>
             <dt className="text-xs text-muted-foreground">{t("fields.login")}</dt>
-            <dd className="truncate font-medium">{connection.brokerLogin ?? "—"}</dd>
+            <dd className="truncate font-medium">{connection.brokerLogin ?? "-"}</dd>
           </div>
           <div>
             <dt className="text-xs text-muted-foreground">{t("fields.heartbeat")}</dt>
@@ -615,6 +618,68 @@ function MagicMappingsSection() {
   );
 }
 
+// ── Recent sync activity ───────────────────────────────────────────────────
+
+function ActivitySection() {
+  const t = useTranslations("brokerSync.activity");
+  const { data: overview, isLoading } = useSyncOverview();
+
+  const relative = (iso: string) => {
+    const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    if (minutes < 1) return "just now";
+    if (minutes < 60) return `${minutes} min ago`;
+    if (minutes < 1440) return `${Math.round(minutes / 60)} h ago`;
+    return new Date(iso).toLocaleDateString("en-CA");
+  };
+
+  const statusStyle: Record<string, string> = {
+    PROCESSED: "border-emerald-500/40 text-emerald-700 dark:text-emerald-400",
+    DUPLICATE: "border-border text-muted-foreground",
+    REJECTED: "border-red-500/40 text-red-700 dark:text-red-400",
+    FAILED: "border-red-500/40 text-red-700 dark:text-red-400",
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{t("title")}</CardTitle>
+        <CardDescription>{t("description")}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <Skeleton className="h-24 w-full" />
+        ) : !overview || overview.recentEvents.length === 0 ? (
+          <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+            {t("empty")}
+          </p>
+        ) : (
+          <ul className="divide-y rounded-lg border">
+            {overview.recentEvents.map((event) => (
+              <li
+                key={event.id}
+                className="flex flex-wrap items-center justify-between gap-2 p-3"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-mono text-sm font-medium">
+                    {event.type}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {event.connectionLabel} · {relative(event.receivedAt)}
+                    {event.errorCode ? ` · ${event.errorCode}` : ""}
+                  </p>
+                </div>
+                <Badge variant="outline" className={statusStyle[event.status] ?? statusStyle.DUPLICATE}>
+                  {t(`status.${event.status.toLowerCase()}` as "processed")}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Main view ────────────────────────────────────────────────────────────────
 
 export function BrokerSyncView() {
@@ -624,13 +689,12 @@ export function BrokerSyncView() {
   const [created, setCreated] = React.useState<CreatedConnection | null>(null);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-        </div>
-        <div className="flex shrink-0 gap-2">
+    <div className="space-y-6">
+      <PageHeader
+        title={t("title")}
+        description={t("subtitle")}
+        actions={
+          <div className="flex shrink-0 gap-2">
           <Button
             variant="outline"
             size="icon"
@@ -643,8 +707,9 @@ export function BrokerSyncView() {
             <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
             {t("create")}
           </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* Honest requirements */}
       <Card className="border-border bg-muted/30">
@@ -691,6 +756,9 @@ export function BrokerSyncView() {
           ))}
         </div>
       )}
+
+      {/* Recent activity */}
+      <ActivitySection />
 
       {/* Symbol mappings */}
       <Card>

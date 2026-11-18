@@ -24,7 +24,7 @@ function requirePepper(name: string): string {
   const value = process.env[name];
   if (!value || value.length < 16) {
     throw new Error(
-      `${name} is missing or too short (< 16 chars) — set it in .env before running v3 features.`
+      `${name} is missing or too short (< 16 chars) - set it in .env before running v3 features.`
     );
   }
   return value;
@@ -53,7 +53,7 @@ export function tokenPrefixOf(token: string, length = 6): string {
   return token.slice(0, length);
 }
 
-/** Constant-time string equality — no early exit on first differing byte. */
+/** Constant-time string equality - no early exit on first differing byte. */
 export function constantTimeEqual(a: string, b: string): boolean {
   const bufA = Buffer.from(a, "utf8");
   const bufB = Buffer.from(b, "utf8");

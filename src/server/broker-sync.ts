@@ -91,7 +91,7 @@ async function requireConnection(
 
 export interface CreatedConnection {
   connection: BrokerConnectionDTO;
-  /** Raw token — displayed ONCE, never stored or logged. */
+  /** Raw token - displayed ONCE, never stored or logged. */
   token: string;
   /** Ready-to-copy ingest URL for the EA. */
   ingestUrl: string;
@@ -346,10 +346,19 @@ export interface SyncOverviewDTO {
   needsDetailsCount: number;
   /** Latest equity per synced account (from heartbeats). */
   equity: { accountId: string; accountName: string; balance: string; equity: string; time: string }[];
+  /** Last ingest events, newest first (max 10). */
+  recentEvents: {
+    id: string;
+    connectionLabel: string;
+    type: string;
+    status: string;
+    errorCode: string | null;
+    receivedAt: string;
+  }[];
 }
 
 export async function getSyncOverview(userId: string): Promise<SyncOverviewDTO> {
-  const [connections, needsDetailsCount, snapshots] = await Promise.all([
+  const [connections, needsDetailsCount, snapshots, events] = await Promise.all([
     db.brokerConnection.findMany({
       where: { userId, status: { not: "REVOKED" } },
       include: { account: { select: { name: true } } },
@@ -361,6 +370,12 @@ export async function getSyncOverview(userId: string): Promise<SyncOverviewDTO> 
       orderBy: { time: "desc" },
       take: 60,
       include: { account: { select: { name: true } } },
+    }),
+    db.syncEventLog.findMany({
+      where: { userId },
+      orderBy: { receivedAt: "desc" },
+      take: 10,
+      include: { connection: { select: { label: true } } },
     }),
   ]);
 
@@ -379,6 +394,14 @@ export async function getSyncOverview(userId: string): Promise<SyncOverviewDTO> 
       balance: snapshot.balance.toString(),
       equity: snapshot.equity.toString(),
       time: snapshot.time.toISOString(),
+    })),
+    recentEvents: events.map((event) => ({
+      id: event.id,
+      connectionLabel: event.connection.label,
+      type: event.type,
+      status: event.status,
+      errorCode: event.errorCode,
+      receivedAt: event.receivedAt.toISOString(),
     })),
   };
 }

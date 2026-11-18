@@ -4,7 +4,7 @@
  * DashboardsView (v2.5 Module 1) — replaces the old fixed dashboard.
  *
  * Header: greeting + global filters (period preset / account, URL state
- * `#/?p=&a=&d=`). Dashboard tabs (dnd-kit reorder, rename / default / delete,
+ * `/?p=&a=&d=`). Dashboard tabs (dnd-kit reorder, rename / default / delete,
  * create from blank or the 6 built-in templates). Edit mode toolbar
  * (customize, add widget, undo, reset layout, done) with live announcements.
  * Desktop/tablet: react-grid-layout (12 cols, drag + resize in edit mode,
@@ -99,6 +99,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { useAccounts } from "@/hooks/use-trading";
 import {
@@ -117,7 +118,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useSession } from "@/components/app/session-context";
 import { useI18n } from "@/i18n/i18n-provider";
 import { intlLocale } from "@/i18n/config";
-import { navigate } from "@/lib/router";
+import { ROUTE_CHANGE_EVENT, navigate } from "@/lib/router";
 import { getWidgetDefinition } from "@/lib/dashboard/registry";
 import {
   GRID_BREAKPOINTS,
@@ -136,6 +137,8 @@ import { BUILT_IN_TEMPLATES } from "@/lib/dashboard/templates";
 // Registers the v2.5 M2 chart widgets before any getWidgetDefinition /
 // safeParseWidgetConfig call — idempotent side-effect import.
 import "@/lib/dashboard/register-chart-widgets";
+import "@/lib/dashboard/register-risk-reward-widgets";
+import "@/lib/dashboard/register-mrt-wave2-widgets";
 import type { WidgetPatchInput } from "@/lib/validations/dashboard";
 import { WidgetShell } from "@/components/dashboard/widget-shell";
 import { WidgetCatalog } from "@/components/dashboard/widget-catalog";
@@ -217,10 +220,9 @@ function chartHeightPx(widget: DashboardWidgetDTO): number {
   return Math.max(120, h * 40 - 110);
 }
 
-/** URL query of the dashboard route (`#/?p=&a=&d=`). */
-function readHashQuery(): URLSearchParams {
-  const qs = window.location.hash.split("?")[1] ?? "";
-  return new URLSearchParams(qs);
+/** URL query of the dashboard route (`/?p=&a=&d=`). */
+function readUrlQuery(): URLSearchParams {
+  return new URLSearchParams(window.location.search);
 }
 
 // ── Sortable dashboard tab ───────────────────────────────────────────────────
@@ -342,7 +344,7 @@ export function DashboardsView() {
 
   React.useEffect(() => {
     const read = () => {
-      const params = readHashQuery();
+      const params = readUrlQuery();
       const p = params.get("p");
       if (p && isPeriodPreset(p)) setPreset(p);
       const a = params.get("a");
@@ -352,8 +354,12 @@ export function DashboardsView() {
     read();
     setHydrated(true);
     setStoredId(window.localStorage.getItem(LAST_DASHBOARD_KEY));
-    window.addEventListener("hashchange", read);
-    return () => window.removeEventListener("hashchange", read);
+    window.addEventListener("popstate", read);
+    window.addEventListener(ROUTE_CHANGE_EVENT, read);
+    return () => {
+      window.removeEventListener("popstate", read);
+      window.removeEventListener(ROUTE_CHANGE_EVENT, read);
+    };
   }, []);
 
   // ── Data ──
@@ -403,8 +409,8 @@ export function DashboardsView() {
     sp.set("p", preset);
     if (effectiveAccountId) sp.set("a", effectiveAccountId);
     if (active?.id) sp.set("d", active.id);
-    const next = `#/?${sp.toString()}`;
-    if (window.location.hash !== next) {
+    const next = `/?${sp.toString()}`;
+    if (`${window.location.pathname}${window.location.search}` !== next) {
       window.history.replaceState(null, "", next);
     }
   }, [hydrated, preset, effectiveAccountId, active?.id]);
@@ -485,7 +491,7 @@ export function DashboardsView() {
     [gridState, active, layoutsSignature]
   );
 
-  /** Debounced layout save — patches only the widgets that actually moved. */
+  /** Debounced layout save - patches only the widgets that actually moved. */
   const saveLayouts = React.useCallback(() => {
     if (!active) return;
     const all = gridsRef.current;
@@ -749,7 +755,7 @@ export function DashboardsView() {
     (widgetId: string, patch: WidgetPatchInput) =>
       patchWidgetNormal.mutate({ dashboardId, widgetId, patch });
 
-  const renderShell = (w: DashboardWidgetDTO) => {
+  const renderShell = (w: DashboardWidgetDTO, index = 0) => {
     if (!active) return null;
     const definition = getWidgetDefinition(w.type);
     const entry = dashboardData?.widgets[w.id];
@@ -759,6 +765,7 @@ export function DashboardsView() {
     return (
       <WidgetShell
         key={w.id}
+        index={index}
         widget={w}
         definition={definition}
         editMode={editMode}
@@ -855,17 +862,17 @@ export function DashboardsView() {
         <CardDescription>{tDash("emptyDesc")}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <Button onClick={() => navigate("#/trades/quick")}>
+        <Button onClick={() => navigate("/trades/quick")} data-tour="quick-trade-alt">
           <Zap className="h-4 w-4" aria-hidden="true" />
           {tDash("emptyCtaQuick")}
         </Button>
-        <Button variant="outline" onClick={() => navigate("#/trades/new")}>
+        <Button variant="outline" onClick={() => navigate("/trades/new")}>
           <Plus className="h-4 w-4" aria-hidden="true" />
           {tDash("emptyCtaForm")}
         </Button>
         <Button
           variant="outline"
-          onClick={() => navigate("#/reglages/templates")}
+          onClick={() => navigate("/settings/templates")}
         >
           <LayoutTemplate className="h-4 w-4" aria-hidden="true" />
           {tDash("emptyCtaTemplates")}
@@ -936,7 +943,7 @@ export function DashboardsView() {
                   </span>
                 </div>
               ) : null}
-              {renderShell(w)}
+              {renderShell(w, index)}
             </div>
           );
         })}
@@ -958,7 +965,7 @@ export function DashboardsView() {
         onResizeStart={onGridInteractionStart}
         className="min-h-40"
       >
-        {active.widgets.map((w) => renderShell(w))}
+        {active.widgets.map((w, i) => renderShell(w, i))}
       </ResponsiveGridLayout>
     );
 
@@ -973,16 +980,12 @@ export function DashboardsView() {
   return (
     <div className="space-y-6">
       {/* ── Greeting + global filters ── */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-xl font-bold tracking-tight sm:text-2xl">
-            {tDash("greeting", { name: profile.displayName })}
-          </h2>
-          {today && (
-            <p className="text-sm capitalize text-muted-foreground">{today}</p>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      <PageHeader
+        title={tDash("greeting", { name: profile.displayName })}
+        description={today ? <span className="capitalize">{today}</span> : undefined}
+        className="sm:flex-col lg:flex-row lg:items-end"
+        actions={
+          <>
           <Select
             value={preset}
             onValueChange={(v) => setPreset(v as PeriodPreset)}
@@ -1021,8 +1024,9 @@ export function DashboardsView() {
               ))}
             </SelectContent>
           </Select>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* ── Dashboard tabs ── */}
       <DndContext

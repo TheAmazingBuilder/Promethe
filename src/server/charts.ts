@@ -55,7 +55,7 @@ interface LocalParts {
   isoWeek: number; // 1-53
 }
 
-/** Local parts of a Date in `timezone` — null on invalid TZ. */
+/** Local parts of a Date in `timezone` - null on invalid TZ. */
 export function localParts(date: Date, timezone: string): LocalParts | null {
   try {
     const fmt = new Intl.DateTimeFormat("en-US", {
@@ -240,7 +240,7 @@ export async function getBuilderTrades(
   };
 }
 
-/** Trade row (no relations) → minimal BuilderTrade — test helper. */
+/** Trade row (no relations) → minimal BuilderTrade - test helper. */
 export function toBuilderTradeFromRow(
   t: TradeRow & Partial<Row>,
   timezone: string
@@ -358,7 +358,7 @@ export interface CandleWindowPayload {
   candles: CandleDTO[];
 }
 
-/** Hard caps (free tier / 500 MB budget — documented in README). */
+/** Hard caps (free tier / 500 MB budget - documented in README). */
 export const CANDLE_MAX_ROWS_PER_IMPORT = 50_000;
 export const CANDLE_MAX_WINDOW_BARS = 6_000;
 export const CANDLE_USER_BUDGET = 250_000;
@@ -447,6 +447,103 @@ export async function getCandleWindow(
     to: to.toISOString(),
     candles,
   };
+}
+
+/** One batch result, aligned by index with the request array. */
+export interface CandleBatchResult {
+  candles: CandleDTO[];
+}
+
+/**
+ * Batch candle windows (Phase 2 perf, item 7) — the trades grid's mini
+ * charts, one HTTP call instead of one GET per card.
+ *
+ * Windows are grouped by (instrumentId, timeframe) and served from ONE
+ * union window per group (one getCandleWindow call), sliced per card in
+ * memory. Cap guard: the union keeps only the LAST
+ * CANDLE_MAX_WINDOW_BARS bars, so when a union returns that many rows
+ * the earliest cards may have lost candles — the group then falls back
+ * to one window fetch per card, still inside this single batch request.
+ * A group that fails (unknown instrument) yields empty candles for its
+ * cards instead of failing the whole batch.
+ */
+export async function getCandleBatch(
+  userId: string,
+  requests: CandleWindowQuery[]
+): Promise<CandleBatchResult[]> {
+  const results: CandleBatchResult[] = requests.map(() => ({ candles: [] }));
+  interface Group {
+    instrumentId: string;
+    timeframe: CandleTimeframe;
+    from: Date;
+    to: Date;
+    indexes: number[];
+  }
+  const groups = new Map<string, Group>();
+  requests.forEach((req, i) => {
+    const key = `${req.instrumentId}|${req.timeframe}`;
+    const from = new Date(req.from);
+    const to = new Date(req.to);
+    const group = groups.get(key);
+    if (group) {
+      if (from < group.from) group.from = from;
+      if (to > group.to) group.to = to;
+      group.indexes.push(i);
+    } else {
+      groups.set(key, {
+        instrumentId: req.instrumentId,
+        timeframe: req.timeframe,
+        from,
+        to,
+        indexes: [i],
+      });
+    }
+  });
+
+  await Promise.all(
+    [...groups.values()].map(async (group) => {
+      try {
+        const union = await getCandleWindow(userId, {
+          instrumentId: group.instrumentId,
+          timeframe: group.timeframe,
+          from: group.from.toISOString(),
+          to: group.to.toISOString(),
+        });
+        if (union.candles.length >= CANDLE_MAX_WINDOW_BARS) {
+          // Union was capped: fall back to one window fetch per card.
+          await Promise.all(
+            group.indexes.map(async (i) => {
+              try {
+                const single = await getCandleWindow(userId, requests[i]);
+                results[i] = { candles: single.candles };
+              } catch (error) {
+                console.error(
+                  `[charts] batch window ${i} failed:`,
+                  error
+                );
+              }
+            })
+          );
+          return;
+        }
+        for (const i of group.indexes) {
+          const fromSec = Date.parse(requests[i].from) / 1000;
+          const toSec = Date.parse(requests[i].to) / 1000;
+          results[i] = {
+            candles: union.candles.filter(
+              (c) => c.time >= fromSec && c.time <= toSec
+            ),
+          };
+        }
+      } catch (error) {
+        console.error(
+          `[charts] batch group ${group.instrumentId}/${group.timeframe} failed:`,
+          error
+        );
+      }
+    })
+  );
+  return results;
 }
 
 // ── CSV candle import ────────────────────────────────────────────────────────

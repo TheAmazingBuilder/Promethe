@@ -41,7 +41,7 @@ export interface BuilderTrade extends StatTrade {
   pips: string | null;
   points: string | null;
   riskPercent: string | null;
-  /** MFE/MAE expressed in R (computed server-side — excursionR below). */
+  /** MFE/MAE expressed in R (computed server-side - excursionR below). */
   mfeR: string | null;
   maeR: string | null;
   /** Trade duration in minutes (exit − entry). */
@@ -51,7 +51,7 @@ export interface BuilderTrade extends StatTrade {
   /** MISTAKE-kind tag names. */
   mistakes: string[];
   // Timezone-aware local parts (user's profile timezone, computed server-side)
-  /** Local calendar date of the EXIT (YYYY-MM-DD) — P&L attribution. */
+  /** Local calendar date of the EXIT (YYYY-MM-DD) - P&L attribution. */
   localDate: string | null;
   /** Local calendar date of the ENTRY (YYYY-MM-DD). */
   localEntryDate: string | null;
@@ -228,7 +228,7 @@ export function dimensionDef(key: XDimension): DimensionDef {
   return def;
 }
 
-/** Category keys of one trade for a dimension — null/empty = excluded. */
+/** Category keys of one trade for a dimension - null/empty = excluded. */
 export function categoriesOf(t: BuilderTrade, dim: XDimension): string[] {
   switch (dim) {
     case "hourOfDay":
@@ -290,7 +290,7 @@ export function categoriesOf(t: BuilderTrade, dim: XDimension): string[] {
     case "account":
       return [t.accountName];
     case "tradeIndex":
-      return []; // scatter-only — handled separately
+      return []; // scatter-only - handled separately
     case "date":
       return t.localEntryDate ? [t.localEntryDate] : [];
   }
@@ -534,13 +534,13 @@ export function linearTrend(points: Array<[number, number]>): TrendResult | null
 // ── Result types ─────────────────────────────────────────────────────────────
 
 export interface ChartDatum {
-  /** Display key (raw category — the UI localizes buckets/weekday names). */
+  /** Display key (raw category - the UI localizes buckets/weekday names). */
   key: string;
   /** Series key → aggregated value (JS number for Recharts; null = no data). */
   values: Record<string, number | null>;
   /** Trades in this category (all groups). */
   n: number;
-  /** Trade ids (capped — see TRADE_ID_CAP), for drill-down counts. */
+  /** Trade ids (capped - see TRADE_ID_CAP), for drill-down counts. */
   tradeIds: string[];
   /** True count of matching trades (≥ tradeIds.length when capped). */
   total: number;
@@ -946,7 +946,7 @@ export function chartResultToCsv(result: ChartResult): string {
 // ── Drill-down filter mapping ────────────────────────────────────────────────
 
 /**
- * Map a drill-down descriptor to /api/trades list query filters. Dimensions
+ * Map a drill-down descriptor to /api/v1/trades list query filters. Dimensions
  * without a server-side filter (buckets, tags…) return {} — the UI shows a
  * notice that the drill-down opened unfiltered for those.
  */
@@ -1026,5 +1026,5 @@ export const HOLDING_BUCKET_KEYS = HOLDING_BUCKETS.map((b) => b.key);
 export const LOT_BUCKET_KEYS = LOT_BUCKETS.map((b) => b.key);
 export const RISK_BUCKET_KEYS = RISK_BUCKETS.map((b) => b.key);
 
-/** computeTradeStats re-export — category stats for aggregate measures. */
+/** computeTradeStats re-export - category stats for aggregate measures. */
 export { computeTradeStats };

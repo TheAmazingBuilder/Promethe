@@ -26,10 +26,10 @@ export interface ShareLinkDTO {
   createdAt: string;
 }
 
-/** What the create call returns — the ONLY moment the raw URL exists. */
+/** What the create call returns - the ONLY moment the raw URL exists. */
 export interface CreatedShareLink {
   link: ShareLinkDTO;
-  /** Absolute path ("/s/<raw-token>") — build the full origin client-side. */
+  /** Absolute path ("/s/<raw-token>") - build the full origin client-side. */
   urlPath: string;
 }
 
@@ -46,9 +46,9 @@ export interface SharePolicyInput {
 
 export interface CreateShareLinkInput {
   type: ShareLinkType;
-  /** Required for TRADE — the trade to share. */
+  /** Required for TRADE - the trade to share. */
   tradeId?: string;
-  /** Required for REPORT — the period the report covers. */
+  /** Required for REPORT - the period the report covers. */
   reportPeriod?: {
     start: string; // YYYY-MM-DD
     end: string; // YYYY-MM-DD
@@ -57,7 +57,7 @@ export interface CreateShareLinkInput {
   title: string;
   mode: ShareLinkMode;
   policy: SharePolicyInput;
-  /** Days from now; 7 | 30 | 90 | 365 | 3650 (10 y max — no "never"). */
+  /** Days from now; 7 | 30 | 90 | 365 | 3650 (10 y max - no "never"). */
   expiresInDays: number;
   /** Optional view cap (>= 1). */
   maxViews?: number | null;
@@ -69,7 +69,7 @@ export interface PublicScreenshotRef {
   id: string;
   label: string | null;
   caption: string | null;
-  /** /api/public/media/<token>/<id> — filled by the resolver. */
+  /** /api/v1/public/media/<token>/<id> - filled by the resolver. */
   url: string;
 }
 
@@ -114,7 +114,7 @@ export interface PublicReportPayload {
 
 export type PublicSharePayload = PublicTradePayload | PublicReportPayload;
 
-/** Resolution outcome — GONE covers invalid/expired/revoked/view-limit so
+/** Resolution outcome - GONE covers invalid/expired/revoked/view-limit so
  *  probing tokens cannot distinguish between the cases. */
 export type ResolveResult =
   | { ok: true; payload: PublicSharePayload }

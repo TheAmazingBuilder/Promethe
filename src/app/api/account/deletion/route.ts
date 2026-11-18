@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     const password = typeof body?.password === "string" ? body.password : "";
     if (!password) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Mot de passe requis." },
+        { error: "VALIDATION", message: "Password required." },
         { status: 422 }
       );
     }
@@ -42,8 +42,8 @@ export async function POST(req: Request) {
       const status = result.code === "BAD_PASSWORD" ? 403 : 409;
       const message =
         result.code === "BAD_PASSWORD"
-          ? "Mot de passe incorrect."
-          : "Une suppression est déjà programmée.";
+          ? "Incorrect password."
+          : "A deletion is already scheduled.";
       return NextResponse.json({ error: result.code, message }, { status });
     }
     return NextResponse.json({ state: result.state });
@@ -60,7 +60,7 @@ export async function DELETE() {
       return NextResponse.json(
         {
           error: "NO_PENDING_REQUEST",
-          message: "Aucune suppression en attente.",
+          message: "No pending deletion.",
         },
         { status: 409 }
       );

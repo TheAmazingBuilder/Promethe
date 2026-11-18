@@ -16,11 +16,13 @@
  *  7. Prune in-app notifications older than 90 days.
  *  8. v2.5 M4: purge trash items older than 30 days (DB rows + Storage
  *     objects) and prune expired ChangeLog undo snapshots.
+ *  9. v2.5 M6: freeze today's trader quality score snapshot per user.
  */
 import { db } from "@/lib/db";
 import { pruneRateLimits } from "@/lib/rate-limit";
 import { executeDueDeletions, type DeletionExecutionReport } from "@/server/account-deletion";
 import { purgeExpiredTrash, type TrashPurgeReport } from "@/server/trash";
+import { recordDailyTraderScores } from "@/server/advanced-analytics";
 
 export interface MaintenanceReport {
   ranAt: string;
@@ -32,6 +34,7 @@ export interface MaintenanceReport {
   shareLinksDeleted: number;
   notificationsPruned: number;
   trashPurged: TrashPurgeReport;
+  traderScoreSnapshots: number;
 }
 
 export async function runDailyMaintenance(now: Date = new Date()): Promise<MaintenanceReport> {
@@ -73,6 +76,10 @@ export async function runDailyMaintenance(now: Date = new Date()): Promise<Maint
   // 8. v2.5 M4 — trash retention (30 days) + ChangeLog pruning.
   const trashPurged = await purgeExpiredTrash(now);
 
+  // 9. v2.5 M6 — daily trader score snapshots (best-effort, never blocks
+  // the report: a failing step logs inside recordDailyTraderScores).
+  const traderScores = await recordDailyTraderScores(now);
+
   return {
     ranAt: now.toISOString(),
     deletions,
@@ -83,5 +90,6 @@ export async function runDailyMaintenance(now: Date = new Date()): Promise<Maint
     shareLinksDeleted: shareLinks.count,
     notificationsPruned: notifications.count,
     trashPurged,
+    traderScoreSnapshots: traderScores.snapshots,
   };
 }

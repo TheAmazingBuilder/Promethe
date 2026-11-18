@@ -7,8 +7,25 @@
  * through safeParseWidgetConfig before PATCHing.
  */
 import * as React from "react";
-import { ArrowDown, ArrowUp, PencilRuler } from "lucide-react";
+import { ArrowDown, ArrowUp, GripVertical, PencilRuler } from "lucide-react";
 import { useTranslations } from "next-intl";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -48,7 +65,7 @@ import {
   type KpiKey,
 } from "@/lib/dashboard/types";
 
-/** Widget types whose config schema is empty — the dialog shows a note. */
+/** Widget types whose config schema is empty - the dialog shows a note. */
 const NO_SETTINGS_TYPES = new Set([
   "equity-curve",
   "drawdown-curve",
@@ -173,6 +190,26 @@ export function WidgetConfigDialog({
     });
   };
 
+  // ── KPI drag-and-drop (dnd-kit) — same source of truth as the buttons ──
+  // Pointer drag with a 6px activation distance (same as the dashboard tabs)
+  // plus a keyboard sensor: focus the grip, hold Space, move with arrows.
+  // The up/down buttons stay available as the keyboard alternative.
+  const kpiSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const onKpiDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setKpis((prev) => {
+      const oldIndex = prev.indexOf(active.id as KpiKey);
+      const newIndex = prev.indexOf(over.id as KpiKey);
+      if (oldIndex < 0 || newIndex < 0) return prev;
+      return arrayMove(prev, oldIndex, newIndex);
+    });
+  };
+
   const buildConfig = (): unknown => {
     switch (widget.type) {
       case "kpi-strip":
@@ -227,45 +264,34 @@ export function WidgetConfigDialog({
             <p className="text-sm text-muted-foreground">
               {t("config.kpisHelp", { max: KPI_STRIP_MAX })}
             </p>
-            <ul className="max-h-72 space-y-1 overflow-y-auto pr-1">
-              {kpis.map((key, index) => (
-                <li
-                  key={key}
-                  className="flex items-center gap-2 rounded-md border px-2 py-1.5"
-                >
-                  <Checkbox
-                    checked
-                    onCheckedChange={(checked) =>
-                      toggleKpi(key, checked === true)
-                    }
-                    aria-label={t(`kpi.${key}`)}
-                  />
-                  <span className="flex-1 text-sm">{t(`kpi.${key}`)}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => moveKpi(index, -1)}
-                    disabled={index === 0}
-                    aria-label={t("config.moveUp", { name: t(`kpi.${key}`) })}
-                  >
-                    <ArrowUp className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => moveKpi(index, 1)}
-                    disabled={index === kpis.length - 1}
-                    aria-label={t("config.moveDown", { name: t(`kpi.${key}`) })}
-                  >
-                    <ArrowDown className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                </li>
-              ))}
-            </ul>
+            <DndContext
+              sensors={kpiSensors}
+              collisionDetection={closestCenter}
+              onDragEnd={onKpiDragEnd}
+            >
+              <SortableContext items={kpis} strategy={verticalListSortingStrategy}>
+                <ul className="max-h-72 space-y-1 overflow-y-auto pr-1">
+                  {kpis.map((key, index) => (
+                    <SortableKpiRow
+                      key={key}
+                      kpiKey={key}
+                      index={index}
+                      isLast={index === kpis.length - 1}
+                      label={t(`kpi.${key}`)}
+                      moveUpLabel={t("config.moveUp", { name: t(`kpi.${key}`) })}
+                      moveDownLabel={t("config.moveDown", { name: t(`kpi.${key}`) })}
+                      dragLabel={t("config.dragKpi", { name: t(`kpi.${key}`) })}
+                      onToggle={(checked) => toggleKpi(key, checked)}
+                      onMoveUp={() => moveKpi(index, -1)}
+                      onMoveDown={() => moveKpi(index, 1)}
+                    />
+                  ))}
+                </ul>
+              </SortableContext>
+            </DndContext>
+            <p className="text-xs text-muted-foreground">
+              {t("config.dragHint")}
+            </p>
             <div className="space-y-1.5 rounded-md border p-2">
               <p className="text-xs font-medium text-muted-foreground">
                 {t("config.availableKpis")}
@@ -388,7 +414,7 @@ export function WidgetConfigDialog({
               size="sm"
               onClick={() => {
                 onOpenChange(false);
-                navigate("#/reglages/dashboards");
+                navigate("/settings/dashboards");
               }}
             >
               {t("config.metricGoSettings")}
@@ -429,7 +455,7 @@ export function WidgetConfigDialog({
               size="sm"
               onClick={() => {
                 onOpenChange(false);
-                navigate("#/analytics/charts");
+                navigate("/analytics/charts");
               }}
             >
               {t("config.chartGoBuilder")}
@@ -531,6 +557,89 @@ export function WidgetConfigDialog({
 }
 
 /** Small internal helpers keep the switch above readable. */
+
+/** One KPI row in the kpi-strip editor: draggable by its grip, removable via
+ * the checkbox, reorderable via the up/down buttons (keyboard alternative). */
+function SortableKpiRow({
+  kpiKey,
+  index,
+  isLast,
+  label,
+  moveUpLabel,
+  moveDownLabel,
+  dragLabel,
+  onToggle,
+  onMoveUp,
+  onMoveDown,
+}: {
+  kpiKey: KpiKey;
+  index: number;
+  isLast: boolean;
+  label: string;
+  moveUpLabel: string;
+  moveDownLabel: string;
+  dragLabel: string;
+  onToggle: (checked: boolean) => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: kpiKey });
+  return (
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`flex items-center gap-1.5 rounded-md border bg-background px-2 py-1.5 ${
+        isDragging ? "z-10 opacity-80 shadow-md" : ""
+      }`}
+    >
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        aria-label={dragLabel}
+        className="flex h-8 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+      >
+        <GripVertical className="h-4 w-4" aria-hidden="true" />
+      </button>
+      <Checkbox
+        checked
+        onCheckedChange={(checked) => onToggle(checked === true)}
+        aria-label={label}
+      />
+      <span className="flex-1 text-sm">{label}</span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        onClick={onMoveUp}
+        disabled={index === 0}
+        aria-label={moveUpLabel}
+      >
+        <ArrowUp className="h-4 w-4" aria-hidden="true" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        onClick={onMoveDown}
+        disabled={isLast}
+        aria-label={moveDownLabel}
+      >
+        <ArrowDown className="h-4 w-4" aria-hidden="true" />
+      </Button>
+    </li>
+  );
+}
+
 function ConfigSwitch({
   id,
   label,

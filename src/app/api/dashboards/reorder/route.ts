@@ -4,7 +4,7 @@ import { apiError } from "@/server/api";
 import { reorderDashboards } from "@/server/dashboards";
 import { dashboardsReorderSchema, zodFieldErrors } from "@/lib/validations/shared";
 
-/** POST /api/dashboards/reorder — full order array (all dashboard ids). */
+/** POST /api/dashboards/reorder - full order array (all dashboard ids). */
 export async function POST(req: Request) {
   try {
     const session = await requireUser();
@@ -14,7 +14,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: "VALIDATION",
-          message: "Certains champs sont invalides.",
+          message: "Some fields are invalid.",
           fieldErrors: zodFieldErrors(parsed.error),
         },
         { status: 422 }

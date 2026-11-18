@@ -13,7 +13,7 @@ export const handleSchema = z
   .string()
   .trim()
   .toLowerCase()
-  .regex(/^[a-z0-9_]{3,24}$/, "3-24 caractères : a-z, 0-9, _");
+  .regex(/^[a-z0-9_]{3,24}$/, "3–24 characters: a-z, 0-9, _");
 
 /** Fine-grained mentor permissions (scope of the mentee's journal). */
 export const mentorPermissionsSchema = z
@@ -34,7 +34,7 @@ export const mentorPermissionsSchema = z
 
 export type MentorPermissions = z.infer<typeof mentorPermissionsSchema>;
 
-/** POST /api/mentors — invite by email. */
+/** POST /api/v1/mentors - invite by email. */
 export const mentorInviteSchema = z
   .object({
     email: z.string().trim().toLowerCase().email().max(254),
@@ -44,26 +44,26 @@ export const mentorInviteSchema = z
 
 export type MentorInviteInput = z.infer<typeof mentorInviteSchema>;
 
-/** PATCH /api/mentors/[id] — edit scope / pause / resume. */
+/** PATCH /api/v1/mentors/[id] - edit scope / pause / resume. */
 export const mentorAccessPatchSchema = z
   .object({
     permissions: mentorPermissionsSchema.optional(),
     status: z.enum(["ACTIVE", "PAUSED"]).optional(),
   })
   .refine((v) => v.permissions !== undefined || v.status !== undefined, {
-    message: "Rien à modifier.",
+    message: "Nothing to change.",
   });
 
 export type MentorAccessPatch = z.infer<typeof mentorAccessPatchSchema>;
 
-/** POST /api/mentor/invitations/[token] — accept or decline. */
+/** POST /api/v1/mentor/invitations/[token] - accept or decline. */
 export const invitationActionSchema = z
   .object({
     action: z.enum(["ACCEPT", "DECLINE"]),
   })
   .strip();
 
-/** POST /api/trades/[id]/comments — body + optional parent (one level). */
+/** POST /api/v1/trades/[id]/comments - body + optional parent (one level). */
 export const commentCreateSchema = z
   .object({
     body: z.string().trim().min(1).max(4000),
@@ -73,7 +73,7 @@ export const commentCreateSchema = z
 
 export type CommentCreateInput = z.infer<typeof commentCreateSchema>;
 
-/** PATCH /api/trades/[id]/comments/[commentId] — author-only edit. */
+/** PATCH /api/v1/trades/[id]/comments/[commentId] - author-only edit. */
 export const commentEditSchema = z
   .object({
     body: z.string().trim().min(1).max(4000),
@@ -82,7 +82,7 @@ export const commentEditSchema = z
 
 export type CommentEditInput = z.infer<typeof commentEditSchema>;
 
-/** PATCH /api/profile — handle + public display name (mentoring prerequisites). */
+/** PATCH /api/v1/profile - handle + public display name (mentoring prerequisites). */
 export const handlePatchSchema = z
   .object({
     handle: handleSchema,

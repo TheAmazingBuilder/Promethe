@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * v2.5 Module 2 — chart builder page (#/analytics/charts, spec §4.1).
+ * v2.5 Module 2 — chart builder page (/analytics/charts, spec §4.1).
  *
  * Dropdown-based builder with live preview: the pure engine (/src/lib/charts/
  * builder.ts) recomputes client-side over the cached trades payload, so every
@@ -19,6 +19,7 @@ import {
   Download,
   GitBranch,
   Image as ImageIcon,
+  LayoutDashboard,
   LineChart as LineChartIcon,
   Loader2,
   Plus,
@@ -30,6 +31,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAccounts } from "@/hooks/use-trading";
+import { useAddWidget, useDashboards } from "@/hooks/use-dashboards";
 import {
   useBuilderData,
   useCreateSavedChart,
@@ -67,6 +69,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { ToastAction } from "@/components/ui/toast";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
@@ -74,9 +77,15 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { PageHeader } from "@/components/ui/page-header";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import { ApiClientError } from "@/lib/api-client";
 import { navigate } from "@/lib/router";
+import { getWidgetDefinition } from "@/lib/dashboard/registry";
+// Registers the saved-chart / heatmap / year-calendar widgets (side effect).
+import "@/lib/dashboard/register-chart-widgets";
+import { findFreeSlot } from "@/lib/dashboard/layout";
+import { MAX_WIDGETS_PER_DASHBOARD } from "@/lib/dashboard/types";
 import {
   buildChart,
   chartResultToCsv,
@@ -107,12 +116,22 @@ import {
   type XDimension,
   type YMeasure,
 } from "@/lib/validations/charts";
+import dynamic from "next/dynamic";
+import { ChartTable } from "./chart-table";
 import {
-  ChartPreview,
-  ChartTable,
   formatCategoryKey,
   yMeasureFormat,
-} from "./chart-preview";
+} from "./chart-format";
+
+// ChartPreview (recharts) loads on demand — the builder shell (filters,
+// config, table fallback) renders first, the chart chunk after.
+const ChartPreview = dynamic(
+  () => import("./chart-preview").then((m) => m.ChartPreview),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-[320px] w-full" />,
+  }
+);
 
 // ── Config shape (draft — validated on every render) ─────────────────────────
 
@@ -237,12 +256,19 @@ export function ChartBuilderView() {
   const [saveOpen, setSaveOpen] = React.useState(false);
   const [saveName, setSaveName] = React.useState("");
   const [saving, setSaving] = React.useState(false);
+  const [addTarget, setAddTarget] = React.useState<SavedChartDTO | null>(null);
+  const [addDashboardId, setAddDashboardId] = React.useState("");
+  // Set when "Add to dashboard" is clicked on an unsaved draft: the save
+  // dialog opens first, then the freshly saved chart is added.
+  const [pendingAddAfterSave, setPendingAddAfterSave] = React.useState(false);
   const previewRef = React.useRef<HTMLDivElement>(null);
 
   const accounts = useAccounts();
   const savedCharts = useSavedCharts();
   const createChart = useCreateSavedChart();
   const deleteChart = useDeleteSavedChart();
+  const dashboardsQuery = useDashboards();
+  const addWidget = useAddWidget();
 
   const filters = React.useMemo(
     () => ({ period: draft.period, account: draft.accountId }),
@@ -266,7 +292,7 @@ export function ChartBuilderView() {
   React.useEffect(() => {
     const handler = (e: Event) => {
       const id = (e as CustomEvent<string>).detail;
-      if (id) navigate(`#/trades/${encodeURIComponent(id)}`);
+      if (id) navigate(`/trades/${encodeURIComponent(id)}`);
     };
     window.addEventListener("tj:chart-drill-trade", handler);
     return () => window.removeEventListener("tj:chart-drill-trade", handler);
@@ -344,10 +370,10 @@ export function ChartBuilderView() {
       .join("&");
     if (!keys) {
       toast({ description: t("preview.drillNotFilterable") });
-      navigate("#/trades");
+      navigate("/trades");
       return;
     }
-    navigate(`#/trades?${keys}`);
+    navigate(`/trades?${keys}`);
   };
 
   // ── Exports ───────────────────────────────────────────────────────────────
@@ -369,10 +395,17 @@ export function ChartBuilderView() {
     if (!cfg || !name.trim()) return;
     setSaving(true);
     try {
-      await createChart.mutateAsync({ name: name.trim(), config: cfg });
+      const created = await createChart.mutateAsync({
+        name: name.trim(),
+        config: cfg,
+      });
       toast({ title: t("toast.saved") });
       setSaveOpen(false);
       setSaveName("");
+      if (pendingAddAfterSave) {
+        setPendingAddAfterSave(false);
+        requestAddToDashboard(created);
+      }
     } catch (error) {
       const err = error instanceof ApiClientError ? error : null;
       toast({
@@ -422,6 +455,103 @@ export function ChartBuilderView() {
     }
   };
 
+  // ── Add to dashboard ────────────────────────────────────────────────────
+
+  const dashboards = dashboardsQuery.data?.dashboards ?? [];
+
+  /** Saved chart whose config matches the current draft, if any. */
+  const matchingSaved = React.useMemo(() => {
+    if (!config) return null;
+    const current = JSON.stringify(config);
+    return (
+      (savedCharts.data ?? []).find((sc) => {
+        const cfg = parseSavedConfig(sc.config);
+        return cfg != null && JSON.stringify(cfg) === current;
+      }) ?? null
+    );
+  }, [config, savedCharts.data]);
+
+  /** Adds a saved chart as a saved-chart widget (same mechanism as the
+   * widget catalog: registry default size + first free slot). */
+  const addChartToDashboard = (chart: SavedChartDTO, dashboardId: string) => {
+    const dashboard = dashboards.find((d) => d.id === dashboardId);
+    if (!dashboard) return;
+    if (dashboard.widgets.length >= MAX_WIDGETS_PER_DASHBOARD) {
+      toast({ title: t("toast.dashboardFull"), variant: "destructive" });
+      return;
+    }
+    const def = getWidgetDefinition("saved-chart");
+    const w = def?.defaultLayout.w ?? 6;
+    const h = def?.defaultLayout.h ?? 8;
+    const existingLg = dashboard.widgets
+      .map((wd) => wd.layouts.lg)
+      .filter(
+        (l): l is { x: number; y: number; w: number; h: number } => l != null
+      );
+    const slot = findFreeSlot(existingLg, w, h);
+    setAddTarget(null);
+    addWidget.mutate(
+      {
+        dashboardId,
+        input: {
+          type: "saved-chart",
+          config: { chartId: chart.id },
+          layouts: { lg: { x: slot.x, y: slot.y, w, h } },
+        },
+      },
+      {
+        onSuccess: () => {
+          toast({
+            title: t("toast.addedToDashboard", { dashboard: dashboard.name }),
+            action: (
+              <ToastAction
+                altText={t("toast.viewDashboard")}
+                onClick={() => navigate(`/?d=${dashboardId}`)}
+              >
+                {t("toast.viewDashboard")}
+              </ToastAction>
+            ),
+          });
+        },
+        onError: (error) => {
+          toast({
+            title: t("toast.addError"),
+            description: (error as Error | undefined)?.message,
+            variant: "destructive",
+          });
+        },
+      }
+    );
+  };
+
+  /** Entry point: one dashboard goes straight in, several open the picker. */
+  const requestAddToDashboard = (chart: SavedChartDTO) => {
+    if (dashboards.length === 0) {
+      toast({ title: t("toast.noDashboard"), variant: "destructive" });
+      return;
+    }
+    if (dashboards.length === 1) {
+      addChartToDashboard(chart, dashboards[0]!.id);
+      return;
+    }
+    const preferred =
+      dashboards.find((d) => d.isDefault) ?? dashboards[0]!;
+    setAddDashboardId(preferred.id);
+    setAddTarget(chart);
+  };
+
+  /** Current draft: add the matching saved chart, or save first then add. */
+  const addDraftToDashboard = () => {
+    if (!config) return;
+    if (matchingSaved) {
+      requestAddToDashboard(matchingSaved);
+      return;
+    }
+    setPendingAddAfterSave(true);
+    setSaveName("");
+    setSaveOpen(true);
+  };
+
   // ── Render helpers ────────────────────────────────────────────────────────
 
   const trades: BuilderTrade[] = data.data?.trades ?? [];
@@ -446,23 +576,23 @@ export function ChartBuilderView() {
   return (
     <div className="space-y-6">
       {/* Header + sub-nav */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
-          <p className="text-sm text-muted-foreground">{t("description")}</p>
-        </div>
-        <Tabs value="charts">
+      <PageHeader
+        title={t("title")}
+        description={t("description")}
+        actions={
+          <Tabs value="charts">
           <TabsList>
-            <TabsTrigger value="overview" onClick={() => navigate("#/analytics")}>
+            <TabsTrigger value="overview" onClick={() => navigate("/analytics")}>
               {t("tabs.overview")}
             </TabsTrigger>
             <TabsTrigger value="charts">{t("tabs.charts")}</TabsTrigger>
-            <TabsTrigger value="heatmaps" onClick={() => navigate("#/analytics/heatmaps")}>
+            <TabsTrigger value="heatmaps" onClick={() => navigate("/analytics/heatmaps")}>
               {t("tabs.heatmaps")}
             </TabsTrigger>
           </TabsList>
-        </Tabs>
-      </div>
+          </Tabs>
+        }
+      />
 
       {/* Filters */}
       <Card>
@@ -845,7 +975,7 @@ export function ChartBuilderView() {
             <div className="space-y-1.5">
               <CardTitle className="text-base">
                 {t("preview.title")}
-                {yDef ? ` — ${t(`measures.${draft.y}` as never)}` : ""}
+                {yDef ? ` - ${t(`measures.${draft.y}` as never)}` : ""}
               </CardTitle>
               <CardDescription>
                 {draft.chartType === "scatter"
@@ -900,6 +1030,16 @@ export function ChartBuilderView() {
                 <Save aria-hidden="true" />
                 <span className="hidden sm:inline">{t("saved.save")}</span>
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={addDraftToDashboard}
+                disabled={!config}
+                title={t("saved.addToDashboardHint")}
+              >
+                <LayoutDashboard aria-hidden="true" />
+                <span className="hidden sm:inline">{t("saved.addToDashboard")}</span>
+              </Button>
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -914,7 +1054,7 @@ export function ChartBuilderView() {
                 title={t("preview.empty")}
                 description={t("preview.emptyDesc")}
                 actionLabel={t("preview.emptyCta")}
-                onAction={() => navigate("#/trades/new")}
+                onAction={() => navigate("/trades/new")}
               />
             ) : !config ? (
               <div className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm">
@@ -945,7 +1085,7 @@ export function ChartBuilderView() {
                 <div
                   ref={previewRef}
                   role="img"
-                  aria-label={`${t("preview.title")} — ${t(`dimensions.${draft.x}` as never)}`}
+                  aria-label={`${t("preview.title")} - ${t(`dimensions.${draft.x}` as never)}`}
                 >
                   <ChartPreview
                     result={result}
@@ -1048,6 +1188,14 @@ export function ChartBuilderView() {
                         {t("saved.duplicate")}
                       </Button>
                       <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => requestAddToDashboard(sc)}
+                      >
+                        <LayoutDashboard aria-hidden="true" />
+                        {t("saved.addToDashboard")}
+                      </Button>
+                      <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => void removeSaved(sc)}
@@ -1065,7 +1213,13 @@ export function ChartBuilderView() {
       </Card>
 
       {/* Save dialog */}
-      <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
+      <Dialog
+        open={saveOpen}
+        onOpenChange={(open) => {
+          setSaveOpen(open);
+          if (!open) setPendingAddAfterSave(false);
+        }}
+      >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>{t("saved.saveTitle")}</DialogTitle>
@@ -1090,6 +1244,59 @@ export function ChartBuilderView() {
             >
               {saving ? <Loader2 aria-hidden="true" className="animate-spin" /> : <Plus aria-hidden="true" />}
               {t("saved.saveAction")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dashboard picker (shown when several dashboards exist) */}
+      <Dialog open={addTarget != null} onOpenChange={(open) => {
+        if (!open) setAddTarget(null);
+      }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("addToDashboard.title")}</DialogTitle>
+            <DialogDescription>
+              {addTarget
+                ? t("addToDashboard.description", { name: addTarget.name })
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="add-dashboard-select">
+              {t("addToDashboard.dashboard")}
+            </Label>
+            <Select value={addDashboardId} onValueChange={setAddDashboardId}>
+              <SelectTrigger id="add-dashboard-select" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {dashboards.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>
+                    {d.name}
+                    {d.widgets.length >= MAX_WIDGETS_PER_DASHBOARD
+                      ? ` (${t("addToDashboard.full")})`
+                      : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                if (addTarget && addDashboardId) {
+                  addChartToDashboard(addTarget, addDashboardId);
+                }
+              }}
+              disabled={!addTarget || !addDashboardId || addWidget.isPending}
+            >
+              {addWidget.isPending ? (
+                <Loader2 aria-hidden="true" className="animate-spin" />
+              ) : (
+                <LayoutDashboard aria-hidden="true" />
+              )}
+              {t("addToDashboard.add")}
             </Button>
           </DialogFooter>
         </DialogContent>

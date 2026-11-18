@@ -18,7 +18,7 @@ export type ConnectionLifeStatus = "PENDING" | "ACTIVE" | "STALE";
 
 /** Weekday staleness threshold (minutes without heartbeat). */
 export const STALE_WEEKDAY_MIN = 30;
-/** Weekend threshold — no alert unless the terminal was down for days. */
+/** Weekend threshold - no alert unless the terminal was down for days. */
 export const STALE_WEEKEND_MIN = 72 * 60;
 
 /**
@@ -31,7 +31,7 @@ export function evaluateLifeStatus(
 ): ConnectionLifeStatus {
   if (!lastHeartbeatAt) return "PENDING";
   const ageMinutes = (now.getTime() - lastHeartbeatAt.getTime()) / 60_000;
-  if (ageMinutes < 0) return "ACTIVE"; // clock skew — tolerate
+  if (ageMinutes < 0) return "ACTIVE"; // clock skew - tolerate
   const threshold = isWeekendUtc(now) ? STALE_WEEKEND_MIN : STALE_WEEKDAY_MIN;
   return ageMinutes > threshold ? "STALE" : "ACTIVE";
 }

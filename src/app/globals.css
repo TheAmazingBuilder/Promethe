@@ -123,6 +123,67 @@
   }
 }
 
+/* Native color scheme: the browser renders native date/datetime popups and
+ * the calendar-picker indicator in the app's actual theme. Class-based dark
+ * mode does not follow the OS preference, hence the html.dark override. */
+html {
+  color-scheme: light dark;
+}
+html.dark {
+  color-scheme: dark;
+}
+
+/* ── Native date / datetime-local inputs, Euforia style ─────────────────────
+ *
+ * Euforia dresses its native date inputs (no custom picker) with:
+ * h-10 w-full rounded-md border bg-background px-3 font-mono text-sm
+ * tabular-nums plus a focus ring. The rules below reproduce that look for
+ * EVERY date input in the app at once, using the project tokens. The
+ * emerald focus outline comes from --gain (never cobalt, never gold).
+ * Per-field classNames (h-10, or h-8 w-32 for From/To filters) refine
+ * height and width where needed; Tailwind utilities win over these
+ * element selectors by specificity.
+ * On focus, the gray shadcn ring is suppressed (box-shadow: none) so the
+ * single visible indicator is the emerald outline.
+ * ─────────────────────────────────────────────────────────────────────────── */
+input[type="date"],
+input[type="datetime-local"] {
+  height: 2.5rem;
+  width: 100%;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--input);
+  background-color: var(--background);
+  padding-inline: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground);
+  outline: none;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+input[type="date"]::placeholder,
+input[type="datetime-local"]::placeholder {
+  color: var(--muted-foreground);
+}
+input[type="date"]:disabled,
+input[type="datetime-local"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+input[type="date"]:focus-visible,
+input[type="datetime-local"]:focus-visible {
+  outline: 2px solid var(--gain);
+  outline-offset: 2px;
+  border-color: var(--gain);
+  box-shadow: none;
+}
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
+
 /* ── P&L semantic tokens (v2.5 Module 1 — appearance system, spec §1) ────────
  *
  * --gain / --loss / --neutral carry the meaning (profit / loss / flat); the
@@ -443,6 +504,66 @@
   }
 }
 
+/* View fade - short opacity-only transition between SPA views (150 ms),
+ * the CSS replacement for the former framer-motion AnimatePresence in
+ * view-switch.tsx. Reduced motion (above) collapses it to an instant show. */
+@keyframes view-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.view-fade-in {
+  animation: view-fade-in 150ms ease-out;
+}
+
+/* Dashboard widget entrance - short fade-up, staggered per widget via an
+ * inline animation-delay. Fill mode "both" keeps the hidden start state
+ * during the delay. Reduced motion (above) collapses it to an instant show. */
+@keyframes widget-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.widget-enter {
+  animation: widget-enter 320ms ease-out both;
+}
+
+/* Loading skeleton shimmer - a light sweep across the placeholder, on top
+ * of the pulse. Reduced motion (above) collapses it to a static block. */
+@keyframes skeleton-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.08),
+    transparent
+  );
+  animation: skeleton-shimmer 1.6s infinite;
+}
+
 /* Font families (§3.3).
  * DYSLEXIA_FRIENDLY: system dyslexia-recommended stack (Verdana/Tahoma/
  * Comic Sans MS) — zero download, works offline, license-free (decision
@@ -492,4 +613,32 @@ body {
 /* Tabular digits. */
 [data-tabular-nums="1"] body {
   font-variant-numeric: tabular-nums;
+}
+
+/* Gaïa print — only active while body carries .printing-gaia (set by the
+ * print dialog). A print started anywhere else is never hijacked. */
+@media print {
+  body.printing-gaia * {
+    visibility: hidden !important;
+  }
+  body.printing-gaia .print-sheet,
+  body.printing-gaia .print-sheet * {
+    visibility: visible !important;
+  }
+  body.printing-gaia .print-sheet {
+    position: absolute !important;
+    inset: 0 auto auto 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 18mm 14mm !important;
+    box-shadow: none !important;
+  }
+  body.printing-gaia .print-sheet .no-print {
+    display: none !important;
+  }
+  @page {
+    margin: 8mm;
+  }
 }

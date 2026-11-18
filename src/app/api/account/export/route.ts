@@ -16,7 +16,7 @@ export async function GET() {
         return NextResponse.json(
           {
             error: "EXPORT_COOLDOWN",
-            message: "Un export complet est déjà disponible toutes les 24 heures.",
+            message: "A full export is already available every 24 hours.",
             retryAfterMs: result.retryAfterMs ?? 0,
           },
           {
@@ -28,7 +28,7 @@ export async function GET() {
         );
       }
       return NextResponse.json(
-        { error: "NOT_FOUND", message: "Compte introuvable." },
+        { error: "NOT_FOUND", message: "Account not found." },
         { status: 404 }
       );
     }

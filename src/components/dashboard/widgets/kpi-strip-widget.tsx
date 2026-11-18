@@ -17,6 +17,8 @@ import {
   pnlClass,
 } from "@/lib/format";
 import { useFormat } from "@/lib/format/use-format";
+import { useAnimatedDecimal } from "@/hooks/use-count-up";
+import { cn } from "@/lib/utils";
 import type { KpiKey } from "@/lib/dashboard/types";
 import { kpiStripConfigSchema } from "@/lib/dashboard/registry";
 import type { KpiBlock, KpiWidgetData } from "./types";
@@ -25,22 +27,24 @@ import { asKpiData } from "./types";
 const EMERALD = "text-gain";
 const ROSE = "text-loss";
 
-/** One KPI card — ported from the old dashboard view. */
+/** One KPI card - ported from the old dashboard view. */
 export function KpiCard({
   label,
   value,
   valueClassName,
   sub,
+  sparkline,
   compact = false,
 }: {
   label: string;
   value: React.ReactNode;
   valueClassName?: string;
   sub?: React.ReactNode;
+  sparkline?: React.ReactNode;
   compact?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg border p-3 sm:p-4">
+    <div className="flex flex-col gap-1.5 rounded-lg border p-3 transition-colors hover:border-accent-foreground/25 hover:bg-accent/40 sm:p-4">
       <p className="truncate text-xs font-medium text-muted-foreground">
         {label}
       </p>
@@ -51,12 +55,56 @@ export function KpiCard({
       >
         {value}
       </p>
+      {sparkline}
       {sub != null ? (
         <p className="text-xs tabular-nums text-muted-foreground">{sub}</p>
       ) : null}
     </div>
   );
 }
+
+/** Tiny inline SVG sparkline - cumulative P&L path of the period. Green when
+    the period ends above where it started, red otherwise. */
+function Sparkline({ values }: { values: number[] }) {
+  if (values.length < 2) return null;
+  const w = 72;
+  const h = 24;
+  const pad = 2;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const points = values
+    .map(
+      (v, i) =>
+        `${(pad + (i * (w - pad * 2)) / (values.length - 1)).toFixed(1)},${(
+          h -
+          pad -
+          ((v - min) / span) * (h - pad * 2)
+        ).toFixed(1)}`
+    )
+    .join(" ");
+  const up = values[values.length - 1] >= values[0];
+  return (
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+      className={cn("h-6 w-full", up ? "text-gain" : "text-loss")}
+      aria-hidden="true"
+    >
+      <polyline
+        points={points}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** Formats whose value is money - the only ones a P&L sparkline describes. */
+const SPARKLINE_FORMATS = new Set<KpiFormat>(["money", "moneySigned"]);
 
 /** Raw decimal string of one KPI from a KPI block, or null. */
 function kpiRaw(block: KpiBlock | null, key: KpiKey): string | null {
@@ -142,7 +190,7 @@ function isFiniteNumber(v: string | null): v is string {
   return toD(v).isFinite();
 }
 
-/** Format groups — which formatter a KPI key uses. */
+/** Format groups - which formatter a KPI key uses. */
 type KpiFormat =
   | "money"
   | "moneySigned"
@@ -182,7 +230,7 @@ const KPI_FORMAT: Record<KpiKey, KpiFormat> = {
   tradingDays: "count",
 };
 
-/** Keys where a NEGATIVE delta is actually good — tone flips. */
+/** Keys where a NEGATIVE delta is actually good - tone flips. */
 const LOWER_IS_BETTER = new Set<KpiKey>([
   "grossLoss",
   "avgLoss",
@@ -206,7 +254,7 @@ function useKpiDisplay() {
     ): { value: React.ReactNode; tone: string } => {
       const format = KPI_FORMAT[key];
       if (format !== "count" && !isFiniteNumber(raw)) {
-        return { value: "—", tone: "" };
+        return { value: "-", tone: "" };
       }
       const d = raw != null ? toD(raw) : null;
       switch (format) {
@@ -256,7 +304,7 @@ function useKpiDisplay() {
         case "duration":
           return { value: durationLabel(d?.toNumber() ?? 0), tone: "" };
         case "streak": {
-          const n = d?.toNumber() ?? 0;
+          const n = Math.round(d?.toNumber() ?? 0);
           if (n > 0) {
             return { value: tDash("streakWin", { count: n }), tone: EMERALD };
           }
@@ -266,10 +314,10 @@ function useKpiDisplay() {
               tone: ROSE,
             };
           }
-          return { value: "—", tone: "" };
+          return { value: "-", tone: "" };
         }
         default:
-          return { value: "—", tone: "" };
+          return { value: "-", tone: "" };
       }
     },
     [durationLabel, tDash, fmt]
@@ -370,16 +418,24 @@ export function parseKpiStripConfig(config: unknown): {
   };
 }
 
-/** Shared body: renders the KPI cards of the widget payload (strip + single). */
-export function KpiCards({
-  data,
-  kpis,
+/** One KPI card with a count-up on its value (see useAnimatedDecimal). */
+function AnimatedKpiCard({
+  kpiKey,
+  raw,
+  block,
+  compare,
+  sparkline,
+  showSparkline,
   showDelta,
   currency,
   compact = false,
 }: {
-  data: KpiWidgetData | null;
-  kpis: KpiKey[];
+  kpiKey: KpiKey;
+  raw: string | null;
+  block: KpiBlock | null;
+  compare: KpiBlock | null;
+  sparkline: number[] | null;
+  showSparkline: boolean;
   showDelta: boolean;
   currency: string;
   compact?: boolean;
@@ -387,40 +443,80 @@ export function KpiCards({
   const t = useTranslations("dashboards");
   const fmt = useFormat();
   const display = useKpiDisplay();
+  const animatedRaw = useAnimatedDecimal(raw);
+  const { value, tone } = display(kpiKey, animatedRaw, currency);
+  const prevRaw = showDelta ? kpiRaw(compare, kpiKey) : null;
+  const sub =
+    showDelta && compare != null ? (
+      <KpiDelta
+        kpi={kpiKey}
+        current={raw}
+        previous={prevRaw}
+        currency={currency}
+      />
+    ) : kpiKey === "maxDrawdown" &&
+        block?.stats.maxDrawdownPercent != null ? (
+      <span>{fmt.pct(block.stats.maxDrawdownPercent)}</span>
+    ) : null;
+  return (
+    <KpiCard
+      compact={compact}
+      label={t(`kpi.${kpiKey}`)}
+      value={value}
+      valueClassName={tone}
+      sub={sub}
+      sparkline={
+        showSparkline &&
+        SPARKLINE_FORMATS.has(KPI_FORMAT[kpiKey]) &&
+        sparkline != null ? (
+          <Sparkline values={sparkline} />
+        ) : undefined
+      }
+    />
+  );
+}
+
+/** Shared body: renders the KPI cards of the widget payload (strip + single). */
+export function KpiCards({
+  data,
+  kpis,
+  showDelta,
+  showSparkline = false,
+  currency,
+  compact = false,
+}: {
+  data: KpiWidgetData | null;
+  kpis: KpiKey[];
+  showDelta: boolean;
+  showSparkline?: boolean;
+  currency: string;
+  compact?: boolean;
+}) {
   const block: KpiBlock | null = data
     ? { stats: data.stats, advanced: data.advanced, extras: data.extras }
     : null;
   const compare = data?.compare ?? null;
+  const sparkline =
+    data?.sparkline != null
+      ? data.sparkline.map((v) => Number(v)).filter((n) => Number.isFinite(n))
+      : null;
 
   return (
     <>
-      {kpis.map((key) => {
-        const raw = kpiRaw(block, key);
-        const { value, tone } = display(key, raw, currency);
-        const prevRaw = showDelta ? kpiRaw(compare, key) : null;
-        const sub =
-          showDelta && compare != null ? (
-            <KpiDelta
-              kpi={key}
-              current={raw}
-              previous={prevRaw}
-              currency={currency}
-            />
-          ) : key === "maxDrawdown" &&
-              block?.stats.maxDrawdownPercent != null ? (
-            <span>{fmt.pct(block.stats.maxDrawdownPercent)}</span>
-          ) : null;
-        return (
-          <KpiCard
-            key={key}
-            compact={compact}
-            label={t(`kpi.${key}`)}
-            value={value}
-            valueClassName={tone}
-            sub={sub}
-          />
-        );
-      })}
+      {kpis.map((key) => (
+        <AnimatedKpiCard
+          key={key}
+          kpiKey={key}
+          raw={kpiRaw(block, key)}
+          block={block}
+          compare={compare}
+          sparkline={sparkline}
+          showSparkline={showSparkline}
+          showDelta={showDelta}
+          currency={currency}
+          compact={compact}
+        />
+      ))}
     </>
   );
 }
@@ -437,11 +533,15 @@ export function KpiStripWidget({
   const parsed = parseKpiStripConfig(config);
   const kpiData = asKpiData(data);
   return (
-    <div className="grid grid-cols-2 gap-2 sm:gap-3 @lg:grid-cols-3 @2xl:grid-cols-4">
+    <div
+      data-tour="kpi"
+      className="grid grid-cols-2 gap-2 sm:gap-3 @lg:grid-cols-3 @2xl:grid-cols-4"
+    >
       <KpiCards
         data={kpiData}
         kpis={parsed.kpis}
         showDelta={parsed.showDelta}
+        showSparkline={parsed.showSparkline}
         currency={currency}
         compact={parsed.kpis.length > 4}
       />

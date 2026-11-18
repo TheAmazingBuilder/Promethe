@@ -1,6 +1,6 @@
 /**
  * Error translation helpers — the API returns stable codes; the client maps
- * them to localized strings. Server-side French messages act as fallback for
+ * them to localized strings. Server-side English messages act as fallback for
  * unknown codes only.
  */
 import type { useTranslations } from "next-intl";

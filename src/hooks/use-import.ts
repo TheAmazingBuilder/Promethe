@@ -78,7 +78,7 @@ function parseInWorker(worker: Worker, content: ImportFileContent): Promise<Pars
     const id = Date.now();
     const timeout = setTimeout(() => {
       worker.terminate();
-      reject(new Error("Analyse trop longue — fichier trop volumineux ?"));
+      reject(new Error("Analysis too long – file too large?"));
     }, 60_000);
 
     worker.addEventListener("message", (event: MessageEvent<WorkerResponse>) => {
@@ -92,7 +92,7 @@ function parseInWorker(worker: Worker, content: ImportFileContent): Promise<Pars
     worker.addEventListener("error", (event) => {
       clearTimeout(timeout);
       worker.terminate();
-      reject(new Error(event.message || "Erreur du worker d'analyse."));
+      reject(new Error(event.message || "Analysis worker error."));
     });
 
     const request: WorkerRequest = { id, content };
@@ -120,11 +120,11 @@ export function useStartImport(onProgress: (progress: ImportProgress) => void) {
     }: StartImportInput): Promise<{ batch: ImportBatchDTO; outcome: ImportOutcome }> => {
       const fileHash = await hashFile(file);
 
-      onProgress({ phase: "uploading", percent: 0, message: "Création du lot…" });
+      onProgress({ phase: "uploading", percent: 0, message: "Creating batch…" });
       const { batch, duplicateWarning } = await apiFetch<{
         batch: ImportBatchDTO;
         duplicateWarning: string | false;
-      }>("/api/import/batches", {
+      }>("/api/v1/import/batches", {
         method: "POST",
         body: JSON.stringify({
           accountId,
@@ -171,7 +171,7 @@ export function useStartImport(onProgress: (progress: ImportProgress) => void) {
           duplicates: number;
           manualSkipped: number;
           errors: ImportOutcome["errors"];
-        }>(`/api/import/batches/${batch.id}/rows`, {
+        }>(`/api/v1/import/batches/${batch.id}/rows`, {
           method: "POST",
           body: JSON.stringify(payload),
         });
@@ -192,7 +192,7 @@ export function useStartImport(onProgress: (progress: ImportProgress) => void) {
       const completed = await apiFetch<{
         batch: ImportBatchDTO;
         reconciliation: { created: number };
-      }>(`/api/import/batches/${batch.id}/complete`, {
+      }>(`/api/v1/import/batches/${batch.id}/complete`, {
         method: "POST",
         body: JSON.stringify({
           created: outcome.created,

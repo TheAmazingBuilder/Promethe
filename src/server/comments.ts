@@ -175,7 +175,7 @@ function toCommentDTO(row: CommentRow, ownerId: string): TradeCommentDTO {
       displayName:
         row.author.profile?.publicDisplayName ||
         row.author.profile?.displayName ||
-        "Utilisateur",
+        "User",
       isOwner: row.authorId === ownerId,
     },
     body: row.deletedAt ? "" : row.body,
@@ -191,7 +191,7 @@ export async function listComments(
   tradeId: string
 ): Promise<CommentsPayloadDTO> {
   const trade = await findTrade(tradeId);
-  if (!trade) throw new CommentValidationError("TRADE_NOT_FOUND", "Trade introuvable.", 404);
+  if (!trade) throw new CommentValidationError("TRADE_NOT_FOUND", "Trade not found.", 404);
   const ctx = await resolveViewerContext(viewerId, trade);
   if (!ctx) throw new AccessDeniedError();
 
@@ -237,11 +237,11 @@ export async function createComment(
   input: CommentCreateInput
 ): Promise<TradeCommentDTO> {
   const trade = await findTrade(tradeId);
-  if (!trade) throw new CommentValidationError("TRADE_NOT_FOUND", "Trade introuvable.", 404);
+  if (!trade) throw new CommentValidationError("TRADE_NOT_FOUND", "Trade not found.", 404);
   const ctx = await resolveViewerContext(viewerId, trade);
   if (!ctx) throw new AccessDeniedError();
   if (ctx.role === "MENTOR" && !ctx.scope.canComment) {
-    throw new AccessDeniedError("Vous n'avez pas la permission de commenter ce journal.");
+    throw new AccessDeniedError("You do not have permission to comment on this journal.");
   }
 
   // Rate limit: 20 comments per author per 10 minutes.
@@ -249,7 +249,7 @@ export async function createComment(
   if (!rl.allowed) {
     throw new CommentValidationError(
       "COMMENT_RATE_LIMITED",
-      "Trop de commentaires — patientez quelques instants.",
+      "Too many comments – please wait a moment.",
       429
     );
   }
@@ -268,12 +268,12 @@ export async function createComment(
       select: { id: true, authorId: true, parentId: true, tradeId: true, deletedAt: true },
     });
     if (!parent || parent.tradeId !== tradeId || parent.deletedAt) {
-      throw new CommentValidationError("PARENT_INVALID", "Commentaire parent invalide.");
+      throw new CommentValidationError("PARENT_INVALID", "Invalid parent comment.");
     }
     if (parent.parentId) {
       throw new CommentValidationError(
         "PARENT_INVALID",
-        "Un seul niveau de réponse — répondez au commentaire d'origine."
+        "Only one reply level – reply to the original comment."
       );
     }
   }
@@ -285,7 +285,7 @@ export async function createComment(
   if (invalid.length) {
     throw new CommentValidationError(
       "MENTION_INVALID",
-      `Mention impossible : @${invalid[0]} n'a pas accès à ce trade.`
+      `Mention not possible: @${invalid[0]} does not have access to this trade.`
     );
   }
   const mentionedUsers = handles
@@ -329,7 +329,7 @@ export async function createComment(
   };
 }
 
-/** Deep links are role-aware: owners land on #/trades, mentors on #/mentor. */
+/** Deep links are role-aware: owners land on /trades, mentors on /mentor. */
 function tradeUrlForOwner(tradeId: string): string {
   return `/trades/${tradeId}`;
 }
@@ -352,8 +352,8 @@ async function dispatchNotifications(params: {
     await notifyInApp({
       userId: trade.userId,
       type: "COMMENT_NEW",
-      title: "Nouveau commentaire",
-      body: "Un mentor a commenté un de vos trades.",
+      title: "New comment",
+      body: "A mentor commented on one of your trades.",
       url: tradeUrlForOwner(trade.id),
       dedupeWithinMs: 10 * 60 * 1000,
     });
@@ -365,8 +365,8 @@ async function dispatchNotifications(params: {
     await notifyInApp({
       userId: parentAuthorId,
       type: "COMMENT_REPLY",
-      title: "Réponse à votre commentaire",
-      body: "Quelqu'un a répondu à votre commentaire.",
+      title: "Reply to your comment",
+      body: "Someone replied to your comment.",
       url: recipientIsOwner
         ? tradeUrlForOwner(trade.id)
         : tradeUrlForMentor(trade.userId, trade.id),
@@ -380,8 +380,8 @@ async function dispatchNotifications(params: {
     await notifyInApp({
       userId: user.id,
       type: "MENTION",
-      title: "Vous avez été mentionné",
-      body: "Vous avez été mentionné dans un commentaire de trade.",
+      title: "You were mentioned",
+      body: "You were mentioned in a trade comment.",
       url: recipientIsOwner
         ? tradeUrlForOwner(trade.id)
         : tradeUrlForMentor(trade.userId, trade.id),
@@ -401,24 +401,24 @@ export async function editComment(
     where: { id: commentId },
     include: AUTHOR_INCLUDE,
   });
-  if (!row) throw new CommentValidationError("COMMENT_NOT_FOUND", "Commentaire introuvable.", 404);
+  if (!row) throw new CommentValidationError("COMMENT_NOT_FOUND", "Comment not found.", 404);
   if (row.deletedAt) {
-    throw new CommentValidationError("COMMENT_DELETED", "Ce commentaire est supprimé.");
+    throw new CommentValidationError("COMMENT_DELETED", "This comment has been deleted.");
   }
   if (row.authorId !== viewerId) {
-    throw new AccessDeniedError("Seul l'auteur peut modifier son commentaire.");
+    throw new AccessDeniedError("Only the author can edit their comment.");
   }
 
   // Re-validate mentions after the edit.
   const trade = await findTrade(row.tradeId);
-  if (!trade) throw new CommentValidationError("TRADE_NOT_FOUND", "Trade introuvable.", 404);
+  if (!trade) throw new CommentValidationError("TRADE_NOT_FOUND", "Trade not found.", 404);
   const handles = parseMentionHandles(input.body);
   const { byHandle } = await mentionableFor(trade);
   const invalid = handles.filter((h) => !byHandle.has(h));
   if (invalid.length) {
     throw new CommentValidationError(
       "MENTION_INVALID",
-      `Mention impossible : @${invalid[0]} n'a pas accès à ce trade.`
+      `Mention not possible: @${invalid[0]} does not have access to this trade.`
     );
   }
   const mentionedUsers = handles.map((h) => byHandle.get(h)!).filter((u) => u.id !== viewerId);
@@ -446,12 +446,12 @@ export async function editComment(
 
 export async function deleteComment(viewerId: string, commentId: string): Promise<void> {
   const row = await db.tradeComment.findUnique({ where: { id: commentId } });
-  if (!row) throw new CommentValidationError("COMMENT_NOT_FOUND", "Commentaire introuvable.", 404);
+  if (!row) throw new CommentValidationError("COMMENT_NOT_FOUND", "Comment not found.", 404);
 
   const isAuthor = row.authorId === viewerId;
   const isOwner = row.ownerId === viewerId;
   if (!isAuthor && !isOwner) {
-    throw new AccessDeniedError("Seul l'auteur ou le propriétaire du journal peut supprimer ce commentaire.");
+    throw new AccessDeniedError("Only the author or the journal owner can delete this comment.");
   }
   if (row.deletedAt) return;
 
@@ -477,7 +477,7 @@ export async function deleteComment(viewerId: string, commentId: string): Promis
 
 export async function markTradeRead(viewerId: string, tradeId: string): Promise<void> {
   const trade = await findTrade(tradeId);
-  if (!trade) throw new CommentValidationError("TRADE_NOT_FOUND", "Trade introuvable.", 404);
+  if (!trade) throw new CommentValidationError("TRADE_NOT_FOUND", "Trade not found.", 404);
   const ctx = await resolveViewerContext(viewerId, trade);
   if (!ctx) throw new AccessDeniedError();
 
@@ -558,7 +558,7 @@ export async function unreadCommentsForOwner(
   return unread;
 }
 
-/** Mentors currently watching the owner's journal — count of live accesses. */
+/** Mentors currently watching the owner's journal - count of live accesses. */
 export async function watchingMentorsCount(ownerId: string): Promise<number> {
   return db.mentorAccess.count({
     where: {
