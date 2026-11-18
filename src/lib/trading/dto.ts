@@ -748,6 +748,18 @@ export interface AdvancedAnalyticsPayload {
 
 import type { WeeklyPlan } from "@/lib/analytics/weekly-plan";
 
+// ── When you trade (MRT wave 2) ─────────────────────────────────────────────
+
+import type { WhenYouTradeResult } from "@/lib/analytics/when-you-trade";
+
+export interface WhenYouTradePayload extends WhenYouTradeResult {
+  period: AnalyticsPeriod;
+  /** Active account filter (null = all accounts). */
+  accountId: string | null;
+  currency: string;
+  timezone: string;
+}
+
 export interface WeeklyPlanPayload {
   /** Monday of the week the plan covers, YYYY-MM-DD. */
   weekStart: string;

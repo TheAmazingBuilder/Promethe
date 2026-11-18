@@ -25,6 +25,7 @@ import type {
   AnalyticsPayload,
   AdvancedAnalyticsPayload,
   WeeklyPlanPayload,
+  WhenYouTradePayload,
 } from "@/lib/trading/dto";
 import type {
   PlanAction,
@@ -314,6 +315,19 @@ export function useAdvancedAnalytics(filters: AnalyticsFilters) {
     queryKey: ["analytics-advanced", filters.period, filters.account ?? "all"],
     queryFn: async () =>
       apiFetch<AdvancedAnalyticsPayload>(`/api/v1/analytics/advanced?${qs}`),
+    staleTime: 60 * 1000,
+  });
+}
+
+// ── When you trade (MRT wave 2) ─────────────────────────────────────────────
+export function useWhenYouTrade(filters: AnalyticsFilters) {
+  const params = new URLSearchParams({ period: filters.period });
+  if (filters.account) params.set("account", filters.account);
+  const qs = params.toString();
+  return useQuery({
+    queryKey: ["analytics-when-you-trade", filters.period, filters.account ?? "all"],
+    queryFn: async () =>
+      apiFetch<WhenYouTradePayload>(`/api/v1/analytics/when-you-trade?${qs}`),
     staleTime: 60 * 1000,
   });
 }

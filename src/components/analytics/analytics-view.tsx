@@ -68,6 +68,7 @@ import { useA11yPrefs } from "@/components/a11y/a11y-provider";
 import { Money, Sensitive } from "@/components/privacy/money";
 import { useTradingLabels } from "@/components/trades/trade-bits";
 import { MonthlyReportDialog } from "@/components/reports/monthly-report-dialog";
+import { WhenYouTradeSection } from "@/components/analytics/when-you-trade-section";
 import { useSession } from "@/components/app/session-context";
 import { useI18n } from "@/i18n/i18n-provider";
 import { useAccounts, useAnalytics } from "@/hooks/use-trading";
@@ -1072,6 +1073,13 @@ export function AnalyticsView() {
                 })}
             </div>
           </section>
+
+          {/* When you trade (MRT wave 2) — hour, weekday, session x weekday. */}
+          <WhenYouTradeSection
+            period={period}
+            accountId={accountId}
+            currency={currency}
+          />
 
           {/* Footer note */}
           <p className="flex flex-wrap items-start gap-2 text-xs text-muted-foreground">

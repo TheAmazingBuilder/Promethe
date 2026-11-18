@@ -38,8 +38,9 @@ const TRADE_INCLUDE = {
 
 type Row = Prisma.TradeGetPayload<{ include: typeof TRADE_INCLUDE }>;
 
-/** Period start (UTC Date) - null for "all". */
-function periodCutoff(period: AnalyticsQuery["period"]): Date | null {
+/** Period start (UTC Date) - null for "all". Exported for the
+ * when-you-trade endpoint, which filters the same closed trades. */
+export function periodCutoff(period: AnalyticsQuery["period"]): Date | null {
   const now = new Date();
   switch (period) {
     case "30d":
@@ -84,7 +85,10 @@ function localParts(
   }
 }
 
-function toAnalyticsTrade(
+/** Row → AnalyticsTrade (local entry parts in the user timezone).
+ * Exported for the when-you-trade endpoint, which aggregates the same
+ * closed trades along the entry-time dimensions. */
+export function toAnalyticsTrade(
   t: Row,
   timezone: string,
   tradingDay: Parameters<typeof getTradingDay>[2]

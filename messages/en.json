@@ -674,6 +674,36 @@
         "noteMulti": "A trade can carry several confluences, so it is counted once in every confluence it carries and the rows add up to more than the tagged total.",
         "noteSample": "Win rates under {min} trades are directional only — keep tagging before drawing conclusions."
       }
+    },
+    "whenYouTrade": {
+      "title": "When you trade",
+      "loading": "Loading when-you-trade stats…",
+      "errorTitle": "Could not load when-you-trade stats.",
+      "errorRetry": "Retry",
+      "emptyTitle": "No closed trades yet",
+      "emptyDesc": "Log a trade to see when your trading works best: by hour, by weekday, and by session.",
+      "emptyAction": "Log a trade",
+      "bestHour": "Best hour",
+      "bestDay": "Best day",
+      "bestNone": "Not enough data yet. A slot needs at least {min} trades to be named best.",
+      "highlightSub": "{count} trades, {winRate} win rate, {pnl}",
+      "byHourTitle": "By hour",
+      "byHourDesc": "Net P&L per hour of entry, in your timezone. Select a bar to see its trades.",
+      "hourTip": "{hour}: {count} trades, {pnl}",
+      "hourNote": "Based on {total} closed trades. Hours are local entry hours.",
+      "byWeekdayTitle": "By weekday",
+      "byWeekdayDesc": "Net P&L per day of the week. Select a day to see its trades.",
+      "weekdayTip": "{day}: {count} trades, {pnl}",
+      "sampleNote": "Best hour and best day need at least {min} trades in that slot.",
+      "matrixTitle": "Session by weekday",
+      "matrixDesc": "Net P&L for each session and weekday pair. Only sessions in your data are shown. Select a cell to see its trades.",
+      "matrixSession": "Session",
+      "matrixEmpty": "No session recorded on your trades yet.",
+      "matrixNote": "Sessions come from your trades. A session with no trades never appears here.",
+      "matrixCellEmpty": "{session} on {day}: no trades",
+      "matrixCellTip": "{session} on {day}: {count} trades, {pnl}",
+      "cellTrades": "{count} trades",
+      "timezoneNote": "Hours and weekdays use your local entry time. Based on {total} closed trades."
     }
   },
   "calendar": {
