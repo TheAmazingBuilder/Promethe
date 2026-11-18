@@ -209,7 +209,7 @@ describe("getTradingDay — rollover modes", () => {
       mode: "CUSTOM",
       rolloverTime: "06:00",
       rolloverTimezone: "Asia/Tokyo",
-    };
+    } as const;
     // Trading day D = (06:00 Tokyo on D−1, 06:00 Tokyo on D].
     // 2024-05-14T20:30Z = Tokyo May 15 05:30 → day 2024-05-15.
     expect(getTradingDay(new Date("2024-05-14T20:30:00Z"), "UTC", settings)).toBe(

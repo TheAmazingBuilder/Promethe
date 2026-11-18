@@ -173,13 +173,22 @@ describe("soft-deleted trades never appear in stats (regression)", () => {
     ).toBeNull();
 
     // Server list + search.
-    const list = await listTrades(userA.id, { page: 1, pageSize: 25 });
+    const list = await listTrades(userA.id, {
+      page: 1,
+      pageSize: 25,
+      includeDrafts: false,
+      sort: "entryTime",
+      order: "desc",
+    });
     expect(list.total).toBe(1);
     expect(list.data[0]?.id).toBe(visible.id);
     const search = await listTrades(userA.id, {
       page: 1,
       pageSize: 25,
       search: "hide",
+      includeDrafts: false,
+      sort: "entryTime",
+      order: "desc",
     });
     expect(search.total).toBe(0);
 
@@ -191,7 +200,13 @@ describe("soft-deleted trades never appear in stats (regression)", () => {
     expect(analytics.stats?.tradeCount ?? 0).toBe(1);
 
     // Export.
-    const csv = await exportTradesCsv(userA.id, { page: 1, pageSize: 25 }, "en");
+    const csv = await exportTradesCsv(userA.id, {
+      page: 1,
+      pageSize: 25,
+      includeDrafts: false,
+      sort: "entryTime",
+      order: "desc",
+    });
     expect(csv.count).toBe(1);
     expect(csv.csv).not.toContain("hide me");
 
@@ -292,7 +307,13 @@ describe("deleteTrade → trash", () => {
 
     const detail = await getTradeDetail(userA.id, trade.id);
     expect(detail?.id).toBe(trade.id);
-    const list = await listTrades(userA.id, { page: 1, pageSize: 25 });
+    const list = await listTrades(userA.id, {
+      page: 1,
+      pageSize: 25,
+      includeDrafts: false,
+      sort: "entryTime",
+      order: "desc",
+    });
     expect(list.total).toBe(1);
     const analytics = await getAnalytics(userA.id, { period: "all" });
     expect(analytics.stats?.tradeCount ?? 0).toBe(1);
@@ -323,8 +344,8 @@ describe("trashed strategy & tag are hidden from DTOs and analytics", () => {
 
     // Analytics breakdown by strategy excludes the trashed bucket.
     const analytics = await getAnalytics(userA.id, { period: "all" });
-    const byStrategy = analytics.breakdowns.byStrategy ?? [];
-    expect(byStrategy.find((b) => b.label === "Trash Strat")).toBeUndefined();
+    const byStrategy = analytics.breakdowns.strategy ?? [];
+    expect(byStrategy.find((b) => b.key === "Trash Strat")).toBeUndefined();
 
     // Restore → everything returns.
     await restoreTrashItems(userA.id, [
