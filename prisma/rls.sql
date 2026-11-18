@@ -43,6 +43,8 @@
 --   Si Postgres remonte « operator does not exist: text = uuid », suffixer
 --   auth.uid()::text d'un cast (ex. : user_id = auth.uid()::text).
 
+CREATE SCHEMA IF NOT EXISTS app;
+
 -- ═════════════════════════════════════════════════════════════════════════════
 -- users
 -- ═════════════════════════════════════════════════════════════════════════════
@@ -766,11 +768,71 @@ CREATE POLICY trade_screenshots_delete ON storage.objects
   );
 
 -- ═════════════════════════════════════════════════════════════════════════════
+-- v3 — Fonctions mentor SECURITY DEFINER (lecture scope-bounded)
+-- ═════════════════════════════════════════════════════════════════════════════
+-- Ces fonctions reproduisent les règles de scope applicatives (AccessContext)
+-- au niveau SQL : un mentor actif, non expiré, dont le scope couvre le COMPTE
+-- du trade, peut le lire. Elles alimentent les policies SELECT mentor des
+-- tables trades / trade_modifications / trade_comments. Les mentors n'obtiennent
+-- JAMAIS de droit d'écriture sur les données du propriétaire via le SQL.
+
+CREATE OR REPLACE FUNCTION app.mentor_can_read_trade(p_trade_id text)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM trades t
+    JOIN mentor_accesses ma ON ma.owner_id = t.user_id
+    WHERE t.id = p_trade_id
+      AND ma.mentor_id = auth.uid()::text
+      AND ma.status = 'ACTIVE'
+      AND (ma.expires_at IS NULL OR ma.expires_at > now())
+      AND (
+        ma.account_scope = 'ALL'
+        OR (
+          ma.account_scope = 'LIST'
+          AND t.account_id::text = ANY (
+            SELECT jsonb_array_elements_text(ma.account_ids_json::jsonb)
+          )
+        )
+      )
+  );
+$$;
+
+-- Équivalent pour une entrée de journal (scope comptes + can_view_journal).
+CREATE OR REPLACE FUNCTION app.mentor_can_read_journal(p_entry_id text)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM journal_entries je
+    JOIN mentor_accesses ma ON ma.owner_id = je.user_id
+    WHERE je.id = p_entry_id
+      AND ma.mentor_id = auth.uid()::text
+      AND ma.status = 'ACTIVE'
+      AND (ma.expires_at IS NULL OR ma.expires_at > now())
+      AND ma.can_view_journal
+      AND (
+        ma.account_scope = 'ALL'
+        OR ma.account_scope = 'LIST'  -- journal non lié à un compte : LIST = refusé
+      )
+  );
+$$;
+
+-- ═════════════════════════════════════════════════════════════════════════════
 -- v3 — Broker sync & import (owner-only, sauf lecture mentor via helpers)
 -- ═════════════════════════════════════════════════════════════════════════════
 -- Toutes les tables v3 appartiennent à un utilisateur (user_id) et suivent le
 -- même motif owner-only. L'accès mentor en lecture est accordé UNIQUEMENT via
--- les fonctions SECURITY DEFINER app.mentor_* ci-dessous (jamais via des
+-- les fonctions SECURITY DEFINER app.mentor_* définies plus haut (jamais via des
 -- policies directes : un mentor ne doit jamais écrire les données du
 -- propriétaire, et ne doit lire que ce que son scope autorise).
 --
@@ -939,65 +1001,6 @@ CREATE POLICY comment_read_states_owner ON comment_read_states
   USING (user_id = auth.uid()::text)
   WITH CHECK (user_id = auth.uid()::text);
 
--- ═════════════════════════════════════════════════════════════════════════════
--- v3 — Fonctions mentor SECURITY DEFINER (lecture scope-bounded)
--- ═════════════════════════════════════════════════════════════════════════════
--- Ces fonctions reproduisent les règles de scope applicatives (AccessContext)
--- au niveau SQL : un mentor actif, non expiré, dont le scope couvre le COMPTE
--- du trade, peut le lire. Elles alimentent les policies SELECT mentor des
--- tables trades / trade_modifications / trade_comments. Les mentors n'obtiennent
--- JAMAIS de droit d'écriture sur les données du propriétaire via le SQL.
-
-CREATE OR REPLACE FUNCTION app.mentor_can_read_trade(p_trade_id uuid)
-RETURNS boolean
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = public
-STABLE
-AS $$
-  SELECT EXISTS (
-    SELECT 1
-    FROM trades t
-    JOIN mentor_accesses ma ON ma.owner_id = t.user_id
-    WHERE t.id = p_trade_id
-      AND ma.mentor_id = auth.uid()::text
-      AND ma.status = 'ACTIVE'
-      AND (ma.expires_at IS NULL OR ma.expires_at > now())
-      AND (
-        ma.account_scope = 'ALL'
-        OR (
-          ma.account_scope = 'LIST'
-          AND t.account_id::text = ANY (
-            SELECT jsonb_array_elements_text(ma.account_ids_json::jsonb)
-          )
-        )
-      )
-  );
-$$;
-
--- Équivalent pour une entrée de journal (scope comptes + can_view_journal).
-CREATE OR REPLACE FUNCTION app.mentor_can_read_journal(p_entry_id uuid)
-RETURNS boolean
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = public
-STABLE
-AS $$
-  SELECT EXISTS (
-    SELECT 1
-    FROM journal_entries je
-    JOIN mentor_accesses ma ON ma.owner_id = je.user_id
-    WHERE je.id = p_entry_id
-      AND ma.mentor_id = auth.uid()::text
-      AND ma.status = 'ACTIVE'
-      AND (ma.expires_at IS NULL OR ma.expires_at > now())
-      AND ma.can_view_journal
-      AND (
-        ma.account_scope = 'ALL'
-        OR ma.account_scope = 'LIST'  -- journal non lié à un compte : LIST = refusé
-      )
-  );
-$$;
 
 -- ═════════════════════════════════════════════════════════════════════════════
 -- v3 — Compliance
