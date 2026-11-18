@@ -45,6 +45,7 @@ export async function listGoalsWithProgress(
           exitTime: true,
           netPnl: true,
           rMultiple: true,
+          grade: true,
           followedPlan: true,
         },
       }),
@@ -78,12 +79,9 @@ export async function listGoalsWithProgress(
       exitIso: (t.exitTime ?? new Date(0)).toISOString(),
       netPnl: t.netPnl?.toString() ?? null,
       rMultiple: t.rMultiple?.toString() ?? null,
-      // No grade column on Trade in this clone yet: the parallel wave-3
-      // grades chantier adds it. Until then every trade is ungraded and
-      // the A+ win-rate goal honestly reports "no graded trades yet".
-      // Wiring after that chantier merges: add `grade: true` to the
-      // select above and pass `grade: t.grade` here.
-      grade: null,
+      // Real setup grade (A+ | A | B | C, null = ungraded) from the
+      // wave-3 grades chantier; A_PLUS_WIN_RATE counts A+ trades only.
+      grade: t.grade,
       // Review verdict wins; the trade's own followedPlan is the fallback
       // for trades recorded before the Playbook review.
       playbookMatch: review?.playbookMatch ?? null,

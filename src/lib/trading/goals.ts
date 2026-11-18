@@ -70,10 +70,10 @@ export interface GoalTradePoint {
   netPnl: string | null;
   rMultiple: string | null;
   /**
-   * Setup grade (A+ | A | B | C) when the trade was graded. The grade
-   * column lands with the parallel wave-3 grades chantier; until then
-   * the server passes null and A_PLUS_WIN_RATE honestly reports "no
-   * graded trades yet" instead of a misleading 0%.
+   * Setup grade (A+ | A | B | C) when the trade was graded, null when
+   * ungraded. The server passes the real Trade.grade; A_PLUS_WIN_RATE
+   * counts A+ trades only and honestly reports "no graded trades yet"
+   * (null) instead of a misleading 0% when none are graded.
    */
   grade?: string | null;
   /**
