@@ -7,9 +7,11 @@ import {
 } from "../../src/components/app/nav";
 
 /**
- * Sidebar slimming (Phase 1): 11 page entries visible at a glance, the
- * Data group collapsed by default behind one parent row, every page still
- * listed for the command palette and the mobile sheet.
+ * Sidebar slimming (Phase 1) + Strategies removal: 10 page entries visible
+ * at a glance, the Data group collapsed by default behind one parent row,
+ * every page still listed for the command palette and the mobile sheet.
+ * Strategies has no sidebar entry (the Playbook already has a Strategies
+ * tab) but stays reachable via the palette, search and its own route.
  */
 describe("sidebar slimming", () => {
   it("lists every page for the command palette and the mobile sheet", () => {
@@ -41,7 +43,7 @@ describe("sidebar slimming", () => {
     }
   });
 
-  it("shows 11 page entries at a glance (Data behind one parent row)", () => {
+  it("shows 10 page entries at a glance (Data behind one parent row)", () => {
     const visibleTopLevel: Array<{ key: string }> = NAV_GROUPS.flatMap(
       (group) =>
         group.collapsible
@@ -50,14 +52,14 @@ describe("sidebar slimming", () => {
               .filter((item) => !item.mentorOnly)
               .map((item) => ({ key: item.view }))
     );
-    // 11 page entries + the Data parent row.
-    expect(visibleTopLevel).toHaveLength(12);
+    // 10 page entries + the Data parent row.
+    expect(visibleTopLevel).toHaveLength(11);
     const pageEntries = NAV_GROUPS.flatMap((group) =>
       group.collapsible
         ? []
         : group.items.filter((item) => !item.mentorOnly)
     );
-    expect(pageEntries).toHaveLength(11);
+    expect(pageEntries).toHaveLength(10);
     expect(
       pageEntries.map((item) => item.view)
     ).toEqual([
@@ -67,7 +69,6 @@ describe("sidebar slimming", () => {
       "tools",
       "analytics",
       "journal",
-      "strategies",
       "playbook",
       "gaia",
       "rules",
@@ -105,6 +106,18 @@ describe("sidebar slimming", () => {
     }
     expect(findNavItem("accounts")?.path).toBe("#/comptes");
     expect(findNavItem("settings")?.path).toBe("#/reglages");
+  });
+
+  it("keeps Strategies out of the sidebar but reachable via palette and search", () => {
+    // No sidebar group lists Strategies (the Playbook tab covers it).
+    const sidebarViews = NAV_GROUPS.flatMap((group) =>
+      group.items.map((item) => item.view)
+    );
+    expect(sidebarViews).not.toContain("strategies");
+    // ...but the route stays listed for the command palette and search,
+    // and the header title still resolves.
+    expect(allNavItems().map((item) => item.view)).toContain("strategies");
+    expect(findNavItem("strategies")?.path).toBe("#/strategies");
   });
 
   it("auto-expands a collapsed group when one of its pages is active", () => {

@@ -4530,6 +4530,7 @@
       "emptyTitle": "No strategy in the playbook",
       "emptyDesc": "Create a strategy, duplicate an existing one, or start from a template.",
       "newStrategy": "New strategy",
+      "openFullStrategies": "Open the full Strategies view",
       "fromTemplate": "From template",
       "duplicate": "Duplicate",
       "duplicateTitle": "Duplicate strategy",

@@ -3,10 +3,17 @@
  * sheet, the command palette and the header title. Labels and descriptions are
  * absolute i18n message keys (see messages/en.json).
  *
- * Sidebar kept short on purpose: only the pages used every day live here.
- * Settings sub-pages live as links inside the Settings page, charts and
- * heatmaps as buttons inside Analytics, quick trade as a floating button,
- * and focus mode as a header button.
+ * Sidebar kept short on purpose: only the pages used every day live here
+ * (10 entries at a glance, plus the collapsible Data group). Settings
+ * sub-pages live as links inside the Settings page, charts and heatmaps as
+ * buttons inside Analytics, quick trade as a floating button, and focus
+ * mode as a header button.
+ *
+ * Strategies has no sidebar entry on purpose: the Playbook already has a
+ * Strategies tab, so it would be a duplicate. The standalone Strategies
+ * view (full editor: definition, checklists, versions, stats) stays a real
+ * route, listed in EXTRA_NAV_ITEMS below so the command palette, search
+ * and the header title keep finding it.
  *
  * The Data group is the one exception to the flat list: it renders as a
  * single collapsible parent row ("Data", collapsed by default) whose six
@@ -136,15 +143,6 @@ export const NAV_GROUPS: NavGroup[] = [
         ready: true,
       },
       {
-        labelKey: "nav.strategies",
-        descriptionKey: "nav.strategiesDesc",
-        path: "#/strategies",
-        view: "strategies",
-        icon: Target,
-        phase: null,
-        ready: true,
-      },
-      {
         labelKey: "nav.playbook",
         descriptionKey: "nav.playbookDesc",
         path: "#/playbook",
@@ -265,16 +263,38 @@ export function findNavItem(view: ViewId): NavItem | undefined {
     const item = group.items.find((i) => i.view === view);
     if (item) return item;
   }
-  return undefined;
+  return EXTRA_NAV_ITEMS.find((i) => i.view === view);
 }
+
+/**
+ * Pages with no sidebar entry that stay reachable everywhere else:
+ * Strategies lives in the Playbook tab (duplicating it in the sidebar
+ * would be noise), but the standalone view is still a real route — the
+ * command palette, search results and the header title resolve it here.
+ */
+export const EXTRA_NAV_ITEMS: NavItem[] = [
+  {
+    labelKey: "nav.strategies",
+    descriptionKey: "nav.strategiesDesc",
+    path: "#/strategies",
+    view: "strategies",
+    icon: Target,
+    phase: null,
+    ready: true,
+  },
+];
 
 /**
  * Every page in the app, in sidebar order — the single list the command
  * palette (and any full-page index) reads, so a page that is only a
- * sub-entry in the sidebar is still listed everywhere else.
+ * sub-entry in the sidebar is still listed everywhere else. Palette-only
+ * pages (EXTRA_NAV_ITEMS) come last.
  */
 export function allNavItems(): NavItem[] {
-  return NAV_GROUPS.flatMap((group) => group.items);
+  return [
+    ...NAV_GROUPS.flatMap((group) => group.items),
+    ...EXTRA_NAV_ITEMS,
+  ];
 }
 
 /**

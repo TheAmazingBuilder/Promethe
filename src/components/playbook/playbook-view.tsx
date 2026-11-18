@@ -602,6 +602,22 @@ function StrategiesTab() {
 
   return (
     <>
+      {/* The full Strategies view holds creation and the complete editor
+          (definition, checklists, versions, stats) — this tab is the
+          Playbook summary, so both actions stay one click away. */}
+      <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate("#/strategies")}
+        >
+          {t("openFullStrategies")}
+        </Button>
+        <Button size="sm" onClick={() => navigate("#/strategies")}>
+          <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
+          {t("newStrategy")}
+        </Button>
+      </div>
       <div className="grid gap-4 md:grid-cols-2">
         {(data ?? []).map((s) => {
           const st = statsById.get(s.id);
