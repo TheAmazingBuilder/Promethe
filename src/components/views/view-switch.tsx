@@ -22,6 +22,7 @@ import { LifecycleView } from "@/components/analytics/lifecycle-view";
 import { ExitsView } from "@/components/analytics/exits-view";
 import { QualityView } from "@/components/analytics/quality-view";
 import { SetupsView } from "@/components/analytics/setups-view";
+import { ConfluencesView } from "@/components/analytics/confluences-view";
 import { SequencesView } from "@/components/analytics/sequences-view";
 import { SeasonalityView } from "@/components/analytics/seasonality-view";
 import { AnomaliesView } from "@/components/analytics/anomalies-view";
@@ -132,6 +133,9 @@ export function ViewSwitch() {
       break;
     case "analytics-setups":
       view = <SetupsView />;
+      break;
+    case "analytics-confluences":
+      view = <ConfluencesView />;
       break;
     case "analytics-sequences":
       view = <SequencesView />;

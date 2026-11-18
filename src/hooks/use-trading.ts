@@ -556,7 +556,7 @@ export function useDeleteAccount() {
 export interface TagInputBody {
   name: string;
   color: string;
-  kind: "SETUP" | "MISTAKE" | "CONTEXT" | "CUSTOM";
+  kind: "SETUP" | "MISTAKE" | "CONTEXT" | "CUSTOM" | "CONFLUENCE";
 }
 
 export function useCreateTag() {

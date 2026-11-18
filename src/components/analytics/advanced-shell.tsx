@@ -34,6 +34,7 @@ export type AdvancedTabId =
   | "exits"
   | "quality"
   | "setups"
+  | "confluences"
   | "sequences"
   | "seasonality"
   | "anomalies"
@@ -44,6 +45,7 @@ export const ADVANCED_TABS: Array<{ id: AdvancedTabId; path: string }> = [
   { id: "exits", path: "/analytics/exits" },
   { id: "quality", path: "/analytics/quality" },
   { id: "setups", path: "/analytics/setups" },
+  { id: "confluences", path: "/analytics/confluences" },
   { id: "sequences", path: "/analytics/sequences" },
   { id: "seasonality", path: "/analytics/seasonality" },
   { id: "anomalies", path: "/analytics/anomalies" },

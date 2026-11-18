@@ -417,7 +417,8 @@
         "sequences": "Sequences",
         "seasonality": "Seasonality",
         "anomalies": "Anomalies",
-        "weekly-plan": "Weekly plan"
+        "weekly-plan": "Weekly plan",
+        "confluences": "Confluences"
       },
       "sample": "Sample: {count} trades",
       "noData": "Not enough data yet for this view.",
@@ -644,6 +645,34 @@
         "notEnoughDetail": "The weekly plan needs at least {min} closed trades in the last {window} days. You have {count} so far.",
         "logTrade": "Log a trade",
         "methodNote": "How this plan is built: every Monday the rules re-read your last 30 days of closed trades and rank the leaks by money lost. Checkboxes belong to the current week only. No grade is used, grades do not exist in Promethe yet."
+      },
+      "confluences": {
+        "title": "Confluence hit rate",
+        "desc": "Win rate and net P&L per confluence tagged on your trades.",
+        "tableTitle": "Hit rate by confluence",
+        "tableDesc": "Closed trades in the selected period and account. Click a row to see its trades.",
+        "colConfluence": "Confluence",
+        "colCount": "Trades",
+        "colWinRate": "Win rate",
+        "colNetPnl": "Net P&L",
+        "colAvgR": "Avg R",
+        "colExpectancy": "Expectancy (R)",
+        "colTrades": "Trades",
+        "winsLosses": "{wins}W / {losses}L",
+        "viewTrades": "View trades",
+        "kpiTagged": "Tagged trades",
+        "kpiTaggedSub": "of {total} closed trades",
+        "kpiCoverage": "Coverage",
+        "kpiCoverageSub": "Share of trades with a confluence",
+        "kpiUntagged": "Untagged trades",
+        "kpiUntaggedSub": "No confluence recorded",
+        "kpiBest": "Best confluence",
+        "kpiBestSub": "{expectancy} expectancy · {count} trades",
+        "kpiBestNone": "Needs 10 trades or more",
+        "empty": "No confluence tagged yet. Tag the confluences on your trades and their hit rate will show up here.",
+        "emptyAction": "Log a trade",
+        "noteMulti": "A trade can carry several confluences, so it is counted once in every confluence it carries and the rows add up to more than the tagged total.",
+        "noteSample": "Win rates under {min} trades are directional only — keep tagging before drawing conclusions."
       }
     }
   },
@@ -1129,7 +1158,12 @@
       "loadError": "Cannot load the trade.",
       "accountMissing": "No active trading account.",
       "strategyNone": "None",
-      "sectionCustomFields": "Custom fields"
+      "sectionCustomFields": "Custom fields",
+      "sectionConfluences": "Confluences",
+      "confluencesHint": "Which confluences were present at entry? Tag them to see their hit rate in Analytics.",
+      "confluenceAddPlaceholder": "Add your own confluence…",
+      "confluenceAdd": "Add",
+      "confluenceCreateFailed": "Could not add this confluence."
     },
     "detail": {
       "notFound": "Trade not found.",
@@ -1227,7 +1261,9 @@
       },
       "tabOverview": "Overview",
       "tabChart": "Price chart",
-      "tabReplay": "Replay"
+      "tabReplay": "Replay",
+      "confluencesTitle": "Confluences",
+      "confluencesEmpty": "No confluence tagged on this trade yet."
     }
   },
   "settings": {
@@ -2858,9 +2894,10 @@
       "SETUP": "Setup",
       "MISTAKE": "Mistake",
       "CONTEXT": "Context",
-      "CUSTOM": "Custom"
+      "CUSTOM": "Custom",
+      "CONFLUENCE": "Confluence"
     },
-    "subtitle": "SETUP / MISTAKE / CONTEXT / CUSTOM labels to qualify your trades and filters.",
+    "subtitle": "SETUP / MISTAKE / CONTEXT / CONFLUENCE / CUSTOM labels to qualify your trades and filters.",
     "add": "Tag",
     "edit": "Edit",
     "delete": "Delete",

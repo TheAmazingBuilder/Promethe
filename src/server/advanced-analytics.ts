@@ -1,6 +1,6 @@
 /**
  * Advanced analytics aggregation (v2.5 Module 6, Prompt 6) — powers
- * /analytics/lifecycle, /exits, /quality, /setups, /sequences,
+ * /analytics/lifecycle, /exits, /quality, /setups, /confluences, /sequences,
  * /seasonality and /anomalies: lifecycle (MFE/MAE, almost-TP, time in
  * profit/loss from stored candles), exit analysis, trader score, setup
  * ranking, sequences, seasonality and anomaly detection over CLOSED
@@ -183,6 +183,12 @@ function toAdvancedTrade(
     entryPrice: t.entryPrice?.toString() ?? null,
     initialStopLoss: t.initialStopLoss?.toString() ?? null,
     tags: t.tags.map((tt) => tt.tag.name),
+    // MRT wave 1 — confluences are Tag rows with kind CONFLUENCE (see
+    // src/lib/trading/confluences.ts). Soft-deleted tags are excluded so a
+    // trashed confluence never feeds the hit-rate table.
+    confluenceTags: t.tags
+      .filter((tt) => tt.tag.kind === "CONFLUENCE" && tt.tag.deletedAt == null)
+      .map((tt) => ({ id: tt.tag.id, name: tt.tag.name, color: tt.tag.color })),
     violationCount: t.ruleViolations.length,
     playbookMatch: t.review?.playbookMatch ?? null,
     riskPercent: t.riskPercent?.toString() ?? null,

@@ -205,6 +205,7 @@ function drillFiltersFromHash(): Partial<TradeListQuery> | null {
     any = true;
   };
   if (q.symbol) set("symbol", q.symbol);
+  if (q.tagId) set("tagId", q.tagId);
   if (q.direction === "LONG" || q.direction === "SHORT") {
     set("direction", q.direction);
   }

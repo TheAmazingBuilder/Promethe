@@ -23,7 +23,12 @@ import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Image as ImageIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Money, Sensitive } from "@/components/privacy/money";
-import { ResultBadge, useTradingLabels } from "@/components/trades/trade-bits";
+import {
+  ResultBadge,
+  TagsBadges,
+  useTradingLabels,
+} from "@/components/trades/trade-bits";
+import { confluenceTagsOf } from "@/lib/trading/confluences";
 import { apiFetch } from "@/lib/api-client";
 import { fmtDateInTz, fmtSigned, pnlClass } from "@/lib/format";
 import { navigate } from "@/lib/router";
@@ -223,6 +228,9 @@ function TradeGridCard({
           {fmtDateInTz(trade.entryTime, timezone)}
           {sessionLabel ? ` · ${sessionLabel}` : ""}
         </p>
+        {/* Confluences (MRT wave 1) — badges only when the trade has any;
+            TagsBadges renders nothing for an empty list. */}
+        <TagsBadges tags={confluenceTagsOf(trade.tags)} max={3} />
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
             {trade.resultType ? (

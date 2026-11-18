@@ -314,7 +314,7 @@ export const tagInputSchema = z.object({
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/, "invalidColor")
     .default("#64748b"),
-  kind: z.enum(["SETUP", "MISTAKE", "CONTEXT", "CUSTOM"]).default("CUSTOM"),
+  kind: z.enum(["SETUP", "MISTAKE", "CONTEXT", "CUSTOM", "CONFLUENCE"]).default("CUSTOM"),
 });
 export const tagPatchSchema = tagInputSchema.partial();
 

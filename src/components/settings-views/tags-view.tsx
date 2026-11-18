@@ -2,7 +2,7 @@
 
 /**
  * Tags view (v1 phase 7) — user tags grouped by kind (SETUP / MISTAKE /
- * CONTEXT / CUSTOM) with full CRUD; global presets are listed read-only with
+ * CONTEXT / CONFLUENCE / CUSTOM) with full CRUD; global presets are listed read-only with
  * a badge. Data: GET/POST /api/v1/tags · PATCH/DELETE /api/v1/tags/[id].
  */
 import * as React from "react";
@@ -48,7 +48,7 @@ import { ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import type { TagDTO } from "@/lib/trading/dto";
 
-const KINDS = ["SETUP", "MISTAKE", "CONTEXT", "CUSTOM"] as const;
+const KINDS = ["SETUP", "MISTAKE", "CONTEXT", "CONFLUENCE", "CUSTOM"] as const;
 type Kind = (typeof KINDS)[number];
 
 type TagRow = TagDTO & { isPreset?: boolean };

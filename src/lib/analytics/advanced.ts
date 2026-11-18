@@ -4,6 +4,7 @@
  * Pure computation over CLOSED trades: trade lifecycle (MFE/MAE, almost-TP),
  * exit analysis (capture ratio, left on the table, exit simulations), trader
  * quality score (0-100), setup ranking (expectancy + Wilson intervals),
+ * confluence hit rate (win rate and P&L per confluence tag, MRT wave 1),
  * sequence analysis (after-streak performance, transition matrix, binomial
  * test), seasonality (month / quarter / day-of-month / ISO week / year x month
  * heatmap) and anomaly detection (robust MAD z-scores).
@@ -69,6 +70,9 @@ export interface AdvancedTrade extends AnalyticsTrade {
   initialStopLoss: string | null;
   /** Tag names on the trade. */
   tags: string[];
+  /** Confluence tags on the trade (kind CONFLUENCE): id, name, color.
+   * Optional for callers that only carry tag names. */
+  confluenceTags?: Array<{ id: string; name: string; color: string }>;
   /** Rule violations attached to the trade. */
   violationCount: number;
   /** Declared playbook match at review time (MATCHED | PARTIAL |
@@ -659,6 +663,110 @@ export function computeSetupRanking(trades: AdvancedTrade[]): SetupRank[] {
   );
 }
 
+// ── (d2) Confluence hit rate (MRT wave 1) ──────────────────────────────────
+// Win rate and P&L per confluence tag (kind CONFLUENCE), MRT "Confluence hit
+// rate". A trade can carry several confluences, so it is counted once in
+// every confluence it carries: row counts add up to more than the tagged
+// total, which the UI states plainly. R multiples drive expectancy; a trade
+// without an R multiple still counts for win rate and net P&L.
+
+/** Minimum sample for a confluence verdict (same bar as setups). */
+export const MIN_SAMPLE_CONFLUENCE = 10;
+
+export interface ConfluenceRow {
+  tagId: string;
+  name: string;
+  color: string;
+  count: number;
+  wins: number;
+  losses: number;
+  breakevens: number;
+  winRate: number | null;
+  wilsonLower: number | null;
+  wilsonUpper: number | null;
+  /** Mean R per trade, null when no trade in the group carries an R. */
+  expectancy: number | null;
+  avgR: number | null;
+  totalR: number | null;
+  netPnl: string;
+}
+
+export interface ConfluencesResult {
+  /** Closed trades in scope (all, tagged or not). */
+  total: number;
+  /** Trades carrying at least one confluence. */
+  tagged: number;
+  /** Trades with no confluence at all. */
+  untagged: number;
+  rows: ConfluenceRow[];
+}
+
+export function computeConfluences(trades: AdvancedTrade[]): ConfluencesResult {
+  const groups = new Map<
+    string,
+    { name: string; color: string; list: AdvancedTrade[] }
+  >();
+  let tagged = 0;
+  for (const t of trades) {
+    const confs = t.confluenceTags ?? [];
+    if (confs.length === 0) continue;
+    tagged += 1;
+    const seen = new Set<string>();
+    for (const c of confs) {
+      // One trade counts once per confluence, even if the tag is attached twice.
+      if (seen.has(c.id)) continue;
+      seen.add(c.id);
+      const group = groups.get(c.id) ?? { name: c.name, color: c.color, list: [] };
+      group.list.push(t);
+      groups.set(c.id, group);
+    }
+  }
+  const rows: ConfluenceRow[] = [...groups.entries()].map(([tagId, group]) => {
+    const list = group.list;
+    const rs = list
+      .map((t) => (t.rMultiple == null ? null : Number(t.rMultiple)))
+      .filter((v): v is number => v != null && Number.isFinite(v));
+    const wins = list.filter((t) => t.resultType === "WIN").length;
+    const losses = list.filter((t) => t.resultType === "LOSS").length;
+    const breakevens = list.filter((t) => t.resultType === "BREAKEVEN").length;
+    const decided = wins + losses;
+    const wilson = decided > 0 ? wilsonInterval(wins, decided) : null;
+    const expectancy = rs.length > 0 ? mean(rs) : null;
+    const netPnl = list
+      .reduce((acc, t) => acc.plus(toD(t.netPnl ?? 0)), D0)
+      .toString();
+    return {
+      tagId,
+      name: group.name,
+      color: group.color,
+      count: list.length,
+      wins,
+      losses,
+      breakevens,
+      winRate: decided > 0 ? round((wins / decided) * 100, 1) : null,
+      wilsonLower: wilson != null ? round(wilson.lower * 100, 1) : null,
+      wilsonUpper: wilson != null ? round(wilson.upper * 100, 1) : null,
+      expectancy: expectancy != null ? round(expectancy, 2) : null,
+      avgR: expectancy != null ? round(expectancy, 2) : null,
+      totalR:
+        rs.length > 0 ? round(rs.reduce((a, b) => a + b, 0), 2) : null,
+      netPnl,
+    };
+  });
+  // Most-tagged first; expectancy breaks ties.
+  rows.sort(
+    (a, b) =>
+      b.count - a.count ||
+      (b.expectancy ?? -Infinity) - (a.expectancy ?? -Infinity)
+  );
+  return {
+    total: trades.length,
+    tagged,
+    untagged: trades.length - tagged,
+    rows,
+  };
+}
+
 // ── (e) Sequence analysis ────────────────────────────────────────────────────
 
 export interface AfterStreakRow {
@@ -1068,6 +1176,7 @@ export interface AdvancedAnalytics {
   score: TraderScore;
   scoreHistory: ScoreHistoryPoint[];
   setups: SetupRank[];
+  confluences: ConfluencesResult;
   sequences: SequencesResult;
   seasonality: SeasonalityResult;
   anomalies: AnomaliesResult;
@@ -1084,6 +1193,7 @@ export function computeAdvancedAnalytics(
     score: computeTraderScore(trades, stats, advanced),
     scoreHistory: computeScoreHistory(trades),
     setups: computeSetupRanking(trades),
+    confluences: computeConfluences(trades),
     sequences: computeSequences(trades),
     seasonality: computeSeasonality(trades),
     anomalies: computeAnomalies(trades),

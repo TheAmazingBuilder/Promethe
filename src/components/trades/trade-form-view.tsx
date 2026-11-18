@@ -60,6 +60,7 @@ import {
 } from "./trade-bits";
 import {
   useAccounts,
+  useCreateTag,
   useCreateTrade,
   useInstruments,
   useRecordTemplateUse,
@@ -70,6 +71,12 @@ import {
   useUpdateTrade,
   type MutationResult,
 } from "@/hooks/use-trading";
+import {
+  CONFLUENCE_CUSTOM_COLOR,
+  CONFLUENCE_PRESETS,
+  CONFLUENCE_PRESET_NAMES,
+  confluenceTagsOf,
+} from "@/lib/trading/confluences";
 import { useSetups } from "@/hooks/use-playbook";
 import type { TemplateDTO } from "@/lib/trading/dto";
 import { useToast } from "@/hooks/use-toast";
@@ -542,6 +549,53 @@ export function TradeFormView({
         ? f.tagIds.filter((x) => x !== id)
         : [...f.tagIds, id],
     }));
+
+  // ── Confluences (MRT wave 1) ─────────────────────────────────────────────
+  // Confluences are Tag rows with kind CONFLUENCE. The predefined list lives
+  // in code only (never seeded): picking one creates the user's Tag row on
+  // demand (POST /api/tags, upsert by name) and selects it. Custom
+  // confluences are created the same way from the inline input.
+  const createTag = useCreateTag();
+  const [customConfluence, setCustomConfluence] = React.useState("");
+  const allConfluenceTags = React.useMemo(
+    () => confluenceTagsOf(tags ?? []),
+    [tags]
+  );
+  // The generic Tags section hides confluences: they have their own section
+  // below, so a confluence is never shown (or toggled) twice.
+  const regularTags = React.useMemo(
+    () => (tags ?? []).filter((tag) => tag.kind !== "CONFLUENCE"),
+    [tags]
+  );
+  const customConfluenceTags = React.useMemo(
+    () =>
+      allConfluenceTags.filter((tag) => !CONFLUENCE_PRESET_NAMES.has(tag.name)),
+    [allConfluenceTags]
+  );
+  const addConfluenceTag = (name: string, color: string) => {
+    const trimmed = name.trim();
+    if (trimmed === "" || createTag.isPending) return;
+    const existing = allConfluenceTags.find((tag) => tag.name === trimmed);
+    if (existing) {
+      toggleTag(existing.id);
+      return;
+    }
+    createTag.mutate(
+      { name: trimmed, color, kind: "CONFLUENCE" },
+      {
+        onSuccess: (tag) => {
+          setForm((f) =>
+            f.tagIds.includes(tag.id)
+              ? f
+              : { ...f, tagIds: [...f.tagIds, tag.id] }
+          );
+        },
+        onError: () => {
+          toast({ title: t("confluenceCreateFailed"), variant: "destructive" });
+        },
+      }
+    );
+  };
 
   const applyTemplate = (tplId: string) => {
     setTemplateId(tplId);
@@ -1478,11 +1532,11 @@ export function TradeFormView({
               <CardTitle className="text-base">{t("sectionTags")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {(tags ?? []).length === 0 ? (
+              {regularTags.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{tc("none")}</p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
-                  {(tags ?? []).map((tag) => {
+                  {regularTags.map((tag) => {
                     const active = form.tagIds.includes(tag.id);
                     return (
                       <button
@@ -1541,6 +1595,104 @@ export function TradeFormView({
                   </div>
                   <p className="text-xs text-muted-foreground">{t("draftHint")}</p>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Confluences (MRT wave 1) — predefined ICT/SMC list in code +
+              user-created customs, stored as CONFLUENCE tags. */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">
+                {t("sectionConfluences")}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                {t("confluencesHint")}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {CONFLUENCE_PRESETS.map((preset) => {
+                  const tag = allConfluenceTags.find(
+                    (x) => x.name === preset.name
+                  );
+                  const active = tag != null && form.tagIds.includes(tag.id);
+                  return (
+                    <button
+                      key={preset.name}
+                      type="button"
+                      aria-pressed={active}
+                      disabled={createTag.isPending}
+                      onClick={() => addConfluenceTag(preset.name, preset.color)}
+                      className={cn(
+                        badgeVariants({ variant: active ? "default" : "outline" }),
+                        "min-h-10 cursor-pointer gap-1.5 px-3 font-normal",
+                        active ? "" : "text-muted-foreground"
+                      )}
+                      style={active ? { borderColor: `${preset.color}66` } : undefined}
+                    >
+                      <span
+                        className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: preset.color }}
+                        aria-hidden="true"
+                      />
+                      {preset.name}
+                    </button>
+                  );
+                })}
+                {customConfluenceTags.map((tag) => {
+                  const active = form.tagIds.includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => toggleTag(tag.id)}
+                      className={cn(
+                        badgeVariants({ variant: active ? "default" : "outline" }),
+                        "min-h-10 cursor-pointer gap-1.5 px-3 font-normal",
+                        active ? "" : "text-muted-foreground"
+                      )}
+                      style={active ? { borderColor: `${tag.color}66` } : undefined}
+                    >
+                      <span
+                        className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: tag.color }}
+                        aria-hidden="true"
+                      />
+                      {tag.name}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={customConfluence}
+                  onChange={(e) => setCustomConfluence(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addConfluenceTag(customConfluence, CONFLUENCE_CUSTOM_COLOR);
+                      setCustomConfluence("");
+                    }
+                  }}
+                  placeholder={t("confluenceAddPlaceholder")}
+                  maxLength={40}
+                  aria-label={t("confluenceAddPlaceholder")}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={
+                    customConfluence.trim() === "" || createTag.isPending
+                  }
+                  onClick={() => {
+                    addConfluenceTag(customConfluence, CONFLUENCE_CUSTOM_COLOR);
+                    setCustomConfluence("");
+                  }}
+                >
+                  {t("confluenceAdd")}
+                </Button>
               </div>
             </CardContent>
           </Card>

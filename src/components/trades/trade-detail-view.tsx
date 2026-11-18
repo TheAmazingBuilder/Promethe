@@ -106,6 +106,7 @@ import {
   Field,
   ResultBadge,
   StatusBadge,
+  TagsBadges,
   toSpec,
   useTradingLabels,
 } from "@/components/trades/trade-bits";
@@ -140,6 +141,7 @@ import {
 } from "@/lib/media/compress";
 import { navigate } from "@/lib/router";
 import { EXIT_REASONS } from "@/lib/trading/types";
+import { confluenceTagsOf } from "@/lib/trading/confluences";
 import type { CloseTradeInput } from "@/lib/validations/trade";
 
 /** Trade detail sheet - read-only fiche with close dialog and screenshot flow. */
@@ -760,6 +762,23 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
               <InfoRow key={label} label={label} value={value} />
             ))}
           </dl>
+        </CardContent>
+      </Card>
+
+      {/* ── Confluences (MRT wave 1) — badges, or the honest empty state
+          for trades tagged before confluences existed. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t("confluencesTitle")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {confluenceTagsOf(trade.tags).length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {t("confluencesEmpty")}
+            </p>
+          ) : (
+            <TagsBadges tags={confluenceTagsOf(trade.tags)} max={10} />
+          )}
         </CardContent>
       </Card>
 
