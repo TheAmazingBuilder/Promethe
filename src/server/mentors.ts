@@ -225,7 +225,7 @@ export async function createInvitation(
   });
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
-  const inviteUrl = `${baseUrl}//invitation/${token}`;
+  const inviteUrl = `${baseUrl.replace(/\/+$/, "")}/invitation/${token}`;
 
   // In-app notification when the invitee already has an account (email channel
   // is a documented production addition — sandbox has no SMTP).

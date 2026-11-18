@@ -197,6 +197,9 @@ describe("mentor invitations", () => {
     });
     invitationToken = inviteUrl.split("/invitation/")[1];
     expect(invitationToken.startsWith("mtr_")).toBe(true);
+    // No double slash before /invitation/ (regression: base URL + "//invitation/").
+    expect(inviteUrl).not.toContain("//invitation/");
+    expect(inviteUrl).toContain("/invitation/mtr_");
     expect(invitation.status).toBe("PENDING");
     // Raw token never stored — only its hash.
     const row = await db.mentorInvitation.findUniqueOrThrow({
