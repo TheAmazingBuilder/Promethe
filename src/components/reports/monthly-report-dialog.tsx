@@ -62,8 +62,11 @@ function currentMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function buildPdf(report: MonthlyReport, generatedLabel: string): void {
-  const pdf = new ReportPdf(report.currency);
+async function buildPdf(
+  report: MonthlyReport,
+  generatedLabel: string
+): Promise<void> {
+  const pdf = await ReportPdf.create(report.currency);
   const footerLabel = `Monthly report ${report.monthLabel}`;
 
   pdf.header(`Monthly report – ${report.monthLabel}`, generatedLabel);
@@ -171,7 +174,7 @@ export function MonthlyReportDialog({
         "en-CA",
         { dateStyle: "medium" }
       ).format(new Date())}`;
-      buildPdf(report, generatedLabel);
+      await buildPdf(report, generatedLabel);
       onOpenChange(false);
     } catch (err) {
       setError((err as Error).message || t("failed"));

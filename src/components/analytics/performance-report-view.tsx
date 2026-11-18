@@ -109,7 +109,7 @@ export function PerformanceReportView() {
             accounts: report.coverage.accounts,
           });
 
-  const downloadPdf = () => {
+  const downloadPdf = async () => {
     if (data == null || report == null || !report.sufficient) return;
     setPdfBusy(true);
     setPdfError(null);
@@ -118,7 +118,7 @@ export function PerformanceReportView() {
         "en-CA",
         { dateStyle: "medium" }
       ).format(new Date())}`;
-      buildPerformancePdf(
+      await buildPerformancePdf(
         data,
         tAnalytics(PERIOD_KEYS[period]),
         coverageLine ?? "",

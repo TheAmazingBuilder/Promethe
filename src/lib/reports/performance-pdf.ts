@@ -57,16 +57,16 @@ function fmtDay(dayKey: string): string {
   }).format(new Date(Date.UTC(y, m - 1, d)));
 }
 
-export function buildPerformancePdf(
+export async function buildPerformancePdf(
   payload: PerformanceReportPayload,
   periodLabel: string,
   coverageLine: string,
   generatedLabel: string,
   nextWeekActions: PlanAction[],
   labels: PerformancePdfLabels
-): void {
+): Promise<void> {
   const { report } = payload;
-  const pdf = new ReportPdf(payload.currency);
+  const pdf = await ReportPdf.create(payload.currency);
   const footerLabel = `Performance report ${periodLabel}`;
 
   pdf.header(`${labels.title} – ${periodLabel}`, generatedLabel);

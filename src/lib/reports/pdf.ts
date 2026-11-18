@@ -13,8 +13,12 @@
  * dialog before it. The money-formatting ratchet test scans line by
  * line: keep the `currency:` option on its own line, never on the same
  * line as `Intl.NumberFormat(`.
+ *
+ * jsPDF is loaded lazily (ReportPdf.create): the library is ~327 Ko
+ * parsed and only used when a PDF is actually exported, so it must
+ * never be a static import of this module.
  */
-import { jsPDF } from "jspdf";
+import type { jsPDF } from "jspdf";
 
 export interface EquityPoint {
   date: string;
@@ -32,12 +36,22 @@ export class ReportPdf {
   page = 1;
   private readonly moneyFmt: Intl.NumberFormat;
 
-  constructor(currency: string) {
-    this.doc = new jsPDF({ unit: "mm", format: "a4" });
+  constructor(currency: string, JsPDFCtor: typeof jsPDF) {
+    this.doc = new JsPDFCtor({ unit: "mm", format: "a4" });
     this.moneyFmt = new Intl.NumberFormat("en-CA", {
       style: "currency",
       currency,
     });
+  }
+
+  /**
+   * Loads jspdf on demand (dynamic import) and returns a ready ReportPdf.
+   * The only way to build one - the constructor stays private to the
+   * factory so no caller can reintroduce a static jspdf import.
+   */
+  static async create(currency: string): Promise<ReportPdf> {
+    const { jsPDF: JsPDFCtor } = await import("jspdf");
+    return new ReportPdf(currency, JsPDFCtor);
   }
 
   moneyOf(value: string | null): string {
