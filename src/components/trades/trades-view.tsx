@@ -20,6 +20,7 @@ import {
   Columns3,
   Copy,
   Eye,
+  LayoutGrid,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -28,6 +29,7 @@ import {
   RotateCcw,
   Search,
   Star,
+  Table2,
   Trash2,
   X,
   Zap,
@@ -84,6 +86,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PageHeader } from "@/components/ui/page-header";
+import { TradesGridView } from "@/components/trades/trades-grid-view";
+import {
+  readGridViewMode,
+  writeGridViewMode,
+  type TradesViewMode,
+} from "@/lib/trades/grid-stats";
 import { useSession } from "@/components/app/session-context";
 import { Money, Sensitive } from "@/components/privacy/money";
 import { useI18n } from "@/i18n/i18n-provider";
@@ -221,6 +229,7 @@ function drillFiltersFromHash(): Partial<TradeListQuery> | null {
 /** Trades journal - server-side filters, saved views, sortable paginated table. */
 export function TradesView() {
   const t = useTranslations("trades.list");
+  const tGrid = useTranslations("tradesGrid");
   const tCommon = useTranslations("common");
   const tRoot = useTranslations();
   const { locale } = useI18n();
@@ -232,6 +241,16 @@ export function TradesView() {
   const [query, setQuery] = React.useState<TradeListQuery>(DEFAULT_QUERY);
   const [searchInput, setSearchInput] = React.useState("");
   const [showMore, setShowMore] = React.useState(false);
+  // Grid mode: card grid over the same rows (table stays the default).
+  const [viewMode, setViewModeState] = React.useState<TradesViewMode>(() =>
+    readGridViewMode()
+  );
+  const setViewMode = (mode: TradesViewMode) => {
+    setViewModeState(mode);
+    writeGridViewMode(mode);
+    // Bulk selection is a table affordance: drop it when leaving the table.
+    if (mode === "grid") setSelectedIds([]);
+  };
   const [saveOpen, setSaveOpen] = React.useState(false);
   const [viewName, setViewName] = React.useState("");
   const [activeViewId, setActiveViewId] = React.useState<string | null>(null);
@@ -1374,11 +1393,38 @@ export function TradesView() {
               </button>
             </Badge>
           )}
+          {/* ── Table / Grid toggle (persisted in localStorage) ── */}
+          <div
+            className="ml-auto inline-flex rounded-md border"
+            role="group"
+            aria-label={tGrid("viewMode")}
+          >
+            <Button
+              variant={viewMode === "table" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 gap-1.5 rounded-r-none px-2 text-xs"
+              aria-pressed={viewMode === "table"}
+              onClick={() => setViewMode("table")}
+            >
+              <Table2 className="h-3.5 w-3.5" aria-hidden="true" />
+              {tGrid("table")}
+            </Button>
+            <Button
+              variant={viewMode === "grid" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 gap-1.5 rounded-l-none border-l px-2 text-xs"
+              aria-pressed={viewMode === "grid"}
+              onClick={() => setViewMode("grid")}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
+              {tGrid("grid")}
+            </Button>
+          </div>
         </div>
       )}
 
-      {/* ── Bulk bar (v2.5 M4 §4.4) ── */}
-      {selectedIds.length > 0 && (
+      {/* ── Bulk bar (v2.5 M4 §4.4, table mode only) ── */}
+      {selectedIds.length > 0 && viewMode === "table" && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2">
           <p className="text-sm font-medium">
             {t("selectedCount", { count: selectedIds.length })}
@@ -1413,11 +1459,19 @@ export function TradesView() {
 
       {/* ── Body ── */}
       {loading ? (
-        <div className="space-y-2 rounded-lg border p-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full" />
-          ))}
-        </div>
+        viewMode === "grid" ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="h-44 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2 rounded-lg border p-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </div>
+        )
       ) : trades.isError ? (
         <Card className="gap-0 py-4">
           <CardContent className="px-4">
@@ -1484,6 +1538,8 @@ export function TradesView() {
             </CardContent>
           </Card>
         )
+      ) : viewMode === "grid" ? (
+        <TradesGridView trades={rows} query={query} timezone={timezone} />
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <Table>
