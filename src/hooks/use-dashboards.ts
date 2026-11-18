@@ -103,7 +103,11 @@ export function useDashboardData(
   return useQuery({
     queryKey: ["dashboard-data", dashboardId, preset, accountId],
     enabled: dashboardId != null,
-    staleTime: 30_000,
+    // Phase 2 perf (item 6) — heavy endpoint (whole-dashboard compute,
+    // 45 s server cache): no refetch on tab return, 5 min staleTime.
+    // Widget/config mutations invalidate this key explicitly.
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
     queryFn: async () =>
       apiFetch<DashboardDataPayload>(
         `/api/v1/dashboards/${dashboardId}/data`,

@@ -235,6 +235,13 @@ function useInvalidateTrades() {
   return () => {
     void qc.invalidateQueries({ queryKey: ["trades"] });
     void qc.invalidateQueries({ queryKey: ["dashboard"] });
+    // Phase 2 perf (item 6) — the heavy analytics queries below run with
+    // a 5 min staleTime and no refetch on focus, so a trade mutation must
+    // invalidate them explicitly; otherwise an edit would leave the tabs
+    // stale for up to 5 min (today the gap is 60 s).
+    void qc.invalidateQueries({ queryKey: ["analytics-advanced"] });
+    void qc.invalidateQueries({ queryKey: ["weekly-plan"] });
+    void qc.invalidateQueries({ queryKey: ["performance-report"] });
   };
 }
 
@@ -340,7 +347,12 @@ export function useAdvancedAnalytics(
     ],
     queryFn: async () =>
       apiFetch<AdvancedAnalyticsPayload>(`/api/v1/analytics/advanced?${qs}`),
-    staleTime: 60 * 1000,
+    // Phase 2 perf (item 6) — heavy endpoint (full recompute per module
+    // on the server, 45 s server cache): no refetch on tab return, 5 min
+    // staleTime. Fresh data still arrives after a trade mutation via
+    // useInvalidateTrades.
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -369,7 +381,10 @@ export function useWeeklyPlan(accountId?: string) {
       apiFetch<WeeklyPlanPayload>(
         `/api/v1/weekly-plan${qs ? `?${qs}` : ""}`
       ),
-    staleTime: 60 * 1000,
+    // Phase 2 perf (item 6) — heavy endpoint: no refetch on tab return,
+    // 5 min staleTime. The toggle invalidates this key on success.
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -408,7 +423,10 @@ export function usePerformanceReport(filters: AnalyticsFilters) {
       apiFetch<PerformanceReportPayload>(
         `/api/v1/performance-report?${qs}`
       ),
-    staleTime: 60 * 1000,
+    // Phase 2 perf (item 6) — heavy endpoint: no refetch on tab return,
+    // 5 min staleTime. The plan toggle invalidates this key on success.
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 }
 
