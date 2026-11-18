@@ -74,6 +74,31 @@ type TradeRow = Prisma.TradeGetPayload<{
   };
 }>;
 
+/**
+ * Minimal row shape baseItem reads: every trade scalar plus only the
+ * relation fields the list item exposes (symbol/digits, account name,
+ * strategy name + deletedAt for the soft-delete rule, tag id/name/color/
+ * kind + deletedAt). The full include satisfies it — and so does a
+ * narrowed select (dashboard aggregation), so the mapper never sees a
+ * field outside this shape.
+ */
+export type TradeListRow = Omit<
+  TradeRow,
+  "instrument" | "account" | "strategy" | "tags"
+> & {
+  instrument: Pick<TradeRow["instrument"], "symbol" | "digits">;
+  account: Pick<TradeRow["account"], "name">;
+  strategy:
+    | Pick<NonNullable<TradeRow["strategy"]>, "name" | "deletedAt">
+    | null;
+  tags: Array<{
+    tag: Pick<
+      TradeRow["tags"][number]["tag"],
+      "id" | "name" | "color" | "kind" | "deletedAt"
+    >;
+  }>;
+};
+
 type TradeFullRow = Prisma.TradeGetPayload<{
   include: {
     instrument: true;
@@ -137,7 +162,7 @@ export function toInstrumentSpec(row: Instrument): InstrumentSpec {
   };
 }
 
-function baseItem(t: TradeRow): TradeListItemDTO {
+function baseItem(t: TradeListRow): TradeListItemDTO {
   // v2.5 M4 — references to soft-deleted entities are hidden in DTOs: a
   // trashed strategy shows as "none" on the trade until it is restored
   // (the trade itself keeps its strategyId — restore brings it back).
@@ -191,7 +216,7 @@ function baseItem(t: TradeRow): TradeListItemDTO {
 }
 
 /** Public row → list-item mapper (reused by the dashboard aggregation). */
-export function toTradeListItem(t: TradeRow): TradeListItemDTO {
+export function toTradeListItem(t: TradeListRow): TradeListItemDTO {
   return baseItem(t);
 }
 
