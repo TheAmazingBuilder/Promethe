@@ -44,6 +44,7 @@ import { MentorOwnerView } from "@/components/mentor/mentor-owner-view";
 import { MentorTradeView } from "@/components/mentor/mentor-trade-view";
 import { InvitationView } from "@/components/mentor/invitation-view";
 import { AccountSettingsView } from "@/components/settings/account-settings-view";
+import { ProfileView } from "@/components/profile/profile-view";
 import { LegalView } from "@/components/legal/legal-view";
 import { FocusView } from "@/components/dashboard/focus-view";
 import { AppearanceView } from "@/components/settings-views/appearance-view";
@@ -231,6 +232,9 @@ export function ViewSwitch() {
       break;
     case "account-settings":
       view = <AccountSettingsView />;
+      break;
+    case "profile-settings":
+      view = <ProfileView />;
       break;
     case "trash":
       view = <TrashView />;

@@ -42,6 +42,7 @@ import {
   Tags,
   Target,
   Upload,
+  UserRound,
   Wallet,
 } from "lucide-react";
 import type { ViewId } from "@/lib/router";
@@ -279,6 +280,15 @@ export const EXTRA_NAV_ITEMS: NavItem[] = [
     path: "/strategies",
     view: "strategies",
     icon: Target,
+    phase: null,
+    ready: true,
+  },
+  {
+    labelKey: "nav.profile",
+    descriptionKey: "nav.profileDesc",
+    path: "/settings/profile",
+    view: "profile-settings",
+    icon: UserRound,
     phase: null,
     ready: true,
   },

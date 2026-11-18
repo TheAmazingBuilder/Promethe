@@ -47,6 +47,8 @@ export const VIEW_IDS = [
   "invitation",
   // v3 Phase 6 — portability & compliance
   "account-settings",
+  // Profile page (/settings/profile)
+  "profile-settings",
   "legal",
   // v2.5 Module 1 — customizable dashboards
   "focus",
@@ -153,6 +155,7 @@ const SETTINGS_SUB_VIEW: Record<string, ViewId> = {
   mentors: "mentors",
   compte: "account-settings",
   account: "account-settings",
+  profile: "profile-settings",
   appearance: "appearance-settings",
   dashboards: "dashboards-settings",
   privacy: "privacy-settings",
@@ -463,6 +466,8 @@ export function routeToPath(route: AppRoute): string {
       );
     case "account-settings":
       return withSearch("/settings/account", query);
+    case "profile-settings":
+      return withSearch("/settings/profile", query);
     case "legal":
       return withSearch(`/legal/${route.legalPage ?? "terms"}`, query);
     case "focus":

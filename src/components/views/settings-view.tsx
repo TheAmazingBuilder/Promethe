@@ -264,6 +264,20 @@ export function SettingsView() {
       </Card>
 
       <Link
+        href="/settings/profile"
+        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <ShieldCheck className="h-5 w-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">{t("profileLink")}</p>
+            <p className="text-xs text-muted-foreground">{t("profileLinkDesc")}</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </Link>
+
+      <Link
         href="/settings/account"
         className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
       >
