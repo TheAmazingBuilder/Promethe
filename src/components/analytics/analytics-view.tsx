@@ -34,18 +34,6 @@ import {
   Zap,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -68,7 +56,19 @@ import { useA11yPrefs } from "@/components/a11y/a11y-provider";
 import { Money, Sensitive } from "@/components/privacy/money";
 import { useTradingLabels } from "@/components/trades/trade-bits";
 import { MonthlyReportDialog } from "@/components/reports/monthly-report-dialog";
+import dynamic from "next/dynamic";
 import { WhenYouTradeSection } from "@/components/analytics/when-you-trade-section";
+
+// Equity / R-distribution charts (recharts) load on demand after the KPIs
+// and filters - the analytics shell never waits on the chart chunk.
+import type { EquityDatum } from "./analytics-charts";
+const AnalyticsCharts = dynamic(
+  () => import("./analytics-charts").then((m) => m.AnalyticsCharts),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-[340px] w-full" />,
+  }
+);
 import { useSession } from "@/components/app/session-context";
 import { useI18n } from "@/i18n/i18n-provider";
 import { useAccounts, useAnalytics } from "@/hooks/use-trading";
@@ -77,7 +77,6 @@ import type { AnalyticsPeriod } from "@/lib/validations/analytics";
 import type { GroupStat } from "@/lib/analytics/engine";
 import type { Insight } from "@/lib/analytics/insights";
 import {
-  fmtDateInTz,
   fmtNum,
   fmtSigned,
   pnlClass,
@@ -122,65 +121,6 @@ function KpiCard({
   );
 }
 
-interface EquityDatum {
-  i: number;
-  date: string;
-  equity: number;
-  drawdown: number;
-}
-
-function EquityTooltipContent({
-  active,
-  payload,
-  currency,
-  timezone,
-}: {
-  active?: boolean;
-  payload?: Array<{ payload?: EquityDatum }>;
-  currency: string;
-  timezone: string;
-}) {
-  if (!active) return null;
-  const point = payload?.[0]?.payload;
-  if (!point) return null;
-  return (
-    <div className="rounded-lg border bg-background px-3 py-2 text-xs shadow-md">
-      <p className="font-medium">#{point.i}</p>
-      <p className="text-muted-foreground">
-        {fmtDateInTz(point.date, timezone)}
-      </p>
-      <p className="mt-1 tabular-nums">
-        <Money value={point.equity} currency={currency} kind="balance" />
-      </p>
-      {point.drawdown > 0 ? (
-        <p className={`tabular-nums ${ROSE}`}>
-          −<Money value={point.drawdown} currency={currency} />
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function RDistTooltipContent({
-  active,
-  payload,
-}: {
-  active?: boolean;
-  payload?: Array<{ payload?: { label: string; count: number; totalR: number } }>;
-}) {
-  if (!active) return null;
-  const point = payload?.[0]?.payload;
-  if (!point) return null;
-  return (
-    <div className="rounded-lg border bg-background px-3 py-2 text-xs shadow-md">
-      <p className="font-medium">{point.label}</p>
-      <p className="tabular-nums">{point.count}</p>
-      <p className="tabular-nums text-muted-foreground">
-        Σ {fmtSigned(String(point.totalR))} R
-      </p>
-    </div>
-  );
-}
 
 /** One breakdown dimension - compact rows with a proportional net P&L bar. */
 function BreakdownCard({
@@ -723,184 +663,25 @@ export function AnalyticsView() {
             </div>
           </section>
 
-          {/* Equity + drawdown (2/3) | R distribution (1/3) */}
-          <div className="grid gap-6 xl:grid-cols-3">
-            <Card className="xl:col-span-2">
-              <CardHeader>
-                <CardTitle className="text-base">{t("equityTitle")}</CardTitle>
-                <CardDescription>
-                  {t("equityDesc", {
-                    amount: fmt.money(data.equityInitialBalance, currency),
-                  })}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div
-                  className="h-[220px] w-full"
-                  role="img"
-                  aria-label={t("equityTitle")}
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart
-                      data={equityData}
-                      margin={{ top: 8, right: 12, bottom: 0, left: 0 }}
-                    >
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        strokeOpacity={0.3}
-                        vertical={false}
-                      />
-                      <XAxis
-                        dataKey="i"
-                        tickFormatter={(value: number) => `#${value}`}
-                        tick={{ fontSize: 11 }}
-                        tickLine={false}
-                        axisLine={false}
-                        minTickGap={32}
-                      />
-                      <YAxis
-                        domain={["auto", "auto"]}
-                        tickFormatter={(value: number) => fmt.money(value, currency, 0)}
-                        tick={{ fontSize: 11 }}
-                        tickLine={false}
-                        axisLine={false}
-                        width={60}
-                      />
-                      <Tooltip
-                        cursor={{ strokeOpacity: 0.4 }}
-                        content={
-                          <EquityTooltipContent
-                            currency={currency}
-                            timezone={timezone}
-                          />
-                        }
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="equity"
-                        stroke="#10b981"
-                        strokeWidth={2}
-                        fill="#10b981"
-                        fillOpacity={0.15}
-                        dot={false}
-                        activeDot={{ r: 4 }}
-                        isAnimationActive={!reducedMotionActive}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-                <div>
-                  <p className="mb-1 text-xs font-medium text-muted-foreground">
-                    {t("drawdownTitle")}
-                  </p>
-                  <div
-                    className="h-[80px] w-full"
-                    role="img"
-                    aria-label={t("drawdownTitle")}
-                  >
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart
-                        data={equityData}
-                        margin={{ top: 4, right: 12, bottom: 0, left: 0 }}
-                      >
-                        <XAxis dataKey="i" hide />
-                        <YAxis
-                          domain={[0, "auto"]}
-                          tickFormatter={(value: number) => fmt.money(value, currency, 0)}
-                          tick={{ fontSize: 10 }}
-                          tickLine={false}
-                          axisLine={false}
-                          width={60}
-                        />
-                        <Tooltip
-                          cursor={{ strokeOpacity: 0.4 }}
-                          content={
-                            <EquityTooltipContent
-                              currency={currency}
-                              timezone={timezone}
-                            />
-                          }
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="drawdown"
-                          stroke="#f43f5e"
-                          strokeWidth={1.5}
-                          fill="#f43f5e"
-                          fillOpacity={0.15}
-                          dot={false}
-                          isAnimationActive={!reducedMotionActive}
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">{t("rdistTitle")}</CardTitle>
-                <CardDescription>
-                  {data.rDistribution.withoutR > 0
-                    ? t("rdistDescMissing", {
-                        count: data.rDistribution.withoutR,
-                      })
-                    : t("rdistDesc")}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div
-                  className="h-[320px] w-full"
-                  role="img"
-                  aria-label={t("rdistTitle")}
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={rDistData}
-                      margin={{ top: 8, right: 4, bottom: 0, left: 0 }}
-                    >
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        strokeOpacity={0.3}
-                        vertical={false}
-                      />
-                      <XAxis
-                        dataKey="label"
-                        tick={{ fontSize: 10 }}
-                        tickLine={false}
-                        axisLine={false}
-                        interval={0}
-                        angle={-35}
-                        textAnchor="end"
-                        height={44}
-                      />
-                      <YAxis
-                        allowDecimals={false}
-                        tick={{ fontSize: 11 }}
-                        tickLine={false}
-                        axisLine={false}
-                        width={32}
-                      />
-                      <Tooltip
-                        cursor={{ fillOpacity: 0.08 }}
-                        content={<RDistTooltipContent />}
-                      />
-                      <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={36} isAnimationActive={!reducedMotionActive}>
-                        {rDistData.map((b) => (
-                          <Cell
-                            key={b.id}
-                            fill={b.negative ? "var(--loss)" : "var(--gain)"}
-                            fillOpacity={0.8}
-                          />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <AnalyticsCharts
+            equityData={equityData}
+            rDistData={rDistData}
+            currency={currency}
+            timezone={timezone}
+            reducedMotion={reducedMotionActive}
+            formatMoney={(v, c, d) => fmt.money(v, c, d)}
+            equityTitle={t("equityTitle")}
+            equityDesc={t("equityDesc", {
+              amount: fmt.money(data.equityInitialBalance, currency),
+            })}
+            drawdownTitle={t("drawdownTitle")}
+            rdistTitle={t("rdistTitle")}
+            rdistDesc={t("rdistDesc")}
+            rdistDescMissing={t("rdistDescMissing", {
+              count: data.rDistribution.withoutR,
+            })}
+            missingCount={data.rDistribution.withoutR}
+          />
 
           {/* Insights — ce qui marche / ce qui coûte / à noter */}
           <section aria-label={t("insightsAria")}>

@@ -45,12 +45,12 @@ import {
   type YearCell,
   type YearDayStats,
 } from "@/lib/charts/yearGrid";
+import { ChartPreview } from "@/components/charts/chart-preview";
 import {
-  ChartPreview,
   formatCategoryKey,
   yMeasureFormat,
   type MeasureFormatKind,
-} from "@/components/charts/chart-preview";
+} from "@/components/charts/chart-format";
 import { HeatmapMatrix } from "@/components/charts/heatmap-matrix";
 import {
   heatmapWidgetConfigSchema,

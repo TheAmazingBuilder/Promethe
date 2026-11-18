@@ -13,8 +13,8 @@ import * as React from "react";
 import { useTranslations } from "next-intl";
 import { cellColor, type MatrixResult } from "@/lib/charts/heatmap";
 import type { XDimension } from "@/lib/validations/charts";
-import type { MeasureFormatKind } from "./chart-preview";
-import { formatCategoryKey } from "./chart-preview";
+import type { MeasureFormatKind } from "./chart-format";
+import { formatCategoryKey } from "./chart-format";
 import { fmtNum } from "@/lib/format";
 
 export interface HeatmapMatrixProps {

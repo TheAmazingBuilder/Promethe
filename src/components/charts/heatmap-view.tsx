@@ -56,7 +56,7 @@ import {
 } from "@/lib/charts/export-png";
 import type { XDimension } from "@/lib/validations/charts";
 import { HeatmapMatrix } from "./heatmap-matrix";
-import { formatCategoryKey, yMeasureFormat } from "./chart-preview";
+import { formatCategoryKey, yMeasureFormat } from "./chart-format";
 
 /** Categorical dimensions usable on a heatmap axis. */
 const HEATMAP_DIMS = X_DIMENSION_DEFS.filter(

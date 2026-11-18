@@ -6,21 +6,16 @@
  * Every renderer tolerates null / malformed data payloads.
  */
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useI18n } from "@/i18n/i18n-provider";
+import { Skeleton } from "@/components/ui/skeleton";
 import { KpiStripWidget } from "./kpi-strip-widget";
 import { SingleKpiWidget } from "./single-kpi-widget";
 import { PeriodCompareWidget } from "./period-compare-widget";
-import {
-  DrawdownCurveWidget,
-  EquityCurveWidget,
-} from "./equity-curve-widget";
 import { PnlCalendarWidget } from "./pnl-calendar-widget";
 import { OpenTradesWidget } from "./open-trades-widget";
 import { RecentTradesWidget } from "./recent-trades-widget";
-import { PerformanceChartWidget } from "./performance-chart-widget";
 import { GroupTableWidget } from "./group-table-widget";
-import { RHistogramWidget } from "./r-histogram-widget";
-import { WinLossWidget } from "./win-loss-widget";
 import { StreakWidget } from "./streak-widget";
 import {
   GoalsProgressWidget,
@@ -33,11 +28,6 @@ import { NextNewsWidget } from "./next-news-widget";
 import { QuickActionsWidget } from "./quick-actions-widget";
 import { StickyNoteWidget } from "./sticky-note-widget";
 import { CustomMetricWidget } from "./custom-metric-widget";
-import {
-  HeatmapWidget,
-  SavedChartWidget,
-  YearCalendarWidget,
-} from "./chart-widgets";
 import { RiskBudgetWidget } from "./risk-budget-widget";
 import { DisciplineScoreWidget } from "./discipline-score-widget";
 import { TopLeaksWidget } from "./top-leaks-widget";
@@ -45,6 +35,57 @@ import { HabitsAtAGlanceWidget } from "./habits-at-a-glance-widget";
 import "@/lib/dashboard/register-chart-widgets";
 import "@/lib/dashboard/register-risk-reward-widgets";
 import "@/lib/dashboard/register-mrt-wave2-widgets";
+
+/**
+ * Sober loading state while a chart widget chunk loads. Plain skeleton,
+ * fixed height so the grid does not jump.
+ */
+function ChartLoading() {
+  return <Skeleton className="h-[220px] w-full" aria-label="Loading chart" />;
+}
+
+// ── Recharts widgets, one chunk each ─────────────────────────────────────────
+// Every widget below renders with recharts (ResponsiveContainer needs the
+// DOM, so ssr: false). They load on demand after the dashboard shell:
+// a dashboard without chart widgets never downloads recharts (~349 Ko).
+const EquityCurveWidget = dynamic(
+  () =>
+    import("./equity-curve-widget").then((m) => m.EquityCurveWidget),
+  { ssr: false, loading: () => <ChartLoading /> }
+);
+const DrawdownCurveWidget = dynamic(
+  () =>
+    import("./equity-curve-widget").then((m) => m.DrawdownCurveWidget),
+  { ssr: false, loading: () => <ChartLoading /> }
+);
+const PerformanceChartWidget = dynamic(
+  () =>
+    import("./performance-chart-widget").then(
+      (m) => m.PerformanceChartWidget
+    ),
+  { ssr: false, loading: () => <ChartLoading /> }
+);
+const RHistogramWidget = dynamic(
+  () => import("./r-histogram-widget").then((m) => m.RHistogramWidget),
+  { ssr: false, loading: () => <ChartLoading /> }
+);
+const WinLossWidget = dynamic(
+  () => import("./win-loss-widget").then((m) => m.WinLossWidget),
+  { ssr: false, loading: () => <ChartLoading /> }
+);
+// Saved-chart / heatmap / year-calendar widgets (ChartPreview → recharts).
+const SavedChartWidget = dynamic(
+  () => import("./chart-widgets").then((m) => m.SavedChartWidget),
+  { ssr: false, loading: () => <ChartLoading /> }
+);
+const HeatmapWidget = dynamic(
+  () => import("./chart-widgets").then((m) => m.HeatmapWidget),
+  { ssr: false, loading: () => <ChartLoading /> }
+);
+const YearCalendarWidget = dynamic(
+  () => import("./chart-widgets").then((m) => m.YearCalendarWidget),
+  { ssr: false, loading: () => <ChartLoading /> }
+);
 
 export interface WidgetRendererProps {
   type: string;

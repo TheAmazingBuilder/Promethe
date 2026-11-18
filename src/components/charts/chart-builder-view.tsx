@@ -116,12 +116,22 @@ import {
   type XDimension,
   type YMeasure,
 } from "@/lib/validations/charts";
+import dynamic from "next/dynamic";
+import { ChartTable } from "./chart-table";
 import {
-  ChartPreview,
-  ChartTable,
   formatCategoryKey,
   yMeasureFormat,
-} from "./chart-preview";
+} from "./chart-format";
+
+// ChartPreview (recharts) loads on demand — the builder shell (filters,
+// config, table fallback) renders first, the chart chunk after.
+const ChartPreview = dynamic(
+  () => import("./chart-preview").then((m) => m.ChartPreview),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-[320px] w-full" />,
+  }
+);
 
 // ── Config shape (draft — validated on every render) ─────────────────────────
 
