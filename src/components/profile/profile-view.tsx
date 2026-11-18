@@ -945,9 +945,9 @@ export function ProfileView() {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="truncate text-xl font-bold">
+              <p className="truncate text-xl font-bold">
                 {profile.displayName}
-              </h2>
+              </p>
               <Badge variant="outline">{t("freePlan")}</Badge>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
