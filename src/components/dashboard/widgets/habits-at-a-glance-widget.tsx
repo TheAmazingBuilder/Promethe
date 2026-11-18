@@ -1,15 +1,16 @@
 "use client";
 
 /**
- * Habits at a glance widget (MRT wave 2, chantier 2) — win rate by
- * session, all time, on the dashboard.
+ * Habits at a glance widget (MRT wave 2, chantier 2; grades added wave 3)
+ * — win rate by session and by grade, all time, on the dashboard.
  *
  * No new calculation: the session breakdown comes straight from GET
  * /api/v1/analytics?period=all (computeBreakdowns, the same payload as
- * /analytics). Grades are NOT shown: they do not exist in Promethe yet,
- * so the widget shows the session only, with the trade count behind
- * every win rate. Each row links to the trades list filtered on that
- * session. No closed trades → an honest empty state, never a
+ * /analytics); the grade breakdown comes from GET
+ * /api/v1/analytics/advanced?period=all (computeGrades). Grades are the
+ * MRT setup grades (A+ / A / B / C); ungraded trades are counted, never
+ * given a grade. Each row links to the trades list filtered on that
+ * session or grade. No closed trades → an honest empty state, never a
  * placeholder rate. Self-fetching (hasLoader: false).
  */
 import { useTranslations } from "next-intl";
@@ -23,14 +24,17 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAnalytics } from "@/hooks/use-trading";
+import { useAdvancedAnalytics, useAnalytics } from "@/hooks/use-trading";
+import { GradeBadge } from "@/components/trades/trade-bits";
 import { sessionLabel } from "@/lib/analytics/weekly-plan";
+import { compareTradeGrades } from "@/lib/trading/grades";
 import { fmtNum } from "@/lib/format";
 import { navigate } from "@/lib/router";
 
 export function HabitsAtAGlanceWidget() {
   const t = useTranslations("habitsAtAGlance");
   const { data, isLoading, isError } = useAnalytics({ period: "all" });
+  const advanced = useAdvancedAnalytics({ period: "all" });
 
   if (isLoading) {
     return (
@@ -55,6 +59,10 @@ export function HabitsAtAGlanceWidget() {
     (acc, g) => acc + g.stats.tradeCount,
     0
   );
+  const gradeRows = [...(advanced.data?.advanced.grades.rows ?? [])].sort(
+    (a, b) => compareTradeGrades(a.grade, b.grade)
+  );
+  const ungradedCount = advanced.data?.advanced.grades.ungraded ?? 0;
 
   return (
     <Card>
@@ -118,6 +126,81 @@ export function HabitsAtAGlanceWidget() {
             })}
           </ul>
         )}
+
+        {/* ── By grade (MRT wave 3) ── */}
+        <div className="mt-4 border-t pt-4">
+          <p className="mb-2 text-sm font-medium">{t("byGrade")}</p>
+          {advanced.isLoading ? (
+            <div className="space-y-2" role="status" aria-live="polite">
+              <span className="sr-only">{t("loadingGrades")}</span>
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-2/3" />
+            </div>
+          ) : advanced.isError || !advanced.data ? null : gradeRows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t("gradesEmpty")}</p>
+          ) : (
+            <ul className="space-y-2">
+              {gradeRows.map((row) => {
+                const winRate = row.winRate;
+                return (
+                  <li key={row.grade}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate(
+                          `/trades?grade=${encodeURIComponent(row.grade)}`
+                        )
+                      }
+                      aria-label={t("viewGrade", { grade: row.grade })}
+                      className="flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted/50 motion-reduce:transition-none"
+                    >
+                      <span className="w-24 shrink-0">
+                        <GradeBadge grade={row.grade} />
+                      </span>
+                      <Progress
+                        value={winRate ?? 0}
+                        className="min-w-0 flex-1"
+                      />
+                      <span className="shrink-0 text-sm tabular-nums">
+                        {winRate != null
+                          ? `${fmtNum(winRate, 1)}%`
+                          : t("noDecided")}
+                      </span>
+                      <span className="hidden shrink-0 text-xs text-muted-foreground tabular-nums sm:block">
+                        {t("trades", { n: row.count })}
+                      </span>
+                      <ChevronRight
+                        className="h-4 w-4 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                    </button>
+                  </li>
+                );
+              })}
+              {ungradedCount > 0 ? (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/trades?grade=UNGRADED")}
+                    aria-label={t("viewUngraded")}
+                    className="flex w-full items-center gap-3 rounded-lg border border-dashed p-3 text-left transition-colors hover:bg-muted/50 motion-reduce:transition-none"
+                  >
+                    <span className="w-24 shrink-0 truncate text-sm text-muted-foreground">
+                      {t("ungraded")}
+                    </span>
+                    <span className="min-w-0 flex-1 text-sm text-muted-foreground">
+                      {t("ungradedTrades", { n: ungradedCount })}
+                    </span>
+                    <ChevronRight
+                      className="h-4 w-4 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                  </button>
+                </li>
+              ) : null}
+            </ul>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

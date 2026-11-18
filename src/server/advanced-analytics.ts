@@ -183,6 +183,7 @@ function toAdvancedTrade(
     entryPrice: t.entryPrice?.toString() ?? null,
     initialStopLoss: t.initialStopLoss?.toString() ?? null,
     tags: t.tags.map((tt) => tt.tag.name),
+    grade: t.grade,
     // MRT wave 1 — confluences are Tag rows with kind CONFLUENCE (see
     // src/lib/trading/confluences.ts). Soft-deleted tags are excluded so a
     // trashed confluence never feeds the hit-rate table.

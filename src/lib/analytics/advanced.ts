@@ -15,6 +15,7 @@
  * them — no conclusion is drawn under the threshold.
  */
 import { D0, Decimal, toD } from "@/lib/trading/dec";
+import { compareTradeGrades } from "@/lib/trading/grades";
 import {
   computeTradeStats,
   sortChronologically,
@@ -70,6 +71,9 @@ export interface AdvancedTrade extends AnalyticsTrade {
   initialStopLoss: string | null;
   /** Tag names on the trade. */
   tags: string[];
+  /** MRT setup grade (A+ | A | B | C), null = ungraded. Optional for
+   * callers that only carry tag dimensions. */
+  grade?: string | null;
   /** Confluence tags on the trade (kind CONFLUENCE): id, name, color.
    * Optional for callers that only carry tag names. */
   confluenceTags?: Array<{ id: string; name: string; color: string }>;
@@ -767,6 +771,95 @@ export function computeConfluences(trades: AdvancedTrade[]): ConfluencesResult {
   };
 }
 
+// ── (d3) By grade (MRT wave 3) ─────────────────────────────────────────────
+// Win rate and P&L per MRT setup grade (A+ / A / B / C). Unlike confluences,
+// a trade carries at most one grade, so row counts add up to the graded
+// total exactly. Ungraded trades are counted, never assigned a grade, and
+// never enter a row. R multiples drive expectancy; a trade without an R
+// multiple still counts for win rate and net P&L.
+
+/** Minimum sample for a grade verdict (same bar as setups / confluences). */
+export const MIN_SAMPLE_GRADE = 10;
+
+export interface GradeRow {
+  grade: string;
+  count: number;
+  wins: number;
+  losses: number;
+  breakevens: number;
+  winRate: number | null;
+  wilsonLower: number | null;
+  wilsonUpper: number | null;
+  /** Mean R per trade, null when no trade in the group carries an R. */
+  expectancy: number | null;
+  avgR: number | null;
+  totalR: number | null;
+  netPnl: string;
+}
+
+export interface GradesResult {
+  /** Closed trades in scope (all, graded or not). */
+  total: number;
+  /** Trades carrying a grade. */
+  graded: number;
+  /** Trades with no grade. */
+  ungraded: number;
+  /** One row per grade present in the data, best grade first. */
+  rows: GradeRow[];
+}
+
+export function computeGrades(trades: AdvancedTrade[]): GradesResult {
+  const groups = new Map<string, AdvancedTrade[]>();
+  let graded = 0;
+  for (const t of trades) {
+    if (t.grade == null) continue;
+    graded += 1;
+    const list = groups.get(t.grade) ?? [];
+    list.push(t);
+    groups.set(t.grade, list);
+  }
+  const rows: GradeRow[] = [...groups.entries()].map(([grade, list]) => {
+    const rs = list
+      .map((t) => (t.rMultiple == null ? null : Number(t.rMultiple)))
+      .filter((v): v is number => v != null && Number.isFinite(v));
+    const wins = list.filter((t) => t.resultType === "WIN").length;
+    const losses = list.filter((t) => t.resultType === "LOSS").length;
+    const breakevens = list.filter((t) => t.resultType === "BREAKEVEN").length;
+    const decided = wins + losses;
+    const wilson = decided > 0 ? wilsonInterval(wins, decided) : null;
+    const expectancy = rs.length > 0 ? mean(rs) : null;
+    const netPnl = list
+      .reduce((acc, t) => acc.plus(toD(t.netPnl ?? 0)), D0)
+      .toString();
+    return {
+      grade,
+      count: list.length,
+      wins,
+      losses,
+      breakevens,
+      winRate: decided > 0 ? round((wins / decided) * 100, 1) : null,
+      wilsonLower: wilson != null ? round(wilson.lower * 100, 1) : null,
+      wilsonUpper: wilson != null ? round(wilson.upper * 100, 1) : null,
+      expectancy: expectancy != null ? round(expectancy, 2) : null,
+      avgR: expectancy != null ? round(expectancy, 2) : null,
+      totalR:
+        rs.length > 0 ? round(rs.reduce((a, b) => a + b, 0), 2) : null,
+      netPnl,
+    };
+  });
+  // Best grade first; trade count breaks ties.
+  rows.sort(
+    (a, b) =>
+      compareTradeGrades(a.grade, b.grade) || b.count - a.count
+  );
+  return {
+    total: trades.length,
+    graded,
+    ungraded: trades.length - graded,
+    rows,
+  };
+}
+
 // ── (e) Sequence analysis ────────────────────────────────────────────────────
 
 export interface AfterStreakRow {
@@ -1177,6 +1270,7 @@ export interface AdvancedAnalytics {
   scoreHistory: ScoreHistoryPoint[];
   setups: SetupRank[];
   confluences: ConfluencesResult;
+  grades: GradesResult;
   sequences: SequencesResult;
   seasonality: SeasonalityResult;
   anomalies: AnomaliesResult;
@@ -1194,6 +1288,7 @@ export function computeAdvancedAnalytics(
     scoreHistory: computeScoreHistory(trades),
     setups: computeSetupRanking(trades),
     confluences: computeConfluences(trades),
+    grades: computeGrades(trades),
     sequences: computeSequences(trades),
     seasonality: computeSeasonality(trades),
     anomalies: computeAnomalies(trades),

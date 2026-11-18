@@ -98,6 +98,7 @@ import {
 import { previewTrade, type TradePreview } from "@/lib/trading/calculate";
 import { PreTradeExposureCheck } from "@/components/tools/pre-trade-exposure-check";
 import { toD } from "@/lib/trading/dec";
+import { TRADE_GRADES, type TradeGrade } from "@/lib/trading/grades";
 import {
   EMOTIONS,
   EXIT_REASONS,
@@ -171,6 +172,8 @@ interface TradeFormState {
   /** Playbook setup id ("" = none, "custom" = free-text setupType). */
   setupId: string;
   marketCondition: string;
+  /** MRT setup grade ("" = ungraded). */
+  grade: string;
   entryTime: string; // ISO ("" = cleared → now on submit)
   exitTime: string; // ISO ("" = null)
   entryPrice: string;
@@ -222,6 +225,7 @@ function emptyForm(): TradeFormState {
     setupType: "",
     setupId: "",
     marketCondition: "",
+    grade: "",
     entryTime: nowIso(),
     exitTime: "",
     entryPrice: "",
@@ -284,6 +288,7 @@ const FIELD_LABELS: Record<string, string> = {
   manualNetPnl: "manualNetPnl",
   exitReason: "exitReason",
   tradingViewUrl: "tradingViewUrl",
+  grade: "grade",
   notes: "notes",
   tagIds: "sectionTags",
   checklistResults: "checklist",
@@ -396,6 +401,7 @@ export function TradeFormView({
       setupType: trade.setupType ?? "",
       setupId: trade.setupId ?? (trade.setupType ? "custom" : ""),
       marketCondition: trade.marketCondition ?? "",
+      grade: trade.grade ?? "",
       entryTime: trade.entryTime,
       exitTime: trade.exitTime ?? "",
       entryPrice: trade.entryPrice,
@@ -656,6 +662,7 @@ export function TradeFormView({
       setupId:
         form.setupId && form.setupId !== "custom" ? form.setupId : null,
       marketCondition: (form.marketCondition || null) as MarketCondition | null,
+      grade: (form.grade || null) as TradeGrade | null,
       entryTime: form.entryTime || nowIso(),
       exitTime: nul(form.exitTime),
       entryPrice: form.entryPrice.trim(),
@@ -1047,6 +1054,24 @@ export function TradeFormView({
                     {MARKET_CONDITIONS.map((mc) => (
                       <SelectItem key={mc} value={mc}>
                         {labels.marketCondition(mc)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label={t("grade")} htmlFor="tf-grade" hint={t("gradeHint")}>
+                <Select
+                  value={form.grade || "none"}
+                  onValueChange={guardEmpty((v) => set("grade", v === "none" ? "" : v))}
+                >
+                  <SelectTrigger id="tf-grade" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{tc("none")}</SelectItem>
+                    {TRADE_GRADES.map((g) => (
+                      <SelectItem key={g} value={g}>
+                        {g}
                       </SelectItem>
                     ))}
                   </SelectContent>

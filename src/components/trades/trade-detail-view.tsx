@@ -104,6 +104,7 @@ import {
   DirectionBadge,
   DraftBadge,
   Field,
+  GradeBadge,
   ResultBadge,
   StatusBadge,
   TagsBadges,
@@ -507,6 +508,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
       </Sensitive>,
     ],
     [t("strategy"), trade.strategyName ?? "-"],
+    [t("grade"), <GradeBadge key="grade" grade={trade.grade} />],
     [t("sessionLabel"), labels.session(trade.session)],
     [t("timeframe"), trade.timeframe ?? "-"],
     [t("orderType"), labels.orderType(trade.orderType)],
@@ -541,6 +543,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
             <DirectionBadge direction={trade.direction} />
             <StatusBadge status={trade.status} />
             <ResultBadge result={trade.resultType} />
+            <GradeBadge grade={trade.grade} />
             {trade.isDraft && <DraftBadge />}
           </div>
           <p className="text-sm text-muted-foreground">

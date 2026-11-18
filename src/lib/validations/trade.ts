@@ -7,6 +7,7 @@
  *  - Messages are stable CODES translated client-side (src/lib/i18n-errors.ts).
  */
 import { z } from "zod";
+import { TRADE_GRADES } from "@/lib/trading/grades";
 import {
   ASSET_CLASSES,
   COMMON_CURRENCIES,
@@ -117,6 +118,8 @@ export const tradeInputSchema = z.object({
   setupQualityRating: z.number().int().min(1).max(5).nullish(),
   executionRating: z.number().int().min(1).max(5).nullish(),
   followedPlan: z.boolean().nullish(),
+  /** MRT setup grade (A+ | A | B | C), null = ungraded. Not a 1-5 score. */
+  grade: z.enum(TRADE_GRADES).nullish(),
 
   tagIds: z.array(z.string()).max(30).default([]),
   checklistResults: z.record(z.string(), z.boolean()).nullish(),
@@ -168,6 +171,8 @@ export const tradeListQuerySchema = z.object({
   resultType: z.enum(["WIN", "LOSS", "BREAKEVEN"]).optional(),
   reviewStatus: z.enum(["NOT_REVIEWED", "REVIEWED"]).optional(),
   session: z.enum(TRADING_SESSIONS).optional(),
+  /** MRT setup grade filter; "UNGRADED" matches trades with no grade. */
+  grade: z.enum([...TRADE_GRADES, "UNGRADED"] as const).optional(),
   /// v2.5 M2 drill-down — chart timeframe (M1…MN).
   timeframe: z.enum(TIMEFRAMES).optional(),
   accountId: z.string().optional(),

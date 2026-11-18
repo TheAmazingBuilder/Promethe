@@ -74,6 +74,8 @@ export interface TradeListItemDTO {
   isDraft: boolean;
   emotionBefore: string | null;
   followedPlan: boolean | null;
+  /** MRT setup grade (A+ | A | B | C), null = ungraded. */
+  grade: string | null;
   createdAt: string;
   updatedAt: string;
   tags: TagDTO[];

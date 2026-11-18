@@ -557,6 +557,7 @@ export function AnalyticsView() {
               "exits",
               "quality",
               "setups",
+              "grades",
               "sequences",
               "seasonality",
               "anomalies",

@@ -282,6 +282,11 @@
     },
     "calendarLegend": "{green} green · {red} red days"
   },
+  "grades": {
+    "ungraded": "Ungraded",
+    "title": "Setup grade",
+    "hint": "Grade the setup quality of this trade, A+ being the best. Leave it blank when you do not want to grade it."
+  },
   "datePicker": {
     "title": "Date and time",
     "previousMonth": "Previous month",
@@ -418,7 +423,8 @@
         "seasonality": "Seasonality",
         "anomalies": "Anomalies",
         "weekly-plan": "Weekly plan",
-        "confluences": "Confluences"
+        "confluences": "Confluences",
+        "grades": "Grades"
       },
       "sample": "Sample: {count} trades",
       "noData": "Not enough data yet for this view.",
@@ -644,7 +650,7 @@
         "notEnoughTitle": "Not enough trades yet",
         "notEnoughDetail": "The weekly plan needs at least {min} closed trades in the last {window} days. You have {count} so far.",
         "logTrade": "Log a trade",
-        "methodNote": "How this plan is built: every Monday the rules re-read your last 30 days of closed trades and rank the leaks by money lost. Checkboxes belong to the current week only. No grade is used, grades do not exist in Promethe yet."
+        "methodNote": "How this plan is built: every Monday the rules re-read your last 30 days of closed trades and rank the leaks by money lost. Checkboxes belong to the current week only."
       },
       "confluences": {
         "title": "Confluence hit rate",
@@ -673,6 +679,35 @@
         "emptyAction": "Log a trade",
         "noteMulti": "A trade can carry several confluences, so it is counted once in every confluence it carries and the rows add up to more than the tagged total.",
         "noteSample": "Win rates under {min} trades are directional only — keep tagging before drawing conclusions."
+      },
+      "grades": {
+        "title": "By grade",
+        "desc": "Win rate and P&L per setup grade. Grade your trades in the trade form to fill this view.",
+        "tableTitle": "Win rate and P&L by grade",
+        "tableDesc": "Closed trades only. A trade carries at most one grade, so the rows add up to the graded total.",
+        "colGrade": "Grade",
+        "colCount": "Trades",
+        "colWinRate": "Win rate",
+        "colNetPnl": "Net P&L",
+        "colAvgR": "Avg R",
+        "colExpectancy": "Expectancy",
+        "colTrades": "Trades",
+        "winsLosses": "{wins}W / {losses}L",
+        "viewTrades": "View trades",
+        "kpiGraded": "Graded trades",
+        "kpiGradedSub": "of {total} closed trades",
+        "kpiCoverage": "Graded share",
+        "kpiCoverageSub": "Share of closed trades with a grade",
+        "kpiUngraded": "Ungraded trades",
+        "kpiUngradedSub": "Closed trades with no grade",
+        "kpiBest": "Best grade",
+        "kpiBestSub": "{expectancy} R expected per trade, {count} trades",
+        "kpiBestNone": "No grade has 10 trades yet",
+        "empty": "No graded trades in this period yet. Grade a trade in the trade form, and its win rate and P&L will show up here.",
+        "emptyAction": "Log a trade",
+        "noteSingle": "A trade carries at most one grade, so row counts add up to the graded total exactly.",
+        "noteSample": "No conclusion is drawn under {min} trades per grade.",
+        "viewUngraded": "View {count} ungraded trades"
       }
     },
     "whenYouTrade": {
@@ -1127,7 +1162,9 @@
       "moveViewUp": "Move up",
       "moveViewDown": "Move down",
       "viewMenu": "Options for {name}",
-      "colAnomaly": "Anomaly"
+      "colAnomaly": "Anomaly",
+      "grade": "Grade",
+      "colGrade": "Grade"
     },
     "form": {
       "createTitle": "New trade",
@@ -1219,7 +1256,9 @@
       "confluencesHint": "Which confluences were present at entry? Tag them to see their hit rate in Analytics.",
       "confluenceAddPlaceholder": "Add your own confluence…",
       "confluenceAdd": "Add",
-      "confluenceCreateFailed": "Could not add this confluence."
+      "confluenceCreateFailed": "Could not add this confluence.",
+      "grade": "Setup grade",
+      "gradeHint": "A+ is your best setup. Leave it blank to keep the trade ungraded."
     },
     "detail": {
       "notFound": "Trade not found.",
@@ -1319,7 +1358,8 @@
       "tabChart": "Price chart",
       "tabReplay": "Replay",
       "confluencesTitle": "Confluences",
-      "confluencesEmpty": "No confluence tagged on this trade yet."
+      "confluencesEmpty": "No confluence tagged on this trade yet.",
+      "grade": "Setup grade"
     }
   },
   "settings": {
@@ -1807,7 +1847,14 @@
     "empty": "No closed trades yet. Your win rate by session will show up here.",
     "trades": "{n} trades",
     "noDecided": "No decided trades",
-    "viewSession": "View {session} session trades"
+    "viewSession": "View {session} session trades",
+    "byGrade": "By grade",
+    "viewGrade": "View {grade} trades",
+    "viewUngraded": "View ungraded trades",
+    "ungraded": "Ungraded",
+    "ungradedTrades": "{n} trades without a grade",
+    "gradesEmpty": "No graded trades yet. Grade a trade in the trade form to see it here.",
+    "loadingGrades": "Loading grades…"
   },
   "trading": {
     "direction": {

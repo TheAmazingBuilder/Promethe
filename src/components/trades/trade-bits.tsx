@@ -12,6 +12,11 @@ import * as React from "react";
 import { useTranslations } from "next-intl";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  TRADE_GRADE_BADGE_CLASS,
+  isTradeGrade,
+  type TradeGrade,
+} from "@/lib/trading/grades";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -113,6 +118,36 @@ export function ResultBadge({
   return (
     <Badge variant="outline" className={`font-medium ${tone} ${className ?? ""}`}>
       {labels.result(result)}
+    </Badge>
+  );
+}
+
+export function GradeBadge({
+  grade,
+  className,
+}: {
+  grade: string | null | undefined;
+  className?: string;
+}) {
+  const t = useTranslations("grades");
+  if (!grade) {
+    return (
+      <Badge
+        variant="outline"
+        className={`font-normal text-muted-foreground ${className ?? ""}`}
+      >
+        {t("ungraded")}
+      </Badge>
+    );
+  }
+  if (!isTradeGrade(grade)) return null;
+  const g: TradeGrade = grade;
+  return (
+    <Badge
+      variant="outline"
+      className={`font-semibold tabular-nums ${TRADE_GRADE_BADGE_CLASS[g]} ${className ?? ""}`}
+    >
+      {g}
     </Badge>
   );
 }

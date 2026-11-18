@@ -100,6 +100,7 @@ import { useI18n } from "@/i18n/i18n-provider";
 import {
   DirectionBadge,
   DraftBadge,
+  GradeBadge,
   ResultBadge,
   StatusBadge,
   TagsBadges,
@@ -138,6 +139,7 @@ import {
 import { useFormat } from "@/lib/format/use-format";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import { navigate, parsePathname } from "@/lib/router";
+import { TRADE_GRADES } from "@/lib/trading/grades";
 import type { SavedViewDTO, TradeListItemDTO } from "@/lib/trading/dto";
 import {
   DIRECTIONS,
@@ -185,6 +187,7 @@ const TRADE_COLUMNS: TradeColumnDef[] = [
   { id: "account", labelKey: "colAccount", className: "hidden lg:table-cell", cellClassName: "text-muted-foreground" },
   { id: "strategy", labelKey: "colStrategy", className: "hidden lg:table-cell", cellClassName: "text-muted-foreground" },
   { id: "session", labelKey: "colSession", className: "hidden xl:table-cell", cellClassName: "text-muted-foreground" },
+  { id: "grade", labelKey: "colGrade", className: "hidden md:table-cell" },
   { id: "timeframe", labelKey: "colTimeframe", className: "hidden xl:table-cell" },
   { id: "review", labelKey: "colReview", className: "hidden lg:table-cell" },
   // v2.5 M6 — anomaly badge (robust MAD z-score, see /analytics/anomalies).
@@ -212,6 +215,12 @@ function drillFiltersFromHash(): Partial<TradeListQuery> | null {
     set("direction", q.direction);
   }
   if (q.session) set("session", q.session as TradeListQuery["session"]);
+  if (q.grade) {
+    const g = q.grade;
+    if (g === "UNGRADED" || (TRADE_GRADES as readonly string[]).includes(g)) {
+      set("grade", g as TradeListQuery["grade"]);
+    }
+  }
   if (q.timeframe) set("timeframe", q.timeframe as TradeListQuery["timeframe"]);
   if (q.emotion) set("emotion", q.emotion as TradeListQuery["emotion"]);
   if (q.search) set("search", q.search);
@@ -410,6 +419,7 @@ export function TradesView() {
           query.resultType ||
           query.reviewStatus ||
           query.session ||
+          query.grade ||
           query.accountId ||
           query.strategyId ||
           query.instrumentId ||
@@ -907,6 +917,12 @@ export function TradesView() {
             {labels.session(trade.session)}
           </TableCell>
         );
+      case "grade":
+        return (
+          <TableCell key={col.id} className="hidden md:table-cell">
+            <GradeBadge grade={trade.grade} />
+          </TableCell>
+        );
       case "timeframe":
         return (
           <TableCell key={col.id} className="hidden tabular-nums xl:table-cell">
@@ -1095,6 +1111,16 @@ export function TradesView() {
                 label: labels.session(s),
               }))}
               onChange={(v) => setFilter({ session: v })}
+            />
+            <FilterSelect
+              id="filter-grade"
+              label={t("grade")}
+              value={query.grade}
+              options={[
+                ...TRADE_GRADES.map((g) => ({ value: g, label: g })),
+                { value: "UNGRADED", label: tRoot("grades.ungraded") },
+              ]}
+              onChange={(v) => setFilter({ grade: v })}
             />
 
             {showMore && (

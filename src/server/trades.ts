@@ -177,6 +177,7 @@ function baseItem(t: TradeRow): TradeListItemDTO {
     isDraft: t.isDraft,
     emotionBefore: t.emotionBefore,
     followedPlan: t.followedPlan,
+    grade: t.grade,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
     currentPrice: s(t.currentPrice),
@@ -491,6 +492,11 @@ export function tradeListWhere(
     ...(query.resultType ? { resultType: query.resultType } : {}),
     ...(query.reviewStatus ? { reviewStatus: query.reviewStatus } : {}),
     ...(query.session ? { session: query.session } : {}),
+    ...(query.grade
+      ? query.grade === "UNGRADED"
+        ? { grade: null }
+        : { grade: query.grade }
+      : {}),
     ...(query.timeframe ? { timeframe: query.timeframe } : {}),
     ...(query.accountId ? { accountId: query.accountId } : {}),
     ...(query.strategyId ? { strategyId: query.strategyId } : {}),
@@ -786,6 +792,7 @@ export async function createTrade(
         setupQualityRating: input.setupQualityRating ?? null,
         executionRating: input.executionRating ?? null,
         followedPlan: input.followedPlan ?? null,
+        grade: input.grade ?? null,
         reviewStatus: input.reviewStatus,
         isDraft: input.isDraft,
         preTradeAnalysis: input.preTradeAnalysis,
@@ -1041,6 +1048,7 @@ export async function updateTrade(
         executionRating:
           patch.executionRating !== undefined ? patch.executionRating : undefined,
         followedPlan: patch.followedPlan !== undefined ? patch.followedPlan : undefined,
+        grade: patch.grade !== undefined ? patch.grade : undefined,
         reviewStatus: patch.reviewStatus ?? undefined,
         isDraft: patch.isDraft !== undefined ? patch.isDraft : undefined,
         preTradeAnalysis: patch.preTradeAnalysis ?? undefined,

@@ -552,6 +552,10 @@ model Trade {
   setupQualityRating Int?     @map("setup_quality_rating") // 1-5
   executionRating    Int?     @map("execution_rating") // 1-5
   followedPlan       Boolean? @map("followed_plan")
+  /// MRT setup grade (wave 3): A+ | A | B | C, null = ungraded. Distinct
+  /// from TradeReview 1-5 scores and from Strategy.grade (strategy
+  /// presentation grade) — this is the grade of this trade's setup.
+  grade              String? // A+ | A | B | C
   lessonLearned      String?  @map("lesson_learned")
 
   // Review workflow (addendum §11.3)
@@ -637,6 +641,7 @@ model Trade {
   @@index([userId, status])
   @@index([userId, isDraft])
   @@index([userId, reviewStatus])
+  @@index([userId, grade])
   @@index([userId, deletedAt])
   @@index([accountId])
   @@map("trades")

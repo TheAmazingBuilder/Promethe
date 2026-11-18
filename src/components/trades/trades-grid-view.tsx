@@ -6,10 +6,9 @@
  * Table/Grid is persisted in localStorage (see @/lib/trades/grid-stats).
  *
  * Honest limits, by design:
- * - No grade badge: Promethe stores no letter grade on a trade
- *   (TradeReview holds 1-5 scores, not exposed on the list DTO), so no
- *   grade is shown rather than an invented one. A reviewed trade shows a
- *   small review check instead.
+ * - Grade badge: the trade's MRT setup grade (A+ / A / B / C), or
+ *   "Ungraded" when no grade was given — never an invented grade.
+ *   A reviewed trade shows a small review check instead.
  * - Mini chart: real candles from /api/v1/charts/candles for the trade's
  *   instrument and timeframe, drawn as a dependency-free inline SVG.
  *   Candles only exist when the user imported them, so most cards show
@@ -25,6 +24,7 @@ import { Card } from "@/components/ui/card";
 import { Money, Sensitive } from "@/components/privacy/money";
 import {
   ResultBadge,
+  GradeBadge,
   TagsBadges,
   useTradingLabels,
 } from "@/components/trades/trade-bits";
@@ -238,6 +238,7 @@ function TradeGridCard({
             ) : (
               <span className="text-xs text-muted-foreground">{t("open")}</span>
             )}
+            <GradeBadge grade={trade.grade} />
             {trade.rMultiple !== null && trade.rMultiple !== undefined && (
               <span className="rounded-md border bg-muted px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
                 {fmtSigned(trade.rMultiple, 2, 2)} R

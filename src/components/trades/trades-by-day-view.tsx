@@ -8,9 +8,8 @@
  * it (page-scoped sums, see @/lib/trades/by-day).
  *
  * Honest limits, by design:
- * - No grade badge: Promethe stores no letter grade on a trade
- *   (decisionGrade does not exist), so no grade is shown rather than an
- *   invented one.
+ * - Grade badge: the trade's MRT setup grade (A+ / A / B / C), or
+ *   "Ungraded" when no grade was given — never an invented grade.
  * - Day totals cover the trades listed under the header only. A day
  *   split across two pages never shows a total that pretends to cover
  *   trades on another page.
@@ -20,6 +19,7 @@ import { useTranslations } from "next-intl";
 import { Money, Sensitive } from "@/components/privacy/money";
 import {
   DirectionBadge,
+  GradeBadge,
   ResultBadge,
   TagsBadges,
   useTradingLabels,
@@ -94,6 +94,7 @@ export function TradesByDayView({
                           {trade.symbol}
                         </span>
                         <DirectionBadge direction={trade.direction} />
+                        <GradeBadge grade={trade.grade} />
                         {trade.resultType ? (
                           <ResultBadge result={trade.resultType} />
                         ) : null}
