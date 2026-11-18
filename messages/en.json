@@ -4589,6 +4589,8 @@
       "openToDos": "Open to-dos",
       "refs": "Entity references",
       "emptyNote": "Empty note",
+      "showMore": "Show more",
+      "showingCount": "Showing {shown} of {total} notes",
       "moveToFolder": "Move to folder",
       "moveTitle": "Move to folder",
       "movePickWhere": "pick where this note lives.",

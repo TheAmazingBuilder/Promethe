@@ -8,7 +8,7 @@
  * comme un 404.
  */
 import { NextResponse } from "next/server";
-import type { Note, NoteFolder, NoteTag, NoteTemplate, NoteVersion } from "@prisma/client";
+import type { Note, NoteFolder, NoteTag, NoteTemplate, NoteVersion, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import {
@@ -306,7 +306,33 @@ function tagNamesOf(tagIds: string[], tags: NoteTag[]): string[] {
     .filter((name): name is string => name !== null);
 }
 
-function toRow(note: Note, folders: NoteFolder[], tags: NoteTag[]): GaiaNoteRow {
+/**
+ * Narrow note select for list/overview queries (Phase 2 perf, item 8):
+ * every scalar EXCEPT `blocks` — the row's excerpt/wordCount/blockCount/
+ * refCount/todoOpen come from a bounded second fetch for the displayed
+ * rows only. Full rows (with blocks) still load for single-note reads.
+ */
+const NOTE_LIST_SELECT = {
+  id: true,
+  title: true,
+  icon: true,
+  folderId: true,
+  tagIds: true,
+  favorite: true,
+  templateId: true,
+  createdAt: true,
+  updatedAt: true,
+  lastViewedAt: true,
+  deletedAt: true,
+} as const;
+
+type NoteListRow = Prisma.NoteGetPayload<{ select: typeof NOTE_LIST_SELECT }>;
+
+/** Minimal shape toRow reads: full rows satisfy it, narrow rows + their
+ * blocks (fetched separately) do too. */
+type NoteRowInput = NoteListRow & { blocks: string };
+
+function toRow(note: NoteRowInput, folders: NoteFolder[], tags: NoteTag[]): GaiaNoteRow {
   const blocks = parseJsonBlocks(note.blocks);
   const tagIds = parseJsonStringArray(note.tagIds);
   return {
@@ -413,24 +439,62 @@ export type GaiaListQuery = {
   sort?: string;
   refKind?: string;
   refId?: string;
+  /** 1-based page (default 1). */
+  page?: number;
+  /** Rows per page, 1-100 (default 50). */
+  pageSize?: number;
 };
+
+/** Blocks for a bounded set of note ids (one indexed query). */
+async function loadBlocksFor(noteIds: string[]): Promise<Map<string, string>> {
+  if (noteIds.length === 0) return new Map();
+  const rows = await db.note.findMany({
+    where: { id: { in: noteIds } },
+    select: { id: true, blocks: true },
+  });
+  return new Map(rows.map((r) => [r.id, r.blocks]));
+}
+
+function pageWindow(query: GaiaListQuery): { page: number; pageSize: number } {
+  const page = Math.max(1, Math.floor(query.page ?? 1) || 1);
+  const pageSize = Math.min(
+    100,
+    Math.max(1, Math.floor(query.pageSize ?? 50) || 50)
+  );
+  return { page, pageSize };
+}
+
+function sortOrderBy(sort: string): Prisma.NoteOrderByWithRelationInput[] {
+  // Deterministic tiebreaker (id desc) so take/skip pages never shift
+  // when two notes share the same timestamp.
+  if (sort === "created") return [{ createdAt: "desc" }, { id: "desc" }];
+  if (sort === "title") return [{ title: "asc" }, { id: "desc" }];
+  if (sort === "viewed") {
+    // The old JS sort put nulls last; SQL DESC puts them first.
+    return [{ lastViewedAt: { sort: "desc", nulls: "last" } }, { id: "desc" }];
+  }
+  return [{ updatedAt: "desc" }, { id: "desc" }];
+}
 
 export async function listNotes(
   userId: string,
   query: GaiaListQuery,
 ): Promise<{ notes: GaiaNoteRow[]; total: number }> {
-  const [folders, tags, all] = await Promise.all([
+  const [folders, tags] = await Promise.all([
     loadFolders(userId),
     loadTags(userId),
-    db.note.findMany({ where: { userId } }),
   ]);
+  const { page, pageSize } = pageWindow(query);
 
+  // Reference view: link detection needs block text — in-memory path
+  // over the user's notes (same matching as before), then paginate.
   if (query.refKind !== undefined && query.refId !== undefined) {
     const parsed = gaiaRefKindSchema.safeParse(query.refKind);
     if (!parsed.success) {
       throw validationError("Invalid reference type.");
     }
     const kind = parsed.data;
+    const all = await db.note.findMany({ where: { userId } });
     const linked = all.filter(
       (note) =>
         note.deletedAt === null &&
@@ -438,53 +502,91 @@ export async function listNotes(
           (b) => b.type === "ref" && b.ref?.kind === kind && b.ref.id === query.refId,
         ),
     );
-    const rows = linked
-      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-      .map((note) => toRow(note, folders, tags));
-    return { notes: rows, total: rows.length };
+    const sorted = linked.sort(
+      (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()
+    );
+    const total = sorted.length;
+    const pageNotes = sorted.slice((page - 1) * pageSize, page * pageSize);
+    return {
+      notes: pageNotes.map((note) => toRow(note, folders, tags)),
+      total,
+    };
   }
 
   const view = query.view ?? "all";
-  let scoped = all;
+  const where: Prisma.NoteWhereInput = { userId };
   if (view === "trash") {
-    scoped = all.filter((n) => n.deletedAt !== null);
+    where.deletedAt = { not: null };
   } else {
-    scoped = all.filter((n) => n.deletedAt === null);
-    if (view === "favorites") scoped = scoped.filter((n) => n.favorite);
-    else if (view === "recent") scoped = scoped.filter((n) => n.lastViewedAt !== null);
+    where.deletedAt = null;
+    if (view === "favorites") where.favorite = true;
+    else if (view === "recent") where.lastViewedAt = { not: null };
     else if (view === "folder" && query.folderId) {
-      scoped = scoped.filter((n) => n.folderId === query.folderId);
+      where.folderId = query.folderId;
     } else if (view === "tag" && query.tagId) {
-      scoped = scoped.filter((n) => parseJsonStringArray(n.tagIds).includes(query.tagId as string));
+      // tagIds is a JSON string array: the quoted match is exact
+      // membership (same as the old array .includes()).
+      where.tagIds = { contains: `"${query.tagId}"` };
     }
   }
 
   const q = (query.q ?? "").trim().toLowerCase();
   if (q !== "") {
-    scoped = scoped.filter((note) => {
+    // Text search needs block text, tag names and folder names —
+    // in-memory path over the scoped set (same matching as before),
+    // then paginate after filtering.
+    const scoped = await db.note.findMany({ where });
+    const filtered = scoped.filter((note) => {
       const blocks = parseJsonBlocks(note.blocks);
       const tagIds = parseJsonStringArray(note.tagIds);
       return (
         note.title.toLowerCase().includes(q) ||
         textOfBlocks(blocks).toLowerCase().includes(q) ||
-        tagNamesOf(tagIds, tags).some((name) => name.toLowerCase().includes(q)) ||
-        (folderNameOf(note.folderId, folders) ?? "").toLowerCase().includes(q)
+        tagNamesOf(tagIds, tags).some((name) =>
+          name.toLowerCase().includes(q),
+        ) ||
+        (folderNameOf(note.folderId, folders) ?? "")
+          .toLowerCase()
+          .includes(q)
       );
     });
+    const sort = query.sort ?? "updated";
+    const sorted = [...filtered].sort((a, b) => {
+      if (sort === "created") return b.createdAt.getTime() - a.createdAt.getTime();
+      if (sort === "title") return a.title.localeCompare(b.title);
+      if (sort === "viewed") {
+        return (b.lastViewedAt?.getTime() ?? 0) - (a.lastViewedAt?.getTime() ?? 0);
+      }
+      return b.updatedAt.getTime() - a.updatedAt.getTime();
+    });
+    const total = sorted.length;
+    const pageNotes = sorted.slice((page - 1) * pageSize, page * pageSize);
+    return {
+      notes: pageNotes.map((note) => toRow(note, folders, tags)),
+      total,
+    };
   }
 
-  const sort = query.sort ?? "updated";
-  const sorted = [...scoped].sort((a, b) => {
-    if (sort === "created") return b.createdAt.getTime() - a.createdAt.getTime();
-    if (sort === "title") return a.title.localeCompare(b.title);
-    if (sort === "viewed") {
-      return (b.lastViewedAt?.getTime() ?? 0) - (a.lastViewedAt?.getTime() ?? 0);
-    }
-    return b.updatedAt.getTime() - a.updatedAt.getTime();
-  });
-
-  const rows = sorted.map((note) => toRow(note, folders, tags));
-  return { notes: rows, total: rows.length };
+  // Common path (Phase 2 perf, item 8): SQL filter + sort + take/skip,
+  // blocks only for the page rows — no full-history scan, no block JSON
+  // for notes the page never shows.
+  const [total, pageRows] = await Promise.all([
+    db.note.count({ where }),
+    db.note.findMany({
+      where,
+      select: NOTE_LIST_SELECT,
+      orderBy: sortOrderBy(query.sort ?? "updated"),
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+  ]);
+  const blocksById = await loadBlocksFor(pageRows.map((n) => n.id));
+  return {
+    notes: pageRows.map((n) =>
+      toRow({ ...n, blocks: blocksById.get(n.id) ?? "[]" }, folders, tags)
+    ),
+    total,
+  };
 }
 
 export async function getNote(
@@ -946,7 +1048,10 @@ export async function getOverview(userId: string): Promise<GaiaOverviewResponse>
   const [folders, tags, allNotes] = await Promise.all([
     loadFolders(userId),
     loadTags(userId),
-    db.note.findMany({ where: { userId } }),
+    // Phase 2 perf (item 8) — narrow select, no blocks: counts, folders,
+    // tags and activity need scalars only. Blocks load once, bounded to
+    // the ≤16 rows actually displayed below.
+    db.note.findMany({ where: { userId }, select: NOTE_LIST_SELECT }),
   ]);
   const active = allNotes.filter((n) => n.deletedAt === null);
   const trashed = allNotes.filter((n) => n.deletedAt !== null);
@@ -954,18 +1059,23 @@ export async function getOverview(userId: string): Promise<GaiaOverviewResponse>
 
   const recentEdited = [...active]
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-    .slice(0, 6)
-    .map((n) => toRow(n, folders, tags));
+    .slice(0, 6);
   const recentViewed = active
     .filter((n) => n.lastViewedAt !== null)
     .sort((a, b) => (b.lastViewedAt?.getTime() ?? 0) - (a.lastViewedAt?.getTime() ?? 0))
-    .slice(0, 5)
-    .map((n) => toRow(n, folders, tags));
+    .slice(0, 5);
   const favorites = active
     .filter((n) => n.favorite)
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-    .slice(0, 5)
-    .map((n) => toRow(n, folders, tags));
+    .slice(0, 5);
+
+  const blocksById = await loadBlocksFor([
+    ...new Set(
+      [...recentEdited, ...recentViewed, ...favorites].map((n) => n.id)
+    ),
+  ]);
+  const toDisplayRow = (n: NoteListRow): GaiaNoteRow =>
+    toRow({ ...n, blocks: blocksById.get(n.id) ?? "[]" }, folders, tags);
 
   const foldersWithCounts: GaiaFolderDTO[] = folders
     .map((folder) => ({
@@ -1016,9 +1126,9 @@ export async function getOverview(userId: string): Promise<GaiaOverviewResponse>
       tags: tags.length,
       trashed: trashed.length,
     },
-    recentEdited,
-    recentViewed,
-    favorites,
+    recentEdited: recentEdited.map(toDisplayRow),
+    recentViewed: recentViewed.map(toDisplayRow),
+    favorites: favorites.map(toDisplayRow),
     folders: foldersWithCounts,
     topTags: tagsWithCounts.slice(0, 8),
     activity,

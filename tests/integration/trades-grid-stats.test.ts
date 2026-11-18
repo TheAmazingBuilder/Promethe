@@ -178,6 +178,18 @@ beforeAll(async () => {
       volume: null,
     });
   }
+  // Idempotent seed: clear this instrument's window first (re-runs share
+  // the same test DB; candles have no user to cascade from).
+  await db.priceCandle.deleteMany({
+    where: {
+      instrumentId: xauusdId,
+      timeframe: "H1",
+      openTime: {
+        gte: new Date(Date.UTC(2026, 10, 12, 0, 0, 0)),
+        lt: new Date(Date.UTC(2026, 10, 14, 0, 0, 0)),
+      },
+    },
+  });
   await db.priceCandle.createMany({ data: h1 });
 
   // M1 candles for EURUSD, Nov 10 00:00 → Nov 14 23:59 (7200 bars) —
@@ -205,6 +217,16 @@ beforeAll(async () => {
       volume: null,
     });
   }
+  await db.priceCandle.deleteMany({
+    where: {
+      instrumentId: eurusdId,
+      timeframe: "M1",
+      openTime: {
+        gte: new Date(Date.UTC(2026, 10, 10, 0, 0, 0)),
+        lt: new Date(Date.UTC(2026, 10, 15, 0, 0, 0)),
+      },
+    },
+  });
   await db.priceCandle.createMany({ data: m1 });
 });
 

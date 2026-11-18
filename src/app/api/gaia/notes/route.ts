@@ -4,7 +4,8 @@ import { apiError } from "@/server/api";
 import { createNote, gaiaErrorResponse, listNotes } from "@/server/gaia";
 
 /**
- * GET  /api/gaia/notes?view=&folderId=&tagId=&q=&sort= (+ refKind/refId)
+ * GET  /api/gaia/notes?view=&folderId=&tagId=&q=&sort=&page=&pageSize=
+ *      (+ refKind/refId)
  * POST /api/gaia/notes : créer une note (201).
  */
 export async function GET(req: Request) {
@@ -19,6 +20,11 @@ export async function GET(req: Request) {
       sort: url.searchParams.get("sort") ?? undefined,
       refKind: url.searchParams.get("refKind") ?? undefined,
       refId: url.searchParams.get("refId") ?? undefined,
+      page: url.searchParams.get("page") === null ? undefined : Number(url.searchParams.get("page")),
+      pageSize:
+        url.searchParams.get("pageSize") === null
+          ? undefined
+          : Number(url.searchParams.get("pageSize")),
     });
     return NextResponse.json(result);
   } catch (error) {

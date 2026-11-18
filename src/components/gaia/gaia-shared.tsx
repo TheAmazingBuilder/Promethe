@@ -191,6 +191,8 @@ export interface GaiaNotesParams {
   tagId: string;
   q: string;
   sort: string;
+  /** Rows per page (server default 50, max 100). */
+  pageSize?: number;
 }
 
 export const GAIA_DEFAULT_PARAMS: GaiaNotesParams = {
@@ -199,6 +201,7 @@ export const GAIA_DEFAULT_PARAMS: GaiaNotesParams = {
   tagId: "",
   q: "",
   sort: "updated",
+  pageSize: 50,
 };
 
 export type GaiaT = (key: string) => string;
@@ -395,6 +398,9 @@ function gaiaNotesQuery(params: GaiaNotesParams): string {
   if (params.view === "tag" && params.tagId) q.set("tagId", params.tagId);
   if (params.q) q.set("q", params.q);
   if (params.sort && params.sort !== "updated") q.set("sort", params.sort);
+  if (params.pageSize && params.pageSize !== 50) {
+    q.set("pageSize", String(params.pageSize));
+  }
   return q.toString();
 }
 

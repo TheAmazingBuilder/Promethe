@@ -249,9 +249,21 @@ export function NotesBrowser({
     return () => clearTimeout(timer);
   }, [rawQuery, params.q, onParamsChange]);
 
-  const notesQuery = useGaiaNotes(params);
+  // Phase 2 perf (item 8) — the list is server-paginated (50/page):
+  // the browser grows the page instead of fetching the whole workspace.
+  // Any filter change resets to the first page.
+  const [limit, setLimit] = React.useState(50);
+  const filterKey = [params.view, params.folderId, params.tagId, params.q, params.sort].join("|");
+  const [lastFilterKey, setLastFilterKey] = React.useState(filterKey);
+  if (filterKey !== lastFilterKey) {
+    setLastFilterKey(filterKey);
+    setLimit(50);
+  }
+
+  const notesQuery = useGaiaNotes({ ...params, pageSize: limit });
   const tagsQuery = useGaiaTags();
   const notes = notesQuery.data?.notes ?? [];
+  const total = notesQuery.data?.total ?? 0;
   const tags = (tagsQuery.data?.tags ?? []).filter((tag) => tag.noteCount > 0);
 
   return (
@@ -468,6 +480,23 @@ export function NotesBrowser({
           ))}
         </div>
       )}
+
+      {!notesQuery.isLoading && total > notes.length ? (
+        <div className="flex flex-col items-center gap-1 pt-1">
+          <Button
+            type="button"
+            variant="outline"
+            data-testid="gaia-notes-show-more"
+            disabled={notesQuery.isFetching}
+            onClick={() => setLimit((l) => l + 50)}
+          >
+            {t("gaia.notes.showMore")}
+          </Button>
+          <span className="text-[11px] text-muted-foreground">
+            {t("gaia.notes.showingCount", { shown: notes.length, total })}
+          </span>
+        </div>
+      ) : null}
 
       <MoveDialog note={moveTarget} onClose={() => setMoveTarget(null)} t={tr} />
     </div>
