@@ -218,7 +218,7 @@ export function JournalView({ date }: { date?: string }) {
     <section
       aria-labelledby="journal-title"
       data-tour="journal"
-      className="mx-auto flex max-w-4xl flex-col gap-6"
+      className="flex flex-col gap-6"
     >
       {/* Header + day navigation */}
       <div className="flex flex-wrap items-end justify-between gap-3">

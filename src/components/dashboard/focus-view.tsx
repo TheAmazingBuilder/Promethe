@@ -717,7 +717,7 @@ export function FocusView() {
   const show = (block: FocusBlock) => blocks.includes(block);
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-6">
+    <div className="w-full space-y-6">
       {/* Chrome: exit + configure */}
       <div className="flex items-center justify-between">
         <Button

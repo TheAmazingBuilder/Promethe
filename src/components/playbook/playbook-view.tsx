@@ -2167,7 +2167,7 @@ export function PlaybookView() {
   const tab: TabId = isTab(route.query?.tab) ? (route.query?.tab as TabId) : "overview";
 
   return (
-    <section aria-labelledby="playbook-title" className="mx-auto flex max-w-5xl flex-col gap-6">
+    <section aria-labelledby="playbook-title" className="flex flex-col gap-6">
       <div>
         <h1 id="playbook-title" className="text-2xl font-bold tracking-tight">
           {t("title")}

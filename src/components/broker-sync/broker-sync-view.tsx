@@ -688,7 +688,7 @@ export function BrokerSyncView() {
   const [created, setCreated] = React.useState<CreatedConnection | null>(null);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>

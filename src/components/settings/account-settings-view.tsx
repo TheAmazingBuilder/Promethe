@@ -223,7 +223,7 @@ export function AccountSettingsView() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="space-y-6">
       <div>
         <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
           <ShieldCheck className="h-5 w-5 text-emerald-600" aria-hidden="true" />

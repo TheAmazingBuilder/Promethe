@@ -159,7 +159,7 @@ export function AppearanceView() {
 
   if (!mounted || isLoading) {
     return (
-      <div className="mx-auto max-w-2xl space-y-6">
+      <div className="space-y-6">
         <Skeleton className="h-8 w-56" />
         <Skeleton className="h-64 w-full rounded-xl" />
         <Skeleton className="h-44 w-full rounded-xl" />
@@ -232,7 +232,7 @@ export function AppearanceView() {
     : undefined;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 pb-24">
+    <div className="space-y-6 pb-24">
       <div>
         <h2 className="text-lg font-semibold tracking-tight">{t("title")}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
@@ -524,7 +524,7 @@ export function AppearanceView() {
 
       {/* ── Save bar ── */}
       <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <p className="text-xs text-muted-foreground">
             {dirty ? t("unsavedHint") : t("savedHint")}
           </p>

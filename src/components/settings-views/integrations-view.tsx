@@ -277,7 +277,7 @@ export function IntegrationsView() {
 
   if (loading || !data) {
     return (
-      <div className="mx-auto max-w-2xl space-y-6">
+      <div className="space-y-6">
         <p className="text-sm text-muted-foreground">{t("title")}</p>
       </div>
     );
@@ -297,7 +297,7 @@ export function IntegrationsView() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="space-y-6">
       <div>
         <Link
           href="/settings"

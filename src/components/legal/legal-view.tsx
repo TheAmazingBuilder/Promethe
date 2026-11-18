@@ -110,7 +110,7 @@ export function LegalView({ page, standalone = false }: { page: LegalPage; stand
         })}
       </nav>
 
-      <article className="space-y-6">
+      <article className="max-w-prose space-y-6">
         <h1 className="text-xl font-semibold tracking-tight">
           {t(`title.${page}`)}
         </h1>
@@ -134,7 +134,7 @@ export function LegalView({ page, standalone = false }: { page: LegalPage; stand
   );
 
   if (!standalone) {
-    return <div className="mx-auto max-w-2xl">{content}</div>;
+    return <div>{content}</div>;
   }
 
   // Logged-out layout: brand + content + back link, footer at the bottom.

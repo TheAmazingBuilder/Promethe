@@ -45,7 +45,7 @@ export function MentorView() {
   );
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="space-y-6">
       <div>
         <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
           <GraduationCap className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />

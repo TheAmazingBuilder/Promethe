@@ -533,7 +533,7 @@ export function QuickTradeView() {
       : null;
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-4">
+    <div className="w-full space-y-4">
       <div className="space-y-1 text-center sm:text-left">
         <h2 className="text-xl font-bold tracking-tight sm:text-2xl">{t("title")}</h2>
         <p className="text-sm text-muted-foreground">{t("subtitle")}</p>

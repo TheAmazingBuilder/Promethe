@@ -699,7 +699,7 @@ export function GaiaEditor({
 
   if (noteQuery.isLoading || !draft) {
     return (
-      <div data-testid="gaia-editor-loading" className="mx-auto w-full max-w-4xl space-y-3">
+      <div data-testid="gaia-editor-loading" className="w-full space-y-3">
         <Skeleton className="h-10 w-2/3" />
         <Skeleton className="h-4 w-1/3" />
         {Array.from({ length: 6 }).map((_, i) => (
@@ -713,7 +713,7 @@ export function GaiaEditor({
     return (
       <div
         data-testid="gaia-editor-error"
-        className="mx-auto flex w-full max-w-4xl flex-col items-center gap-3 rounded-xl border bg-card p-10 text-center"
+        className="flex w-full flex-col items-center gap-3 rounded-xl border bg-card p-10 text-center"
       >
         <p className="text-sm font-semibold">{t("gaia.editor.loadError")}</p>
         <div className="flex gap-2">
@@ -757,7 +757,7 @@ export function GaiaEditor({
     <div
       data-testid="gaia-editor"
       onKeyDownCapture={handleKeyDownCapture}
-      className="mx-auto w-full max-w-4xl"
+      className="w-full"
     >
       <div className="rounded-xl border bg-card">
         <div className="flex items-start gap-2 border-b px-4 pb-3 pt-4 sm:px-6">
@@ -1064,7 +1064,7 @@ export function GaiaEditor({
           </span>
         </div>
 
-        <div data-testid="gaia-blocks" className="space-y-1 px-4 py-4 sm:px-6">
+        <div data-testid="gaia-blocks" className="max-w-prose space-y-1 px-4 py-4 sm:px-6">
           {draft.blocks.map((block, i) => (
             <GaiaBlockRow
               key={block.id}

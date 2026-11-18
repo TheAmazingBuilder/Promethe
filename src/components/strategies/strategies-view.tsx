@@ -647,7 +647,7 @@ export function StrategiesView() {
   };
 
   return (
-    <section aria-labelledby="strategies-title" className="mx-auto flex max-w-5xl flex-col gap-6">
+    <section aria-labelledby="strategies-title" className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 id="strategies-title" className="text-2xl font-bold tracking-tight">
