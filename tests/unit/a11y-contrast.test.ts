@@ -9,7 +9,12 @@ import {
   passesContrast,
   relativeLuminance,
 } from "@/lib/a11y/contrast";
-import { normalizeA11yPreferences } from "@/lib/a11y/preferences";
+import {
+  normalizeA11yPreferences,
+  type ContrastMode,
+  type FontFamilyChoice,
+  type ReducedMotionMode,
+} from "@/lib/a11y/preferences";
 
 describe("contrast math", () => {
   it("black on white = 21:1, white on white = 1:1", () => {
@@ -108,9 +113,12 @@ describe("normalizeA11yPreferences", () => {
 
   it("defaults unknown enum values to SYSTEM/DEFAULT", () => {
     const p = normalizeA11yPreferences({
-      contrastMode: "WAT",
-      reducedMotion: "NOPE",
-      fontFamily: "COMIC",
+      // Invalid values on purpose: the test asserts they are rejected at
+      // runtime, so the casts keep the type checker quiet without hiding
+      // the runtime validation being exercised.
+      contrastMode: "WAT" as unknown as ContrastMode,
+      reducedMotion: "NOPE" as unknown as ReducedMotionMode,
+      fontFamily: "COMIC" as unknown as FontFamilyChoice,
     });
     expect(p.contrastMode).toBe("SYSTEM");
     expect(p.reducedMotion).toBe("SYSTEM");

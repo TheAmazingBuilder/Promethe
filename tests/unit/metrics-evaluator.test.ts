@@ -10,6 +10,7 @@ import {
   applyMetricFilters,
   evaluateMetric,
   type MetricDefinition,
+  type MetricFilterGroup,
   type MetricTrade,
 } from "@/lib/metrics/evaluator";
 
@@ -316,7 +317,9 @@ describe("evaluateMetric — aggregates", () => {
 // ── evaluateMetric — empty and low samples ────────────────────────────────────
 
 describe("evaluateMetric — empty and low samples", () => {
-  const noMatch = [{ filters: [{ field: "instrument", values: ["NOPE"] }] }];
+  const noMatch: MetricFilterGroup[] = [
+    { filters: [{ field: "instrument", values: ["NOPE"] }] },
+  ];
 
   it("empty sample → value null, sampleSize 0, lowSample false", () => {
     const result = evaluateMetric({ aggregate: "netPnl", filterGroups: noMatch }, craftedSample());
