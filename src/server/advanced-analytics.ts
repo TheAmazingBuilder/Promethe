@@ -6,9 +6,10 @@
  * ranking, sequences, seasonality and anomaly detection over CLOSED
  * non-draft trades.
  *
- * Persistence (idempotent, user-scoped): the GET handler upserts
- * TradeLifecycleStats rows, today's TraderScoreSnapshot and refreshes
- * TradeAnomaly rows for the trades in scope, so the tables stay in sync
+ * Persistence (idempotent, user-scoped, Phase 2 perf): the GET handler
+ * only writes when the stored rows actually differ — a read-only visit
+ * writes nothing — and only for the modules it computed. Lifecycle rows,
+ * today's TraderScoreSnapshot and the TradeAnomaly rows stay in sync
  * with the live computation. The daily cron calls recordDailyTraderScores
  * for every user instead.
  *
@@ -18,11 +19,13 @@
 import { db } from "@/lib/db";
 import {
   computeAdvancedAnalytics,
+  computeAdvancedAnalyticsModules,
   computeTraderScore,
   isAlmostTp,
   type AdvancedAnalytics,
   type AdvancedTrade,
 } from "@/lib/analytics/advanced";
+import { ADVANCED_MODULES } from "@/lib/validations/analytics";
 import {
   computeAdvancedStats,
 } from "@/lib/analytics/insights";
@@ -37,6 +40,7 @@ import type { Prisma } from "@prisma/client";
 import { parseCustomFields } from "@/lib/custom-fields/validate";
 import { getDisplayPreferences } from "@/server/display-preferences";
 import { getTradingDay, tradingDayOfTrade } from "@/lib/time/trading-day";
+import { unstable_cache } from "next/cache";
 
 const TRADE_INCLUDE = {
   instrument: true,
@@ -116,6 +120,41 @@ export async function loadAdvancedTrades(
   );
   return { trades, timezone, currency, tradingDay: prefs.tradingDay };
 }
+
+/**
+ * Phase 2 perf — short server cache (45 s) for the closed-trade load.
+ * Keyed by user + account + period: one user's data is never served to
+ * another. Shared by the advanced endpoint, the weekly plan and the
+ * performance report, so the same scope loads once per 45 s window
+ * instead of once per tab/widget. The daily cron keeps the uncached
+ * loader (it must freeze fresh values).
+ */
+const loadAdvancedTradesCachedInner = unstable_cache(
+  async (
+    userId: string,
+    accountId: string | undefined,
+    period: AnalyticsQuery["period"] | undefined
+  ) => loadAdvancedTrades(userId, accountId, period),
+  ["advanced-trades"],
+  { revalidate: 45 }
+);
+
+export async function loadAdvancedTradesCached(
+  userId: string,
+  accountId?: string,
+  period?: AnalyticsQuery["period"]
+): Promise<LoadedTrades> {
+  return loadAdvancedTradesCachedInner(userId, accountId, period);
+}
+
+/**
+ * Zero-trade shells for modules the client did not request: structurally
+ * valid, computed the same way as a real empty result (never invented).
+ */
+const EMPTY_ADVANCED: AdvancedAnalytics = (() => {
+  const stats = computeTradeStats([]);
+  return computeAdvancedAnalytics([], stats, computeAdvancedStats([], stats));
+})();
 
 function toAdvancedTrade(
   t: Row,
@@ -282,84 +321,143 @@ async function computeTimeInProfit(
   return out;
 }
 
-/** Persist the computed modules (idempotent, user-scoped). */
+/**
+ * Persist the computed modules — only when the stored rows actually
+ * differ (a read-only visit writes nothing). Only the modules that were
+ * computed are persisted: lifecycle rows come from the trades themselves,
+ * the score snapshot needs the score module, the anomaly rows need the
+ * anomalies module.
+ *
+ * Score components are stored as Int (schema): the computed 1-decimal
+ * values are rounded before the comparison and the write, so a stored
+ * snapshot compares equal on the next visit instead of looking changed
+ * forever. (Previously the raw floats were written — rejected by the
+ * Int columns — and the failure was swallowed by the caller's try/catch,
+ * so snapshots were never stored.)
+ */
 async function persistAdvanced(
   userId: string,
   trades: AdvancedTrade[],
-  computed: AdvancedAnalytics,
+  computed: Partial<AdvancedAnalytics>,
   now: Date
 ): Promise<void> {
   // Lifecycle rows (only trades with MFE/MAE or candle time data).
-  for (const t of trades) {
-    if (t.mfeR == null && t.maeR == null && t.timeInProfitMin == null) {
-      continue;
-    }
-    await db.tradeLifecycleStats.upsert({
-      where: { tradeId: t.id },
-      update: {
-        mfeR: t.mfeR != null ? toD(t.mfeR) : null,
-        maeR: t.maeR != null ? toD(t.maeR) : null,
-        timeInProfitMin: t.timeInProfitMin,
-        timeInLossMin: t.timeInLossMin,
-        almostTp: isAlmostTp(t),
-        computedAt: now,
-      },
-      create: {
-        tradeId: t.id,
-        userId,
-        mfeR: t.mfeR != null ? toD(t.mfeR) : null,
-        maeR: t.maeR != null ? toD(t.maeR) : null,
-        timeInProfitMin: t.timeInProfitMin,
-        timeInLossMin: t.timeInLossMin,
-        almostTp: isAlmostTp(t),
-        computedAt: now,
+  const withData = trades.filter(
+    (t) => t.mfeR != null || t.maeR != null || t.timeInProfitMin != null
+  );
+  if (withData.length > 0) {
+    const existing = await db.tradeLifecycleStats.findMany({
+      where: { userId, tradeId: { in: withData.map((t) => t.id) } },
+      select: {
+        tradeId: true,
+        mfeR: true,
+        maeR: true,
+        timeInProfitMin: true,
+        timeInLossMin: true,
+        almostTp: true,
       },
     });
+    const prevById = new Map(existing.map((r) => [r.tradeId, r]));
+    for (const t of withData) {
+      const next = {
+        mfeR: t.mfeR != null ? toD(t.mfeR) : null,
+        maeR: t.maeR != null ? toD(t.maeR) : null,
+        timeInProfitMin: t.timeInProfitMin,
+        timeInLossMin: t.timeInLossMin,
+        almostTp: isAlmostTp(t),
+      };
+      const prev = prevById.get(t.id);
+      if (
+        prev != null &&
+        (prev.mfeR?.toString() ?? null) === (next.mfeR?.toString() ?? null) &&
+        (prev.maeR?.toString() ?? null) === (next.maeR?.toString() ?? null) &&
+        prev.timeInProfitMin === next.timeInProfitMin &&
+        prev.timeInLossMin === next.timeInLossMin &&
+        prev.almostTp === next.almostTp
+      ) {
+        continue;
+      }
+      await db.tradeLifecycleStats.upsert({
+        where: { tradeId: t.id },
+        update: { ...next, computedAt: now },
+        create: { tradeId: t.id, userId, ...next, computedAt: now },
+      });
+    }
   }
 
-  // Today's score snapshot.
-  if (trades.length > 0) {
+  // Today's score snapshot (only when the score module was computed).
+  if (computed.score != null && trades.length > 0) {
     const day = utcDay(now);
     const s = computed.score;
-    await db.traderScoreSnapshot.upsert({
+    const components = {
+      discipline: Math.round(s.components.discipline),
+      edge: Math.round(s.components.edge),
+      consistency: Math.round(s.components.consistency),
+      risk: Math.round(s.components.risk),
+    };
+    const prev = await db.traderScoreSnapshot.findUnique({
       where: { userId_date: { userId, date: day } },
-      update: {
-        score: s.total,
-        discipline: s.components.discipline,
-        edge: s.components.edge,
-        consistency: s.components.consistency,
-        risk: s.components.risk,
-        tradeCount: s.trades,
-      },
-      create: {
-        userId,
-        date: day,
-        score: s.total,
-        discipline: s.components.discipline,
-        edge: s.components.edge,
-        consistency: s.components.consistency,
-        risk: s.components.risk,
-        tradeCount: s.trades,
-      },
     });
+    if (
+      prev == null ||
+      prev.score !== s.total ||
+      prev.discipline !== components.discipline ||
+      prev.edge !== components.edge ||
+      prev.consistency !== components.consistency ||
+      prev.risk !== components.risk ||
+      prev.tradeCount !== s.trades
+    ) {
+      await db.traderScoreSnapshot.upsert({
+        where: { userId_date: { userId, date: day } },
+        update: { score: s.total, ...components, tradeCount: s.trades },
+        create: {
+          userId,
+          date: day,
+          score: s.total,
+          ...components,
+          tradeCount: s.trades,
+        },
+      });
+    }
   }
 
-  // Anomalies: refresh the rows for the trades in scope.
-  const tradeIds = trades.map((t) => t.id);
-  if (tradeIds.length > 0) {
-    await db.tradeAnomaly.deleteMany({
-      where: { userId, tradeId: { in: tradeIds } },
-    });
-    if (computed.anomalies.anomalies.length > 0) {
-      await db.tradeAnomaly.createMany({
-        data: computed.anomalies.anomalies.map((a) => ({
-          tradeId: a.tradeId,
-          userId,
-          kind: a.kind,
-          severity: a.severity,
-          zScore: toD(a.zScore),
-        })),
+  // Anomalies: refresh the rows for the trades in scope, only when the
+  // computed set differs from the stored one.
+  if (computed.anomalies != null) {
+    const tradeIds = trades.map((t) => t.id);
+    if (tradeIds.length > 0) {
+      const key = (r: {
+        tradeId: string;
+        kind: string;
+        severity: string;
+        zScore: { toString(): string } | number;
+      }): string =>
+        `${r.tradeId}|${r.kind}|${r.severity}|${Number(r.zScore.toString())}`;
+      const existing = await db.tradeAnomaly.findMany({
+        where: { userId, tradeId: { in: tradeIds } },
+        select: { tradeId: true, kind: true, severity: true, zScore: true },
       });
+      const prevKeys = new Set(existing.map(key));
+      const next = computed.anomalies.anomalies;
+      const changed =
+        prevKeys.size !== next.length ||
+        next.some((a) => !prevKeys.has(key(a)));
+      if (changed) {
+        await db.tradeAnomaly.deleteMany({
+          where: { userId, tradeId: { in: tradeIds } },
+        });
+        if (next.length > 0) {
+          await db.tradeAnomaly.createMany({
+            data: next.map((a) => ({
+              tradeId: a.tradeId,
+              userId,
+              kind: a.kind,
+              severity: a.severity,
+              zScore: toD(a.zScore),
+            })),
+          });
+        }
+      }
     }
   }
 }
@@ -368,16 +466,23 @@ export async function getAdvancedAnalytics(
   userId: string,
   query: AnalyticsQuery
 ): Promise<AdvancedAnalyticsPayload> {
-  const { trades, timezone, currency, tradingDay } = await loadAdvancedTrades(
-    userId,
-    query.account ?? undefined,
-    query.period
-  );
+  const modules = query.module != null ? [query.module] : [...ADVANCED_MODULES];
+  const { trades, timezone, currency, tradingDay } =
+    await loadAdvancedTradesCached(
+      userId,
+      query.account ?? undefined,
+      query.period
+    );
   const stats = computeTradeStats(trades, {
     dayOf: tradingDayOfTrade(timezone, tradingDay),
   });
   const advancedStats = computeAdvancedStats(trades, stats);
-  const computed = computeAdvancedAnalytics(trades, stats, advancedStats);
+  const computed = computeAdvancedAnalyticsModules(
+    trades,
+    stats,
+    advancedStats,
+    modules
+  );
   const now = new Date();
   try {
     await persistAdvanced(userId, trades, computed, now);
@@ -390,7 +495,7 @@ export async function getAdvancedAnalytics(
     accountId: query.account ?? null,
     currency,
     timezone,
-    advanced: computed,
+    advanced: { ...EMPTY_ADVANCED, ...computed },
   };
 }
 

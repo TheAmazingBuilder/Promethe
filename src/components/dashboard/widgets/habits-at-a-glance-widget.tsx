@@ -34,7 +34,7 @@ import { navigate } from "@/lib/router";
 export function HabitsAtAGlanceWidget() {
   const t = useTranslations("habitsAtAGlance");
   const { data, isLoading, isError } = useAnalytics({ period: "all" });
-  const advanced = useAdvancedAnalytics({ period: "all" });
+  const advanced = useAdvancedAnalytics({ period: "all" }, "grades");
 
   if (isLoading) {
     return (

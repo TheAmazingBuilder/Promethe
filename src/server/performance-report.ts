@@ -15,7 +15,7 @@ import {
   type PerformanceReport,
 } from "@/lib/analytics/performance-report";
 import { weekEndSunday, weekStartMonday } from "@/lib/analytics/weekly-plan";
-import { loadAdvancedTrades } from "@/server/advanced-analytics";
+import { loadAdvancedTradesCached } from "@/server/advanced-analytics";
 import { tradingDayOfTrade } from "@/lib/time/trading-day";
 import type { PerformanceReportPayload } from "@/lib/trading/dto";
 import type { AnalyticsQuery } from "@/lib/validations/analytics";
@@ -25,7 +25,7 @@ export async function getPerformanceReport(
   query: AnalyticsQuery
 ): Promise<PerformanceReportPayload> {
   const accountId = query.account ?? undefined;
-  const { trades, timezone, currency, tradingDay } = await loadAdvancedTrades(
+  const { trades, timezone, currency, tradingDay } = await loadAdvancedTradesCached(
     userId,
     accountId,
     query.period

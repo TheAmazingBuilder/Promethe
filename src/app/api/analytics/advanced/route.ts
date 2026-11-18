@@ -8,10 +8,14 @@ import { rateLimit, sweepRateLimits } from "@/lib/rate-limit";
 /**
  * GET /api/analytics/advanced — lifecycle, exits, trader score, setup
  * ranking, sequences, seasonality and anomalies over closed trades.
- * Query: period (30d|90d|ytd|all, default 30d), account (optional id).
- * Scoped by session user. The handler also persists, idempotently, the
- * lifecycle stats, today's score snapshot and the anomaly rows for the
- * trades in scope (see src/server/advanced-analytics.ts).
+ * Query: period (30d|90d|ytd|all, default 30d), account (optional id),
+ * module (optional: one of the advanced modules — only that module is
+ * computed, the rest is returned as zero-trade shells).
+ * Scoped by session user. The handler persists, idempotently and only
+ * when the stored rows differ, the lifecycle stats, today's score
+ * snapshot and the anomaly rows for the trades in scope (see
+ * src/server/advanced-analytics.ts). The closed-trade load is cached
+ * server-side for 45 s (keyed by user + account + period).
  */
 export async function GET(req: Request) {
   try {

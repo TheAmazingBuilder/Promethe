@@ -60,10 +60,13 @@ export function SetupsView() {
   const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
   const [compareA, setCompareA] = React.useState<string>("");
   const [compareB, setCompareB] = React.useState<string>("");
-  const { data, isLoading, isError, refetch } = useAdvancedAnalytics({
-    period,
-    account: accountId === "all" ? undefined : accountId,
-  });
+  const { data, isLoading, isError, refetch } = useAdvancedAnalytics(
+    {
+      period,
+      account: accountId === "all" ? undefined : accountId,
+    },
+    "setups"
+  );
   const setups = data?.advanced.setups ?? [];
   const currency = data?.currency ?? "USD";
   const selected = setups.find((s) => s.key === selectedKey) ?? null;

@@ -26,7 +26,7 @@ import {
   type WeeklyPlan,
   type WeeklyRuleKey,
 } from "@/lib/analytics/weekly-plan";
-import { loadAdvancedTrades } from "@/server/advanced-analytics";
+import { loadAdvancedTradesCached } from "@/server/advanced-analytics";
 import { tradingDayOfTrade } from "@/lib/time/trading-day";
 import type { WeeklyPlanPayload } from "@/lib/trading/dto";
 import type { WeeklyPlanQuery, WeeklyPlanToggle } from "@/lib/validations/analytics";
@@ -43,7 +43,7 @@ async function buildPlan(
   query: WeeklyPlanQuery
 ): Promise<BuiltPlan> {
   const accountId = query.account ?? undefined;
-  const { trades, timezone, currency, tradingDay } = await loadAdvancedTrades(
+  const { trades, timezone, currency, tradingDay } = await loadAdvancedTradesCached(
     userId,
     accountId,
     "30d"

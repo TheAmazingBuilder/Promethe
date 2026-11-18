@@ -36,10 +36,13 @@ export function ExitsView() {
   const labels = useTradingLabels();
   const [period, setPeriod] = React.useState<AnalyticsPeriod>("all");
   const [accountId, setAccountId] = React.useState<string>("all");
-  const { data, isLoading, isError, refetch } = useAdvancedAnalytics({
-    period,
-    account: accountId === "all" ? undefined : accountId,
-  });
+  const { data, isLoading, isError, refetch } = useAdvancedAnalytics(
+    {
+      period,
+      account: accountId === "all" ? undefined : accountId,
+    },
+    "exits"
+  );
   const exits = data?.advanced.exits ?? null;
 
   return (

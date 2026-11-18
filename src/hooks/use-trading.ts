@@ -32,6 +32,7 @@ import type {
   PlanAction,
 } from "@/lib/analytics/weekly-plan";
 import type {
+  AdvancedModule,
   AnalyticsPeriod,
   WeeklyPlanRule,
 } from "@/lib/validations/analytics";
@@ -320,12 +321,23 @@ export function useAnalytics(filters: AnalyticsFilters) {
 
 // ── Advanced analytics (v2.5 Module 6) ───────────────────────────────────────
 
-export function useAdvancedAnalytics(filters: AnalyticsFilters) {
+// Phase 2 perf — `module` restricts the server computation to one module
+// (score covers the trader score + its history); omit it for all modules.
+export function useAdvancedAnalytics(
+  filters: AnalyticsFilters,
+  module?: AdvancedModule
+) {
   const params = new URLSearchParams({ period: filters.period });
   if (filters.account) params.set("account", filters.account);
+  if (module) params.set("module", module);
   const qs = params.toString();
   return useQuery({
-    queryKey: ["analytics-advanced", filters.period, filters.account ?? "all"],
+    queryKey: [
+      "analytics-advanced",
+      filters.period,
+      filters.account ?? "all",
+      module ?? "all",
+    ],
     queryFn: async () =>
       apiFetch<AdvancedAnalyticsPayload>(`/api/v1/analytics/advanced?${qs}`),
     staleTime: 60 * 1000,

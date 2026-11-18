@@ -47,10 +47,13 @@ export function LifecycleView() {
   const tRoot = useTranslations("analytics.advanced");
   const [period, setPeriod] = React.useState<AnalyticsPeriod>("all");
   const [accountId, setAccountId] = React.useState<string>("all");
-  const { data, isLoading, isError, refetch } = useAdvancedAnalytics({
-    period,
-    account: accountId === "all" ? undefined : accountId,
-  });
+  const { data, isLoading, isError, refetch } = useAdvancedAnalytics(
+    {
+      period,
+      account: accountId === "all" ? undefined : accountId,
+    },
+    "lifecycle"
+  );
   const lifecycle = data?.advanced.lifecycle ?? null;
   const timezone = data?.timezone ?? "UTC";
 

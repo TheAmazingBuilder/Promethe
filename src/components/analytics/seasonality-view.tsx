@@ -55,10 +55,13 @@ export function SeasonalityView() {
   const { locale } = useI18n();
   const [period, setPeriod] = React.useState<AnalyticsPeriod>("all");
   const [accountId, setAccountId] = React.useState<string>("all");
-  const { data, isLoading, isError, refetch } = useAdvancedAnalytics({
-    period,
-    account: accountId === "all" ? undefined : accountId,
-  });
+  const { data, isLoading, isError, refetch } = useAdvancedAnalytics(
+    {
+      period,
+      account: accountId === "all" ? undefined : accountId,
+    },
+    "seasonality"
+  );
   const season = data?.advanced.seasonality ?? null;
   const currency = data?.currency ?? "USD";
 

@@ -36,9 +36,10 @@ const GRADE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "o
 export function DisciplineScoreWidget() {
   const t = useTranslations("analytics.advanced.quality");
   const tRisk = useTranslations("riskReward");
-  const { data, isLoading, isError } = useAdvancedAnalytics({
-    period: "all",
-  });
+  const { data, isLoading, isError } = useAdvancedAnalytics(
+    { period: "all" },
+    "score"
+  );
 
   if (isLoading) {
     return (

@@ -17,6 +17,10 @@
 import { D0, Decimal, toD } from "@/lib/trading/dec";
 import { compareTradeGrades } from "@/lib/trading/grades";
 import {
+  ADVANCED_MODULES,
+  type AdvancedModule,
+} from "@/lib/validations/analytics";
+import {
   computeTradeStats,
   sortChronologically,
   type TradeStats,
@@ -1276,21 +1280,44 @@ export interface AdvancedAnalytics {
   anomalies: AnomaliesResult;
 }
 
+/**
+ * Phase 2 perf — compute only the requested modules. The `score` module
+ * covers both the trader score and its history. Unrequested modules are
+ * absent from the result; the server fills them with the zero-trade
+ * shells so the payload shape stays complete.
+ */
+export function computeAdvancedAnalyticsModules(
+  trades: AdvancedTrade[],
+  stats: TradeStats,
+  advanced: AdvancedStats,
+  modules: readonly AdvancedModule[]
+): Partial<AdvancedAnalytics> {
+  const want = new Set(modules);
+  const out: Partial<AdvancedAnalytics> = {};
+  if (want.has("lifecycle")) out.lifecycle = computeLifecycle(trades);
+  if (want.has("exits")) out.exits = computeExits(trades);
+  if (want.has("score")) {
+    out.score = computeTraderScore(trades, stats, advanced);
+    out.scoreHistory = computeScoreHistory(trades);
+  }
+  if (want.has("setups")) out.setups = computeSetupRanking(trades);
+  if (want.has("confluences")) out.confluences = computeConfluences(trades);
+  if (want.has("grades")) out.grades = computeGrades(trades);
+  if (want.has("sequences")) out.sequences = computeSequences(trades);
+  if (want.has("seasonality")) out.seasonality = computeSeasonality(trades);
+  if (want.has("anomalies")) out.anomalies = computeAnomalies(trades);
+  return out;
+}
+
 export function computeAdvancedAnalytics(
   trades: AdvancedTrade[],
   stats: TradeStats,
   advanced: AdvancedStats
 ): AdvancedAnalytics {
-  return {
-    lifecycle: computeLifecycle(trades),
-    exits: computeExits(trades),
-    score: computeTraderScore(trades, stats, advanced),
-    scoreHistory: computeScoreHistory(trades),
-    setups: computeSetupRanking(trades),
-    confluences: computeConfluences(trades),
-    grades: computeGrades(trades),
-    sequences: computeSequences(trades),
-    seasonality: computeSeasonality(trades),
-    anomalies: computeAnomalies(trades),
-  };
+  return computeAdvancedAnalyticsModules(
+    trades,
+    stats,
+    advanced,
+    ADVANCED_MODULES
+  ) as AdvancedAnalytics;
 }

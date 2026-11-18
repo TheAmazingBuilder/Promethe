@@ -77,10 +77,13 @@ export function GradesView() {
   const [accountId, setAccountId] = React.useState<string>("all");
   const [sortKey, setSortKey] = React.useState<SortKey>("count");
   const [sortDir, setSortDir] = React.useState<"asc" | "desc">("desc");
-  const { data, isLoading, isError, refetch } = useAdvancedAnalytics({
-    period,
-    account: accountId === "all" ? undefined : accountId,
-  });
+  const { data, isLoading, isError, refetch } = useAdvancedAnalytics(
+    {
+      period,
+      account: accountId === "all" ? undefined : accountId,
+    },
+    "grades"
+  );
   const result = data?.advanced.grades ?? null;
   const rows = result?.rows ?? [];
   const currency = data?.currency ?? "USD";

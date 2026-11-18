@@ -35,10 +35,13 @@ export function SequencesView() {
   const tRoot = useTranslations("analytics.advanced");
   const [period, setPeriod] = React.useState<AnalyticsPeriod>("all");
   const [accountId, setAccountId] = React.useState<string>("all");
-  const { data, isLoading, isError, refetch } = useAdvancedAnalytics({
-    period,
-    account: accountId === "all" ? undefined : accountId,
-  });
+  const { data, isLoading, isError, refetch } = useAdvancedAnalytics(
+    {
+      period,
+      account: accountId === "all" ? undefined : accountId,
+    },
+    "sequences"
+  );
   const seq = data?.advanced.sequences ?? null;
 
   return (

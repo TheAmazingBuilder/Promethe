@@ -38,10 +38,13 @@ export function AnomaliesView() {
   const tAnalytics = useTranslations("analytics");
   const [period, setPeriod] = React.useState<AnalyticsPeriod>("all");
   const [accountId, setAccountId] = React.useState<string>("all");
-  const { data, isLoading, isError, refetch } = useAdvancedAnalytics({
-    period,
-    account: accountId === "all" ? undefined : accountId,
-  });
+  const { data, isLoading, isError, refetch } = useAdvancedAnalytics(
+    {
+      period,
+      account: accountId === "all" ? undefined : accountId,
+    },
+    "anomalies"
+  );
   const anomalies = data?.advanced.anomalies ?? null;
   const timezone = data?.timezone ?? "UTC";
   const fmtMinutes = React.useCallback(

@@ -75,10 +75,13 @@ export function ConfluencesView() {
   const [accountId, setAccountId] = React.useState<string>("all");
   const [sortKey, setSortKey] = React.useState<SortKey>("count");
   const [sortDir, setSortDir] = React.useState<"asc" | "desc">("desc");
-  const { data, isLoading, isError, refetch } = useAdvancedAnalytics({
-    period,
-    account: accountId === "all" ? undefined : accountId,
-  });
+  const { data, isLoading, isError, refetch } = useAdvancedAnalytics(
+    {
+      period,
+      account: accountId === "all" ? undefined : accountId,
+    },
+    "confluences"
+  );
   const result = data?.advanced.confluences ?? null;
   const rows = result?.rows ?? [];
   const currency = data?.currency ?? "USD";
