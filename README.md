@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/brand/phoenix-1.png" alt="Promethe phoenix" width="120" />
+  <img src="public/brand/phoenix-2.png" alt="Promethe phoenix" width="360" />
 </p>
 
 <h1 align="center">Promethe</h1>
