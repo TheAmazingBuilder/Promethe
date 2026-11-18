@@ -105,7 +105,7 @@ export function useToolScenarios(kind?: "MULTI_TP" | "MARGIN" | "RISK_REWARD") {
     queryFn: async () =>
       (
         await apiFetch<{ scenarios: ToolScenarioDTO[] }>(
-          `/api/tool-scenarios${kind ? `?kind=${kind}` : ""}`
+          `/api/v1/tool-scenarios${kind ? `?kind=${kind}` : ""}`
         )
       ).scenarios.map(toScenario),
   });
@@ -117,7 +117,7 @@ export function useCreateToolScenario() {
     mutationFn: async (input: ToolScenarioInput) =>
       toScenario(
         (
-          await apiFetch<{ scenario: ToolScenarioDTO }>("/api/tool-scenarios", {
+          await apiFetch<{ scenario: ToolScenarioDTO }>("/api/v1/tool-scenarios", {
             method: "POST",
             body: JSON.stringify(input),
           })
@@ -133,7 +133,7 @@ export function useDeleteToolScenario() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch(`/api/tool-scenarios/${id}`, { method: "DELETE" });
+      await apiFetch(`/api/v1/tool-scenarios/${id}`, { method: "DELETE" });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["tool-scenarios"] });
@@ -147,7 +147,7 @@ export function useFxRates() {
   return useQuery({
     queryKey: ["fx-rates"],
     queryFn: async () =>
-      (await apiFetch<{ rates: FxRateDTO[] }>("/api/fx-rates")).rates.map(toFxRate),
+      (await apiFetch<{ rates: FxRateDTO[] }>("/api/v1/fx-rates")).rates.map(toFxRate),
   });
 }
 
@@ -157,7 +157,7 @@ export function useUpsertFxRate() {
     mutationFn: async (input: FxRateInput) =>
       toFxRate(
         (
-          await apiFetch<{ rate: FxRateDTO }>("/api/fx-rates", {
+          await apiFetch<{ rate: FxRateDTO }>("/api/v1/fx-rates", {
             method: "POST",
             body: JSON.stringify(input),
           })
@@ -173,7 +173,7 @@ export function useDeleteFxRate() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch(`/api/fx-rates/${id}`, { method: "DELETE" });
+      await apiFetch(`/api/v1/fx-rates/${id}`, { method: "DELETE" });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["fx-rates"] });
@@ -190,7 +190,7 @@ export function useImportFxRates() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (csv: string) =>
-      apiFetch<FxImportResult>("/api/fx-rates/import", {
+      apiFetch<FxImportResult>("/api/v1/fx-rates/import", {
         method: "POST",
         body: JSON.stringify({ csv }),
       }),
@@ -208,7 +208,7 @@ export function useSessionSettings(kind?: "DISPLAY" | "DETECTION") {
     queryFn: async () =>
       (
         await apiFetch<{ settings: MarketSessionSettingDTO[] }>(
-          `/api/market-sessions${kind ? `?kind=${kind}` : ""}`
+          `/api/v1/market-sessions${kind ? `?kind=${kind}` : ""}`
         )
       ).settings.map(toSession),
   });
@@ -220,7 +220,7 @@ export function useCreateSessionSetting() {
     mutationFn: async (input: MarketSessionSettingInput) =>
       toSession(
         (
-          await apiFetch<{ setting: MarketSessionSettingDTO }>("/api/market-sessions", {
+          await apiFetch<{ setting: MarketSessionSettingDTO }>("/api/v1/market-sessions", {
             method: "POST",
             body: JSON.stringify(input),
           })
@@ -245,7 +245,7 @@ export function useUpdateSessionSetting() {
       toSession(
         (
           await apiFetch<{ setting: MarketSessionSettingDTO }>(
-            `/api/market-sessions/${id}`,
+            `/api/v1/market-sessions/${id}`,
             { method: "PATCH", body: JSON.stringify(patch) }
           )
         ).setting
@@ -260,7 +260,7 @@ export function useResetSessionSettings() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => {
-      await apiFetch("/api/market-sessions", { method: "DELETE" });
+      await apiFetch("/api/v1/market-sessions", { method: "DELETE" });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["market-sessions"] });
@@ -274,7 +274,7 @@ export function useExitPlans() {
   return useQuery({
     queryKey: ["exit-plans"],
     queryFn: async () =>
-      (await apiFetch<{ plans: ExitPlanDTO[] }>("/api/exit-plans")).plans.map(toExitPlan),
+      (await apiFetch<{ plans: ExitPlanDTO[] }>("/api/v1/exit-plans")).plans.map(toExitPlan),
   });
 }
 
@@ -284,7 +284,7 @@ export function useCreateExitPlan() {
     mutationFn: async (input: ExitPlanInput) =>
       toExitPlan(
         (
-          await apiFetch<{ plan: ExitPlanDTO }>("/api/exit-plans", {
+          await apiFetch<{ plan: ExitPlanDTO }>("/api/v1/exit-plans", {
             method: "POST",
             body: JSON.stringify(input),
           })
@@ -302,7 +302,7 @@ export function useUpdateExitPlan() {
     mutationFn: async ({ id, patch }: { id: string; patch: ExitPlanPatch }) =>
       toExitPlan(
         (
-          await apiFetch<{ plan: ExitPlanDTO }>(`/api/exit-plans/${id}`, {
+          await apiFetch<{ plan: ExitPlanDTO }>(`/api/v1/exit-plans/${id}`, {
             method: "PATCH",
             body: JSON.stringify(patch),
           })
@@ -318,7 +318,7 @@ export function useDeleteExitPlan() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch(`/api/exit-plans/${id}`, { method: "DELETE" });
+      await apiFetch(`/api/v1/exit-plans/${id}`, { method: "DELETE" });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["exit-plans"] });
@@ -335,7 +335,7 @@ export function useExposureSettings() {
       toExposure(
         (
           await apiFetch<{ settings: ExposureAlertSettingDTO | null }>(
-            "/api/exposure-settings"
+            "/api/v1/exposure-settings"
           )
         ).settings
       ),
@@ -349,7 +349,7 @@ export function useSaveExposureSettings() {
       toExposure(
         (
           await apiFetch<{ settings: ExposureAlertSettingDTO }>(
-            "/api/exposure-settings",
+            "/api/v1/exposure-settings",
             { method: "PUT", body: JSON.stringify(input) }
           )
         ).settings

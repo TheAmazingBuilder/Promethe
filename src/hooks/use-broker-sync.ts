@@ -18,7 +18,7 @@ export function useBrokerConnections() {
   return useQuery({
     queryKey: ["broker-sync", "connections"],
     queryFn: () =>
-      apiFetch<{ connections: BrokerConnection[] }>("/api/broker-sync").then(
+      apiFetch<{ connections: BrokerConnection[] }>("/api/v1/broker-sync").then(
         (data) => data.connections
       ),
   });
@@ -27,7 +27,7 @@ export function useBrokerConnections() {
 export function useSyncOverview() {
   return useQuery({
     queryKey: ["broker-sync", "overview"],
-    queryFn: () => apiFetch<SyncOverview>("/api/broker-sync/overview"),
+    queryFn: () => apiFetch<SyncOverview>("/api/v1/broker-sync/overview"),
     refetchInterval: 60_000, // live-ish status badges
   });
 }
@@ -36,7 +36,7 @@ export function useCreateConnection() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (input: { accountId: string; platform: "MT4" | "MT5"; label: string }) =>
-      apiFetch<CreatedConnection>("/api/broker-sync", {
+      apiFetch<CreatedConnection>("/api/v1/broker-sync", {
         method: "POST",
         body: JSON.stringify(input),
       }),
@@ -59,7 +59,7 @@ export function useUpdateConnection() {
       historyBackfillFrom?: string | null;
       resetBinding?: boolean;
     }) =>
-      apiFetch<{ connection: BrokerConnection }>(`/api/broker-sync/${id}`, {
+      apiFetch<{ connection: BrokerConnection }>(`/api/v1/broker-sync/${id}`, {
         method: "PATCH",
         body: JSON.stringify(patch),
       }),
@@ -74,7 +74,7 @@ export function useRotateConnection() {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch<{ connection: BrokerConnection; token: string }>(
-        `/api/broker-sync/${id}/rotate`,
+        `/api/v1/broker-sync/${id}/rotate`,
         { method: "POST" }
       ),
     onSuccess: () => {
@@ -87,7 +87,7 @@ export function useRevokeConnection() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      apiFetch<{ connection: BrokerConnection }>(`/api/broker-sync/${id}`, {
+      apiFetch<{ connection: BrokerConnection }>(`/api/v1/broker-sync/${id}`, {
         method: "DELETE",
       }),
     onSuccess: () => {
@@ -100,7 +100,7 @@ export function useSymbolMappings() {
   return useQuery({
     queryKey: ["broker-sync", "symbols"],
     queryFn: () =>
-      apiFetch<{ mappings: SymbolMapping[] }>("/api/broker-sync/symbols").then(
+      apiFetch<{ mappings: SymbolMapping[] }>("/api/v1/broker-sync/symbols").then(
         (data) => data.mappings
       ),
   });
@@ -110,7 +110,7 @@ export function useUpsertSymbolMapping() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (input: { brokerSymbol: string; instrumentId: string; pipSize?: string | null }) =>
-      apiFetch<{ ok: true }>("/api/broker-sync/symbols", {
+      apiFetch<{ ok: true }>("/api/v1/broker-sync/symbols", {
         method: "POST",
         body: JSON.stringify(input),
       }),
@@ -124,7 +124,7 @@ export function useMagicMappings() {
   return useQuery({
     queryKey: ["broker-sync", "magic"],
     queryFn: () =>
-      apiFetch<{ mappings: MagicMapping[] }>("/api/broker-sync/magic").then(
+      apiFetch<{ mappings: MagicMapping[] }>("/api/v1/broker-sync/magic").then(
         (data) => data.mappings
       ),
   });
@@ -134,7 +134,7 @@ export function useCreateMagicMapping() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (input: { magicNumber: string; strategyId: string; connectionId?: string | null }) =>
-      apiFetch<{ mapping: MagicMapping }>("/api/broker-sync/magic", {
+      apiFetch<{ mapping: MagicMapping }>("/api/v1/broker-sync/magic", {
         method: "POST",
         body: JSON.stringify(input),
       }),
@@ -148,7 +148,7 @@ export function useDeleteMagicMapping() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      apiFetch<{ ok: true }>(`/api/broker-sync/magic/${id}`, { method: "DELETE" }),
+      apiFetch<{ ok: true }>(`/api/v1/broker-sync/magic/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       client.invalidateQueries({ queryKey: ["broker-sync", "magic"] });
     },

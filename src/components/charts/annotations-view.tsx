@@ -110,13 +110,13 @@ export function AnnotationsView() {
     queryKey: ["charts", "annotations"],
     queryFn: async () =>
       (await apiFetch<{ annotations: Annotation[] }>(
-        "/api/charts/annotations"
+        "/api/v1/charts/annotations"
       )).annotations,
     staleTime: 60 * 1000,
   });
   const removeAnnotation = useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch(`/api/charts/annotations/${id}`, { method: "DELETE" });
+      await apiFetch(`/api/v1/charts/annotations/${id}`, { method: "DELETE" });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["charts", "annotations"] });
@@ -598,12 +598,12 @@ function AnnotationDialog({
         strategyId: scope === "STRATEGY" ? strategyId || null : null,
       };
       if (annotation) {
-        await apiFetch(`/api/charts/annotations/${annotation.id}`, {
+        await apiFetch(`/api/v1/charts/annotations/${annotation.id}`, {
           method: "PATCH",
           body: JSON.stringify(body),
         });
       } else {
-        await apiFetch("/api/charts/annotations", {
+        await apiFetch("/api/v1/charts/annotations", {
           method: "POST",
           body: JSON.stringify(body),
         });

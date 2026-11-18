@@ -3,7 +3,7 @@
 /**
  * Rule violations attached to one trade (v1 phase 6) — read-only section of
  * the trade detail. Hidden when the trade respects every rule.
- * Data: GET /api/trades/[id]/violations.
+ * Data: GET /api/v1/trades/[id]/violations.
  */
 import { ShieldAlert } from "lucide-react";
 import { useTranslations } from "next-intl";

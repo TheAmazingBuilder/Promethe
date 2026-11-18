@@ -10,7 +10,7 @@
 export const DISCORD_WEBHOOK_HOSTS = ["discord.com", "discordapp.com"] as const;
 export const TELEGRAM_API_HOST = "api.telegram.org";
 
-/** Discord webhook path: /api/webhooks/<id>/<token> (query string ignored). */
+/** Discord webhook path: /api/v1/webhooks/<id>/<token> (query string ignored). */
 const DISCORD_WEBHOOK_PATH = /^\/api\/webhooks\/\d+\/[A-Za-z0-9_-]+$/;
 /** Telegram bot token: <bot id digits>:<35-char secret>. */
 const TELEGRAM_TOKEN = /^\d{5,}:[A-Za-z0-9_-]{30,}$/;

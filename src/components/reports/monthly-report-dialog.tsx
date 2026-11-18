@@ -2,7 +2,7 @@
 
 /**
  * Monthly PDF report dialog - pick a month, download the report as a PDF
- * (jsPDF, built on the fly from /api/reports/monthly). Layout: header,
+ * (jsPDF, built on the fly from /api/v1/reports/monthly). Layout: header,
  * KPI block, mini equity curve, symbol + strategy tables, best/worst trades.
  */
 import * as React from "react";
@@ -287,7 +287,7 @@ export function MonthlyReportDialog({
     setError(null);
     try {
       const report = await apiFetch<MonthlyReport>(
-        `/api/reports/monthly?month=${month}`
+        `/api/v1/reports/monthly?month=${month}`
       );
       if (report.tradeCount === 0) {
         setError(t("empty"));

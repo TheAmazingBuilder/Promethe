@@ -60,7 +60,7 @@ export function useInstruments() {
   return useQuery({
     queryKey: ["instruments"],
     queryFn: async () =>
-      (await apiFetch<{ instruments: InstrumentApiDTO[] }>("/api/instruments"))
+      (await apiFetch<{ instruments: InstrumentApiDTO[] }>("/api/v1/instruments"))
         .instruments,
     staleTime: 10 * 60 * 1000,
   });
@@ -70,7 +70,7 @@ export function useAccounts() {
   return useQuery({
     queryKey: ["accounts"],
     queryFn: async () =>
-      (await apiFetch<{ accounts: AccountDTO[] }>("/api/accounts")).accounts,
+      (await apiFetch<{ accounts: AccountDTO[] }>("/api/v1/accounts")).accounts,
     staleTime: 60 * 1000,
   });
 }
@@ -79,7 +79,7 @@ export function useStrategies() {
   return useQuery({
     queryKey: ["strategies"],
     queryFn: async () =>
-      (await apiFetch<{ strategies: StrategyDTO[] }>("/api/strategies"))
+      (await apiFetch<{ strategies: StrategyDTO[] }>("/api/v1/strategies"))
         .strategies,
     staleTime: 60 * 1000,
   });
@@ -88,7 +88,7 @@ export function useStrategies() {
 export function useTags() {
   return useQuery({
     queryKey: ["tags"],
-    queryFn: async () => (await apiFetch<{ tags: TagDTO[] }>("/api/tags")).tags,
+    queryFn: async () => (await apiFetch<{ tags: TagDTO[] }>("/api/v1/tags")).tags,
     staleTime: 60 * 1000,
   });
 }
@@ -99,7 +99,7 @@ export function useSavedViews(page: string) {
     queryFn: async () =>
       (
         await apiFetch<{ views: SavedViewDTO[] }>(
-          `/api/saved-views?page=${encodeURIComponent(page)}`
+          `/api/v1/saved-views?page=${encodeURIComponent(page)}`
         )
       ).views,
   });
@@ -111,7 +111,7 @@ export function useTemplates() {
   return useQuery({
     queryKey: ["templates"],
     queryFn: async () =>
-      (await apiFetch<{ templates: TemplateDTO[] }>("/api/templates")).templates,
+      (await apiFetch<{ templates: TemplateDTO[] }>("/api/v1/templates")).templates,
   });
 }
 
@@ -119,7 +119,7 @@ export function useCreateTemplate() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: TemplateInput) =>
-      (await apiFetch<{ template: TemplateDTO }>("/api/templates", {
+      (await apiFetch<{ template: TemplateDTO }>("/api/v1/templates", {
         method: "POST",
         body: JSON.stringify(input),
       })).template,
@@ -132,7 +132,7 @@ export function useUpdateTemplate() {
   return useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: TemplatePatch }) =>
       (
-        await apiFetch<{ template: TemplateDTO }>(`/api/templates/${id}`, {
+        await apiFetch<{ template: TemplateDTO }>(`/api/v1/templates/${id}`, {
           method: "PATCH",
           body: JSON.stringify(patch),
         })
@@ -145,7 +145,7 @@ export function useRecordTemplateUse() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch(`/api/templates/${id}/use`, { method: "POST" });
+      await apiFetch(`/api/v1/templates/${id}/use`, { method: "POST" });
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["templates"] }),
   });
@@ -155,7 +155,7 @@ export function useDeleteTemplate() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch(`/api/templates/${id}`, { method: "DELETE" });
+      await apiFetch(`/api/v1/templates/${id}`, { method: "DELETE" });
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["templates"] }),
   });
@@ -187,7 +187,7 @@ export function useTradesList(query: TradeListQuery) {
         }
       }
       return apiFetch<PaginatedDTO<TradeListItemDTO>>(
-        `/api/trades?${params.toString()}`
+        `/api/v1/trades?${params.toString()}`
       );
     },
   });
@@ -198,7 +198,7 @@ export function useTrade(id: string | null) {
     queryKey: ["trades", "detail", id],
     enabled: !!id,
     queryFn: async () =>
-      (await apiFetch<{ trade: TradeDetailDTO }>(`/api/trades/${id}`)).trade,
+      (await apiFetch<{ trade: TradeDetailDTO }>(`/api/v1/trades/${id}`)).trade,
   });
 }
 
@@ -220,7 +220,7 @@ export function useCreateTrade() {
   const invalidate = useInvalidateTrades();
   return useMutation({
     mutationFn: async (input: TradeInput) =>
-      apiFetch<MutationResult>("/api/trades", {
+      apiFetch<MutationResult>("/api/v1/trades", {
         method: "POST",
         body: JSON.stringify(input),
       }),
@@ -232,7 +232,7 @@ export function useUpdateTrade() {
   const invalidate = useInvalidateTrades();
   return useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: TradePatch }) =>
-      apiFetch<MutationResult>(`/api/trades/${id}`, {
+      apiFetch<MutationResult>(`/api/v1/trades/${id}`, {
         method: "PATCH",
         body: JSON.stringify(patch),
       }),
@@ -252,7 +252,7 @@ export function useCloseTrade() {
         clientMutationId?: string | null;
       };
     }) =>
-      apiFetch<{ trade: TradeDetailDTO }>(`/api/trades/${id}/close`, {
+      apiFetch<{ trade: TradeDetailDTO }>(`/api/v1/trades/${id}/close`, {
         method: "POST",
         body: JSON.stringify(input),
       }),
@@ -264,7 +264,7 @@ export function useDeleteTrade() {
   const invalidate = useInvalidateTrades();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch(`/api/trades/${id}`, { method: "DELETE" });
+      await apiFetch(`/api/v1/trades/${id}`, { method: "DELETE" });
     },
     onSuccess: invalidate,
   });
@@ -275,7 +275,7 @@ export function useDeleteTrade() {
 export function useDashboard() {
   return useQuery({
     queryKey: ["dashboard"],
-    queryFn: async () => apiFetch<DashboardPayload>("/api/dashboard"),
+    queryFn: async () => apiFetch<DashboardPayload>("/api/v1/dashboard"),
   });
 }
 
@@ -292,7 +292,7 @@ export function useAnalytics(filters: AnalyticsFilters) {
   const qs = params.toString();
   return useQuery({
     queryKey: ["analytics", filters.period, filters.account ?? "all"],
-    queryFn: async () => apiFetch<AnalyticsPayload>(`/api/analytics?${qs}`),
+    queryFn: async () => apiFetch<AnalyticsPayload>(`/api/v1/analytics?${qs}`),
     staleTime: 60 * 1000,
   });
 }
@@ -306,7 +306,7 @@ export function useAdvancedAnalytics(filters: AnalyticsFilters) {
   return useQuery({
     queryKey: ["analytics-advanced", filters.period, filters.account ?? "all"],
     queryFn: async () =>
-      apiFetch<AdvancedAnalyticsPayload>(`/api/analytics/advanced?${qs}`),
+      apiFetch<AdvancedAnalyticsPayload>(`/api/v1/analytics/advanced?${qs}`),
     staleTime: 60 * 1000,
   });
 }
@@ -334,7 +334,7 @@ export function useUploadScreenshot() {
       if (label) form.append("label", label);
       if (caption) form.append("caption", caption);
       // apiFetch sets JSON headers — raw fetch for multipart.
-      const res = await fetch("/api/uploads", { method: "POST", body: form });
+      const res = await fetch("/api/v1/uploads", { method: "POST", body: form });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as
           | { message?: string }
@@ -353,7 +353,7 @@ export function useDeleteScreenshot() {
   const invalidate = useInvalidateTrades();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch(`/api/uploads/${id}`, { method: "DELETE" });
+      await apiFetch(`/api/v1/uploads/${id}`, { method: "DELETE" });
     },
     onSuccess: invalidate,
   });
@@ -374,7 +374,7 @@ export function useCreateSavedView() {
       isPinned?: boolean;
       isDefault?: boolean;
     }) =>
-      apiFetch<{ view: SavedViewDTO }>("/api/saved-views", {
+      apiFetch<{ view: SavedViewDTO }>("/api/v1/saved-views", {
         method: "POST",
         body: JSON.stringify(input),
       }),
@@ -403,7 +403,7 @@ export function useUpdateSavedView() {
       };
     }) =>
       (
-        await apiFetch<{ view: SavedViewDTO }>(`/api/saved-views/${id}`, {
+        await apiFetch<{ view: SavedViewDTO }>(`/api/v1/saved-views/${id}`, {
           method: "PATCH",
           body: JSON.stringify(patch),
         })
@@ -419,7 +419,7 @@ export function useDuplicateSavedView() {
     mutationFn: async (view: SavedViewDTO) =>
       (
         await apiFetch<{ view: SavedViewDTO }>(
-          `/api/saved-views/${view.id}/duplicate`,
+          `/api/v1/saved-views/${view.id}/duplicate`,
           { method: "POST" }
         )
       ).view,
@@ -432,7 +432,7 @@ export function useDeleteSavedView() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (view: SavedViewDTO) => {
-      await apiFetch(`/api/saved-views/${view.id}`, { method: "DELETE" });
+      await apiFetch(`/api/v1/saved-views/${view.id}`, { method: "DELETE" });
       return view;
     },
     onSuccess: (view) =>
@@ -467,7 +467,7 @@ export function useCreateAccount() {
   return useMutation({
     mutationFn: async (input: AccountInputBody) =>
       (
-        await apiFetch<{ account: AccountDTO }>("/api/accounts", {
+        await apiFetch<{ account: AccountDTO }>("/api/v1/accounts", {
           method: "POST",
           body: JSON.stringify(input),
         })
@@ -484,7 +484,7 @@ export function useUpdateAccount() {
   return useMutation({
     mutationFn: async (args: { id: string; patch: Partial<AccountInputBody> }) =>
       (
-        await apiFetch<{ account: AccountDTO }>(`/api/accounts/${args.id}`, {
+        await apiFetch<{ account: AccountDTO }>(`/api/v1/accounts/${args.id}`, {
           method: "PATCH",
           body: JSON.stringify(args.patch),
         })
@@ -501,7 +501,7 @@ export function useDeleteAccount() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch<void>(`/api/accounts/${id}`, { method: "DELETE" });
+      await apiFetch<void>(`/api/v1/accounts/${id}`, { method: "DELETE" });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["accounts"] });
@@ -523,7 +523,7 @@ export function useCreateTag() {
   return useMutation({
     mutationFn: async (input: TagInputBody) =>
       (
-        await apiFetch<{ tag: TagDTO }>("/api/tags", {
+        await apiFetch<{ tag: TagDTO }>("/api/v1/tags", {
           method: "POST",
           body: JSON.stringify(input),
         })
@@ -539,7 +539,7 @@ export function useUpdateTag() {
   return useMutation({
     mutationFn: async (args: { id: string; patch: Partial<TagInputBody> }) =>
       (
-        await apiFetch<{ tag: TagDTO }>(`/api/tags/${args.id}`, {
+        await apiFetch<{ tag: TagDTO }>(`/api/v1/tags/${args.id}`, {
           method: "PATCH",
           body: JSON.stringify(args.patch),
         })
@@ -555,7 +555,7 @@ export function useDeleteTag() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch<void>(`/api/tags/${id}`, { method: "DELETE" });
+      await apiFetch<void>(`/api/v1/tags/${id}`, { method: "DELETE" });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["tags"] });
@@ -588,7 +588,7 @@ export function useCreateInstrument() {
     mutationFn: async (input: InstrumentInputBody) =>
       (
         await apiFetch<{ instrument: InstrumentApiDTO }>(
-          "/api/instruments",
+          "/api/v1/instruments",
           { method: "POST", body: JSON.stringify(input) }
         )
       ).instrument,
@@ -607,7 +607,7 @@ export function useUpdateInstrument() {
     }) =>
       (
         await apiFetch<{ instrument: InstrumentApiDTO }>(
-          `/api/instruments/${args.id}`,
+          `/api/v1/instruments/${args.id}`,
           { method: "PATCH", body: JSON.stringify(args.patch) }
         )
       ).instrument,
@@ -621,7 +621,7 @@ export function useDeleteInstrument() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch<void>(`/api/instruments/${id}`, { method: "DELETE" });
+      await apiFetch<void>(`/api/v1/instruments/${id}`, { method: "DELETE" });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["instruments"] });

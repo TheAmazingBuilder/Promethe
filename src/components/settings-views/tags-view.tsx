@@ -3,7 +3,7 @@
 /**
  * Tags view (v1 phase 7) — user tags grouped by kind (SETUP / MISTAKE /
  * CONTEXT / CUSTOM) with full CRUD; global presets are listed read-only with
- * a badge. Data: GET/POST /api/tags · PATCH/DELETE /api/tags/[id].
+ * a badge. Data: GET/POST /api/v1/tags · PATCH/DELETE /api/v1/tags/[id].
  */
 import * as React from "react";
 import { Lock, Pencil, Plus, Tags, Trash2 } from "lucide-react";

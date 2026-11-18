@@ -3,7 +3,7 @@
 /**
  * Dashboard violations widget (v1 phase 6) — recent rule violations with the
  * breached limit. Hidden when nothing was violated in the last 30 days.
- * Data: GET /api/rules/violations?days=30.
+ * Data: GET /api/v1/rules/violations?days=30.
  */
 import { ShieldAlert } from "lucide-react";
 import { useTranslations } from "next-intl";

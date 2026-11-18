@@ -90,7 +90,7 @@ export function useDashboards() {
   return useQuery({
     queryKey: ["dashboards"],
     queryFn: async () =>
-      apiFetch<DashboardsPayload>("/api/dashboards"),
+      apiFetch<DashboardsPayload>("/api/v1/dashboards"),
     staleTime: 30_000,
   });
 }
@@ -106,7 +106,7 @@ export function useDashboardData(
     staleTime: 30_000,
     queryFn: async () =>
       apiFetch<DashboardDataPayload>(
-        `/api/dashboards/${dashboardId}/data`,
+        `/api/v1/dashboards/${dashboardId}/data`,
         {
           method: "POST",
           body: JSON.stringify({ preset, accountId }),
@@ -119,7 +119,7 @@ export function useAppearance() {
   return useQuery({
     queryKey: ["appearance"],
     queryFn: async () =>
-      (await apiFetch<{ appearance: AppearanceDTO }>("/api/appearance"))
+      (await apiFetch<{ appearance: AppearanceDTO }>("/api/v1/appearance"))
         .appearance,
     staleTime: 60_000,
   });
@@ -130,7 +130,7 @@ export function useCustomMetrics() {
     queryKey: ["custom-metrics"],
     queryFn: async () =>
       (await apiFetch<{ metrics: CustomMetricListDTO[] }>(
-        "/api/custom-metrics"
+        "/api/v1/custom-metrics"
       )).metrics,
     staleTime: 60_000,
   });
@@ -143,7 +143,7 @@ export function useCreateDashboard() {
   return useMutation({
     mutationFn: async (input: DashboardCreate) =>
       (
-        await apiFetch<{ dashboard: DashboardDTO }>("/api/dashboards", {
+        await apiFetch<{ dashboard: DashboardDTO }>("/api/v1/dashboards", {
           method: "POST",
           body: JSON.stringify(input),
         })
@@ -157,7 +157,7 @@ export function usePatchDashboard() {
   return useMutation({
     mutationFn: async (args: { id: string; patch: DashboardPatch }) =>
       (
-        await apiFetch<{ dashboard: DashboardDTO }>(`/api/dashboards/${args.id}`, {
+        await apiFetch<{ dashboard: DashboardDTO }>(`/api/v1/dashboards/${args.id}`, {
           method: "PATCH",
           body: JSON.stringify(args.patch),
         })
@@ -170,7 +170,7 @@ export function useDeleteDashboard() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch<void>(`/api/dashboards/${id}`, { method: "DELETE" });
+      await apiFetch<void>(`/api/v1/dashboards/${id}`, { method: "DELETE" });
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["dashboards"] }),
   });
@@ -182,7 +182,7 @@ export function useReorderDashboards() {
     mutationFn: async (order: string[]) =>
       (
         await apiFetch<{ dashboards: DashboardDTO[] }>(
-          "/api/dashboards/reorder",
+          "/api/v1/dashboards/reorder",
           { method: "POST", body: JSON.stringify({ order }) }
         )
       ).dashboards,
@@ -206,7 +206,7 @@ export function useAddWidget() {
     mutationFn: async (args: { dashboardId: string; input: AddWidgetInput }) =>
       (
         await apiFetch<{ widget: DashboardWidgetDTO }>(
-          `/api/dashboards/${args.dashboardId}/widgets`,
+          `/api/v1/dashboards/${args.dashboardId}/widgets`,
           { method: "POST", body: JSON.stringify(args.input) }
         )
       ).widget,
@@ -247,7 +247,7 @@ export function usePatchWidget(options?: { optimistic?: boolean }) {
     }) =>
       (
         await apiFetch<{ widget: DashboardWidgetDTO }>(
-          `/api/dashboards/${args.dashboardId}/widgets/${args.widgetId}`,
+          `/api/v1/dashboards/${args.dashboardId}/widgets/${args.widgetId}`,
           { method: "PATCH", body: JSON.stringify(cleanPatch(args.patch)) }
         )
       ).widget,
@@ -300,7 +300,7 @@ export function useDeleteWidget() {
   return useMutation({
     mutationFn: async (args: { dashboardId: string; widgetId: string }) => {
       await apiFetch<void>(
-        `/api/dashboards/${args.dashboardId}/widgets/${args.widgetId}`,
+        `/api/v1/dashboards/${args.dashboardId}/widgets/${args.widgetId}`,
         { method: "DELETE" }
       );
     },
@@ -318,7 +318,7 @@ export function usePutAppearance() {
   return useMutation({
     mutationFn: async (input: AppearanceInput) =>
       (
-        await apiFetch<{ appearance: AppearanceDTO }>("/api/appearance", {
+        await apiFetch<{ appearance: AppearanceDTO }>("/api/v1/appearance", {
           method: "PUT",
           body: JSON.stringify(input),
         })
@@ -334,7 +334,7 @@ export function useCreateCustomMetric() {
   return useMutation({
     mutationFn: async (input: CustomMetricInput) =>
       (
-        await apiFetch<{ metric: CustomMetricListDTO }>("/api/custom-metrics", {
+        await apiFetch<{ metric: CustomMetricListDTO }>("/api/v1/custom-metrics", {
           method: "POST",
           body: JSON.stringify(input),
         })
@@ -353,7 +353,7 @@ export function usePatchCustomMetric() {
     }) =>
       (
         await apiFetch<{ metric: CustomMetricListDTO }>(
-          `/api/custom-metrics/${args.id}`,
+          `/api/v1/custom-metrics/${args.id}`,
           { method: "PATCH", body: JSON.stringify(args.patch) }
         )
       ).metric,
@@ -366,7 +366,7 @@ export function useDeleteCustomMetric() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch<void>(`/api/custom-metrics/${id}`, { method: "DELETE" });
+      await apiFetch<void>(`/api/v1/custom-metrics/${id}`, { method: "DELETE" });
     },
     onSuccess: () =>
       void qc.invalidateQueries({ queryKey: ["custom-metrics"] }),
@@ -412,7 +412,7 @@ export function useUserTemplates() {
     queryKey: ["user-templates"],
     queryFn: async () =>
       (await apiFetch<{ templates: UserTemplateDTO[] }>(
-        "/api/user-templates"
+        "/api/v1/user-templates"
       )).templates,
     staleTime: 30_000,
   });
@@ -422,7 +422,7 @@ export function useDeleteUserTemplate() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch<void>(`/api/user-templates/${id}`, { method: "DELETE" });
+      await apiFetch<void>(`/api/v1/user-templates/${id}`, { method: "DELETE" });
     },
     onSuccess: () =>
       void qc.invalidateQueries({ queryKey: ["user-templates"] }),
@@ -439,7 +439,7 @@ export function useSaveAsTemplate() {
     }) =>
       (
         await apiFetch<{ template: UserTemplateDTO }>(
-          `/api/dashboards/${args.dashboardId}/save-template`,
+          `/api/v1/dashboards/${args.dashboardId}/save-template`,
           {
             method: "POST",
             body: JSON.stringify({
@@ -461,7 +461,7 @@ export function useApplyTemplate() {
       apiFetch<{
         dashboard: DashboardDTO;
         skipped: DashboardImportSkipDTO[];
-      }>(`/api/dashboards/${args.dashboardId}/apply-template`, {
+      }>(`/api/v1/dashboards/${args.dashboardId}/apply-template`, {
         method: "POST",
         body: JSON.stringify({ templateKey: args.templateKey }),
       }),
@@ -479,7 +479,7 @@ export function useImportDashboards() {
       apiFetch<{
         dashboards: DashboardDTO[];
         skipped: DashboardImportSkipDTO[];
-      }>("/api/dashboards/import", {
+      }>("/api/v1/dashboards/import", {
         method: "POST",
         body: JSON.stringify(payload),
       }),
@@ -495,6 +495,6 @@ export async function fetchDashboardExport(
   dashboardId: string
 ): Promise<DashboardExportPayloadDTO> {
   return apiFetch<DashboardExportPayloadDTO>(
-    `/api/dashboards/${dashboardId}/export`
+    `/api/v1/dashboards/${dashboardId}/export`
   );
 }

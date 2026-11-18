@@ -5,7 +5,7 @@
  *
  * Replica of Euforia's Nofy shared module, renamed for Promethe: every
  * user-facing string goes through gaia.* i18n keys, hues are emerald/teal
- * (never Euforia's cobalt), and the API base is /api/gaia.
+ * (never Euforia's cobalt), and the API base is /api/v1/gaia.
  */
 import * as React from "react";
 import {
@@ -384,9 +384,9 @@ export function GaiaEmptyState({
   );
 }
 
-// ── API layer (/api/gaia/*) ──────────────────────────────────────────────────
+// ── API layer (/api/v1/gaia/*) ──────────────────────────────────────────────────
 
-const GAIA_BASE = "/api/gaia";
+const GAIA_BASE = "/api/v1/gaia";
 
 function gaiaNotesQuery(params: GaiaNotesParams): string {
   const q = new URLSearchParams();

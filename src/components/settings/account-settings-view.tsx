@@ -91,17 +91,17 @@ export function AccountSettingsView() {
   const history = useQuery({
     queryKey: ["account", "export-history"],
     queryFn: () =>
-      apiFetch<{ history: ExportHistoryRow[] }>("/api/account/export/history"),
+      apiFetch<{ history: ExportHistoryRow[] }>("/api/v1/account/export/history"),
   });
 
   const deletion = useQuery({
     queryKey: ["account", "deletion"],
-    queryFn: () => apiFetch<{ state: DeletionState }>("/api/account/deletion"),
+    queryFn: () => apiFetch<{ state: DeletionState }>("/api/v1/account/deletion"),
   });
 
   const consents = useQuery({
     queryKey: ["account", "consents"],
-    queryFn: () => apiFetch<{ consents: ConsentRow[] }>("/api/account/consents"),
+    queryFn: () => apiFetch<{ consents: ConsentRow[] }>("/api/v1/account/consents"),
   });
 
   const refreshDeletion = () => {
@@ -111,7 +111,7 @@ export function AccountSettingsView() {
   // Download via fetch (not <a href>) to surface cooldown errors as toasts.
   const download = useMutation({
     mutationFn: async () => {
-      const res = await fetch("/api/account/export");
+      const res = await fetch("/api/v1/account/export");
       if (res.ok) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
@@ -164,7 +164,7 @@ export function AccountSettingsView() {
 
   const schedule = useMutation({
     mutationFn: (pwd: string) =>
-      apiFetch<{ state: DeletionState }>("/api/account/deletion", {
+      apiFetch<{ state: DeletionState }>("/api/v1/account/deletion", {
         method: "POST",
         body: JSON.stringify({ password: pwd }),
       }),
@@ -191,7 +191,7 @@ export function AccountSettingsView() {
 
   const cancel = useMutation({
     mutationFn: () =>
-      apiFetch<{ state: DeletionState }>("/api/account/deletion", {
+      apiFetch<{ state: DeletionState }>("/api/v1/account/deletion", {
         method: "DELETE",
       }),
     onSuccess: () => {

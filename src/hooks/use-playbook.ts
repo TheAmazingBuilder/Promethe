@@ -1,6 +1,6 @@
 /**
- * Playbook hooks (Phase 2) — React Query wrappers over the /api/playbook/*
- * and /api/setups/* routes, same conventions as use-journal.ts.
+ * Playbook hooks (Phase 2) — React Query wrappers over the /api/v1/playbook/*
+ * and /api/v1/setups/* routes, same conventions as use-journal.ts.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
@@ -42,7 +42,7 @@ export function usePlaybookOverview() {
   return useQuery({
     queryKey: PLAYBOOK_KEYS.overview,
     queryFn: async () =>
-      (await apiFetch<{ overview: PlaybookOverviewDTO }>("/api/playbook/overview"))
+      (await apiFetch<{ overview: PlaybookOverviewDTO }>("/api/v1/playbook/overview"))
         .overview,
     staleTime: 60 * 1000,
   });
@@ -54,7 +54,7 @@ export function usePlaybookStrategies() {
     queryFn: async () =>
       (
         await apiFetch<{ strategies: StrategyDTO[] }>(
-          "/api/playbook/strategies",
+          "/api/v1/playbook/strategies",
         )
       ).strategies,
     staleTime: 60 * 1000,
@@ -67,7 +67,7 @@ export function usePlaybookStats() {
     queryFn: async () =>
       (
         await apiFetch<{ stats: StrategyStatsDTO[] }>(
-          "/api/strategies/stats",
+          "/api/v1/strategies/stats",
         )
       ).stats,
     staleTime: 60 * 1000,
@@ -81,7 +81,7 @@ export function useSetups(strategyId?: string | null) {
   return useQuery({
     queryKey: PLAYBOOK_KEYS.setups(strategyId),
     queryFn: async () =>
-      (await apiFetch<{ setups: SetupDTO[] }>(`/api/setups${qs}`)).setups,
+      (await apiFetch<{ setups: SetupDTO[] }>(`/api/v1/setups${qs}`)).setups,
     staleTime: 60 * 1000,
   });
 }
@@ -93,7 +93,7 @@ export function useSetupInsights(strategyId?: string | null) {
     queryFn: async () =>
       (
         await apiFetch<{ insights: SetupInsightDTO[] }>(
-          `/api/setups/insights${qs}`,
+          `/api/v1/setups/insights${qs}`,
         )
       ).insights,
     staleTime: 60 * 1000,
@@ -105,7 +105,7 @@ export function useCreateSetup() {
   return useMutation({
     mutationFn: async (input: SetupInput) =>
       (
-        await apiFetch<{ setup: SetupDTO }>("/api/setups", {
+        await apiFetch<{ setup: SetupDTO }>("/api/v1/setups", {
           method: "POST",
           body: JSON.stringify(input),
         })
@@ -119,7 +119,7 @@ export function useUpdateSetup() {
   return useMutation({
     mutationFn: async (args: { id: string; patch: Partial<SetupInput> }) =>
       (
-        await apiFetch<{ setup: SetupDTO }>(`/api/setups/${args.id}`, {
+        await apiFetch<{ setup: SetupDTO }>(`/api/v1/setups/${args.id}`, {
           method: "PATCH",
           body: JSON.stringify(args.patch),
         })
@@ -132,7 +132,7 @@ export function useDeleteSetup() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch<void>(`/api/setups/${id}`, { method: "DELETE" });
+      await apiFetch<void>(`/api/v1/setups/${id}`, { method: "DELETE" });
     },
     onSuccess: () => invalidatePlaybook(qc),
   });
@@ -145,7 +145,7 @@ export function usePlaybookRules() {
     queryKey: PLAYBOOK_KEYS.rules,
     queryFn: async () =>
       (
-        await apiFetch<{ rules: PlaybookRuleDTO[] }>("/api/playbook/rules")
+        await apiFetch<{ rules: PlaybookRuleDTO[] }>("/api/v1/playbook/rules")
       ).rules,
     staleTime: 60 * 1000,
   });
@@ -156,7 +156,7 @@ export function useCreatePlaybookRule() {
   return useMutation({
     mutationFn: async (input: PlaybookRuleInput) =>
       (
-        await apiFetch<{ rule: PlaybookRuleDTO }>("/api/playbook/rules", {
+        await apiFetch<{ rule: PlaybookRuleDTO }>("/api/v1/playbook/rules", {
           method: "POST",
           body: JSON.stringify(input),
         })
@@ -171,7 +171,7 @@ export function useUpdatePlaybookRule() {
     mutationFn: async (args: { id: string; patch: Partial<PlaybookRuleInput> }) =>
       (
         await apiFetch<{ rule: PlaybookRuleDTO }>(
-          `/api/playbook/rules/${args.id}`,
+          `/api/v1/playbook/rules/${args.id}`,
           { method: "PATCH", body: JSON.stringify(args.patch) },
         )
       ).rule,
@@ -183,7 +183,7 @@ export function useDeletePlaybookRule() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch<void>(`/api/playbook/rules/${id}`, { method: "DELETE" });
+      await apiFetch<void>(`/api/v1/playbook/rules/${id}`, { method: "DELETE" });
     },
     onSuccess: () => invalidatePlaybook(qc),
   });
@@ -197,7 +197,7 @@ export function useChecklistTemplates() {
     queryFn: async () =>
       (
         await apiFetch<{ checklists: ChecklistTemplateDTO[] }>(
-          "/api/playbook/checklists",
+          "/api/v1/playbook/checklists",
         )
       ).checklists,
     staleTime: 60 * 1000,
@@ -210,7 +210,7 @@ export function useCreateChecklistTemplate() {
     mutationFn: async (input: ChecklistTemplateInput) =>
       (
         await apiFetch<{ checklist: ChecklistTemplateDTO }>(
-          "/api/playbook/checklists",
+          "/api/v1/playbook/checklists",
           { method: "POST", body: JSON.stringify(input) },
         )
       ).checklist,
@@ -227,7 +227,7 @@ export function useUpdateChecklistTemplate() {
     }) =>
       (
         await apiFetch<{ checklist: ChecklistTemplateDTO }>(
-          `/api/playbook/checklists/${args.id}`,
+          `/api/v1/playbook/checklists/${args.id}`,
           { method: "PATCH", body: JSON.stringify(args.patch) },
         )
       ).checklist,
@@ -239,7 +239,7 @@ export function useDeleteChecklistTemplate() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch<void>(`/api/playbook/checklists/${id}`, {
+      await apiFetch<void>(`/api/v1/playbook/checklists/${id}`, {
         method: "DELETE",
       });
     },
@@ -255,7 +255,7 @@ export function usePlaybookTemplates() {
     queryFn: async () =>
       (
         await apiFetch<{ templates: PlaybookTemplateCardDTO[] }>(
-          "/api/playbook/templates",
+          "/api/v1/playbook/templates",
         )
       ).templates,
     staleTime: 5 * 60 * 1000,
@@ -268,7 +268,7 @@ export function useInstantiateTemplate() {
     mutationFn: async (args: { key: string; name?: string }) =>
       (
         await apiFetch<{ strategy: StrategyDTO }>(
-          "/api/playbook/templates/instantiate",
+          "/api/v1/playbook/templates/instantiate",
           { method: "POST", body: JSON.stringify(args) },
         )
       ).strategy,
@@ -282,7 +282,7 @@ export function useDuplicateStrategy() {
     mutationFn: async (args: { id: string; name?: string }) =>
       (
         await apiFetch<{ strategy: StrategyDTO }>(
-          `/api/strategies/${args.id}/duplicate`,
+          `/api/v1/strategies/${args.id}/duplicate`,
           { method: "POST", body: JSON.stringify({ name: args.name ?? null }) },
         )
       ).strategy,
@@ -296,7 +296,7 @@ export function useInstallGlobalChecklist() {
     mutationFn: async () =>
       (
         await apiFetch<{ checklist: ChecklistTemplateDTO }>(
-          "/api/playbook/checklists/install-global",
+          "/api/v1/playbook/checklists/install-global",
           { method: "POST" },
         )
       ).checklist,
@@ -310,7 +310,7 @@ export function useInstallExampleRules() {
     mutationFn: async () =>
       (
         await apiFetch<{ added: number }>(
-          "/api/playbook/rules/install-examples",
+          "/api/v1/playbook/rules/install-examples",
           { method: "POST" },
         )
       ).added,
@@ -328,7 +328,7 @@ export function useSetPlaybookMatch() {
       playbookMatch: "MATCHED" | "PARTIAL" | "OFF_PLAYBOOK";
     }) =>
       await apiFetch<{ playbookMatch: string }>(
-        `/api/trades/${args.tradeId}/playbook-match`,
+        `/api/v1/trades/${args.tradeId}/playbook-match`,
         {
           method: "POST",
           body: JSON.stringify({ playbookMatch: args.playbookMatch }),

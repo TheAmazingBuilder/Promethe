@@ -203,7 +203,7 @@ export async function getMentorTradeDetail(
   if (Array.isArray(out.screenshots)) {
     out.screenshots = (out.screenshots as Record<string, unknown>[]).map((shot) => ({
       ...shot,
-      url: `/api/mentor/${ctx.ownerId}/media/${String(shot.id)}`,
+      url: `/api/v1/mentor/${ctx.ownerId}/media/${String(shot.id)}`,
     }));
   }
   return { trade: out, policy };

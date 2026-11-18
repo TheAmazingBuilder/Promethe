@@ -25,7 +25,7 @@ import type { GoalInput, GoalPatch, RuleInput, RulePatch } from "@/lib/validatio
 export function useGoals() {
   return useQuery({
     queryKey: ["goals"],
-    queryFn: async () => apiFetch<GoalsPayload>("/api/goals"),
+    queryFn: async () => apiFetch<GoalsPayload>("/api/v1/goals"),
     staleTime: 30 * 1000,
   });
 }
@@ -34,7 +34,7 @@ export function useCreateGoal() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: GoalInput) =>
-      (await apiFetch<{ goal: GoalDTO }>("/api/goals", {
+      (await apiFetch<{ goal: GoalDTO }>("/api/v1/goals", {
         method: "POST",
         body: JSON.stringify(input),
       })).goal,
@@ -48,7 +48,7 @@ export function useUpdateGoal() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (args: { id: string; patch: GoalPatch }) =>
-      (await apiFetch<{ goal: GoalDTO }>(`/api/goals/${args.id}`, {
+      (await apiFetch<{ goal: GoalDTO }>(`/api/v1/goals/${args.id}`, {
         method: "PATCH",
         body: JSON.stringify(args.patch),
       })).goal,
@@ -62,7 +62,7 @@ export function useDeleteGoal() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch<void>(`/api/goals/${id}`, { method: "DELETE" });
+      await apiFetch<void>(`/api/v1/goals/${id}`, { method: "DELETE" });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["goals"] });
@@ -76,7 +76,7 @@ export function useRules() {
   return useQuery({
     queryKey: ["rules"],
     queryFn: async () =>
-      (await apiFetch<{ rules: RuleDTO[] }>("/api/rules")).rules,
+      (await apiFetch<{ rules: RuleDTO[] }>("/api/v1/rules")).rules,
     staleTime: 30 * 1000,
   });
 }
@@ -85,7 +85,7 @@ export function useCreateRule() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: RuleInput) =>
-      (await apiFetch<{ rule: RuleDTO }>("/api/rules", {
+      (await apiFetch<{ rule: RuleDTO }>("/api/v1/rules", {
         method: "POST",
         body: JSON.stringify(input),
       })).rule,
@@ -101,7 +101,7 @@ export function useUpdateRule() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (args: { id: string; patch: RulePatch }) =>
-      (await apiFetch<{ rule: RuleDTO }>(`/api/rules/${args.id}`, {
+      (await apiFetch<{ rule: RuleDTO }>(`/api/v1/rules/${args.id}`, {
         method: "PATCH",
         body: JSON.stringify(args.patch),
       })).rule,
@@ -117,7 +117,7 @@ export function useDeleteRule() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch<void>(`/api/rules/${id}`, { method: "DELETE" });
+      await apiFetch<void>(`/api/v1/rules/${id}`, { method: "DELETE" });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["rules"] });
@@ -135,7 +135,7 @@ export function useViolations(days = 30, enabled = true) {
     queryFn: async () =>
       (
         await apiFetch<{ violations: RuleViolationDTO[] }>(
-          `/api/rules/violations?days=${days}`
+          `/api/v1/rules/violations?days=${days}`
         )
       ).violations,
     staleTime: 30 * 1000,
@@ -150,7 +150,7 @@ export function useTradeViolations(tradeId: string | null) {
     queryFn: async () =>
       (
         await apiFetch<{ violations: RuleViolationDTO[] }>(
-          `/api/trades/${tradeId}/violations`
+          `/api/v1/trades/${tradeId}/violations`
         )
       ).violations,
     enabled: tradeId != null && tradeId !== "",

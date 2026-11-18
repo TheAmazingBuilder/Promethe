@@ -60,7 +60,7 @@ const TRADE = {
       storagePath: "uploads/user_A/shot_1.webp",
       label: "ENTRY",
       caption: "Entry with confirmation",
-      url: "/api/uploads/shot_1",
+      url: "/api/v1/uploads/shot_1",
     },
   ],
   executions: [

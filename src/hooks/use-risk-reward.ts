@@ -14,7 +14,7 @@ export function useRiskRewardSummary() {
   return useQuery({
     queryKey: RISK_REWARD_QUERY_KEY,
     queryFn: async () =>
-      apiFetch<RiskRewardSummaryDTO>("/api/risk-reward/summary"),
+      apiFetch<RiskRewardSummaryDTO>("/api/v1/risk-reward/summary"),
     staleTime: 60 * 1000,
   });
 }
@@ -24,7 +24,7 @@ export function useSetDailyRiskBudget() {
   return useMutation({
     mutationFn: async (dailyRiskBudgetPercent: string | null) =>
       apiFetch<{ dailyRiskBudgetPercent: string | null }>(
-        "/api/risk-reward/summary",
+        "/api/v1/risk-reward/summary",
         {
           method: "PATCH",
           body: JSON.stringify({ dailyRiskBudgetPercent }),

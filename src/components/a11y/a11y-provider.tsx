@@ -63,7 +63,7 @@ export function A11yProvider({ children }: { children: React.ReactNode }) {
     }
     let cancelled = false;
     apiFetch<{ preferences: Record<string, unknown> }>(
-      "/api/display-preferences"
+      "/api/v1/display-preferences"
     )
       .then((payload) => {
         if (cancelled) return;
@@ -110,7 +110,7 @@ export function A11yProvider({ children }: { children: React.ReactNode }) {
     if (sessionKey == null) return;
     if (syncTimer.current) clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
-      apiFetch("/api/display-preferences", {
+      apiFetch("/api/v1/display-preferences", {
         method: "PUT",
         body: JSON.stringify({
           textScale: preferences.textScale,

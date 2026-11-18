@@ -42,7 +42,7 @@ const THEME_OPTIONS = [
 /** Common IANA timezones - the current profile tz is always offered. */
 const TIMEZONES = COMMON_TIMEZONES;
 
-/** Profile editor - PATCH /api/profile, then refresh the global session. */
+/** Profile editor - PATCH /api/v1/profile, then refresh the global session. */
 function ProfileEditorCard() {
   const { session, setSession } = useSession();
   const t = useTranslations("settings");
@@ -76,7 +76,7 @@ function ProfileEditorCard() {
       const result = await apiFetch<{
         user: { id: string; email: string };
         profile: typeof session.profile;
-      }>("/api/profile", {
+      }>("/api/v1/profile", {
         method: "PATCH",
         body: JSON.stringify({
           displayName: name.trim(),

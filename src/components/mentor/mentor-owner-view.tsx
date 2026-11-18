@@ -68,7 +68,7 @@ export function MentorOwnerView({ ownerId }: { ownerId: string }) {
   const home = useQuery({
     queryKey: ["mentor-space"],
     queryFn: () =>
-      apiFetch<{ mentees: MenteeSummaryDTO[] }>("/api/mentor"),
+      apiFetch<{ mentees: MenteeSummaryDTO[] }>("/api/v1/mentor"),
   });
   const mentee = home.data?.mentees.find((m) => m.ownerId === ownerId);
 
@@ -135,7 +135,7 @@ function MentorTradesTable({ ownerId }: { ownerId: string }) {
     queryKey: ["mentor-trades", ownerId, page],
     queryFn: () =>
       apiFetch<MentorTradesPage>(
-        `/api/mentor/${ownerId}/trades?page=${page}&pageSize=20`
+        `/api/v1/mentor/${ownerId}/trades?page=${page}&pageSize=20`
       ),
     retry: false,
   });
@@ -238,7 +238,7 @@ function MentorJournalList({ ownerId }: { ownerId: string }) {
   const t = useTranslations("mentorSpace");
   const journal = useQuery({
     queryKey: ["mentor-journal", ownerId],
-    queryFn: () => apiFetch<MentorJournal>(`/api/mentor/${ownerId}/journal`),
+    queryFn: () => apiFetch<MentorJournal>(`/api/v1/mentor/${ownerId}/journal`),
     retry: false,
   });
 
@@ -299,7 +299,7 @@ function MentorAnalyticsCard({ ownerId }: { ownerId: string }) {
   const t = useTranslations("mentorSpace");
   const analytics = useQuery({
     queryKey: ["mentor-analytics", ownerId],
-    queryFn: () => apiFetch<MentorAnalytics>(`/api/mentor/${ownerId}/analytics`),
+    queryFn: () => apiFetch<MentorAnalytics>(`/api/v1/mentor/${ownerId}/analytics`),
     retry: false,
   });
 

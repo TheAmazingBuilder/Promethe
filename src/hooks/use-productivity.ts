@@ -30,7 +30,7 @@ export function useGlobalSearch(query: string, limit = 8) {
     enabled: q.length >= 2,
     queryFn: async () =>
       apiFetch<SearchPayload>(
-        `/api/search?q=${encodeURIComponent(q)}&limit=${limit}`
+        `/api/v1/search?q=${encodeURIComponent(q)}&limit=${limit}`
       ),
     staleTime: 30 * 1000,
   });
@@ -48,7 +48,7 @@ export function useBulkTrades() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: BulkTradesInput) =>
-      apiFetch<BulkResult>("/api/trades/bulk", {
+      apiFetch<BulkResult>("/api/v1/trades/bulk", {
         method: "POST",
         body: JSON.stringify(input),
       }),
@@ -64,7 +64,7 @@ export function useHistory(limit = 50) {
   return useQuery({
     queryKey: ["history", limit],
     queryFn: async () =>
-      (await apiFetch<{ groups: ChangeLogGroupDTO[] }>(`/api/history?limit=${limit}`))
+      (await apiFetch<{ groups: ChangeLogGroupDTO[] }>(`/api/v1/history?limit=${limit}`))
         .groups,
   });
 }
@@ -73,7 +73,7 @@ export function useUndoGroup() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (groupId: string) =>
-      apiFetch<{ restored: number }>(`/api/history/${groupId}/undo`, {
+      apiFetch<{ restored: number }>(`/api/v1/history/${groupId}/undo`, {
         method: "POST",
       }),
     onSuccess: () => {
@@ -87,14 +87,14 @@ export function useUndoGroup() {
 /** Undo the latest still-undoable group (Cmd+Z). Returns null when none. */
 export async function undoLatestGroup(): Promise<{ restored: number } | null> {
   const { groups } = await apiFetch<{ groups: ChangeLogGroupDTO[] }>(
-    "/api/history?limit=20"
+    "/api/v1/history?limit=20"
   );
   const now = new Date();
   const target = groups.find(
     (g) => !g.undoneAt && new Date(g.expiresAt) > now
   );
   if (!target) return null;
-  return apiFetch<{ restored: number }>(`/api/history/${target.groupId}/undo`, {
+  return apiFetch<{ restored: number }>(`/api/v1/history/${target.groupId}/undo`, {
     method: "POST",
   });
 }
@@ -107,7 +107,7 @@ export function useCustomFields(includeArchived = false) {
     queryFn: async () =>
       (
         await apiFetch<{ definitions: CustomFieldDefinitionDTO[] }>(
-          `/api/custom-fields${includeArchived ? "?archived=1" : ""}`
+          `/api/v1/custom-fields${includeArchived ? "?archived=1" : ""}`
         )
       ).definitions,
   });
@@ -118,7 +118,7 @@ export function useCreateCustomField() {
   return useMutation({
     mutationFn: async (input: CustomFieldDefinitionInput) =>
       (
-        await apiFetch<{ definition: CustomFieldDefinitionDTO }>("/api/custom-fields", {
+        await apiFetch<{ definition: CustomFieldDefinitionDTO }>("/api/v1/custom-fields", {
           method: "POST",
           body: JSON.stringify(input),
         })
@@ -142,7 +142,7 @@ export function useUpdateCustomField() {
     }) =>
       (
         await apiFetch<{ definition: CustomFieldDefinitionDTO }>(
-          `/api/custom-fields/${id}`,
+          `/api/v1/custom-fields/${id}`,
           { method: "PATCH", body: JSON.stringify(patch) }
         )
       ).definition,
@@ -157,7 +157,7 @@ export function useDeleteCustomField() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch(`/api/custom-fields/${id}`, { method: "DELETE" });
+      await apiFetch(`/api/v1/custom-fields/${id}`, { method: "DELETE" });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["custom-fields"] });
@@ -174,7 +174,7 @@ export function useTableColumns(tableKey: string) {
     queryFn: async () =>
       (
         await apiFetch<{ preference: TableColumnPreferenceDTO | null }>(
-          `/api/table-columns?tableKey=${encodeURIComponent(tableKey)}`
+          `/api/v1/table-columns?tableKey=${encodeURIComponent(tableKey)}`
         )
       ).preference,
     staleTime: 5 * 60 * 1000,
@@ -186,7 +186,7 @@ export function useSaveTableColumns() {
   return useMutation({
     mutationFn: async (input: TableColumnsInput) =>
       (
-        await apiFetch<{ preference: TableColumnPreferenceDTO }>("/api/table-columns", {
+        await apiFetch<{ preference: TableColumnPreferenceDTO }>("/api/v1/table-columns", {
           method: "PUT",
           body: JSON.stringify(input),
         })
@@ -202,7 +202,7 @@ export function useShortcuts() {
   return useQuery({
     queryKey: ["shortcuts"],
     queryFn: async () =>
-      (await apiFetch<{ shortcuts: ShortcutDTO[] }>("/api/shortcuts")).shortcuts,
+      (await apiFetch<{ shortcuts: ShortcutDTO[] }>("/api/v1/shortcuts")).shortcuts,
     staleTime: 10 * 60 * 1000,
   });
 }
@@ -212,7 +212,7 @@ export function useUpsertShortcut() {
   return useMutation({
     mutationFn: async (input: { actionId: string; keys: string }) =>
       (
-        await apiFetch<{ shortcut: ShortcutDTO }>("/api/shortcuts", {
+        await apiFetch<{ shortcut: ShortcutDTO }>("/api/v1/shortcuts", {
           method: "PUT",
           body: JSON.stringify(input),
         })
@@ -225,7 +225,7 @@ export function useResetShortcuts() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => {
-      await apiFetch("/api/shortcuts", { method: "DELETE" });
+      await apiFetch("/api/v1/shortcuts", { method: "DELETE" });
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["shortcuts"] }),
   });

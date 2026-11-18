@@ -4,7 +4,7 @@
  * These types mirror the Prisma models 1:1 (ToolScenario, FxRate,
  * MarketSessionSetting, ExitPlan, ExposureAlertSetting) and are the shapes
  * the UI works with. Persistence lives on the server now (src/server/tools.ts
- * + /api/* routes, via src/hooks/use-tools.ts); nothing here touches
+ * + /api/v1/* routes, via src/hooks/use-tools.ts); nothing here touches
  * localStorage anymore.
  */
 "use client";

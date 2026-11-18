@@ -1,7 +1,7 @@
 /**
  * Dashboard widget data loader (v2.5 Module 1, spec §4.4).
  *
- * One POST /api/dashboards/[id]/data call resolves EVERY widget of a
+ * One POST /api/v1/dashboards/[id]/data call resolves EVERY widget of a
  * dashboard: the closed-trade dataset is fetched ONCE (rich rows reused by
  * the analytics engine AND the custom-metric evaluator), then each widget
  * gets its period resolved (global filter + per-widget override), its

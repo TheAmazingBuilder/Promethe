@@ -8,7 +8,7 @@
  * checkbox-chip value pickers fed by the reference data (instruments,
  * strategies, tags, accounts…), an optional formula layer over sub-metrics
  * A/B/C (each with its own aggregate + filters) validated live by the safe
- * parser, and an "Evaluate" preview against POST /api/custom-metrics/preview.
+ * parser, and an "Evaluate" preview against POST /api/v1/custom-metrics/preview.
  */
 import * as React from "react";
 import { useTranslations } from "next-intl";
@@ -831,7 +831,7 @@ export function CustomMetricBuilder({
     setPreviewing(true);
     try {
       const result = await apiFetch<PreviewResult>(
-        "/api/custom-metrics/preview",
+        "/api/v1/custom-metrics/preview",
         {
           method: "POST",
           body: JSON.stringify(input.definition),
@@ -858,7 +858,7 @@ export function CustomMetricBuilder({
     setSaving(true);
     try {
       const response = await apiFetch<{ metric: { id: string } }>(
-        editing ? `/api/custom-metrics/${editing.id}` : "/api/custom-metrics",
+        editing ? `/api/v1/custom-metrics/${editing.id}` : "/api/v1/custom-metrics",
         {
           method: editing ? "PATCH" : "POST",
           body: JSON.stringify(input),
@@ -1159,7 +1159,7 @@ export function CustomMetricsSection() {
   const onDelete = async (id: string) => {
     setDeletingId(id);
     try {
-      await apiFetch<void>(`/api/custom-metrics/${id}`, { method: "DELETE" });
+      await apiFetch<void>(`/api/v1/custom-metrics/${id}`, { method: "DELETE" });
       toast({ title: t("deletedToast") });
       void metrics.refetch();
     } catch (error) {

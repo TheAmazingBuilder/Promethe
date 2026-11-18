@@ -4,8 +4,8 @@
  * Registers the daily risk-budget gauge and the discipline-score widget
  * through the Module 1 extension point registerWidget() — the dashboard
  * core is untouched. Both are SELF-FETCHING (hasLoader: false): the
- * budget gauge pulls /api/risk-reward/summary, the score pulls
- * /api/analytics/advanced directly.
+ * budget gauge pulls /api/v1/risk-reward/summary, the score pulls
+ * /api/v1/analytics/advanced directly.
  *
  * Imported for its side effects by the widget catalog, the widget
  * renderer, the dashboards view, the server-side dashboard validation

@@ -320,7 +320,7 @@ export function PriceChartSection({ trade }: { trade: TradeDetailDTO }) {
     ],
     queryFn: async () =>
       apiFetch<CandleWindowPayload>(
-        `/api/charts/candles?instrumentId=${encodeURIComponent(trade.instrumentId)}&timeframe=${timeframe}&from=${encodeURIComponent(window.from)}&to=${encodeURIComponent(window.to)}`
+        `/api/v1/charts/candles?instrumentId=${encodeURIComponent(trade.instrumentId)}&timeframe=${timeframe}&from=${encodeURIComponent(window.from)}&to=${encodeURIComponent(window.to)}`
       ),
     staleTime: 60 * 1000,
   });
@@ -582,7 +582,7 @@ function CandleImportDialog({
     setBusy(true);
     try {
       const res = await apiFetch<{ imported: number; skipped: number; pruned: number }>(
-        "/api/charts/candles/import",
+        "/api/v1/charts/candles/import",
         {
           method: "POST",
           body: JSON.stringify({

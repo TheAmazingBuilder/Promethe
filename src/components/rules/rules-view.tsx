@@ -3,7 +3,7 @@
 /**
  * Rules & goals view (v1 phase 6) — three tabs: measurable goals with live
  * progress, trading rules CRUD (auto re-evaluation on edit), recent
- * violations. Data: /api/goals · /api/rules · /api/rules/violations.
+ * violations. Data: /api/v1/goals · /api/v1/rules · /api/v1/rules/violations.
  */
 import * as React from "react";
 import {

@@ -123,7 +123,7 @@ export function ReplayPlayerSection({ trade }: { trade: TradeDetailDTO }) {
     ],
     queryFn: async () =>
       apiFetch<CandleWindowPayload>(
-        `/api/charts/candles?instrumentId=${encodeURIComponent(trade.instrumentId)}&timeframe=${timeframe}&from=${encodeURIComponent(window.from)}&to=${encodeURIComponent(window.to)}`
+        `/api/v1/charts/candles?instrumentId=${encodeURIComponent(trade.instrumentId)}&timeframe=${timeframe}&from=${encodeURIComponent(window.from)}&to=${encodeURIComponent(window.to)}`
       ),
     staleTime: 60 * 1000,
   });

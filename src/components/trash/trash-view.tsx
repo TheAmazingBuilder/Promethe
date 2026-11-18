@@ -5,7 +5,7 @@
  * retention: list by entity, search, single/bulk restore, permanent
  * delete, empty trash, days-remaining badge.
  *
- * Data: GET /api/trash · POST /api/trash (restore | delete | empty).
+ * Data: GET /api/v1/trash · POST /api/v1/trash (restore | delete | empty).
  */
 import * as React from "react";
 import {
@@ -91,7 +91,7 @@ export function TrashView() {
     queryKey: ["trash", entity, debounced],
     queryFn: () =>
       apiFetch<TrashListResponse>(
-        `/api/trash?entity=${entity === "ALL" ? "" : entity}${debounced ? `&search=${encodeURIComponent(debounced)}` : ""}`
+        `/api/v1/trash?entity=${entity === "ALL" ? "" : entity}${debounced ? `&search=${encodeURIComponent(debounced)}` : ""}`
       ),
   });
 
@@ -108,7 +108,7 @@ export function TrashView() {
     setBusy(true);
     try {
       const result = await apiFetch<{ restored?: number; deleted?: number }>(
-        "/api/trash",
+        "/api/v1/trash",
         { method: "POST", body: JSON.stringify(body) }
       );
       toast({

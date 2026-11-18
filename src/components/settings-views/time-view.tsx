@@ -7,7 +7,7 @@
  * format, trading-day definition (mode + custom rollover) and the broker
  * server time of each account (read-only — configured in /accounts).
  * Every change applies instantly through the TimeProvider (partial PUT to
- * /api/display-preferences, except the main timezone which PATCHes the
+ * /api/v1/display-preferences, except the main timezone which PATCHes the
  * profile like the settings page does).
  */
 import Link from "next/link";
@@ -84,7 +84,7 @@ function MainTimezoneCard() {
       const result = await apiFetch<{
         user: { id: string; email: string };
         profile: typeof session.profile;
-      }>("/api/profile", {
+      }>("/api/v1/profile", {
         method: "PATCH",
         body: JSON.stringify({ timezone }),
       });

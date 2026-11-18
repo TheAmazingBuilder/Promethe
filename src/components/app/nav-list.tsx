@@ -33,7 +33,7 @@ interface MentorHomePayload {
 export function useMentorHome() {
   return useQuery({
     queryKey: ["mentor-space"],
-    queryFn: () => apiFetch<MentorHomePayload>("/api/mentor"),
+    queryFn: () => apiFetch<MentorHomePayload>("/api/v1/mentor"),
     staleTime: 5 * 60 * 1000,
     retry: false,
   });

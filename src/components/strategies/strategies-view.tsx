@@ -3,8 +3,8 @@
 /**
  * Strategies view (v1 phase 5) — list with per-strategy stats, full editor
  * (definition + replace-all checklist) and immutable version snapshots.
- * Data: GET /api/strategies?withStats=1 · CRUD /api/strategies[/id] ·
- * POST/GET/DELETE /api/strategies/[id]/versions.
+ * Data: GET /api/v1/strategies?withStats=1 · CRUD /api/v1/strategies[/id] ·
+ * POST/GET/DELETE /api/v1/strategies/[id]/versions.
  */
 import * as React from "react";
 import {

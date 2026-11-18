@@ -1,7 +1,7 @@
 /**
  * Screenshot storage — local filesystem equivalent of Supabase Storage in the
  * sandbox: uploads/{userId}/{tradeId}/{id}.{ext}, served ONLY through the
- * ownership-checked /api/uploads/[id] route (never as static files).
+ * ownership-checked /api/v1/uploads/[id] route (never as static files).
  *
  * Client-side compression (max 1600px, WebP q0.8) happens BEFORE the upload
  * (addendum §11.7) — the server enforces type + size limits as defense in depth.
@@ -86,7 +86,7 @@ export async function saveUpload(
     label: row.label,
     caption: row.caption,
     createdAt: row.createdAt.toISOString(),
-    url: `/api/uploads/${row.id}`,
+    url: `/api/v1/uploads/${row.id}`,
   };
 }
 

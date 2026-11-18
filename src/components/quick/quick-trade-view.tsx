@@ -455,7 +455,7 @@ export function QuickTradeView() {
 
       // Persist quick-entry defaults (fire and forget).
       const prefs = session?.profile.preferences ?? {};
-      void apiFetch("/api/profile", {
+      void apiFetch("/api/v1/profile", {
         method: "PATCH",
         body: JSON.stringify({
           preferences: {

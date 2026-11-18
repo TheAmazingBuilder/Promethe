@@ -166,13 +166,13 @@ function InvitationsCard({
     setBusy(token);
     try {
       if (action === "ACCEPT") {
-        await apiFetch(`/api/mentor/invitations/${encodeURIComponent(token)}`, {
+        await apiFetch(`/api/v1/mentor/invitations/${encodeURIComponent(token)}`, {
           method: "POST",
           body: JSON.stringify({ action }),
         });
         toast({ title: t("accepted") });
       } else {
-        await apiFetch(`/api/mentor/invitations/${encodeURIComponent(token)}`, {
+        await apiFetch(`/api/v1/mentor/invitations/${encodeURIComponent(token)}`, {
           method: "POST",
           body: JSON.stringify({ action }),
         });

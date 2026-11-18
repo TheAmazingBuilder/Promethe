@@ -69,7 +69,7 @@ export interface PublicScreenshotRef {
   id: string;
   label: string | null;
   caption: string | null;
-  /** /api/public/media/<token>/<id> - filled by the resolver. */
+  /** /api/v1/public/media/<token>/<id> - filled by the resolver. */
   url: string;
 }
 

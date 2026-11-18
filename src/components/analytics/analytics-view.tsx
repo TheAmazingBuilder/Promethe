@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Analytics view (v2 Phase 4) — GET /api/analytics (useAnalytics).
+ * Analytics view (v2 Phase 4) — GET /api/v1/analytics (useAnalytics).
  *
  * Layout: filters (period tabs + account select) → KPI grid → equity curve
  * with drawdown + R distribution → insights « ce qui marche / ce qui coûte »

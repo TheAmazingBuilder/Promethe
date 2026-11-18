@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * v2.5 Module 2 — chart data hooks (TanStack Query over /api/charts/*).
+ * v2.5 Module 2 — chart data hooks (TanStack Query over /api/v1/charts/*).
  * The heavy payload (builder trades) is cached per period/account; the pure
  * builder then recomputes charts client-side with zero extra requests.
  */
@@ -40,7 +40,7 @@ export function useBuilderData(filters: BuilderFilters) {
   const qs = params.toString();
   return useQuery({
     queryKey: ["charts", "data", filters.period, filters.account ?? "all"],
-    queryFn: async () => apiFetch<BuilderDataPayload>(`/api/charts/data?${qs}`),
+    queryFn: async () => apiFetch<BuilderDataPayload>(`/api/v1/charts/data?${qs}`),
     staleTime: 60 * 1000,
   });
 }
@@ -49,7 +49,7 @@ export function useSavedCharts() {
   return useQuery({
     queryKey: ["charts", "saved"],
     queryFn: async () =>
-      (await apiFetch<{ charts: SavedChartDTO[] }>("/api/charts/saved")).charts,
+      (await apiFetch<{ charts: SavedChartDTO[] }>("/api/v1/charts/saved")).charts,
     staleTime: 60 * 1000,
   });
 }
@@ -66,7 +66,7 @@ export function useCreateSavedChart() {
   return useMutation({
     mutationFn: async (input: SavedChartInput) =>
       (
-        await apiFetch<{ chart: SavedChartDTO }>("/api/charts/saved", {
+        await apiFetch<{ chart: SavedChartDTO }>("/api/v1/charts/saved", {
           method: "POST",
           body: JSON.stringify(input),
         })
@@ -80,7 +80,7 @@ export function useUpdateSavedChart() {
   return useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: SavedChartPatch }) =>
       (
-        await apiFetch<{ chart: SavedChartDTO }>(`/api/charts/saved/${id}`, {
+        await apiFetch<{ chart: SavedChartDTO }>(`/api/v1/charts/saved/${id}`, {
           method: "PATCH",
           body: JSON.stringify(patch),
         })
@@ -93,7 +93,7 @@ export function useDeleteSavedChart() {
   const invalidate = useInvalidateSavedCharts();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch(`/api/charts/saved/${id}`, { method: "DELETE" });
+      await apiFetch(`/api/v1/charts/saved/${id}`, { method: "DELETE" });
     },
     onSuccess: invalidate,
   });

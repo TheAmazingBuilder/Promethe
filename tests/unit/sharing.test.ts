@@ -213,7 +213,7 @@ describe("parseStoredSnapshot / toPublicPayload", () => {
     expect(payload.kind).toBe("TRADE");
     if (payload.kind === "TRADE") {
       expect(payload.screenshots[0].url).toBe(
-        "/api/public/media/RAWTOKEN_ABC123/shot1"
+        "/api/v1/public/media/RAWTOKEN_ABC123/shot1"
       );
       // Le JSON stocké ne contient PAS le jeton brut
       expect(json).not.toContain("RAWTOKEN_ABC123");

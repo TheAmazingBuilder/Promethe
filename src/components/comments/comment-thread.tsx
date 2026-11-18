@@ -78,7 +78,7 @@ export function CommentThread({
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["comments", tradeId],
-    queryFn: () => apiJson<CommentsPayloadDTO>(`/api/trades/${tradeId}/comments`),
+    queryFn: () => apiJson<CommentsPayloadDTO>(`/api/v1/trades/${tradeId}/comments`),
     retry: false,
   });
 
@@ -108,7 +108,7 @@ export function CommentThread({
     if (!text || !canComment) return;
     setSending(true);
     try {
-      await apiJson(`/api/trades/${tradeId}/comments`, {
+      await apiJson(`/api/v1/trades/${tradeId}/comments`, {
         method: "POST",
         body: JSON.stringify({ body: text, parentId: replyTo?.id ?? null }),
       });
@@ -355,7 +355,7 @@ function CommentItem({
     if (!text) return;
     setSaving(true);
     try {
-      await apiJson(`/api/trades/${tradeId}/comments/${comment.id}`, {
+      await apiJson(`/api/v1/trades/${tradeId}/comments/${comment.id}`, {
         method: "PATCH",
         body: JSON.stringify({ body: text }),
       });
@@ -374,7 +374,7 @@ function CommentItem({
 
   async function remove(): Promise<void> {
     try {
-      await apiJson(`/api/trades/${tradeId}/comments/${comment.id}`, {
+      await apiJson(`/api/v1/trades/${tradeId}/comments/${comment.id}`, {
         method: "DELETE",
       });
       await queryClient.invalidateQueries({ queryKey: ["comments", tradeId] });

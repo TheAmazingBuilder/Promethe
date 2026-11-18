@@ -112,20 +112,20 @@ export function BenchmarkView() {
   const analytics = useQuery({
     queryKey: ["analytics", "all", "all"],
     queryFn: async () =>
-      apiFetch<AnalyticsPayload>("/api/analytics?period=all"),
+      apiFetch<AnalyticsPayload>("/api/v1/analytics?period=all"),
     staleTime: 60 * 1000,
   });
   const benchmarks = useQuery({
     queryKey: ["charts", "benchmarks"],
     queryFn: async () =>
       (await apiFetch<{ benchmarks: BenchmarkProfileDTO[] }>(
-        "/api/charts/benchmarks"
+        "/api/v1/charts/benchmarks"
       )).benchmarks,
     staleTime: 60 * 1000,
   });
   const deleteBenchmark = useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch(`/api/charts/benchmarks/${id}`, { method: "DELETE" });
+      await apiFetch(`/api/v1/charts/benchmarks/${id}`, { method: "DELETE" });
     },
     onSuccess: () => {
       setSelectedId("default");
@@ -563,7 +563,7 @@ function CreateBenchmarkDialog({
               .filter((p) => /^\d{4}-\d{2}-\d{2}$/.test(p.date) && Number.isFinite(p.value))
           : undefined;
       const res = await apiFetch<{ benchmark: BenchmarkProfileDTO }>(
-        "/api/charts/benchmarks",
+        "/api/v1/charts/benchmarks",
         {
           method: "POST",
           body: JSON.stringify({

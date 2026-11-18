@@ -52,7 +52,7 @@ export function MentorTradeView({
     queryKey: ["mentor-trade", ownerId, tradeId],
     queryFn: () =>
       apiFetch<MentorTradePayload>(
-        `/api/mentor/${ownerId}/trades/${tradeId}`
+        `/api/v1/mentor/${ownerId}/trades/${tradeId}`
       ),
     retry: false,
   });

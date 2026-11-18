@@ -5,7 +5,7 @@
  *
  * Owns the time slice of UserDisplayPreference: extra timezones (max 3),
  * clock format, week start and the trading-day definition. The server row
- * is the source of truth (GET/PUT /api/display-preferences, partial
+ * is the source of truth (GET/PUT /api/v1/display-preferences, partial
  * patches — same pattern as the a11y and privacy providers). Before the
  * first load the defaults apply (MIDNIGHT_LOCAL = the previous behaviour),
  * so the journal/calendar "today" never blocks on the network and never
@@ -114,7 +114,7 @@ export function TimeProvider({ children }: { children: React.ReactNode }) {
     }
     let cancelled = false;
     apiFetch<{ preferences: Record<string, unknown> }>(
-      "/api/display-preferences"
+      "/api/v1/display-preferences"
     )
       .then((payload) => {
         if (cancelled) return;
@@ -143,7 +143,7 @@ export function TimeProvider({ children }: { children: React.ReactNode }) {
     setPreferences(next);
     try {
       const payload = await apiFetch<{ preferences: Record<string, unknown> }>(
-        "/api/display-preferences",
+        "/api/v1/display-preferences",
         { method: "PUT", body: JSON.stringify(patch) }
       );
       setPreferences(normalizeTimePreferences(payload.preferences));

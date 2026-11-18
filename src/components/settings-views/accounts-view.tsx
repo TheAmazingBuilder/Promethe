@@ -5,7 +5,7 @@
  * challenge fields (daily loss / total drawdown %, profit target,
  * STATIC | TRAILING, start date). Accounts with trades are never deleted
  * (409 TRADES_ON_ACCOUNT) — deactivate instead.
- * Data: GET/POST /api/accounts · PATCH/DELETE /api/accounts/[id].
+ * Data: GET/POST /api/v1/accounts · PATCH/DELETE /api/v1/accounts/[id].
  */
 import * as React from "react";
 import { Pencil, Plus, Trash2, Wallet } from "lucide-react";

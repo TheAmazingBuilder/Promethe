@@ -35,7 +35,7 @@ export function SessionProvider({
 
   const logout = React.useCallback(async () => {
     try {
-      await apiFetch("/api/auth/logout", { method: "POST" });
+      await apiFetch("/api/v1/auth/logout", { method: "POST" });
     } catch {
       // The local session is dropped regardless — cookie cleared server-side
       // best-effort; worst case it expires naturally.

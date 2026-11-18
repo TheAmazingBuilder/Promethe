@@ -1,5 +1,5 @@
 /**
- * v2.5 Module 5 - trading tools: zod schemas for the /api/* tools routes.
+ * v2.5 Module 5 - trading tools: zod schemas for the /api/v1/* tools routes.
  */
 import { z } from "zod";
 

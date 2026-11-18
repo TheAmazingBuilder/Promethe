@@ -128,7 +128,7 @@ export function IntegrationsView() {
 
   const load = React.useCallback(async () => {
     try {
-      const overview = await apiFetch<Overview>("/api/integrations");
+      const overview = await apiFetch<Overview>("/api/v1/integrations");
       setData(overview);
     } catch (error) {
       const err = error instanceof ApiClientError ? error : null;
@@ -165,7 +165,7 @@ export function IntegrationsView() {
     setSaving(true);
     try {
       if (type === "DISCORD_WEBHOOK") {
-        await apiFetch("/api/integrations", {
+        await apiFetch("/api/v1/integrations", {
           method: "POST",
           body: JSON.stringify({
             type,
@@ -176,7 +176,7 @@ export function IntegrationsView() {
         setDiscordLabel("");
         setWebhookUrl("");
       } else {
-        await apiFetch("/api/integrations", {
+        await apiFetch("/api/v1/integrations", {
           method: "POST",
           body: JSON.stringify({
             type,
@@ -205,7 +205,7 @@ export function IntegrationsView() {
     setDetectTried(false);
     try {
       const result = await apiFetch<{ chats: TelegramChat[] }>(
-        "/api/integrations/telegram-chats",
+        "/api/v1/integrations/telegram-chats",
         {
           method: "POST",
           body: JSON.stringify({ token: botToken.trim() }),
@@ -225,7 +225,7 @@ export function IntegrationsView() {
     patch: Record<string, unknown>
   ) => {
     try {
-      await apiFetch(`/api/integrations/${id}`, {
+      await apiFetch(`/api/v1/integrations/${id}`, {
         method: "PATCH",
         body: JSON.stringify(patch),
       });
@@ -239,7 +239,7 @@ export function IntegrationsView() {
   const testEndpoint = async (id: string) => {
     setTestingId(id);
     try {
-      await apiFetch(`/api/integrations/${id}/test`, { method: "POST" });
+      await apiFetch(`/api/v1/integrations/${id}/test`, { method: "POST" });
       toast({ title: t("testSent") });
       await load();
     } catch {
@@ -251,7 +251,7 @@ export function IntegrationsView() {
 
   const deleteEndpoint = async (id: string) => {
     try {
-      await apiFetch(`/api/integrations/${id}`, { method: "DELETE" });
+      await apiFetch(`/api/v1/integrations/${id}`, { method: "DELETE" });
       setConfirmDeleteId(null);
       toast({ title: t("deleted") });
       await load();
@@ -266,7 +266,7 @@ export function IntegrationsView() {
     patch: Record<string, unknown>
   ) => {
     try {
-      await apiFetch(`/api/integrations/${endpointId}/subscriptions`, {
+      await apiFetch(`/api/v1/integrations/${endpointId}/subscriptions`, {
         method: "POST",
         body: JSON.stringify({ eventType, ...patch }),
       });

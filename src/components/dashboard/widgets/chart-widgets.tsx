@@ -4,8 +4,8 @@
  * v2.5 Module 2 Phase 7 — chart dashboard widgets (spec §5).
  *
  * Three SELF-FETCHING widgets (hasLoader: false — the batched dashboard
- * payload is ignored): they pull their data through /api/charts/* and
- * /api/calendar/year with TanStack Query and reuse the Module 2 chart
+ * payload is ignored): they pull their data through /api/v1/charts/* and
+ * /api/v1/calendar/year with TanStack Query and reuse the Module 2 chart
  * engines/components wholesale (buildChart + ChartPreview, buildMatrix +
  * HeatmapMatrix, buildYearGrid + compact SVG).
  *
@@ -316,7 +316,7 @@ export function YearCalendarWidget() {
   const year = React.useMemo(() => new Date().getFullYear(), []);
   const data = useQuery({
     queryKey: ["calendar", "year", year],
-    queryFn: async () => apiFetch<YearDaysPayload>(`/api/calendar/year?year=${year}`),
+    queryFn: async () => apiFetch<YearDaysPayload>(`/api/v1/calendar/year?year=${year}`),
     staleTime: 5 * 60 * 1000,
   });
 

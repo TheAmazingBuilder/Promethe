@@ -255,8 +255,8 @@ export function ReconciliationView() {
     try {
       const query = accountFilter !== "ALL" ? `?accountId=${accountFilter}` : "";
       const [candidateResult, logResult] = await Promise.all([
-        apiFetch<{ candidates: CandidateDTO[] }>(`/api/reconciliation${query}`),
-        apiFetch<{ logs: MergeLogDTO[] }>("/api/reconciliation/undo"),
+        apiFetch<{ candidates: CandidateDTO[] }>(`/api/v1/reconciliation${query}`),
+        apiFetch<{ logs: MergeLogDTO[] }>("/api/v1/reconciliation/undo"),
       ]);
       setCandidates(candidateResult.candidates);
       setMergeLogs(logResult.logs);
@@ -274,7 +274,7 @@ export function ReconciliationView() {
   const onAction = async (id: string, action: "MERGE" | "REJECT" | "KEEP_SEPARATE") => {
     setBusyId(id);
     try {
-      await apiFetch(`/api/reconciliation/${id}/resolve`, {
+      await apiFetch(`/api/v1/reconciliation/${id}/resolve`, {
         method: "POST",
         body: JSON.stringify({ action }),
       });
@@ -299,7 +299,7 @@ export function ReconciliationView() {
   const onBulkMerge = async () => {
     setBulkBusy(true);
     try {
-      const result = await apiFetch<{ merged: number }>("/api/reconciliation/bulk-merge", {
+      const result = await apiFetch<{ merged: number }>("/api/v1/reconciliation/bulk-merge", {
         method: "POST",
       });
       toast({ title: t("toast.bulkMerged", { n: result.merged }) });
@@ -315,7 +315,7 @@ export function ReconciliationView() {
   const onUndo = async (mergeLogId: string) => {
     setBusyId(mergeLogId);
     try {
-      await apiFetch("/api/reconciliation/undo", {
+      await apiFetch("/api/v1/reconciliation/undo", {
         method: "POST",
         body: JSON.stringify({ mergeLogId }),
       });

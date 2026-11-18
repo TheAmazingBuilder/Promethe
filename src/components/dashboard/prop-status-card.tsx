@@ -3,7 +3,7 @@
 /**
  * PROP breach-risk widget (v1 phase 5) — daily loss / total drawdown limits
  * with progress bars, profit target progress and current equity. Hidden when
- * the user has no PROP account. Data: GET /api/prop-status.
+ * the user has no PROP account. Data: GET /api/v1/prop-status.
  */
 import { AlertTriangle, CheckCircle2, ShieldAlert, Target } from "lucide-react";
 import { useTranslations } from "next-intl";

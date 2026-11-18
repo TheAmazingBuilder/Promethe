@@ -4,7 +4,7 @@
  * Registers the new charts as dashboard widgets through the Module 1
  * extension point registerWidget() — the dashboard core is untouched.
  * All three are SELF-FETCHING (hasLoader: false): they pull their data
- * through the /api/charts/* endpoints directly.
+ * through the /api/v1/charts/* endpoints directly.
  *
  * Imported for its side effects by the widget catalog, the widget
  * renderer, the dashboards view, the server-side dashboard validation

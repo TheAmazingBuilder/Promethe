@@ -238,7 +238,7 @@ export function toTradeDetail(t: TradeDetailRow): TradeDetailDTO {
       label: sc.label,
       caption: sc.caption,
       createdAt: sc.createdAt.toISOString(),
-      url: `/api/uploads/${sc.id}`,
+      url: `/api/v1/uploads/${sc.id}`,
     })),
     executions: t.executions.map((e) => ({
       id: e.id,

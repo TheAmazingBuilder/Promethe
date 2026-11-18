@@ -257,7 +257,7 @@ function LoginForm() {
 
     setLoading(true);
     try {
-      const payload = await apiFetch<SessionPayload>("/api/auth/login", {
+      const payload = await apiFetch<SessionPayload>("/api/v1/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
@@ -368,7 +368,7 @@ function SignupForm() {
 
     setLoading(true);
     try {
-      const payload = await apiFetch<SessionPayload>("/api/auth/signup", {
+      const payload = await apiFetch<SessionPayload>("/api/v1/auth/signup", {
         method: "POST",
         body: JSON.stringify({ ...parsed.data, locale }),
       });

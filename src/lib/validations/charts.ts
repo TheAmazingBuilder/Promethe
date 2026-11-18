@@ -1,7 +1,7 @@
 /**
  * v2.5 Module 2 — chart domain Zod schemas (single source of truth).
  *
- * Shared by the chart-builder UI, the /api/charts/* routes and the pure
+ * Shared by the chart-builder UI, the /api/v1/charts/* routes and the pure
  * engines in /src/lib/charts/*. Client-safe: zod only. Conventions follow
  * the trade domain: decimals travel as STRINGS, dates as ISO strings,
  * SQLite has no enums so value sets live here as z.enum over the lib

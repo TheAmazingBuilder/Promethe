@@ -81,7 +81,7 @@ export function YearCalendar({
 
   const data = useQuery({
     queryKey: ["calendar", "year", year],
-    queryFn: async () => apiFetch<YearDaysPayload>(`/api/calendar/year?year=${year}`),
+    queryFn: async () => apiFetch<YearDaysPayload>(`/api/v1/calendar/year?year=${year}`),
     staleTime: 5 * 60 * 1000,
   });
 

@@ -5,7 +5,7 @@
  * computeTraderScore (0–100, four pillars) on the dashboard.
  *
  * No new calculation: the score, its four pillars and the monthly
- * history come straight from GET /api/analytics/advanced, the same
+ * history come straight from GET /api/v1/analytics/advanced, the same
  * payload as /analytics/quality. No closed trades → an honest empty
  * state, never a placeholder score. Self-fetching (hasLoader: false).
  */

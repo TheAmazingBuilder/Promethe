@@ -3,7 +3,7 @@
 /**
  * Calendar view (v1 phase 5) — month grid of daily net P&L with journal
  * markers, month summary and day streaks. Clicking a day deep-links to its
- * journal entry (/journal/{date}). Data: GET /api/calendar.
+ * journal entry (/journal/{date}). Data: GET /api/v1/calendar.
  */
 import * as React from "react";
 import { BookOpen, ChevronLeft, ChevronRight } from "lucide-react";

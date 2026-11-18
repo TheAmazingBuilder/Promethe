@@ -81,7 +81,7 @@ export async function strategyStats(
     color: s.color,
     status: s.status,
     stats: computeTradeStats(byId.get(s.id) ?? [], { dayOf }),
-    // Playbook extended fields default here; /api/playbook/* fills them in.
+    // Playbook extended fields default here; /api/v1/playbook/* fills them in.
     sparklineR: [],
     expectancyR20: null,
     trades20: 0,

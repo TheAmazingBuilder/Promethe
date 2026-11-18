@@ -4,7 +4,7 @@
  * v3 Phase 6 — Legal pages: /legal/terms, /legal/privacy,
  * /legal/cookies. Public (rendered even when logged out — AppRoot routes
  * here instead of the auth screen), i18n FR/EN, content parameterised by the
- * LEGAL_* server values (public /api/legal endpoint, no personal data).
+ * LEGAL_* server values (public /api/v1/legal endpoint, no personal data).
  */
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
@@ -74,7 +74,7 @@ export function LegalView({ page, standalone = false }: { page: LegalPage; stand
   const t = useTranslations("legal");
   const identity = useQuery({
     queryKey: ["legal", "identity"],
-    queryFn: () => apiFetch<LegalIdentity>("/api/legal"),
+    queryFn: () => apiFetch<LegalIdentity>("/api/v1/legal"),
     staleTime: 60 * 60 * 1000,
   });
 

@@ -44,7 +44,7 @@ export function InvitationView({ token }: { token: string }) {
     queryKey: ["invitation-preview", token],
     queryFn: () =>
       apiFetch<{ invitation: ReceivedInvitationDTO }>(
-        `/api/mentor/invitations/${encodeURIComponent(token)}`
+        `/api/v1/mentor/invitations/${encodeURIComponent(token)}`
       ),
     retry: false,
     enabled: done === null,
@@ -55,7 +55,7 @@ export function InvitationView({ token }: { token: string }) {
   async function act(action: "ACCEPT" | "DECLINE"): Promise<void> {
     setBusy(action);
     try {
-      await apiFetch(`/api/mentor/invitations/${encodeURIComponent(token)}`, {
+      await apiFetch(`/api/v1/mentor/invitations/${encodeURIComponent(token)}`, {
         method: "POST",
         body: JSON.stringify({ action }),
       });

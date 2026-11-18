@@ -4,8 +4,8 @@
  * Playbook view (Phase 2) — the written trading plan.
  *
  * Seven tabs persisted in ?tab= (overview, strategies, setups, rules,
- * checklists, performance, templates). Data: /api/playbook/*, /api/setups/*,
- * /api/strategies/stats. Full strategy editing stays in /strategies; this
+ * checklists, performance, templates). Data: /api/v1/playbook/*, /api/v1/setups/*,
+ * /api/v1/strategies/stats. Full strategy editing stays in /strategies; this
  * page focuses on health, versions, duplication, setups, rules and
  * compliance.
  */

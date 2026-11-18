@@ -3,7 +3,7 @@
 /**
  * Instruments view (v1 phase 7) — the 20 seeded presets (read-only, with the
  * XAUUSD pip convention note) + the user's custom instruments (full CRUD,
- * pipSize editable). Data: GET/POST /api/instruments · PATCH/DELETE [id].
+ * pipSize editable). Data: GET/POST /api/v1/instruments · PATCH/DELETE [id].
  */
 import * as React from "react";
 import { Coins, Info, Pencil, Plus, Trash2 } from "lucide-react";

@@ -80,18 +80,18 @@ export function MentorsView() {
 
   const overview = useQuery({
     queryKey: ["mentors-overview"],
-    queryFn: () => apiFetch<MentorsOverview>("/api/mentors"),
+    queryFn: () => apiFetch<MentorsOverview>("/api/v1/mentors"),
   });
 
   const accounts = useQuery({
     queryKey: ["accounts"],
     queryFn: () =>
-      apiFetch<{ accounts: RefOption[] }>("/api/accounts"),
+      apiFetch<{ accounts: RefOption[] }>("/api/v1/accounts"),
   });
   const strategies = useQuery({
     queryKey: ["strategies"],
     queryFn: () =>
-      apiFetch<{ strategies: RefOption[] }>("/api/strategies"),
+      apiFetch<{ strategies: RefOption[] }>("/api/v1/strategies"),
   });
 
   function refresh(): void {
@@ -175,7 +175,7 @@ function HandleCard({
   async function save(): Promise<void> {
     setSaving(true);
     try {
-      const updated = await apiFetch<SessionPayload>("/api/profile/handle", {
+      const updated = await apiFetch<SessionPayload>("/api/v1/profile/handle", {
         method: "PUT",
         body: JSON.stringify({
           handle: handle.trim().toLowerCase(),
@@ -275,7 +275,7 @@ function InviteCard({
   async function submit(): Promise<void> {
     setSending(true);
     try {
-      const result = await apiFetch<{ inviteUrl: string }>("/api/mentors", {
+      const result = await apiFetch<{ inviteUrl: string }>("/api/v1/mentors", {
         method: "POST",
         body: JSON.stringify({ email: email.trim().toLowerCase(), permissions }),
       });
@@ -380,7 +380,7 @@ function PendingInvitationsCard({
   async function revoke(id: string): Promise<void> {
     setBusy(id);
     try {
-      await apiFetch(`/api/mentors/invitations/${id}`, { method: "DELETE" });
+      await apiFetch(`/api/v1/mentors/invitations/${id}`, { method: "DELETE" });
       onChanged();
     } catch (error) {
       toast({
@@ -564,7 +564,7 @@ function AccessActions({
   async function patch(body: Record<string, unknown>): Promise<void> {
     setBusy(true);
     try {
-      await apiFetch(`/api/mentors/${access.id}`, {
+      await apiFetch(`/api/v1/mentors/${access.id}`, {
         method: "PATCH",
         body: JSON.stringify(body),
       });
@@ -584,7 +584,7 @@ function AccessActions({
   async function revoke(): Promise<void> {
     setBusy(true);
     try {
-      await apiFetch(`/api/mentors/${access.id}`, { method: "DELETE" });
+      await apiFetch(`/api/v1/mentors/${access.id}`, { method: "DELETE" });
       onChanged();
     } catch (error) {
       toast({
@@ -656,7 +656,7 @@ function EditAccessDialog({
   async function save(): Promise<void> {
     setSaving(true);
     try {
-      await apiFetch(`/api/mentors/${access.id}`, {
+      await apiFetch(`/api/v1/mentors/${access.id}`, {
         method: "PATCH",
         body: JSON.stringify({ permissions }),
       });

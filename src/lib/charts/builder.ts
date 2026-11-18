@@ -946,7 +946,7 @@ export function chartResultToCsv(result: ChartResult): string {
 // ── Drill-down filter mapping ────────────────────────────────────────────────
 
 /**
- * Map a drill-down descriptor to /api/trades list query filters. Dimensions
+ * Map a drill-down descriptor to /api/v1/trades list query filters. Dimensions
  * without a server-side filter (buckets, tags…) return {} — the UI shows a
  * notice that the drill-down opened unfiltered for those.
  */

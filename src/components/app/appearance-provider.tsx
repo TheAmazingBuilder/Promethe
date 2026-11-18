@@ -148,7 +148,7 @@ export function AppearanceProvider({ children }: { children: React.ReactNode }) 
     }
     let cancelled = false;
     setIsLoading(true);
-    apiFetch<{ appearance: AppearanceDTO }>("/api/appearance")
+    apiFetch<{ appearance: AppearanceDTO }>("/api/v1/appearance")
       .then((payload) => {
         if (!cancelled) setAppearanceState(payload.appearance);
       })
@@ -174,14 +174,14 @@ export function AppearanceProvider({ children }: { children: React.ReactNode }) 
       setAppearanceState((previous) =>
         patchAppearance(previous ?? DEFAULT_APPEARANCE, input)
       );
-      apiFetch<{ appearance: AppearanceDTO }>("/api/appearance", {
+      apiFetch<{ appearance: AppearanceDTO }>("/api/v1/appearance", {
         method: "PUT",
         body: JSON.stringify(input),
       })
         .then((payload) => setAppearanceState(payload.appearance))
         .catch(() => {
           // Roll back to the server truth on failure.
-          apiFetch<{ appearance: AppearanceDTO }>("/api/appearance")
+          apiFetch<{ appearance: AppearanceDTO }>("/api/v1/appearance")
             .then((payload) => setAppearanceState(payload.appearance))
             .catch(() => undefined);
         });

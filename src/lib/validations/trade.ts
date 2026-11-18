@@ -280,7 +280,7 @@ export const strategyInputSchema = z.object({
   checklistItems: z.array(checklistItemSchema).max(60).optional(),
 });
 
-/** POST /api/strategies/[id]/versions - snapshot the current definition. */
+/** POST /api/v1/strategies/[id]/versions - snapshot the current definition. */
 export const strategyVersionSchema = z.object({
   note: z.string().trim().max(500).nullish(),
 });

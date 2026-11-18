@@ -738,7 +738,7 @@ export function TradesView() {
         // includeDrafts/sort/order already match the query param contract.
         params.set(key, String(value));
       }
-      const res = await fetch(`/api/trades/export?${params.toString()}`, {
+      const res = await fetch(`/api/v1/trades/export?${params.toString()}`, {
         credentials: "same-origin",
       });
       if (!res.ok) {

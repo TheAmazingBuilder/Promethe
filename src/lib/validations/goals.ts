@@ -57,7 +57,7 @@ export type GoalPatch = z.infer<typeof goalPatchSchema>;
 
 // ── Queries ─────────────────────────────────────────────────────────────────
 
-/** GET /api/rules/violations?days=30 - recent violations window. */
+/** GET /api/v1/rules/violations?days=30 - recent violations window. */
 export const violationsQuerySchema = z.object({
   days: z.coerce.number().int().min(1).max(365).default(30),
 });
