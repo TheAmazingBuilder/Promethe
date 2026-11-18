@@ -683,6 +683,23 @@ export interface PaginatedDTO<T> {
   totalPages: number;
 }
 
+/**
+ * Persisted anomaly flag for one trade (a TradeAnomaly row, written by the
+ * advanced analytics computation). Served joined to the trades list so the
+ * badge column needs no full analytics recalculation per visit.
+ */
+export interface TradeAnomalyFlagDTO {
+  tradeId: string;
+  kind: string;
+  severity: string;
+  zScore: number;
+}
+
+/** Trades list payload: page rows + persisted anomaly flags for those rows. */
+export type TradesListPayload = PaginatedDTO<TradeListItemDTO> & {
+  anomalies: TradeAnomalyFlagDTO[];
+};
+
 // ── Dashboard payload (client-safe mirrors of server aggregates) ────────────
 
 import type { TradeStats } from "@/lib/analytics/engine";

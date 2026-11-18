@@ -109,7 +109,6 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import {
   useAccounts,
-  useAdvancedAnalytics,
   useCreateSavedView,
   useDeleteSavedView,
   useDeleteTrade,
@@ -298,15 +297,17 @@ export function TradesView() {
   }, [drillApplied]);
 
   const trades = useTradesList(query);
-  // v2.5 M6 — anomaly flags (all-time, cached 60 s) for the badge column.
+  // Phase 2 perf — anomaly flags come from the persisted TradeAnomaly rows
+  // joined to this list page (no full analytics recalculation per visit).
+  // Flags only exist once an advanced analytics computation has run; the
+  // /analytics/anomalies tab still computes them live.
   const tAnomalies = useTranslations("analytics.advanced.anomalies");
-  const { data: advancedData } = useAdvancedAnalytics({ period: "all" });
   const anomalyByTrade = React.useMemo(() => {
     const map = new Map<
       string,
       { severity: string; kind: string; zScore: number }
     >();
-    for (const a of advancedData?.advanced.anomalies.anomalies ?? []) {
+    for (const a of trades.data?.anomalies ?? []) {
       map.set(a.tradeId, {
         severity: a.severity,
         kind: a.kind,
@@ -314,7 +315,7 @@ export function TradesView() {
       });
     }
     return map;
-  }, [advancedData]);
+  }, [trades.data]);
   const accounts = useAccounts();
   const strategies = useStrategies();
   const tags = useTags();

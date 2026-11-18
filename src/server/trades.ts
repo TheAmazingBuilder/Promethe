@@ -33,10 +33,11 @@ import type {
   TradePatch,
 } from "@/lib/validations/trade";
 import type {
-  PaginatedDTO,
   TagDTO,
+  TradeAnomalyFlagDTO,
   TradeDetailDTO,
   TradeListItemDTO,
+  TradesListPayload,
 } from "@/lib/trading/dto";
 import { evaluateTradeViolations } from "@/server/rules";
 import { checkDrawdownAlerts } from "@/server/integrations/delivery";
@@ -538,7 +539,7 @@ export function tradeListWhere(
 export async function listTrades(
   userId: string,
   query: TradeListQuery
-): Promise<PaginatedDTO<TradeListItemDTO>> {
+): Promise<TradesListPayload> {
   const where = tradeListWhere(userId, query);
 
   // v2.5 M2 drill-down: local-hour / local-weekday filters are timezone-aware
@@ -593,6 +594,10 @@ export async function listTrades(
       pageSize: query.pageSize,
       total,
       totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
+      anomalies: await listAnomalyFlags(
+        userId,
+        pageRows.map((t) => t.id)
+      ),
     };
   }
 
@@ -618,7 +623,36 @@ export async function listTrades(
     pageSize: query.pageSize,
     total,
     totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
+    anomalies: await listAnomalyFlags(
+      userId,
+      rows.map((t) => t.id)
+    ),
   };
+}
+
+/**
+ * Persisted anomaly flags for the given trades (TradeAnomaly rows written
+ * by the advanced analytics computation). One indexed lookup, no
+ * recalculation — the /trades badge column reads these rows instead of
+ * triggering a full analytics run. Empty until an advanced computation
+ * has run at least once; the /analytics/anomalies tab still computes
+ * live and refreshes the rows.
+ */
+async function listAnomalyFlags(
+  userId: string,
+  tradeIds: string[]
+): Promise<TradeAnomalyFlagDTO[]> {
+  if (tradeIds.length === 0) return [];
+  const rows = await db.tradeAnomaly.findMany({
+    where: { userId, tradeId: { in: tradeIds } },
+    select: { tradeId: true, kind: true, severity: true, zScore: true },
+  });
+  return rows.map((r) => ({
+    tradeId: r.tradeId,
+    kind: r.kind,
+    severity: r.severity,
+    zScore: r.zScore.toNumber(),
+  }));
 }
 
 export async function getTradeDetail(

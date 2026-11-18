@@ -14,13 +14,11 @@ import {
 import { apiFetch } from "@/lib/api-client";
 import type {
   AccountDTO,
-  PaginatedDTO,
   SavedViewDTO,
   StrategyDTO,
   TagDTO,
   TemplateDTO,
   TradeDetailDTO,
-  TradeListItemDTO,
   DashboardPayload,
   AnalyticsPayload,
   AdvancedAnalyticsPayload,
@@ -28,6 +26,7 @@ import type {
   WeeklyPlanPayload,
   PerformanceReportPayload,
   WhenYouTradePayload,
+  TradesListPayload,
 } from "@/lib/trading/dto";
 import type {
   PlanAction,
@@ -208,7 +207,7 @@ export function useTradesList(query: TradeListQuery) {
           params.set(key, String(value));
         }
       }
-      return apiFetch<PaginatedDTO<TradeListItemDTO>>(
+      return apiFetch<TradesListPayload>(
         `/api/v1/trades?${params.toString()}`
       );
     },
