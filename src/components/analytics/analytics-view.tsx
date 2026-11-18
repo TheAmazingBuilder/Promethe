@@ -559,6 +559,7 @@ export function AnalyticsView() {
               "sequences",
               "seasonality",
               "anomalies",
+              "weekly-plan",
             ] as const
           ).map((tab) => (
             <Button

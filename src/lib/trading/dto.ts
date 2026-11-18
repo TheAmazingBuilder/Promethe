@@ -744,6 +744,22 @@ export interface AdvancedAnalyticsPayload {
   advanced: AdvancedAnalytics;
 }
 
+// ── Weekly improvement plan (MRT wave 1) ───────────────────────────────────
+
+import type { WeeklyPlan } from "@/lib/analytics/weekly-plan";
+
+export interface WeeklyPlanPayload {
+  /** Monday of the week the plan covers, YYYY-MM-DD. */
+  weekStart: string;
+  /** Sunday of that week, YYYY-MM-DD. */
+  weekEnd: string;
+  /** Active account filter (null = all accounts). */
+  accountId: string | null;
+  currency: string;
+  timezone: string;
+  plan: WeeklyPlan;
+}
+
 // ── Journal & calendar (v1 Phase 5) ─────────────────────────────────────────
 
 export interface JournalEntryDTO {

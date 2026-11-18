@@ -44,6 +44,7 @@ const TRADE_INCLUDE = {
   strategy: true,
   tags: { include: { tag: true } },
   ruleViolations: { select: { ruleId: true } },
+  review: { select: { playbookMatch: true } },
 } as const;
 
 type Row = Prisma.TradeGetPayload<{ include: typeof TRADE_INCLUDE }>;
@@ -77,7 +78,7 @@ interface LoadedTrades {
 }
 
 /** Closed trades mapped to the advanced engine shape (no persistence). */
-async function loadAdvancedTrades(
+export async function loadAdvancedTrades(
   userId: string,
   accountId?: string,
   period?: AnalyticsQuery["period"]
@@ -183,6 +184,7 @@ function toAdvancedTrade(
     initialStopLoss: t.initialStopLoss?.toString() ?? null,
     tags: t.tags.map((tt) => tt.tag.name),
     violationCount: t.ruleViolations.length,
+    playbookMatch: t.review?.playbookMatch ?? null,
     riskPercent: t.riskPercent?.toString() ?? null,
     setupQualityRating: t.setupQualityRating,
     localYear: entryLocal != null ? Number(entryLocal.date.slice(0, 4)) : null,

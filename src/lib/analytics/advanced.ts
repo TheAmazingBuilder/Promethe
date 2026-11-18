@@ -71,6 +71,9 @@ export interface AdvancedTrade extends AnalyticsTrade {
   tags: string[];
   /** Rule violations attached to the trade. */
   violationCount: number;
+  /** Declared playbook match at review time (MATCHED | PARTIAL |
+   * OFF_PLAYBOOK), null when the trade was never reviewed. */
+  playbookMatch?: string | null;
   riskPercent: string | null;
   setupQualityRating: number | null;
   /** Local calendar parts of the ENTRY (user timezone, server-computed). */

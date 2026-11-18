@@ -67,6 +67,7 @@ export const VIEW_IDS = [
   "analytics-sequences",
   "analytics-seasonality",
   "analytics-anomalies",
+  "analytics-weekly-plan",
   // v2.5 Module 4 — productivity & ergonomics
   "trash",
   "search",
@@ -190,6 +191,7 @@ const ANALYTICS_SUB_VIEW: Record<string, ViewId> = {
   sequences: "analytics-sequences",
   seasonality: "analytics-seasonality",
   anomalies: "analytics-anomalies",
+  "weekly-plan": "analytics-weekly-plan",
 };
 
 /** First segments that belong to the app (English or legacy French). */
@@ -408,6 +410,8 @@ export function routeToPath(route: AppRoute): string {
       return withSearch("/analytics/seasonality", query);
     case "analytics-anomalies":
       return withSearch("/analytics/anomalies", query);
+    case "analytics-weekly-plan":
+      return withSearch("/analytics/weekly-plan", query);
     case "calendar":
       return withSearch("/calendar", query);
     case "journal":

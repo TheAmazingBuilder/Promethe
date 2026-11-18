@@ -71,8 +71,20 @@ export {
   magicMappingSchema,
 } from "./sync";
 
-export { analyticsQuerySchema, ANALYTICS_PERIODS } from "./analytics";
-export type { AnalyticsPeriod, AnalyticsQuery } from "./analytics";
+export {
+  analyticsQuerySchema,
+  ANALYTICS_PERIODS,
+  weeklyPlanQuerySchema,
+  weeklyPlanToggleSchema,
+  WEEKLY_PLAN_RULES,
+} from "./analytics";
+export type {
+  AnalyticsPeriod,
+  AnalyticsQuery,
+  WeeklyPlanQuery,
+  WeeklyPlanRule,
+  WeeklyPlanToggle,
+} from "./analytics";
 
 export {
   sharePolicySchema,

@@ -24,7 +24,15 @@ import type {
   DashboardPayload,
   AnalyticsPayload,
   AdvancedAnalyticsPayload,
+  WeeklyPlanPayload,
 } from "@/lib/trading/dto";
+import type {
+  PlanAction,
+} from "@/lib/analytics/weekly-plan";
+import type {
+  AnalyticsPeriod,
+  WeeklyPlanRule,
+} from "@/lib/validations/analytics";
 import type {
   CloseTradeInput,
   TemplateInput,
@@ -33,7 +41,6 @@ import type {
   TradeListQuery,
   TradePatch,
 } from "@/lib/validations/trade";
-import type { AnalyticsPeriod } from "@/lib/validations/analytics";
 
 // ── Reference data ───────────────────────────────────────────────────────────
 
@@ -308,6 +315,40 @@ export function useAdvancedAnalytics(filters: AnalyticsFilters) {
     queryFn: async () =>
       apiFetch<AdvancedAnalyticsPayload>(`/api/v1/analytics/advanced?${qs}`),
     staleTime: 60 * 1000,
+  });
+}
+
+// ── Weekly improvement plan (MRT wave 1) ───────────────────────────────────
+
+export function useWeeklyPlan(accountId?: string) {
+  const params = new URLSearchParams();
+  if (accountId) params.set("account", accountId);
+  const qs = params.toString();
+  return useQuery({
+    queryKey: ["weekly-plan", accountId ?? "all"],
+    queryFn: async () =>
+      apiFetch<WeeklyPlanPayload>(
+        `/api/v1/weekly-plan${qs ? `?${qs}` : ""}`
+      ),
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useToggleWeeklyPlanAction(accountId?: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ rule, done }: { rule: WeeklyPlanRule; done: boolean }) => {
+      const params = new URLSearchParams();
+      if (accountId) params.set("account", accountId);
+      const qs = params.toString();
+      return apiFetch<{ action: PlanAction }>(
+        `/api/v1/weekly-plan${qs ? `?${qs}` : ""}`,
+        { method: "POST", body: JSON.stringify({ rule, done }) }
+      );
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["weekly-plan"] });
+    },
   });
 }
 

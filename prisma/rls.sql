@@ -1259,6 +1259,15 @@ CREATE POLICY trade_anomalies_owner ON trade_anomalies
   USING (user_id = auth.uid())
   WITH CHECK (user_id = auth.uid());
 
+-- ── Weekly improvement plan (MRT wave 1) ────────────────────────────────────
+
+ALTER TABLE weekly_plan_actions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS weekly_plan_actions_owner ON weekly_plan_actions;
+CREATE POLICY weekly_plan_actions_owner ON weekly_plan_actions
+  FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
 -- ═════════════════════════════════════════════════════════════════════════════
 -- v2.5 Module 9 — Discord / Telegram integrations (Prompt 9)
 -- ═════════════════════════════════════════════════════════════════════════════

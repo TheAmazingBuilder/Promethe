@@ -36,7 +36,8 @@ export type AdvancedTabId =
   | "setups"
   | "sequences"
   | "seasonality"
-  | "anomalies";
+  | "anomalies"
+  | "weekly-plan";
 
 export const ADVANCED_TABS: Array<{ id: AdvancedTabId; path: string }> = [
   { id: "lifecycle", path: "/analytics/lifecycle" },
@@ -46,6 +47,7 @@ export const ADVANCED_TABS: Array<{ id: AdvancedTabId; path: string }> = [
   { id: "sequences", path: "/analytics/sequences" },
   { id: "seasonality", path: "/analytics/seasonality" },
   { id: "anomalies", path: "/analytics/anomalies" },
+  { id: "weekly-plan", path: "/analytics/weekly-plan" },
 ];
 
 const PERIODS: AnalyticsPeriod[] = ["30d", "90d", "ytd", "all"];
@@ -64,6 +66,8 @@ interface AdvancedShellProps {
   /** True when the period holds zero closed trades. */
   empty: boolean;
   sampleCount: number | null;
+  /** Hide the period switcher (the weekly plan always covers 30 days). */
+  hidePeriod?: boolean;
   children: React.ReactNode;
 }
 
@@ -80,6 +84,7 @@ export function AdvancedShell({
   onRetry,
   empty,
   sampleCount,
+  hidePeriod = false,
   children,
 }: AdvancedShellProps) {
   const { session } = useSession();
@@ -116,31 +121,33 @@ export function AdvancedShell({
           }
         />
         <div className="flex flex-wrap items-center gap-2">
-          <ToggleGroup
-            type="single"
-            variant="outline"
-            size="sm"
-            className="flex-wrap"
-            value={period}
-            onValueChange={(v) => {
-              if (v && PERIODS.includes(v as AnalyticsPeriod)) {
-                onPeriodChange(v as AnalyticsPeriod);
-              }
-            }}
-          >
-            <ToggleGroupItem value="30d">
-              {tAnalytics("period30d")}
-            </ToggleGroupItem>
-            <ToggleGroupItem value="90d">
-              {tAnalytics("period90d")}
-            </ToggleGroupItem>
-            <ToggleGroupItem value="ytd">
-              {tAnalytics("periodYtd")}
-            </ToggleGroupItem>
-            <ToggleGroupItem value="all">
-              {tAnalytics("periodAll")}
-            </ToggleGroupItem>
-          </ToggleGroup>
+          {hidePeriod ? null : (
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              className="flex-wrap"
+              value={period}
+              onValueChange={(v) => {
+                if (v && PERIODS.includes(v as AnalyticsPeriod)) {
+                  onPeriodChange(v as AnalyticsPeriod);
+                }
+              }}
+            >
+              <ToggleGroupItem value="30d">
+                {tAnalytics("period30d")}
+              </ToggleGroupItem>
+              <ToggleGroupItem value="90d">
+                {tAnalytics("period90d")}
+              </ToggleGroupItem>
+              <ToggleGroupItem value="ytd">
+                {tAnalytics("periodYtd")}
+              </ToggleGroupItem>
+              <ToggleGroupItem value="all">
+                {tAnalytics("periodAll")}
+              </ToggleGroupItem>
+            </ToggleGroup>
+          )}
           <Select
             value={accountId}
             onValueChange={(v) => onAccountChange(v === "all" ? "all" : v)}

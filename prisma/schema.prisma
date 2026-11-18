@@ -122,6 +122,7 @@ model User {
   lifecycleStats      TradeLifecycleStats[]
   traderScoreSnapshots TraderScoreSnapshot[]
   tradeAnomalies      TradeAnomaly[]
+  weeklyPlanActions   WeeklyPlanAction[]
 
   // ── v2.5 Module 9 — Discord / Telegram integrations ──
   integrationEndpoints     IntegrationEndpoint[]
@@ -2439,6 +2440,35 @@ model TradeAnomaly {
   @@unique([tradeId, kind])
   @@index([userId, detectedAt])
   @@map("trade_anomalies")
+}
+
+/// Weekly improvement plan (MRT wave 1) — one row per generated action of
+/// the current week (Monday-Sunday). The title and target are snapshots of
+/// the rule output at generation time; `done` is the user's own checkbox
+/// state for that week. Rows are upserted on every GET and stale rows of
+/// the week (rules that no longer fire) are removed, so the table always
+/// mirrors the live plan. No grade data is stored here.
+model WeeklyPlanAction {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  /// Monday of the week, UTC midnight.
+  weekStart DateTime @map("week_start")
+  /// Stable rule key from the engine (worst-session, worst-hour, ...).
+  rule      String
+  /// Snapshot of the generated action title at generation time.
+  title     String
+  /// Snapshot of the measurable target at generation time.
+  target    String
+  done      Boolean  @default(false)
+  doneAt    DateTime? @map("done_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekStart, rule])
+  @@index([userId, weekStart])
+  @@map("weekly_plan_actions")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
