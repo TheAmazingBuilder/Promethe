@@ -109,6 +109,22 @@ async function storageRequest(
   }
 }
 
+async function isMissingObjectResponse(response: Response): Promise<boolean> {
+  if (response.status !== 404) return false;
+
+  const payload = (await response.clone().json().catch(() => null)) as
+    | { code?: string; error?: string; message?: string }
+    | null;
+  const code = payload?.code ?? payload?.error;
+
+  // Supabase distinguishes a missing object from a missing bucket.
+  return (
+    code === "NoSuchKey" ||
+    code === "not_found" ||
+    payload?.message === "Object not found"
+  );
+}
+
 async function removeStorageObject(objectPath: string): Promise<void> {
   const { baseUrl, serviceKey, bucket } = storageConfig();
   let response: Response;
@@ -130,8 +146,9 @@ async function removeStorageObject(objectPath: string): Promise<void> {
     throw new UploadStorageError();
   }
 
-  // A missing object is already in the desired state.
-  if (!response.ok && response.status !== 404) {
+  // A missing object is already in the desired state; a missing bucket is
+  // a configuration failure and must not be mistaken for successful cleanup.
+  if (!response.ok && !(await isMissingObjectResponse(response))) {
     throw new UploadStorageError();
   }
 }
@@ -243,7 +260,7 @@ export async function readUpload(
   const storagePath = normalizeStoragePath(row.storagePath);
   const response = await storageRequest(storagePath);
 
-  if (response.status === 404) return null;
+  if (await isMissingObjectResponse(response)) return null;
   if (!response.ok) throw new UploadStorageError();
 
   const ext = storagePath.split(".").pop() ?? "";
