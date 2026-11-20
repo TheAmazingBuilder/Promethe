@@ -10,11 +10,9 @@
  * share links, accounts outside their scope, or journal/psychology when
  * canViewJournal is false.
  */
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { UPLOAD_ROOT } from "@/server/uploads";
+import { readUpload } from "@/server/uploads";
 import { toTradeDetail, toTradeListItem } from "@/server/trades";
 import { mentorTradeWhere, touchMentorView } from "@/server/mentors";
 import {
@@ -51,13 +49,6 @@ export function mentorPolicyFrom(scope: AccessScope): RedactionPolicy {
     hidePsychology: !scope.canViewJournal,
   };
 }
-
-const EXT_MIME: Record<string, string> = {
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  webp: "image/webp",
-};
 
 // ── trades list ──────────────────────────────────────────────────────────────
 
@@ -231,13 +222,7 @@ export async function readMentorMedia(
     ctx.scope.strategyIds.includes(shot.trade.strategyId);
   if (!inAccount || !inStrategy) return null;
 
-  const ext = shot.storagePath.split(".").pop() ?? "";
-  try {
-    const buffer = await readFile(path.join(UPLOAD_ROOT, shot.storagePath));
-    return { buffer, contentType: EXT_MIME[ext] ?? "application/octet-stream" };
-  } catch {
-    return null;
-  }
+  return readUpload(shot.userId, screenshotId);
 }
 
 // ── journal (scope-gated) ────────────────────────────────────────────────────

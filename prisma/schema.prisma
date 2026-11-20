@@ -429,7 +429,7 @@ model StrategyChecklistItem {
 }
 
 /// Immutable snapshot of a strategy at version N (addendum §11.3).
-/// Snapshots are JSON strings (SQLite parity), never mutated after creation.
+/// Snapshots are JSON strings, never mutated after creation.
 /// origin MANUAL = saved by hand from the versions dialog; AUTO = frozen by
 /// the server before a definition edit (Euforia §17). AUTO snapshots are
 /// never deletable.
@@ -601,7 +601,7 @@ model Trade {
   /// by a dynamic Zod schema on every write (Module 4 §4.7).
   customFields String?  @map("custom_fields")
   /// Accent-folded lowercase concat of searchable text fields, maintained on
-  /// every write — the SQLite-friendly equivalent of a tsvector column
+  /// every write — the application-maintained equivalent of a tsvector column
   /// (Postgres upgrade path: pg_trgm GIN index, documented in README).
   searchText  String?  @map("search_text")
 
@@ -1868,7 +1868,7 @@ model DataExportLog {
   @@map("data_export_logs")
 }
 
-/// Postgres/SQLite-backed fixed-window rate limiter (no Redis on free tier).
+/// PostgreSQL-backed fixed-window rate limiter (no Redis on free tier).
 /// Keys are already hashed (token / HMAC-of-IP) — no raw identifiers stored.
 model RateLimitBucket {
   key         String   @id
