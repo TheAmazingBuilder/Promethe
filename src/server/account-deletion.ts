@@ -8,7 +8,7 @@
  *  2. DELETE (cancel)            → CANCELLED, notification.
  *  3. Cron /api/cron/daily       → every PENDING whose scheduledFor has passed
  *     is executed: cascade delete of ALL user rows (74 onDelete: Cascade
- *     relations cover every table), screenshots removed from disk, and a
+ *     relations cover every table), screenshots removed from Supabase Storage, and a
  *     non-personal tombstone (HMAC-SHA256 of the user id with TOKEN_PEPPER)
  *     is kept for audit — it proves "this account was deleted on purpose"
  *     without preserving anything reversible.
@@ -17,13 +17,11 @@
  * re-run of the cron can never delete twice. The tombstone upsert makes even
  * a crashed-then-retried transaction safe.
  */
-import { rm } from "node:fs/promises";
-import path from "node:path";
 import { db } from "@/lib/db";
 import { verifyPassword } from "@/lib/auth/password";
 import { hashUserId } from "@/lib/tokens";
 import { notifyInApp } from "@/server/notifications";
-import { UPLOAD_ROOT } from "@/server/uploads";
+import { deleteUploadObjects } from "@/server/uploads";
 
 export const DELETION_GRACE_DAYS = 7;
 
@@ -138,7 +136,7 @@ export interface DeletionExecutionReport {
 
 /**
  * Cron step: executes every due PENDING deletion. All user rows cascade
- * (schema-wide onDelete: Cascade), uploads are removed from disk, and the
+ * (schema-wide onDelete: Cascade), uploads are removed from Supabase Storage, and the
  * tombstone is written in the SAME transaction so a crash between the two
  * steps can never leave personal data behind without a tombstone or vice
  * versa.
@@ -156,6 +154,12 @@ export async function executeDueDeletions(
   for (const { userId } of due) {
     const tombstoneId = hashUserId(userId);
     try {
+      // Keep the object keys before the user cascade removes screenshot rows.
+      const screenshotRows = await db.tradeScreenshot.findMany({
+        where: { userId },
+        select: { storagePath: true },
+      });
+
       await db.$transaction(async (tx) => {
         // Tombstone first (same tx): proof of intentional deletion, irreversible.
         await tx.deletedUserTombstone.upsert({
@@ -171,12 +175,16 @@ export async function executeDueDeletions(
         await tx.user.delete({ where: { id: userId } });
       });
 
-      // Best-effort file cleanup AFTER the DB commit — files are not
-      // transactional. A leftover empty dir is harmless; data rows are gone.
-      await rm(path.join(UPLOAD_ROOT, userId), {
-        recursive: true,
-        force: true,
-      }).catch(() => undefined);
+      // Best-effort object cleanup AFTER the DB commit — Storage is not
+      // transactional. Failures are logged without exposing the user's id.
+      await deleteUploadObjects(
+        screenshotRows.map((row) => row.storagePath)
+      ).catch((error) => {
+        console.error(
+          `[deletion] screenshot cleanup failed for user (hashed) ${tombstoneId}:`,
+          error
+        );
+      });
 
       report.executed += 1;
       report.tombstones.push(tombstoneId);

@@ -264,3 +264,18 @@ export async function deleteUpload(userId: string, id: string): Promise<boolean>
   await db.tradeScreenshot.deleteMany({ where: { id, userId } });
   return true;
 }
+
+/**
+ * Deletes screenshot objects captured before an account cascade.
+ * The caller must collect the paths before deleting the user's DB rows.
+ */
+export async function deleteUploadObjects(storagePaths: string[]): Promise<void> {
+  const results = await Promise.allSettled(
+    storagePaths.map((storagePath) =>
+      removeStorageObject(normalizeStoragePath(storagePath))
+    )
+  );
+  if (results.some((result) => result.status === "rejected")) {
+    throw new UploadStorageError();
+  }
+}

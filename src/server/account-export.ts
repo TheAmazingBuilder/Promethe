@@ -13,13 +13,12 @@
  *  - LOGGED: DataExportLog row (kind FULL, size, schema version) for the
  *    in-app history and the transparency principle (art. 12 RGPD).
  */
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { strToU8, zipSync } from "fflate";
 import { db } from "@/lib/db";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { hashUserId } from "@/lib/tokens";
-import { UPLOAD_ROOT } from "@/server/uploads";
+import { readUpload } from "@/server/uploads";
 import { createId } from "@/lib/id";
 
 export const EXPORT_SCHEMA_VERSION = "1.0.0";
@@ -246,24 +245,22 @@ export async function buildUserExport(userId: string): Promise<{
     db.accountDeletionRequest.findUnique({ where: { userId } }),
   ]);
 
-  // Screenshots metadata lives on trades; files are read from disk.
+  // Screenshot metadata lives on trades; private objects are read from Supabase Storage.
   const screenshots = trades.flatMap((t) => t.screenshots);
   const files: ScreenshotFile[] = [];
   const missingFiles: string[] = [];
   for (const shot of screenshots) {
-    try {
-      const bytes = new Uint8Array(
-        await readFile(path.join(UPLOAD_ROOT, shot.storagePath))
-      );
-      files.push({
-        zipPath: `screenshots/${shot.id}${path.extname(shot.storagePath)}`,
-        bytes,
-      });
-    } catch {
-      // File already gone (old deletion) — recorded in the manifest, never
-      // fails the whole export.
+    const stored = await readUpload(userId, shot.id);
+    if (!stored) {
+      // File already gone (legacy local storage or previous deletion).
       missingFiles.push(shot.storagePath);
+      continue;
     }
+
+    files.push({
+      zipPath: `screenshots/${shot.id}${path.extname(shot.storagePath)}`,
+      bytes: new Uint8Array(stored.buffer),
+    });
   }
 
   // Mentions tied to the exported comments.
