@@ -1,37 +1,105 @@
 /**
- * Recreates the test database from scratch (db/test.db) — separate from the
- * dev database (db/custom.db), per addendum §11.8.
- * Runs `prisma db push` with DATABASE_URL overridden, after deleting any
- * previous test file so every run starts from a clean, deterministic state.
+ * Prepares the dedicated PostgreSQL test schema before integration tests.
+ *
+ * Tests use the same Supabase project if desired, but only the isolated
+ * "promethe_test" schema. The production "public" schema is never reset.
  */
-import { execSync } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 
-const dirname = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(dirname, "..");
-const testDb = path.join(root, "db", "test.db");
+const TEST_SCHEMA = "promethe_test";
 
-if (existsSync(testDb)) {
-  rmSync(testDb);
+function parseTestUrl(value: string | undefined, name: string): URL {
+  if (!value) {
+    throw new Error(
+      `${name} is required. Configure a PostgreSQL URL with schema=${TEST_SCHEMA}; refusing to run database tests.`
+    );
+  }
+
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${name} must be a valid PostgreSQL connection URL.`);
+  }
+
+  if (url.protocol !== "postgres:" && url.protocol !== "postgresql:") {
+    throw new Error(`${name} must use PostgreSQL. SQLite is not supported.`);
+  }
+
+  if (url.searchParams.get("schema") !== TEST_SCHEMA) {
+    throw new Error(
+      `${name} must target schema=${TEST_SCHEMA}. Production/public schema is forbidden for tests.`
+    );
+  }
+
+  return url;
 }
-// Prisma journal files for the test db (e.g. test.db-journal).
-for (const extra of ["test.db-journal", "test.db-shm", "test.db-wal"]) {
-  const p = path.join(root, "db", extra);
-  if (existsSync(p)) rmSync(p);
+
+const testDatabaseUrl = parseTestUrl(
+  process.env.TEST_DATABASE_URL,
+  "TEST_DATABASE_URL"
+);
+const testDirectUrl = parseTestUrl(
+  process.env.TEST_DIRECT_URL,
+  "TEST_DIRECT_URL"
+);
+
+for (const [name, productionValue] of [
+  ["DATABASE_URL", process.env.DATABASE_URL],
+  ["DIRECT_URL", process.env.DIRECT_URL],
+] as const) {
+  if (!productionValue) continue;
+  let productionUrl: URL;
+  try {
+    productionUrl = new URL(productionValue);
+  } catch {
+    continue;
+  }
+
+  const sameDatabase =
+    productionUrl.hostname === testDatabaseUrl.hostname &&
+    productionUrl.pathname === testDatabaseUrl.pathname;
+  const sameSchema =
+    productionUrl.searchParams.get("schema") ===
+    testDatabaseUrl.searchParams.get("schema");
+
+  if (sameDatabase && sameSchema) {
+    throw new Error(
+      `${name} points to the same database schema as TEST_DATABASE_URL. Refusing destructive test setup.`
+    );
+  }
 }
 
-execSync(
-  "bunx prisma db push --skip-generate --accept-data-loss --schema prisma/schema.prisma",
+if (
+  testDatabaseUrl.hostname !== testDirectUrl.hostname ||
+  testDatabaseUrl.pathname !== testDirectUrl.pathname ||
+  testDirectUrl.searchParams.get("schema") !== TEST_SCHEMA
+) {
+  throw new Error(
+    "TEST_DATABASE_URL and TEST_DIRECT_URL must target the same PostgreSQL database and promethe_test schema."
+  );
+}
+
+execFileSync(
+  "bunx",
+  [
+    "prisma",
+    "db",
+    "push",
+    "--skip-generate",
+    "--accept-data-loss",
+    "--schema",
+    "prisma/schema.prisma",
+  ],
   {
-    cwd: root,
+    cwd: process.cwd(),
     stdio: "inherit",
     env: {
       ...process.env,
-      DATABASE_URL: `file:${testDb}`,
+      DATABASE_URL: testDatabaseUrl.toString(),
+      DIRECT_URL: testDirectUrl.toString(),
     },
   }
 );
 
-console.log(`Test database ready: ${testDb}`);
+console.log(`Test schema ready: ${TEST_SCHEMA}`);
