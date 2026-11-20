@@ -16,7 +16,7 @@ function readTestEnvFiles(): Record<string, string> {
     if (!existsSync(filePath)) continue;
 
     for (const line of readFileSync(filePath, "utf8").split(/\r?\n/)) {
-      const match = line.match(/^\s*(?:export\s+)?(TEST_DATABASE_URL|TEST_DIRECT_URL)\s*=\s*(.*?)\s*$/);
+      const match = line.match(/^\s*(?:export\s+)?(DATABASE_URL|DIRECT_URL|TEST_DATABASE_URL|TEST_DIRECT_URL)\s*=\s*(.*?)\s*$/);
       if (!match) continue;
 
       let value = match[2];
@@ -71,6 +71,34 @@ const testDatabaseUrl = configuredTestDatabaseUrl
 const testDirectUrl = configuredTestDirectUrl
   ? validateTestDatabaseUrl(configuredTestDirectUrl, "TEST_DIRECT_URL")
   : testDatabaseUrl;
+
+for (const [name, productionValue] of [
+  ["DATABASE_URL", process.env.DATABASE_URL ?? fileTestEnv.DATABASE_URL],
+  ["DIRECT_URL", process.env.DIRECT_URL ?? fileTestEnv.DIRECT_URL],
+] as const) {
+  if (!productionValue) continue;
+
+  let productionUrl: URL;
+  try {
+    productionUrl = new URL(productionValue);
+  } catch {
+    throw new Error(name + " must be a valid PostgreSQL URL.");
+  }
+
+  const testUrl = new URL(testDatabaseUrl);
+  const sameDatabase =
+    productionUrl.hostname === testUrl.hostname &&
+    productionUrl.pathname === testUrl.pathname;
+  const sameSchema =
+    productionUrl.searchParams.get("schema") ===
+    testUrl.searchParams.get("schema");
+
+  if (sameDatabase && sameSchema) {
+    throw new Error(
+      name + " points to the same schema as TEST_DATABASE_URL. Refusing to run tests."
+    );
+  }
+}
 
 export default defineConfig({
   test: {
