@@ -1,74 +1,162 @@
 -- Promethe — database access model for Supabase PostgreSQL.
 --
--- IMPORTANT ARCHITECTURE DECISION
--- The application uses its own authentication system (scrypt passwords,
--- opaque httpOnly session cookie, AuthSession table). It does NOT authenticate
--- application users with Supabase Auth. Prisma user IDs are CUID strings,
--- whereas auth.uid() is a Supabase Auth UUID. Therefore auth.uid() policies
--- cannot identify Promethe users and must not be presented as tenant isolation.
+-- Promethe uses custom application authentication (opaque httpOnly session
+-- cookies and CUID user IDs), not Supabase Auth. Therefore auth.uid() cannot
+-- identify a Promethe user. Prisma connects server-side using the database
+-- owner role, which bypasses RLS unless FORCE ROW LEVEL SECURITY is enabled.
 --
--- Prisma connects server-side with the database owner role. PostgreSQL table
--- owners bypass RLS unless FORCE ROW LEVEL SECURITY is enabled; forcing RLS
--- without setting a trusted per-transaction user context would break the app
--- and is not a safe substitute for application authorization.
+-- This script applies ONLY to the 96 tables declared in prisma/schema.prisma.
+-- It deliberately does not alter unrelated public tables, Supabase-managed
+-- objects, Storage tables, functions, schema usage, or application data.
 --
--- Current security boundary:
---   1. Browser -> authenticated Promethe API (session cookie).
---   2. API resolves the session with src/server/session.ts.
---   3. Data-access functions must scope every tenant-owned query by userId.
---   4. Supabase anon/authenticated roles receive no direct access to public
---      application tables. The server-only Prisma connection is the data path.
+-- Security boundary:
+--   1. Browser requests go through the authenticated Promethe API.
+--   2. The API resolves the custom session.
+--   3. Tenant-owned queries MUST scope records by userId.
+--   4. anon/authenticated PostgREST roles cannot access Promethe tables.
 --
--- This script reconciles the Supabase grants with that custom-auth model.
--- It does NOT create per-user RLS. Do not execute it if the project has any
--- separate Supabase Auth / PostgREST client that requires direct public-table
--- access. It does not alter data or table definitions.
+-- This is application-layer tenant isolation, NOT per-user PostgreSQL RLS.
+-- Do not execute if another client depends on direct PostgREST access to these
+-- Promethe tables. No data rows are changed by this script.
 
 BEGIN;
 
 DO $$
 DECLARE
-  target_table record;
+  app_table text;
   target_policy record;
 BEGIN
-  FOR target_table IN
-    SELECT schemaname, tablename
-    FROM pg_tables
-    WHERE schemaname = 'public'
+  FOREACH app_table IN ARRAY ARRAY[
+    'users',
+    'auth_sessions',
+    'profiles',
+    'accounts',
+    'cash_transactions',
+    'instruments',
+    'strategies',
+    'setups',
+    'playbook_rules',
+    'checklist_templates',
+    'strategy_checklist_items',
+    'strategy_versions',
+    'saved_views',
+    'trades',
+    'trade_executions',
+    'tags',
+    'trade_tags',
+    'trade_screenshots',
+    'journal_entries',
+    'trading_rules',
+    'goals',
+    'trade_rule_violations',
+    'trade_templates',
+    'push_subscriptions',
+    'reminder_settings',
+    'notification_logs',
+    'offline_sync_logs',
+    'trade_reviews',
+    'review_question_templates',
+    'reports',
+    'report_settings',
+    'scenarios',
+    'monte_carlo_runs',
+    'economic_events',
+    'trade_event_links',
+    'event_watchlists',
+    'market_context_snapshots',
+    'price_candles',
+    'prop_firm_rule_sets',
+    'prop_challenges',
+    'prop_challenge_phase_results',
+    'prop_payouts',
+    'prop_expenses',
+    'prop_alert_states',
+    'broker_connections',
+    'sync_event_logs',
+    'symbol_mappings',
+    'magic_number_mappings',
+    'trade_modifications',
+    'tool_scenarios',
+    'fx_rates',
+    'market_session_settings',
+    'exit_plans',
+    'exposure_alert_settings',
+    'account_equity_snapshots',
+    'import_batches',
+    'reconciliation_candidates',
+    'trade_merge_logs',
+    'share_links',
+    'mentor_invitations',
+    'mentor_accesses',
+    'mentor_access_logs',
+    'trade_comments',
+    'comment_mentions',
+    'comment_read_states',
+    'consent_records',
+    'account_deletion_requests',
+    'deleted_user_tombstones',
+    'data_export_logs',
+    'rate_limit_buckets',
+    'dashboards',
+    'dashboard_widgets',
+    'custom_metrics',
+    'user_dashboard_templates',
+    'user_appearances',
+    'saved_charts',
+    'chart_annotations',
+    'benchmark_profiles',
+    'keyboard_shortcuts',
+    'table_column_preferences',
+    'custom_field_definitions',
+    'change_logs',
+    'batch_entry_drafts',
+    'user_display_preferences',
+    'gaia_notes',
+    'gaia_folders',
+    'gaia_tags',
+    'gaia_templates',
+    'gaia_versions',
+    'trade_lifecycle_stats',
+    'trader_score_snapshots',
+    'trade_anomalies',
+    'weekly_plan_actions',
+    'integration_endpoints',
+    'integration_subscriptions',
+    'outbound_messages'
+  ]::text[]
   LOOP
+    IF to_regclass(format('%I.%I', 'public', app_table)) IS NULL THEN
+      CONTINUE;
+    END IF;
+
     FOR target_policy IN
       SELECT policyname
       FROM pg_policies
-      WHERE schemaname = target_table.schemaname
-        AND tablename = target_table.tablename
+      WHERE schemaname = 'public'
+        AND tablename = app_table
     LOOP
       EXECUTE format(
-        'DROP POLICY IF EXISTS %I ON %I.%I',
+        'DROP POLICY IF EXISTS %I ON public.%I',
         target_policy.policyname,
-        target_table.schemaname,
-        target_table.tablename
+        app_table
       );
     END LOOP;
 
     EXECUTE format(
-      'ALTER TABLE %I.%I DISABLE ROW LEVEL SECURITY',
-      target_table.schemaname,
-      target_table.tablename
+      'ALTER TABLE public.%I DISABLE ROW LEVEL SECURITY',
+      app_table
+    );
+    EXECUTE format(
+      'REVOKE ALL PRIVILEGES ON TABLE public.%I FROM anon, authenticated',
+      app_table
     );
   END LOOP;
 END
 $$;
 
-REVOKE ALL PRIVILEGES ON SCHEMA public FROM anon, authenticated;
-REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
-REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated;
-REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM anon, authenticated;
-
+-- Prevent future Prisma tables created by the current migration owner from
+-- being exposed to the Supabase client roles by default.
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
   REVOKE ALL PRIVILEGES ON TABLES FROM anon, authenticated;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-  REVOKE ALL PRIVILEGES ON SEQUENCES FROM anon, authenticated;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-  REVOKE EXECUTE ON FUNCTIONS FROM anon, authenticated;
 
 COMMIT;
