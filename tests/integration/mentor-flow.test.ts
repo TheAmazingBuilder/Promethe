@@ -1,5 +1,5 @@
 /**
- * v3 Phase 5 — mentor flow integration tests (db/test.db).
+ * v3 Phase 5 — mentor flow integration tests (PostgreSQL schema promethe_test).
  *
  * Proves the security model end-to-end:
  *  - invitations: single-use token, email-match gate (wrong account → neutral

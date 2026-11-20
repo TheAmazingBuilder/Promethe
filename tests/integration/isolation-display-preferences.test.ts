@@ -2,7 +2,7 @@
  * v2.5 Module 8 — isolation tests for UserDisplayPreference + the new
  * Account/Instrument timezone columns.
  *
- * Proves (against db/test.db) that display preferences are strictly scoped
+ * Proves (against PostgreSQL schema promethe_test) that display preferences are strictly scoped
  * by user: get/put never read or write another user's row, the row is
  * created with defaults on first read, partial patches merge without
  * clobbering other slices, and cascade-on-user-delete cleans the table.

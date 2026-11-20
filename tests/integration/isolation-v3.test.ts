@@ -1,7 +1,7 @@
 /**
  * v3 Phase 1 — Extended cross-user isolation tests for the new v3 tables.
  *
- * Proves (against db/test.db) that user A can never read, write or delete
+ * Proves (against PostgreSQL schema promethe_test) that user A can never read, write or delete
  * user B's broker connections, sync event logs, symbol/magic mappings,
  * import batches, reconciliation candidates, merge logs, share links,
  * mentor invitations, mentor accesses, comments, consents or export logs —

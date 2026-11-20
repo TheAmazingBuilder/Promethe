@@ -1,5 +1,5 @@
 /**
- * v1 Phase 5 — integration tests (db/test.db): journal upsert & isolation,
+ * v1 Phase 5 — integration tests (PostgreSQL schema promethe_test): journal upsert & isolation,
  * calendar local-day bucketing (Toronto TZ) + summary/streaks, strategy
  * checklist replace-all + immutable versions + per-strategy stats, PROP
  * breach-risk status.
