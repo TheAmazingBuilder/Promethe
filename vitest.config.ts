@@ -1,10 +1,41 @@
 import { defineConfig } from "vitest/config";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const TEST_SCHEMA = "promethe_test";
+
+function readTestEnvFiles(): Record<string, string> {
+  const values: Record<string, string> = {};
+  const files = [".env", ".env.local", ".env.test", ".env.test.local"];
+
+  for (const file of files) {
+    const filePath = path.join(dirname, file);
+    if (!existsSync(filePath)) continue;
+
+    for (const line of readFileSync(filePath, "utf8").split(/\\r?\\n/)) {
+      const match = line.match(/^\\s*(?:export\\s+)?(TEST_DATABASE_URL|TEST_DIRECT_URL)\\s*=\\s*(.*?)\\s*$/);
+      if (!match) continue;
+
+      let value = match[2];
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      } else {
+        value = value.replace(/\\s+#.*$/, "").trim();
+      }
+      values[match[1]] = value;
+    }
+  }
+
+  return values;
+}
+
+const fileTestEnv = readTestEnvFiles();
 const FALLBACK_TEST_DATABASE_URL =
   "postgresql://invalid:invalid@127.0.0.1:1/promethe_test?schema=promethe_test";
 
@@ -29,12 +60,17 @@ function validateTestDatabaseUrl(value: string, name: string): string {
   return value;
 }
 
-const testDatabaseUrl = process.env.TEST_DATABASE_URL
-  ? validateTestDatabaseUrl(process.env.TEST_DATABASE_URL, "TEST_DATABASE_URL")
+const configuredTestDatabaseUrl =
+  process.env.TEST_DATABASE_URL ?? fileTestEnv.TEST_DATABASE_URL;
+const configuredTestDirectUrl =
+  process.env.TEST_DIRECT_URL ?? fileTestEnv.TEST_DIRECT_URL;
+
+const testDatabaseUrl = configuredTestDatabaseUrl
+  ? validateTestDatabaseUrl(configuredTestDatabaseUrl, "TEST_DATABASE_URL")
   : FALLBACK_TEST_DATABASE_URL;
 
-const testDirectUrl = process.env.TEST_DIRECT_URL
-  ? validateTestDatabaseUrl(process.env.TEST_DIRECT_URL, "TEST_DIRECT_URL")
+const testDirectUrl = configuredTestDirectUrl
+  ? validateTestDatabaseUrl(configuredTestDirectUrl, "TEST_DIRECT_URL")
   : testDatabaseUrl;
 
 export default defineConfig({
