@@ -1,5 +1,5 @@
 /**
- * v3 Phase 2 — Sync engine integration tests (db/test.db).
+ * v3 Phase 2 — Sync engine integration tests (PostgreSQL schema promethe_test).
  *
  * Exercises processIngestPayload end-to-end (the same code the /api/ingest/mt
  * route runs): idempotency, retries, out-of-order delivery, partial closes,

@@ -5,8 +5,11 @@
  * "promethe_test" schema. The production "public" schema is never reset.
  */
 import { execFileSync } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const TEST_SCHEMA = "promethe_test";
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 function parseTestUrl(value: string | undefined, name: string): URL {
   if (!value) {
@@ -92,7 +95,7 @@ execFileSync(
     "prisma/schema.prisma",
   ],
   {
-    cwd: process.cwd(),
+    cwd: ROOT,
     stdio: "inherit",
     env: {
       ...process.env,
