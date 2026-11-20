@@ -38,12 +38,9 @@ export class UploadValidationError extends Error {
   }
 }
 
-class UploadStorageError extends Error {
-  readonly code = "STORAGE_UNAVAILABLE";
-  readonly status = 503;
-
+class UploadStorageError extends UploadValidationError {
   constructor() {
-    super("Screenshot storage is unavailable.");
+    super("STORAGE_UNAVAILABLE", 503);
     this.name = "UploadStorageError";
   }
 }
