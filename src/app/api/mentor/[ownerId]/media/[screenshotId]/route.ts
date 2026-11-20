@@ -28,7 +28,7 @@ export async function GET(_req: Request, ctx: Ctx) {
       status: 200,
       headers: {
         "Content-Type": media.contentType,
-        "Cache-Control": "private, max-age=60",
+        "Cache-Control": "private, no-store",
       },
     });
   } catch (error) {

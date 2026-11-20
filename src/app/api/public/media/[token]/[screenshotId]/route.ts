@@ -53,7 +53,7 @@ export async function GET(req: Request, ctx: Ctx) {
         "Content-Type": file.contentType,
         // Private-ish caching: fine to reuse in the visitor's tab for the
         // link's lifetime, never shared caches.
-        "Cache-Control": "private, max-age=300",
+        "Cache-Control": "private, no-store",
       },
     });
   } catch (error) {
