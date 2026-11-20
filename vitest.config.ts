@@ -15,8 +15,8 @@ function readTestEnvFiles(): Record<string, string> {
     const filePath = path.join(dirname, file);
     if (!existsSync(filePath)) continue;
 
-    for (const line of readFileSync(filePath, "utf8").split(/\\r?\\n/)) {
-      const match = line.match(/^\\s*(?:export\\s+)?(TEST_DATABASE_URL|TEST_DIRECT_URL)\\s*=\\s*(.*?)\\s*$/);
+    for (const line of readFileSync(filePath, "utf8").split(/\r?\n/)) {
+      const match = line.match(/^\s*(?:export\s+)?(TEST_DATABASE_URL|TEST_DIRECT_URL)\s*=\s*(.*?)\s*$/);
       if (!match) continue;
 
       let value = match[2];
@@ -26,7 +26,7 @@ function readTestEnvFiles(): Record<string, string> {
       ) {
         value = value.slice(1, -1);
       } else {
-        value = value.replace(/\\s+#.*$/, "").trim();
+        value = value.replace(/\s+#.*$/, "").trim();
       }
       values[match[1]] = value;
     }
@@ -34,7 +34,6 @@ function readTestEnvFiles(): Record<string, string> {
 
   return values;
 }
-
 const fileTestEnv = readTestEnvFiles();
 const FALLBACK_TEST_DATABASE_URL =
   "postgresql://invalid:invalid@127.0.0.1:1/promethe_test?schema=promethe_test";
