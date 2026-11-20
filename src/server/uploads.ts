@@ -100,11 +100,12 @@ async function storageRequest(
     return await fetch(objectUrl(baseUrl, bucket, objectPath), {
       ...init,
       cache: "no-store",
-      headers: {
-        apikey: serviceKey,
-        Authorization: `Bearer ${serviceKey}`,
-        ...init.headers,
-      },
+      headers: (() => {
+        const headers = new Headers(init.headers);
+        headers.set("apikey", serviceKey);
+        headers.set("Authorization", `Bearer ${serviceKey}`);
+        return headers;
+      })(),
     });
   } catch {
     throw new UploadStorageError();
@@ -203,7 +204,7 @@ export async function saveUpload(
       "Cache-Control": "private, max-age=0, no-store",
       "x-upsert": "false",
     },
-    body: buffer,
+    body: new Uint8Array(buffer),
   });
 
   if (!uploadResponse.ok) throw new UploadStorageError();

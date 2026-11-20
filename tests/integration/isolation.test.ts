@@ -1,9 +1,9 @@
 /**
  * Integration test — USER ISOLATION (addendum §11.8).
  *
- * Proves, against a dedicated PostgreSQL test schema (promethe_test), that
- * user A can never read, update or delete user B's data when the data-access
- * layer scopes by userId — the pattern every /src/server helper must follow:
+ * Proves, against a dedicated PostgreSQL test schema (promethe_test), that user A can
+ * never read, update or delete user B's data when the data-access layer
+ * scopes by userId — the pattern every /src/server helper must follow:
  *
  *   read    → findMany/findFirst({ where: { …, userId } })
  *   update  → updateMany({ where: { id, userId } })
@@ -97,14 +97,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  if (userA?.id || userB?.id) {
-    await db.user.deleteMany({
-      where: { id: { in: [userA?.id, userB?.id].filter(Boolean) as string[] } },
-    });
-  }
-  if (instrumentId) {
-    await db.instrument.deleteMany({ where: { id: instrumentId } });
-  }
+  await db.user.deleteMany({ where: { id: { in: [userA.id, userB.id] } } });
+  await db.instrument.deleteMany({ where: { id: instrumentId } });
   await db.$disconnect();
 });
 
@@ -173,6 +167,7 @@ describe("strategies & checklists", () => {
       data: { strategyId: strategy.id, label: "HTF aligné", order: 0 },
     });
 
+    // READ: B-scoped query does not see A's strategy
     expect(
       await db.strategy.findMany({ where: { userId: userB.id } })
     ).toHaveLength(0);
@@ -182,6 +177,7 @@ describe("strategies & checklists", () => {
       })
     ).toBeNull();
 
+    // UPDATE: B-scoped update affects 0 rows
     const updated = await db.strategy.updateMany({
       where: { id: strategy.id, userId: userB.id },
       data: { name: "HACKED" },
@@ -190,6 +186,7 @@ describe("strategies & checklists", () => {
     const fresh = await db.strategy.findUniqueOrThrow({ where: { id: strategy.id } });
     expect(fresh.name).toBe("Gold breakout");
 
+    // DELETE: B-scoped delete affects 0 rows
     const deleted = await db.strategy.deleteMany({
       where: { id: strategy.id, userId: userB.id },
     });
@@ -198,6 +195,7 @@ describe("strategies & checklists", () => {
       await db.strategy.findUnique({ where: { id: strategy.id } })
     ).not.toBeNull();
 
+    // A-scoped delete works (cascade removes the checklist item)
     const deletedA = await db.strategy.deleteMany({
       where: { id: strategy.id, userId: userA.id },
     });
@@ -245,6 +243,7 @@ describe("trades, executions & screenshots", () => {
       },
     });
 
+    // READ
     expect(
       await db.trade.findMany({ where: { userId: userB.id } })
     ).toHaveLength(0);
@@ -252,6 +251,7 @@ describe("trades, executions & screenshots", () => {
       await db.trade.findFirst({ where: { id: tradeAId, userId: userB.id } })
     ).toBeNull();
 
+    // UPDATE
     const upd = await db.trade.updateMany({
       where: { id: tradeAId, userId: userB.id },
       data: { netPnl: "999999" },
@@ -260,6 +260,7 @@ describe("trades, executions & screenshots", () => {
     const fresh = await db.trade.findUniqueOrThrow({ where: { id: tradeAId } });
     expect(fresh.netPnl?.toString()).toBe("333");
 
+    // DELETE
     const del = await db.trade.deleteMany({
       where: { id: tradeAId, userId: userB.id },
     });
@@ -293,6 +294,7 @@ describe("trades, executions & screenshots", () => {
       await db.tradeScreenshot.findUnique({ where: { id: shot.id } })
     ).not.toBeNull();
 
+    // A-scoped delete works
     const delA = await db.tradeScreenshot.deleteMany({
       where: { id: shot.id, userId: userA.id },
     });
@@ -320,6 +322,7 @@ describe("saved views (addendum §11.3)", () => {
         filtersJson: "{}",
       },
     });
+    // B can create the SAME name without collision (own namespace)
     await db.savedView.create({
       data: {
         userId: userB.id,
