@@ -1,5 +1,5 @@
 /**
- * Phase 2 perf item 5 — dashboard getDashboardData (db/test.db).
+ * Phase 2 perf item 5 — dashboard getDashboardData (PostgreSQL schema promethe_test).
  *
  * The closed-trade dataset is bounded in SQL by the union window
  * (earliest instant any widget reads, comparison windows included) and

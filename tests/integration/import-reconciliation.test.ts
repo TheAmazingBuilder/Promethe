@@ -1,5 +1,5 @@
 /**
- * v3 Phase 3 — Import + reconciliation integration tests (db/test.db).
+ * v3 Phase 3 — Import + reconciliation integration tests (PostgreSQL schema promethe_test).
  *
  * Golden path (v3 §9): importing a history file creates trades without
  * duplicates; re-importing updates broker fields without touching user

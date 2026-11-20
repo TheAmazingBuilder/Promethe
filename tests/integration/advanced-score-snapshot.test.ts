@@ -1,6 +1,6 @@
 /**
  * Phase 2 perf item 3 — trader score served from TraderScoreSnapshot
- * (db/test.db).
+ * (PostgreSQL schema promethe_test).
  *
  * Today's snapshot (when present) freezes the headline score: one
  * indexed read, no recompute. History is built from the snapshots

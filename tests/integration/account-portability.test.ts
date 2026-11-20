@@ -1,5 +1,5 @@
 /**
- * v3 Phase 6 — Portability & compliance integration tests (db/test.db).
+ * v3 Phase 6 — Portability & compliance integration tests (PostgreSQL schema promethe_test).
  *
  * Proves the GDPR model end-to-end:
  *  - export: COMPLETE (every domain file present), ISOLATED (user B's trades
