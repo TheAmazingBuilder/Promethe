@@ -160,6 +160,13 @@ export async function executeDueDeletions(
         select: { storagePath: true },
       });
 
+      // Remove private objects first. If Storage is unavailable, keep the
+      // account and its pending deletion request intact so the cron can retry.
+      // Missing objects are treated as already deleted (idempotent retry).
+      await deleteUploadObjects(
+        screenshotRows.map((row) => row.storagePath)
+      );
+
       await db.$transaction(async (tx) => {
         // Tombstone first (same tx): proof of intentional deletion, irreversible.
         await tx.deletedUserTombstone.upsert({
@@ -173,17 +180,6 @@ export async function executeDueDeletions(
         // users' journals are deleted too (their personal data — RGPD
         // requires it; the schema chose hard delete over anonymisation).
         await tx.user.delete({ where: { id: userId } });
-      });
-
-      // Best-effort object cleanup AFTER the DB commit — Storage is not
-      // transactional. Failures are logged without exposing the user's id.
-      await deleteUploadObjects(
-        screenshotRows.map((row) => row.storagePath)
-      ).catch((error) => {
-        console.error(
-          `[deletion] screenshot cleanup failed for user (hashed) ${tombstoneId}:`,
-          error
-        );
       });
 
       report.executed += 1;
