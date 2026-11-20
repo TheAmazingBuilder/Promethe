@@ -1,6 +1,6 @@
 /**
  * Phase 2 perf item 7 — trades grid: aggregated stats + batched candles
- * (db/test.db).
+ * (PostgreSQL schema promethe_test).
  *
  * getGridStats aggregates in SQL (same numbers as computeGridStats over
  * the same rows); getCandleBatch serves every card window from one

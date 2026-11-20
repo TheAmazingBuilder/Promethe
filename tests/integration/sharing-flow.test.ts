@@ -1,5 +1,5 @@
 /**
- * v3 Phase 4 — Integration tests for the share-link flow (db/test.db).
+ * v3 Phase 4 — Integration tests for the share-link flow (PostgreSQL schema promethe_test).
  *
  * Proves against a real database:
  *  - TRADE + REPORT link creation (ownership enforced — no IDOR)

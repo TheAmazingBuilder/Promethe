@@ -1,5 +1,5 @@
 /**
- * Phase 2 perf item 4 — weekly plan / performance report (db/test.db).
+ * Phase 2 perf item 4 — weekly plan / performance report (PostgreSQL schema promethe_test).
  *
  * The weekly plan only computes the 3 modules it uses; toggling a
  * checkbox is a single update when its row already exists (no plan

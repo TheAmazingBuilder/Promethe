@@ -1,7 +1,7 @@
 /**
  * v2.5 Module 4 — Phase 1 integration tests: trash (soft delete).
  *
- * Proves against db/test.db:
+ * Proves against PostgreSQL schema promethe_test:
  *  1. REGRESSION — soft-deleted trades NEVER appear in stats/analytics,
  *     lists, search, calendar, exports or raw reads (Prisma extension).
  *  2. The extension also applies inside interactive transactions and to
