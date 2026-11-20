@@ -90,6 +90,7 @@ execFileSync(
     "db",
     "push",
     "--skip-generate",
+    "--force-reset",
     "--accept-data-loss",
     "--schema",
     "prisma/schema.prisma",
