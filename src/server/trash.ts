@@ -11,8 +11,6 @@
  * (purgeExpiredTrash) which also removes Storage objects and prunes the
  * ChangeLog (Phase 2).
  */
-import { rm } from "node:fs/promises";
-import path from "node:path";
 import { db } from "@/lib/db";
 import { withDeleted } from "@/lib/trash/deleted-scope";
 import {
@@ -22,7 +20,7 @@ import {
   type TrashEntity,
 } from "@/lib/trash/constants";
 import { foldText } from "@/lib/search/text";
-import { UPLOAD_ROOT } from "@/server/uploads";
+import { deleteUploadObjects } from "@/server/uploads";
 
 export interface TrashItemDTO {
   id: string;
@@ -263,20 +261,15 @@ export async function restoreTrashItems(
   return { restored };
 }
 
-/** Remove the trade's screenshot rows + the uploads/{userId}/{tradeId} dir. */
+/** Remove the private Storage objects for the selected owner's trades. */
 async function purgeTradeStorage(userId: string, tradeIds: string[]): Promise<void> {
   if (tradeIds.length === 0) return;
-  await db.tradeScreenshot.deleteMany({
-    where: { tradeId: { in: tradeIds } },
+
+  const screenshots = await db.tradeScreenshot.findMany({
+    where: { userId, tradeId: { in: tradeIds } },
+    select: { storagePath: true },
   });
-  await Promise.all(
-    tradeIds.map((tradeId) =>
-      rm(path.join(UPLOAD_ROOT, userId, tradeId), {
-        recursive: true,
-        force: true,
-      }).catch(() => undefined)
-    )
-  );
+  await deleteUploadObjects(screenshots.map((shot) => shot.storagePath));
 }
 
 /**
@@ -289,7 +282,27 @@ export async function deleteTrashItemsPermanently(
   refs: TrashItemRef[]
 ): Promise<{ deleted: number }> {
   let deleted = 0;
-  const tradeIds: string[] = [];
+  const requestedTradeIds = refs
+    .filter((ref) => ENTITY_TO_MODEL[ref.entity] === "trade")
+    .map((ref) => ref.id);
+  const eligibleTrades = requestedTradeIds.length
+    ? await withDeleted(() =>
+        db.trade.findMany({
+          where: {
+            id: { in: requestedTradeIds },
+            userId,
+            deletedAt: { not: null },
+          },
+          select: { id: true },
+        })
+      )
+    : [];
+  const tradeIds = eligibleTrades.map((trade) => trade.id);
+
+  // Remove private objects before the permanent DB cascade. If Storage fails,
+  // the trashed records remain intact and the caller can retry safely.
+  await purgeTradeStorage(userId, tradeIds);
+
   await withDeleted(async () => {
     for (const ref of refs) {
       const model = ENTITY_TO_MODEL[ref.entity];
@@ -297,10 +310,7 @@ export async function deleteTrashItemsPermanently(
         const r = await db.trade.deleteMany({
           where: { id: ref.id, userId, deletedAt: { not: null } },
         });
-        if (r.count > 0) {
-          deleted += r.count;
-          tradeIds.push(ref.id);
-        }
+        deleted += r.count;
       } else if (model === "journalEntry") {
         const r = await db.journalEntry.deleteMany({
           where: { id: ref.id, userId, deletedAt: { not: null } },
@@ -319,7 +329,6 @@ export async function deleteTrashItemsPermanently(
       }
     }
   });
-  await purgeTradeStorage(userId, tradeIds);
   return { deleted };
 }
 
@@ -328,7 +337,7 @@ export async function emptyTrash(
   userId: string
 ): Promise<{ deleted: number }> {
   const { items } = await listTrash(userId, { limit: 500 });
-  // Chunked: the free-tier SQLite has a variable cap (999 params).
+  // Chunked to keep PostgreSQL statements bounded (200 ids per batch).
   let deleted = 0;
   const CHUNK = 200;
   for (let i = 0; i < items.length; i += CHUNK) {
@@ -368,16 +377,7 @@ export async function purgeExpiredTrash(
         select: { id: true, userId: true },
         take: 500,
       });
-    let trades = 0;
-    for (let i = 0; i < expiredTrades.length; i += CHUNK) {
-      const r = await db.trade.deleteMany({
-        where: {
-          id: { in: expiredTrades.slice(i, i + CHUNK).map((t) => t.id) },
-        },
-      });
-      trades += r.count;
-    }
-    // Storage cleanup grouped by user (uploads/{userId}/{tradeId}).
+    // Group by owner and remove Storage objects BEFORE cascading DB deletes.
     const byUser = new Map<string, string[]>();
     for (const t of expiredTrades) {
       const list = byUser.get(t.userId) ?? [];
@@ -386,6 +386,16 @@ export async function purgeExpiredTrash(
     }
     for (const [userId, ids] of byUser) {
       await purgeTradeStorage(userId, ids);
+    }
+
+    let trades = 0;
+    for (let i = 0; i < expiredTrades.length; i += CHUNK) {
+      const r = await db.trade.deleteMany({
+        where: {
+          id: { in: expiredTrades.slice(i, i + CHUNK).map((t) => t.id) },
+        },
+      });
+      trades += r.count;
     }
 
     // ── Other entities: chunked find-ids → delete ──
