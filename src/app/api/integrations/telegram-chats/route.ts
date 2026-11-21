@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/server/session";
 import { apiError } from "@/server/api";
 import { consumeRateLimit, sweepRateLimits } from "@/lib/rate-limit";
+import { hashRateLimitIdentifier } from "@/lib/tokens";
 import { validateTelegramToken } from "@/lib/integrations/validation";
 import { discoverTelegramChats } from "@/server/integrations/delivery";
 
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
     const session = await requireUser();
     sweepRateLimits();
     const rl = await consumeRateLimit(
-      `integrations-tg-chats:${session.user.id}`,
+      `integrations-tg-chats:${hashRateLimitIdentifier("integration-telegram-user", session.user.id)}`,
       10,
       60 * 1000
     );
