@@ -39,6 +39,7 @@ export interface DashboardRequirements {
   sync: boolean;
   goals: boolean;
   metrics: boolean;
+  savedCharts: boolean;
 }
 
 export interface DashboardsPayload {

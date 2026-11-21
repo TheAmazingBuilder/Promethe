@@ -72,7 +72,7 @@ export function WidgetCatalog({
   }, [search, tRoot]);
 
   const requirementMet = React.useCallback(
-    (req: WidgetRequirement) => requirements?.[req] !== false,
+    (req: WidgetRequirement) => requirements?.[req] === true,
     [requirements]
   );
 

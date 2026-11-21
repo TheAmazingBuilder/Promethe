@@ -151,7 +151,7 @@ export class ReportPdf {
   bullet(text: string, footerLabel: string): void {
     this.doc.setFontSize(10);
     this.doc.setFont("helvetica", "normal");
-    const lines = this.doc.splitTextToSize(text, this.contentWidth - 5);
+    const lines = this.doc.splitTextToSize(text, this.contentWidth - 5) as string[];
     this.ensureSpace(lines.length * 5 + 2, footerLabel);
     lines.forEach((line, i) => {
       this.doc.text(i === 0 ? "•  " : "    ", this.margin, this.y);
