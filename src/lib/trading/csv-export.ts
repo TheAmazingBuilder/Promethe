@@ -67,7 +67,7 @@ function yn(v: boolean | null | undefined): string {
 
 /** Full CSV document for the given rows. */
 export function tradesToCsv(rows: TradeListItemDTO[]): string {
-  const lines: string[] = [HEADERS.map(csvField).join(",")];
+  const lines: string[] = [HEADERS.map((header) => csvField(header)).join(",")];
   for (const t of rows) {
     lines.push(
       [
