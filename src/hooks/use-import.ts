@@ -7,6 +7,7 @@
 import * as React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
+import { escapeCsvField } from "@/lib/csv";
 import type { ImportFileContent, ParseResult } from "@/lib/import/types";
 import type { WorkerRequest, WorkerResponse } from "@/lib/import/parse-worker";
 import type { ImportBatchDTO } from "@/server/import";
@@ -217,21 +218,37 @@ export function useStartImport(onProgress: (progress: ImportProgress) => void) {
 }
 
 /** CSV download helper for the error report. */
-export function downloadErrorReport(errors: ImportOutcome["errors"], fileName: string): void {
-  const header = "row,externalId,code,detail";
+export function buildErrorReportCsv(
+  errors: ImportOutcome["errors"]
+): string {
+  const header = ["row", "externalId", "code", "detail"]
+    .map(escapeCsvField)
+    .join(",");
   const lines = errors.map((error) =>
     [
       error.row,
       error.externalId ?? "",
       error.code,
-      (error.detail ?? "").replace(/["\n,]/g, " "),
-    ].join(",")
+      error.detail ?? "",
+    ]
+      .map(escapeCsvField)
+      .join(",")
   );
-  const blob = new Blob([[header, ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
+  return [header, ...lines].join("\r\n");
+}
+
+/** CSV download helper for the error report. */
+export function downloadErrorReport(
+  errors: ImportOutcome["errors"],
+  fileName: string
+): void {
+  const blob = new Blob([buildErrorReportCsv(errors)], {
+    type: "text/csv;charset=utf-8",
+  });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `erreurs-${fileName}.csv`;
+  anchor.download = `erreurs-${fileName}`;
   anchor.click();
   URL.revokeObjectURL(url);
 }
