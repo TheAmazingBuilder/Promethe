@@ -32,6 +32,9 @@ import {
   readPublicScreenshot,
 } from "@/server/sharing";
 import { findLeaks, PIPS_R_ONLY_PRESET, NO_REDACTION } from "@/lib/redaction";
+import { mockSupabaseStorage } from "../helpers/supabase-storage";
+
+const storage = mockSupabaseStorage();
 
 const PIPS_POLICY = { ...PIPS_R_ONLY_PRESET };
 const FULL_POLICY = { ...NO_REDACTION };
@@ -139,6 +142,7 @@ afterAll(async () => {
   await db.user.deleteMany({ where: { id: { in: [userA.id, userB.id] } } });
   await db.instrument.deleteMany({ where: { id: instrumentId } });
   await db.$disconnect();
+  storage.restore();
 });
 
 // ── TRADE links ──────────────────────────────────────────────────────────────
@@ -515,17 +519,12 @@ describe("readPublicScreenshot — politique", () => {
   });
 
   it("sert une capture d'un lien valide dont la politique l'autorise", async () => {
-    const { writeFile, mkdir } = await import("node:fs/promises");
-    const path = await import("node:path");
-    const { UPLOAD_ROOT } = await import("@/server/uploads");
-
     const shotId = "shotshare01";
-    const storagePath = path.posix.join(userA.id, tradeAId, `${shotId}.png`);
-    await mkdir(path.join(UPLOAD_ROOT, userA.id, tradeAId), { recursive: true });
-    await writeFile(
-      path.join(UPLOAD_ROOT, storagePath),
-      Buffer.from("89504e470d0a1a0a", "hex")
-    );
+    const storagePath = `${userA.id}/${tradeAId}/${shotId}.png`;
+    storage.objects.set(storagePath, {
+      bytes: Buffer.from("89504e470d0a1a0a", "hex"),
+      contentType: "image/png",
+    });
     await db.tradeScreenshot.create({
       data: {
         id: shotId,
