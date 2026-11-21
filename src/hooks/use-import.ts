@@ -250,7 +250,7 @@ export function downloadErrorReport(
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `erreurs-${fileName}`;
+  anchor.download = `erreurs-${fileName}.csv`;
   anchor.click();
   URL.revokeObjectURL(url);
 }
