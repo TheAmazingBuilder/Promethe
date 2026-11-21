@@ -395,13 +395,16 @@ async function dispatchNotifications(params: {
 export async function editComment(
   viewerId: string,
   commentId: string,
-  input: CommentEditInput
+  input: CommentEditInput,
+  expectedTradeId?: string
 ): Promise<TradeCommentDTO> {
   const row = await db.tradeComment.findUnique({
     where: { id: commentId },
     include: AUTHOR_INCLUDE,
   });
-  if (!row) throw new CommentValidationError("COMMENT_NOT_FOUND", "Comment not found.", 404);
+  if (!row || (expectedTradeId !== undefined && row.tradeId !== expectedTradeId)) {
+    throw new CommentValidationError("COMMENT_NOT_FOUND", "Comment not found.", 404);
+  }
   if (row.deletedAt) {
     throw new CommentValidationError("COMMENT_DELETED", "This comment has been deleted.");
   }
@@ -444,9 +447,15 @@ export async function editComment(
   };
 }
 
-export async function deleteComment(viewerId: string, commentId: string): Promise<void> {
+export async function deleteComment(
+  viewerId: string,
+  commentId: string,
+  expectedTradeId?: string
+): Promise<void> {
   const row = await db.tradeComment.findUnique({ where: { id: commentId } });
-  if (!row) throw new CommentValidationError("COMMENT_NOT_FOUND", "Comment not found.", 404);
+  if (!row || (expectedTradeId !== undefined && row.tradeId !== expectedTradeId)) {
+    throw new CommentValidationError("COMMENT_NOT_FOUND", "Comment not found.", 404);
+  }
 
   const isAuthor = row.authorId === viewerId;
   const isOwner = row.ownerId === viewerId;
