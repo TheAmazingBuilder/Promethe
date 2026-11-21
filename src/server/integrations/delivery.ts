@@ -543,6 +543,31 @@ export interface OutboxReport {
  * Drain due PENDING outbox rows. Daily summaries inside quiet hours are
  * deferred past the end of quiet hours instead of being sent.
  */
+const OUTBOX_LOCK_TIMEOUT_MS = 2 * 60 * 1000;
+
+/**
+ * Atomically finalize a row only while this worker still owns its lease.
+ * updatedAt is the lease version: a reclaimed row receives a newer value,
+ * preventing an expired worker from overwriting the new owner's result.
+ */
+async function updateClaimedOutbox(
+  id: string,
+  claimedAt: Date,
+  data: Record<string, unknown>
+): Promise<boolean> {
+  const result = await db.outboundMessage.updateMany({
+    where: { id, status: "PROCESSING", updatedAt: claimedAt },
+    data,
+  });
+  return result.count === 1;
+}
+
+/**
+ * Drain due PENDING/FAILED rows. PROCESSING rows whose two-minute lease
+ * expired are recoverable after a crashed worker. Claims use compare-and-set
+ * (updateMany with the observed status/version), so concurrent cron runs
+ * cannot both send the same row.
+ */
 export async function processOutbox(
   limit = 50,
   now = new Date()
@@ -554,38 +579,76 @@ export async function processOutbox(
     dead: 0,
     deferredQuietHours: 0,
   };
-  let rows;
+  const staleLockBefore = new Date(now.getTime() - OUTBOX_LOCK_TIMEOUT_MS);
+  let candidates;
   try {
-    rows = await db.outboundMessage.findMany({
-      where: { status: "PENDING", nextAttemptAt: { lte: now } },
+    candidates = await db.outboundMessage.findMany({
+      where: {
+        OR: [
+          { status: { in: ["PENDING", "FAILED"] }, nextAttemptAt: { lte: now } },
+          { status: "PROCESSING", updatedAt: { lte: staleLockBefore } },
+        ],
+      },
       orderBy: { createdAt: "asc" },
       take: limit,
-      include: { endpoint: true },
+      select: { id: true, status: true, updatedAt: true },
     });
   } catch (error) {
     logError("outbox read failed", error);
     return report;
   }
 
-  for (const row of rows) {
+  for (const candidate of candidates) {
+    // Compare-and-set: exactly one concurrent worker can move this version
+    // into PROCESSING. A stale PROCESSING row can only be reclaimed after
+    // its lease deadline.
+    const claimWhere =
+      candidate.status === "PROCESSING"
+        ? {
+            id: candidate.id,
+            status: "PROCESSING",
+            updatedAt: { lte: staleLockBefore },
+          }
+        : {
+            id: candidate.id,
+            status: candidate.status,
+            nextAttemptAt: { lte: now },
+          };
+    let claimed: { count: number };
+    try {
+      claimed = await db.outboundMessage.updateMany({
+        where: claimWhere,
+        data: { status: "PROCESSING" },
+      });
+    } catch (error) {
+      logError("outbox claim failed", error);
+      continue;
+    }
+    if (claimed.count !== 1) continue;
+
+    const row = await db.outboundMessage.findUnique({
+      where: { id: candidate.id },
+      include: { endpoint: true },
+    });
+    if (!row || row.status !== "PROCESSING") continue;
+    const claimedAt = row.updatedAt;
     report.processed += 1;
+
     const parsed = parseOutboundPayload(row.payloadJson);
     if (!parsed) {
-      await db.outboundMessage.update({
-        where: { id: row.id },
-        data: { status: "DEAD", lastError: "Payload illisible." },
-      });
-      report.dead += 1;
+      if (await updateClaimedOutbox(row.id, claimedAt, {
+        status: "DEAD",
+        lastError: "Payload illisible.",
+      })) report.dead += 1;
       continue;
     }
     const { event, privacyLevel } = parsed;
     const endpoint = row.endpoint;
     if (!endpoint || !endpoint.isEnabled) {
-      await db.outboundMessage.update({
-        where: { id: row.id },
-        data: { status: "DEAD", lastError: "Endpoint disabled or deleted." },
-      });
-      report.dead += 1;
+      if (await updateClaimedOutbox(row.id, claimedAt, {
+        status: "DEAD",
+        lastError: "Endpoint disabled or deleted.",
+      })) report.dead += 1;
       continue;
     }
 
@@ -613,13 +676,11 @@ export async function processOutbox(
           sub.quietHoursStart,
           sub.quietHoursEnd
         );
-        await db.outboundMessage.update({
-          where: { id: row.id },
-          data: {
-            nextAttemptAt: new Date(now.getTime() + Math.max(waitMin, 1) * 60 * 1000),
-          },
+        const deferred = await updateClaimedOutbox(row.id, claimedAt, {
+          status: "PENDING",
+          nextAttemptAt: new Date(now.getTime() + Math.max(waitMin, 1) * 60 * 1000),
         });
-        report.deferredQuietHours += 1;
+        if (deferred) report.deferredQuietHours += 1;
         continue;
       }
     }
@@ -632,11 +693,11 @@ export async function processOutbox(
         60 * 1000
       );
       if (!rl.allowed) {
-        await db.outboundMessage.update({
-          where: { id: row.id },
-          data: { nextAttemptAt: new Date(now.getTime() + 60 * 1000) },
+        const deferred = await updateClaimedOutbox(row.id, claimedAt, {
+          status: "PENDING",
+          nextAttemptAt: new Date(now.getTime() + 60 * 1000),
         });
-        report.failed += 1;
+        if (deferred) report.failed += 1;
         continue;
       }
     } catch (error) {
@@ -648,11 +709,10 @@ export async function processOutbox(
       secret = decryptSecret(endpoint.secretEncrypted);
     } catch (error) {
       logError("decrypt failed", error);
-      await db.outboundMessage.update({
-        where: { id: row.id },
-        data: { status: "DEAD", lastError: "Unreadable secret (encryption key?)." },
-      });
-      report.dead += 1;
+      if (await updateClaimedOutbox(row.id, claimedAt, {
+        status: "DEAD",
+        lastError: "Unreadable secret (encryption key?).",
+      })) report.dead += 1;
       continue;
     }
 
@@ -665,57 +725,43 @@ export async function processOutbox(
     );
 
     if (outcome.ok) {
-      await Promise.all([
-        db.outboundMessage.update({
-          where: { id: row.id },
-          data: { status: "SENT", sentAt: new Date() },
-        }),
-        db.integrationEndpoint.update({
+      const sent = await updateClaimedOutbox(row.id, claimedAt, {
+        status: "SENT",
+        sentAt: new Date(),
+        lastError: null,
+      });
+      if (sent) {
+        await db.integrationEndpoint.update({
           where: { id: endpoint.id },
           data: { consecutiveFailures: 0, lastSentAt: new Date() },
-        }),
-      ]);
-      report.sent += 1;
+        });
+        report.sent += 1;
+      }
       continue;
     }
 
     const attempts = row.attempts + 1;
-    if (outcome.retryAfterSeconds != null) {
-      // 429: honour retry_after, keep PENDING.
-      await db.outboundMessage.update({
-        where: { id: row.id },
-        data: {
-          attempts,
-          lastError: outcome.error ?? "RATE_LIMITED",
-          nextAttemptAt: new Date(
+    const exhausted = attempts >= MAX_OUTBOX_ATTEMPTS;
+    const nextAttemptAt =
+      outcome.retryAfterSeconds != null
+        ? new Date(
             now.getTime() +
               Math.min(Math.max(outcome.retryAfterSeconds, 1), 3600) * 1000
-          ),
-        },
-      });
-      report.failed += 1;
-      continue;
-    }
-    if (attempts >= MAX_OUTBOX_ATTEMPTS) {
-      await db.outboundMessage.update({
-        where: { id: row.id },
-        data: { status: "DEAD", attempts, lastError: outcome.error ?? "Repeated failure." },
-      });
+          )
+        : new Date(now.getTime() + backoffDelayMs(attempts));
+    const finalized = await updateClaimedOutbox(row.id, claimedAt, {
+      status: exhausted ? "DEAD" : "FAILED",
+      attempts,
+      lastError: outcome.error ?? "Send failed.",
+      ...(exhausted ? {} : { nextAttemptAt }),
+    });
+    if (!finalized) continue;
+
+    if (outcome.retryAfterSeconds == null) {
       await recordFailure(endpoint.id, outcome.error);
-      report.dead += 1;
-    } else {
-      await db.outboundMessage.update({
-        where: { id: row.id },
-        data: {
-          status: "FAILED",
-          attempts,
-          lastError: outcome.error ?? "Send failed.",
-          nextAttemptAt: new Date(now.getTime() + backoffDelayMs(attempts)),
-        },
-      });
-      await recordFailure(endpoint.id, outcome.error);
-      report.failed += 1;
     }
+    if (exhausted) report.dead += 1;
+    else report.failed += 1;
   }
   return report;
 }
