@@ -1,16 +1,14 @@
 /**
  * Minimal service worker for Promethe (PWA).
  *
- * - Precaches the app shell essentials (icons + brand images) on install.
- * - Cache-first for same-origin static assets (/_next/static, /brand, /ea,
- *   icons): fast repeat loads, works offline for the shell.
- * - Network-first for everything else (pages, /api): never serves stale
- *   data or an outdated app version. API responses are never cached.
- * - Old caches are purged on activate (bump CACHE_NAME to invalidate).
+ * Security policy:
+ * - Cache only public, immutable/static assets.
+ * - Never cache API responses or navigations: authenticated pages can contain
+ *   private trading data and must never be replayed after logout/revocation.
+ * - Bump CACHE_NAME to purge caches created by older service-worker versions.
  */
-const CACHE_NAME = "promethe-v1";
+const CACHE_NAME = "promethe-v2-private-safe";
 const PRECACHE = [
-  "/",
   "/favicon.ico",
   "/icon-192.png",
   "/icon-512.png",
@@ -18,6 +16,19 @@ const PRECACHE = [
   "/brand/phoenix-1.png",
   "/brand/phoenix-2.png",
 ];
+
+const OFFLINE_HTML = `<!doctype html>
+<html lang="en">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Promethe — Offline</title>
+  <body>
+    <main>
+      <h1>You are offline</h1>
+      <p>Reconnect to the internet to access your journal securely.</p>
+    </main>
+  </body>
+</html>`;
 
 function isStaticAsset(url) {
   return (
@@ -37,8 +48,8 @@ self.addEventListener("install", (event) => {
       .open(CACHE_NAME)
       .then((cache) => cache.addAll(PRECACHE))
       .catch(() => {
-        // Offline on first install: precache fails silently, the app still
-        // works online and retries caching on later visits.
+        // Offline on first install: precache fails silently; static assets
+        // are cached as they are successfully loaded on later visits.
       })
       .then(() => self.skipWaiting())
   );
@@ -60,18 +71,21 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
+
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-  // Never cache API traffic or auth.
+
+  // API responses (including owner, mentor and public media proxies) are
+  // network-only. Their Cache-Control headers additionally use no-store.
   if (url.pathname.startsWith("/api/")) return;
 
   if (isStaticAsset(url)) {
     event.respondWith(
       caches.match(request).then((cached) => {
         const network = fetch(request).then((response) => {
-          if (response.ok) {
+          if (response.ok && response.type === "basic") {
             const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+            void caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
           }
           return response;
         });
@@ -81,16 +95,20 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Pages: network first, fall back to the cached shell when offline.
-  event.respondWith(
-    fetch(request)
-      .then((response) => {
-        if (response.ok && request.mode === "navigate") {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-        }
-        return response;
-      })
-      .catch(() => caches.match(request).then((cached) => cached ?? caches.match("/")))
-  );
+  // Navigations are never persisted. The previous worker cached HTML pages,
+  // including authenticated pages, and could replay private data offline.
+  if (request.mode === "navigate") {
+    event.respondWith(
+      fetch(request, { cache: "no-store" }).catch(
+        () =>
+          new Response(OFFLINE_HTML, {
+            status: 503,
+            headers: {
+              "Content-Type": "text/html; charset=utf-8",
+              "Cache-Control": "no-store",
+            },
+          })
+      )
+    );
+  }
 });
