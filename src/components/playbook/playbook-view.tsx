@@ -49,6 +49,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { QueryErrorState } from "@/components/ui/query-error-state";
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
@@ -368,7 +369,7 @@ function DuplicateDialog({
 function OverviewTab() {
   const t = useTranslations("playbook.overview");
   const tUnder = useTranslations("playbook.underperforming");
-  const { data, isLoading } = usePlaybookOverview();
+  const { data, isLoading, isError, refetch } = usePlaybookOverview();
   const { data: strategies } = usePlaybookStrategies();
   const nameById = React.useMemo(() => {
     const map = new Map<string, string>();
@@ -383,6 +384,15 @@ function OverviewTab() {
           <Skeleton key={i} className="h-44 w-full" />
         ))}
       </div>
+    );
+  }
+  if (isError) {
+    return (
+      <QueryErrorState
+        title="Playbook overview could not be loaded"
+        description="Your strategies and journal data are safe. Try loading the overview again."
+        onRetry={() => void refetch()}
+      />
     );
   }
   if (!data) return null;
