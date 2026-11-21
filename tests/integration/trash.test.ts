@@ -329,7 +329,7 @@ describe("trashed strategy & tag are hidden from DTOs and analytics", () => {
     // Analytics breakdown by strategy excludes the trashed bucket.
     const analytics = await getAnalytics(userA.id, { period: "all" });
     const byStrategy = analytics.breakdowns.strategy ?? [];
-    expect(byStrategy.find((b) => b.label === "Trash Strat")).toBeUndefined();
+    expect(byStrategy.find((b) => b.key === "Trash Strat")).toBeUndefined();
 
     // Restore → everything returns.
     await restoreTrashItems(userA.id, [
