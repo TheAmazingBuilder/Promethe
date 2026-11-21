@@ -132,7 +132,7 @@ model User {
   @@map("users")
 }
 
-/// Server-side session store; the httpOnly cookie only holds the opaque session id.
+/// Server-side session store; id is a versioned SHA-256 digest of the opaque cookie token.
 model AuthSession {
   id        String   @id
   userId    String   @map("user_id")
