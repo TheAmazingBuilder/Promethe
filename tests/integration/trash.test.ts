@@ -31,6 +31,14 @@ vi.mock("next/headers", () => ({
 import { db } from "@/lib/db";
 import { withDeleted } from "@/lib/trash/deleted-scope";
 import { TRASH_RETENTION_DAYS } from "@/lib/trash/constants";
+
+const DEFAULT_LIST_QUERY: TradeListQuery = {
+  page: 1,
+  pageSize: 25,
+  includeDrafts: false,
+  sort: "entryTime",
+  order: "desc",
+};
 import { createUserWithDefaults } from "@/server/users";
 import {
   deleteTrade,
@@ -39,6 +47,7 @@ import {
 } from "@/server/trades";
 import { getAnalytics } from "@/server/analytics";
 import { exportTradesCsv } from "@/server/export";
+import type { TradeListQuery } from "@/lib/validations/trade";
 import {
   deleteJournalEntry,
   upsertJournalEntry,
@@ -173,14 +182,10 @@ describe("soft-deleted trades never appear in stats (regression)", () => {
     ).toBeNull();
 
     // Server list + search.
-    const list = await listTrades(userA.id, { page: 1, pageSize: 25 });
+    const list = await listTrades(userA.id, DEFAULT_LIST_QUERY);
     expect(list.total).toBe(1);
     expect(list.data[0]?.id).toBe(visible.id);
-    const search = await listTrades(userA.id, {
-      page: 1,
-      pageSize: 25,
-      search: "hide",
-    });
+    const search = await listTrades(userA.id, { ...DEFAULT_LIST_QUERY, search: "hide" });
     expect(search.total).toBe(0);
 
     // Detail 404s.
@@ -191,7 +196,7 @@ describe("soft-deleted trades never appear in stats (regression)", () => {
     expect(analytics.stats?.tradeCount ?? 0).toBe(1);
 
     // Export.
-    const csv = await exportTradesCsv(userA.id, { page: 1, pageSize: 25 }, "en");
+    const csv = await exportTradesCsv(userA.id, DEFAULT_LIST_QUERY);
     expect(csv.count).toBe(1);
     expect(csv.csv).not.toContain("hide me");
 
@@ -323,7 +328,7 @@ describe("trashed strategy & tag are hidden from DTOs and analytics", () => {
 
     // Analytics breakdown by strategy excludes the trashed bucket.
     const analytics = await getAnalytics(userA.id, { period: "all" });
-    const byStrategy = analytics.breakdowns.byStrategy ?? [];
+    const byStrategy = analytics.breakdowns.strategy ?? [];
     expect(byStrategy.find((b) => b.label === "Trash Strat")).toBeUndefined();
 
     // Restore → everything returns.
