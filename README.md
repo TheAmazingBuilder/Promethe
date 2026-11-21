@@ -70,11 +70,11 @@ Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS + shadcn/ui ·
 ```bash
 git clone https://github.com/TheAmazingBuilder/Promethe.git
 cd Promethe
-npm install
+bun install --frozen-lockfile
 cp .env.example .env   # fill in your own values (see below)
-npx prisma db push
-npx prisma generate
-npm run dev            # http://localhost:3000
+bunx prisma db push
+bunx prisma generate
+bun run dev            # http://localhost:3000
 ```
 
 Seed the reference data (37 instruments, 21 tags, plus a local demo account - idempotent, local use only):
@@ -102,7 +102,7 @@ Generate peppers with `openssl rand -hex 32`. Never commit a real `.env` - this 
 
 ## Deployment
 
-1. **Supabase** - create a project, copy the pooler URLs into `DATABASE_URL` / `DIRECT_URL`, run `npx prisma db push`, apply `prisma/rls.sql` in the SQL Editor.
+1. **Supabase** - create a project, copy the pooler URLs into `DATABASE_URL` / `DIRECT_URL`, run `bunx prisma db push`, apply `prisma/rls.sql` in the SQL Editor.
 2. **Vercel** - import the repo (Next.js preset), set the environment variables above, deploy. The build runs `prisma generate` before `next build`, so the Prisma client always matches the current schema.
 
 Notes for the free tiers: a Supabase free project pauses after ~7 days of inactivity (expect a ~30 s cold start); the Vercel Hobby plan is for non-commercial use. Rate limiting is in-memory - fine for personal use, move to Upstash before opening the app to the public.
@@ -122,9 +122,13 @@ docs/              # API reference (docs/API.md)
 ## Tests
 
 ```bash
-npm test           # Vitest (recreates an isolated test DB first)
-npm run lint       # ESLint
+bun run test:unit          # Unit tests (no database required)
+bun run test:integration   # PostgreSQL integration tests; resets only schema promethe_test
+bun run test:all           # Unit + integration suites
+bun run lint               # ESLint
 ```
+
+Integration tests require `TEST_DATABASE_URL` and `TEST_DIRECT_URL`, both targeting a dedicated PostgreSQL database/schema named `promethe_test`. The reset script refuses SQLite and the production `public` schema; never point these variables at production.
 
 ## License
 

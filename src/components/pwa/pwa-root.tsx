@@ -58,6 +58,9 @@ export function PwaRoot() {
       if (choice.outcome === "accepted" || choice.outcome === "dismissed") {
         setInstallPrompt(null);
       }
+    } catch {
+      // The browser may reject a stale or unavailable prompt. Keep the app
+      // usable and leave the action available for another user-initiated try.
     } finally {
       setIsInstalling(false);
     }

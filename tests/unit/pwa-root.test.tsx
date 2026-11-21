@@ -85,4 +85,26 @@ describe("PwaRoot", () => {
       expect(screen.queryByRole("button", { name: "Install Promethe" })).toBeNull();
     });
   });
+  it("recovers when the browser rejects the installation prompt", async () => {
+    const prompt = vi.fn().mockRejectedValue(new Error("Install prompt unavailable"));
+    const installEvent = new Event("beforeinstallprompt", { cancelable: true }) as Event & {
+      prompt: typeof prompt;
+      userChoice: Promise<{ outcome: "dismissed"; platform: string }>;
+    };
+    installEvent.prompt = prompt;
+    installEvent.userChoice = Promise.resolve({ outcome: "dismissed", platform: "web" });
+
+    render(<PwaRoot />);
+    window.dispatchEvent(installEvent);
+    const installButton = await screen.findByRole("button", { name: "Install Promethe" });
+
+    fireEvent.click(installButton);
+
+    await waitFor(() => expect(prompt).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect((installButton as HTMLButtonElement).disabled).toBe(false);
+    });
+    expect(screen.getByRole("button", { name: "Install Promethe" })).toBeTruthy();
+  });
+
 });
