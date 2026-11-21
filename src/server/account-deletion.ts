@@ -178,7 +178,7 @@ export async function executeDueDeletions(
             scheduledFor: { lte: now },
           };
 
-    let claim;
+    let claim: { count: number };
     try {
       claim = await db.accountDeletionRequest.updateMany({
         where: claimWhere,
