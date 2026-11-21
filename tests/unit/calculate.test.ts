@@ -69,9 +69,22 @@ describe("stopDistance / R multiples", () => {
     const r = calcRMultiple("LONG", "2345.00", "2351.80", "2340.00")!;
     expect(r.toString()).toBe("1.36");
   });
-  it("planned RR: reward 13 / risk 5 = 2.6", () => {
+  it("planned RR: reward 13 / risk 5 = 2.6 for LONG", () => {
     const rr = calcPlannedRR("LONG", "2345.00", "2340.00", "2358.00")!;
     expect(rr.toString()).toBe("2.6");
+  });
+  it("planned RR: reward 13 / risk 5 = 2.6 for SHORT", () => {
+    const rr = calcPlannedRR("SHORT", "2345.00", "2350.00", "2332.00")!;
+    expect(rr.toString()).toBe("2.6");
+  });
+  it("returns null when LONG take profit is below entry", () => {
+    expect(calcPlannedRR("LONG", "2345.00", "2340.00", "2332.00")).toBeNull();
+  });
+  it("returns null when SHORT take profit is above entry", () => {
+    expect(calcPlannedRR("SHORT", "2345.00", "2350.00", "2358.00")).toBeNull();
+  });
+  it("returns null when take profit equals entry", () => {
+    expect(calcPlannedRR("LONG", "2345.00", "2340.00", "2345.00")).toBeNull();
   });
   it("R is null without a valid stop", () => {
     expect(calcRMultiple("LONG", "2345.00", "2351.80", null)).toBeNull();
