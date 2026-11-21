@@ -37,7 +37,7 @@ jobs:
         run: bunx prisma generate
 
       - name: TypeScript
-        run: bunx tsc --noEmit
+        run: bun run typecheck
 
       - name: ESLint
         run: bun run lint
