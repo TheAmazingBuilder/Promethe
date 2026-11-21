@@ -12,6 +12,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
+import { invalidateTradeDerivedQueries } from "@/lib/query/invalidation";
 import type {
   AccountDTO,
   SavedViewDTO,
@@ -232,17 +233,7 @@ export interface MutationResult {
 
 function useInvalidateTrades() {
   const qc = useQueryClient();
-  return () => {
-    void qc.invalidateQueries({ queryKey: ["trades"] });
-    void qc.invalidateQueries({ queryKey: ["dashboard"] });
-    // Phase 2 perf (item 6) — the heavy analytics queries below run with
-    // a 5 min staleTime and no refetch on focus, so a trade mutation must
-    // invalidate them explicitly; otherwise an edit would leave the tabs
-    // stale for up to 5 min (today the gap is 60 s).
-    void qc.invalidateQueries({ queryKey: ["analytics-advanced"] });
-    void qc.invalidateQueries({ queryKey: ["weekly-plan"] });
-    void qc.invalidateQueries({ queryKey: ["performance-report"] });
-  };
+  return () => invalidateTradeDerivedQueries(qc);
 }
 
 export function useCreateTrade() {
