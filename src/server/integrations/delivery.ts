@@ -16,6 +16,7 @@
  *  - Quiet hours gate daily summaries only; drawdown / prop alerts always
  *    go out.
  */
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { decryptSecret } from "@/lib/integrations/crypto";
 import {
@@ -553,7 +554,7 @@ const OUTBOX_LOCK_TIMEOUT_MS = 2 * 60 * 1000;
 async function updateClaimedOutbox(
   id: string,
   claimedAt: Date,
-  data: Record<string, unknown>
+  data: Prisma.OutboundMessageUpdateManyMutationInput
 ): Promise<boolean> {
   const result = await db.outboundMessage.updateMany({
     where: { id, status: "PROCESSING", updatedAt: claimedAt },
