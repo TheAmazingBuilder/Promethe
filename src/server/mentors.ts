@@ -182,7 +182,12 @@ export async function createInvitation(
   const invitee = await db.user.findUnique({ where: { email: input.email } });
   const [pending, existingAccess] = await Promise.all([
     db.mentorInvitation.findFirst({
-      where: { ownerId, inviteeEmail: input.email, status: "PENDING" },
+      where: {
+        ownerId,
+        inviteeEmail: input.email,
+        status: "PENDING",
+        expiresAt: { gt: new Date() },
+      },
     }),
     invitee
       ? db.mentorAccess.findUnique({
