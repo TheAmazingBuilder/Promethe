@@ -203,7 +203,7 @@ function VersionsDialog({
   const t = useTranslations("playbook.strategies");
   const tRoot = useTranslations();
   const { toast } = useToast();
-  const { data: versions, isLoading } = useStrategyVersions(
+  const { data: versions, isLoading, isError, refetch } = useStrategyVersions(
     open ? (strategy?.id ?? null) : null,
   );
   const deleteVersion = useDeleteStrategyVersion();
@@ -235,7 +235,12 @@ function VersionsDialog({
           </DialogTitle>
           <DialogDescription>{t("versionsDesc")}</DialogDescription>
         </DialogHeader>
-        {isLoading ? (
+        {isError ? (
+          <QueryErrorState
+            title="Strategy versions could not be loaded"
+            onRetry={() => void refetch()}
+          />
+        ) : isLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 2 }).map((_, i) => (
               <Skeleton key={i} className="h-16 w-full" />
@@ -546,9 +551,22 @@ function StrategiesTab() {
   const t = useTranslations("playbook.strategies");
   const tRoot = useTranslations();
   const { toast } = useToast();
-  const { data, isLoading } = usePlaybookStrategies();
-  const { data: statsData } = usePlaybookStats();
-  const { data: overview } = usePlaybookOverview();
+  const {
+    data,
+    isLoading,
+    isError: strategiesError,
+    refetch: refetchStrategies,
+  } = usePlaybookStrategies();
+  const {
+    data: statsData,
+    isError: statsError,
+    refetch: refetchStats,
+  } = usePlaybookStats();
+  const {
+    data: overview,
+    isError: overviewError,
+    refetch: refetchOverview,
+  } = usePlaybookOverview();
   const del = useDeleteStrategy();
 
   const statsById = React.useMemo(() => {
@@ -591,6 +609,20 @@ function StrategiesTab() {
           <Skeleton key={i} className="h-44 w-full" />
         ))}
       </div>
+    );
+  }
+  if (strategiesError || statsError || overviewError) {
+    return (
+      <QueryErrorState
+        title="Playbook strategies could not be loaded"
+        onRetry={() => {
+          void Promise.all([
+            refetchStrategies(),
+            refetchStats(),
+            refetchOverview(),
+          ]);
+        }}
+      />
     );
   }
   if ((data ?? []).length === 0) {
@@ -1070,12 +1102,23 @@ function SetupsTab() {
   const t = useTranslations("playbook.setups");
   const tRoot = useTranslations();
   const { toast } = useToast();
-  const { data: strategies } = usePlaybookStrategies();
+  const {
+    data: strategies,
+    isError: strategiesError,
+    refetch: refetchStrategies,
+  } = usePlaybookStrategies();
   const [filter, setFilter] = React.useState<string>("all");
-  const { data: setups, isLoading } = useSetups(
-    filter === "all" ? null : filter,
-  );
-  const { data: insights } = useSetupInsights(filter === "all" ? null : filter);
+  const {
+    data: setups,
+    isLoading,
+    isError: setupsError,
+    refetch: refetchSetups,
+  } = useSetups(filter === "all" ? null : filter);
+  const {
+    data: insights,
+    isError: insightsError,
+    refetch: refetchInsights,
+  } = useSetupInsights(filter === "all" ? null : filter);
   const del = useDeleteSetup();
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<SetupDTO | null>(null);
@@ -1099,6 +1142,21 @@ function SetupsTab() {
       });
     }
   };
+
+  if (strategiesError || setupsError || insightsError) {
+    return (
+      <QueryErrorState
+        title="Playbook setups could not be loaded"
+        onRetry={() => {
+          void Promise.all([
+            refetchStrategies(),
+            refetchSetups(),
+            refetchInsights(),
+          ]);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -1489,8 +1547,17 @@ function RulesTab() {
   const t = useTranslations("playbook.rules");
   const tRoot = useTranslations();
   const { toast } = useToast();
-  const { data: rules, isLoading } = usePlaybookRules();
-  const { data: strategies } = usePlaybookStrategies();
+  const {
+    data: rules,
+    isLoading,
+    isError: rulesError,
+    refetch: refetchRules,
+  } = usePlaybookRules();
+  const {
+    data: strategies,
+    isError: strategiesError,
+    refetch: refetchStrategies,
+  } = usePlaybookStrategies();
   const del = useDeletePlaybookRule();
   const install = useInstallExampleRules();
   const [dialogOpen, setDialogOpen] = React.useState(false);
@@ -1527,6 +1594,17 @@ function RulesTab() {
       });
     }
   };
+
+  if (rulesError || strategiesError) {
+    return (
+      <QueryErrorState
+        title="Playbook rules could not be loaded"
+        onRetry={() => {
+          void Promise.all([refetchRules(), refetchStrategies()]);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -1856,8 +1934,17 @@ function ChecklistsTab() {
   const t = useTranslations("playbook.checklists");
   const tRoot = useTranslations();
   const { toast } = useToast();
-  const { data: checklists, isLoading } = useChecklistTemplates();
-  const { data: strategies } = usePlaybookStrategies();
+  const {
+    data: checklists,
+    isLoading,
+    isError: checklistsError,
+    refetch: refetchChecklists,
+  } = useChecklistTemplates();
+  const {
+    data: strategies,
+    isError: strategiesError,
+    refetch: refetchStrategies,
+  } = usePlaybookStrategies();
   const del = useDeleteChecklistTemplate();
   const install = useInstallGlobalChecklist();
   const [dialogOpen, setDialogOpen] = React.useState(false);
@@ -1889,6 +1976,17 @@ function ChecklistsTab() {
       });
     }
   };
+
+  if (checklistsError || strategiesError) {
+    return (
+      <QueryErrorState
+        title="Playbook checklists could not be loaded"
+        onRetry={() => {
+          void Promise.all([refetchChecklists(), refetchStrategies()]);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -1984,10 +2082,18 @@ function ChecklistsTab() {
 function PerformanceTab() {
   const t = useTranslations("playbook.performance");
   const tStrat = useTranslations("playbook.strategies");
-  const { data, isLoading } = usePlaybookStats();
+  const { data, isLoading, isError, refetch } = usePlaybookStats();
 
   if (isLoading) {
     return <Skeleton className="h-44 w-full" />;
+  }
+  if (isError) {
+    return (
+      <QueryErrorState
+        title="Playbook performance could not be loaded"
+        onRetry={() => void refetch()}
+      />
+    );
   }
   const rows = (data ?? []).filter((s) => s.stats.tradeCount > 0);
   if (rows.length === 0) {
