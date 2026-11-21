@@ -16,7 +16,9 @@
     "test:unit": "vitest run tests/unit",
     "test:integration": "bun scripts/test-db.ts && vitest run tests/integration",
     "test:all": "bun run test:unit && bun run test:integration",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:status": "prisma migrate status"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
