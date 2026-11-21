@@ -8,6 +8,7 @@ import * as React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 import { escapeCsvField } from "@/lib/csv";
+import { invalidateTradeDerivedQueries } from "@/lib/query/invalidation";
 import type { ImportFileContent, ParseResult } from "@/lib/import/types";
 import type { WorkerRequest, WorkerResponse } from "@/lib/import/parse-worker";
 import type { ImportBatchDTO } from "@/server/import";
@@ -210,9 +211,10 @@ export function useStartImport(onProgress: (progress: ImportProgress) => void) {
       return { batch: completed.batch, outcome };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["trades"] });
-      queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
+      invalidateTradeDerivedQueries(queryClient);
+      // Imports can contain cash transactions as well as trades.
+      void queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      void queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
     },
   });
 }
