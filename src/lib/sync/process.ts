@@ -911,6 +911,11 @@ export async function processIngestPayload(
   if (connection.status === "REVOKED") {
     throw new IngestError("CONNECTION_REVOKED", 403);
   }
+  // MISMATCH is a sticky safety state. Only an explicit owner-initiated
+  // reset/rotation may clear the binding and allow another terminal to bind.
+  if (connection.status === "MISMATCH") {
+    throw new IngestError("CONNECTION_MISMATCH", 403);
+  }
 
   // Replay protection: reject payloads with excessive clock skew.
   if (!withinSkew(payload.sentAt)) {
