@@ -56,7 +56,7 @@ describe("privacy store", () => {
   it("loadPrivacyState normalizes invalid values", () => {
     loadPrivacyState(
       {
-        mode: "WAT" as never,
+        mode: "WAT",
         scope: { hidePercentages: true },
         auto: { onInactivitySeconds: 99999 },
         shortcut: "",
