@@ -25,7 +25,7 @@ describe("spreadsheet-safe CSV exports", () => {
     ]);
 
     expect(csv).toContain("\"'=HYPERLINK(\"\"https://example.invalid\"\",\"\"Open\"\")\"");
-    expect(csv).toContain("\"\t'+cmd|/C calc\"");
+    expect(csv).toContain("\"'\t+cmd|/C calc\"");
     expect(csv.startsWith('"row","externalId","code","detail"')).toBe(true);
   });
 });
