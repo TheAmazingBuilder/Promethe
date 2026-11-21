@@ -84,7 +84,7 @@ function BarsShape({ seed }: { seed: string }) {
         <div
           key={i}
           className={
-            i === 3 ? "flex-1 rounded-sm bg-emerald-500/70" : "flex-1 rounded-sm bg-muted-foreground/25"
+            i === 3 ? "flex-1 rounded-sm bg-gain-subtle" : "flex-1 rounded-sm bg-muted-foreground/25"
           }
           style={{ height: `${25 + v * 70}%` }}
         />
@@ -102,7 +102,7 @@ function LineShape({ seed }: { seed: string }) {
     <svg
       viewBox="0 0 120 48"
       preserveAspectRatio="none"
-      className="h-full w-full text-emerald-500"
+      className="h-full w-full text-gain"
     >
       <polygon points={`0,48 ${points} 120,48`} className="fill-current opacity-10" />
       <polyline
@@ -130,7 +130,7 @@ function KpiShape({ seed }: { seed: string }) {
           <div
             className={
               i === 0
-                ? "h-2 rounded-full bg-emerald-500/70"
+                ? "h-2 rounded-full bg-gain-subtle"
                 : "h-2 rounded-full bg-muted-foreground/40"
             }
             style={{ width: `${45 + v * 50}%` }}
@@ -147,7 +147,7 @@ function BigNumberShape({ seed }: { seed: string }) {
     <div className="flex h-full flex-col items-start justify-center gap-1.5 px-1">
       <div className="h-1.5 w-16 rounded-full bg-muted-foreground/25" />
       <div
-        className="h-3.5 rounded-full bg-emerald-500/70"
+        className="h-3.5 rounded-full bg-gain-subtle"
         style={{ width: `${35 + (v ?? 0.5) * 40}%` }}
       />
       <div className="h-1.5 w-24 rounded-full bg-muted-foreground/20" />
@@ -162,7 +162,7 @@ function TableShape({ seed }: { seed: string }) {
       <div className="h-1.5 w-2/3 rounded-full bg-muted-foreground/30" />
       {values.map((v, i) => (
         <div key={i} className="flex items-center gap-1.5">
-          <div className="h-2 w-2 shrink-0 rounded-full bg-emerald-500/60" />
+          <div className="h-2 w-2 shrink-0 rounded-full bg-gain-subtle" />
           <div
             className="h-1.5 rounded-full bg-muted-foreground/25"
             style={{ width: `${40 + v * 50}%` }}
@@ -185,9 +185,9 @@ function CalendarShape({ seed }: { seed: string }) {
           style={{
             backgroundColor:
               v > 0.66
-                ? "rgb(16 185 129 / 0.55)"
+                ? "color-mix(in oklab, var(--gain) 55%, transparent)"
                 : v > 0.33
-                  ? "rgb(16 185 129 / 0.25)"
+                  ? "color-mix(in oklab, var(--gain) 25%, transparent)"
                   : "rgb(148 163 184 / 0.18)",
           }}
         />
@@ -204,7 +204,7 @@ function HeatmapShape({ seed }: { seed: string }) {
         <div
           key={i}
           className="rounded-[2px]"
-          style={{ backgroundColor: `rgb(16 185 129 / ${0.08 + v * 0.75})` }}
+          style={{ backgroundColor: `color-mix(in oklab, var(--gain) ${8 + v * 75}%, transparent)` }}
         />
       ))}
     </div>
@@ -214,7 +214,7 @@ function HeatmapShape({ seed }: { seed: string }) {
 function NoteShape() {
   return (
     <div className="flex h-full flex-col justify-center gap-1.5 px-0.5">
-      <div className="h-2 w-1/2 rounded-full bg-emerald-500/50" />
+      <div className="h-2 w-1/2 rounded-full bg-gain-subtle" />
       <div className="h-1.5 w-full rounded-full bg-muted-foreground/25" />
       <div className="h-1.5 w-5/6 rounded-full bg-muted-foreground/25" />
       <div className="h-1.5 w-2/3 rounded-full bg-muted-foreground/20" />
@@ -231,7 +231,7 @@ function ListShape({ seed }: { seed: string }) {
           <div
             className={
               v > 0.5
-                ? "flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-[3px] bg-emerald-500/70 text-[8px] leading-none text-white"
+                ? "flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-[3px] bg-gain-subtle text-[8px] leading-none text-white"
                 : "h-2.5 w-2.5 shrink-0 rounded-[3px] border border-muted-foreground/40"
             }
           >
@@ -251,7 +251,7 @@ function StatusShape() {
   return (
     <div className="flex h-full flex-col justify-center gap-2">
       <div className="flex items-center gap-1.5">
-        <div className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+        <div className="h-2 w-2 shrink-0 rounded-full bg-gain" />
         <div className="h-1.5 w-2/3 rounded-full bg-muted-foreground/25" />
       </div>
       <div className="flex items-center gap-1.5">
@@ -274,7 +274,7 @@ function ActionsShape() {
           key={i}
           className={
             tone === "emerald"
-              ? "flex h-5 items-center justify-center rounded-md bg-emerald-500/80"
+              ? "flex h-5 items-center justify-center rounded-md bg-gain/80"
               : "flex h-5 items-center justify-center rounded-md border border-muted-foreground/25 bg-background/60"
           }
         >
@@ -300,7 +300,7 @@ function ProgressShape({ seed }: { seed: string }) {
           <div className="h-1.5 w-1/3 rounded-full bg-muted-foreground/25" />
           <div className="h-2 w-full overflow-hidden rounded-full bg-muted-foreground/15">
             <div
-              className="h-full rounded-full bg-emerald-500/70"
+              className="h-full rounded-full bg-gain-subtle"
               style={{ width: `${30 + v * 65}%` }}
             />
           </div>
@@ -314,16 +314,16 @@ function SplitShape() {
   return (
     <div className="flex h-full flex-col justify-center gap-2 px-0.5">
       <div className="flex h-3 w-full overflow-hidden rounded-full">
-        <div className="h-full bg-emerald-500/70" style={{ width: "58%" }} />
-        <div className="h-full bg-red-400/60" style={{ width: "42%" }} />
+        <div className="h-full bg-gain-subtle" style={{ width: "58%" }} />
+        <div className="h-full bg-loss-subtle" style={{ width: "42%" }} />
       </div>
       <div className="flex items-center gap-3">
         <span className="flex items-center gap-1">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500/70" />
+          <span className="h-1.5 w-1.5 rounded-full bg-gain-subtle" />
           <span className="h-1.5 w-8 rounded-full bg-muted-foreground/25" />
         </span>
         <span className="flex items-center gap-1">
-          <span className="h-1.5 w-1.5 rounded-full bg-red-400/60" />
+          <span className="h-1.5 w-1.5 rounded-full bg-loss-subtle" />
           <span className="h-1.5 w-8 rounded-full bg-muted-foreground/25" />
         </span>
       </div>
