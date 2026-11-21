@@ -6,6 +6,7 @@ import { consumeRateLimit } from "@/lib/rate-limit";
 import { clientIpFrom, hashRateLimitIdentifier } from "@/lib/tokens";
 import { createSession } from "@/server/session";
 import { ensureUserSetup } from "@/server/users";
+import { AUTH_RATE_LIMITS } from "@/server/auth-rate-limit-policy";
 
 /** Precomputed hash so a missing account costs the same as a wrong password. */
 const DUMMY_HASH = hashPassword("comparaison-temps-constant");
@@ -34,13 +35,13 @@ export async function POST(req: Request) {
     const [emailLimit, ipLimit] = await Promise.all([
       consumeRateLimit(
         `auth:login:email:${hashRateLimitIdentifier("auth-login-email", email)}`,
-        10,
-        5 * 60 * 1000
+        AUTH_RATE_LIMITS.login.email.limit,
+        AUTH_RATE_LIMITS.login.email.windowMs
       ),
       consumeRateLimit(
         `auth:login:ip:${hashRateLimitIdentifier("auth-login-ip", clientIpFrom(req.headers))}`,
-        30,
-        5 * 60 * 1000
+        AUTH_RATE_LIMITS.login.ip.limit,
+        AUTH_RATE_LIMITS.login.ip.windowMs
       ),
     ]);
     if (!emailLimit.allowed || !ipLimit.allowed) {

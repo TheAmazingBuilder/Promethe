@@ -5,6 +5,7 @@ import { consumeRateLimit } from "@/lib/rate-limit";
 import { clientIpFrom, hashRateLimitIdentifier } from "@/lib/tokens";
 import { createSession } from "@/server/session";
 import { createUserWithDefaults } from "@/server/users";
+import { AUTH_RATE_LIMITS } from "@/server/auth-rate-limit-policy";
 
 /**
  * POST /api/auth/signup
@@ -36,13 +37,13 @@ export async function POST(req: Request) {
     const [emailLimit, ipLimit] = await Promise.all([
       consumeRateLimit(
         `auth:signup:email:${hashRateLimitIdentifier("auth-signup-email", email)}`,
-        5,
-        15 * 60 * 1000
+        AUTH_RATE_LIMITS.signup.email.limit,
+        AUTH_RATE_LIMITS.signup.email.windowMs
       ),
       consumeRateLimit(
         `auth:signup:ip:${hashRateLimitIdentifier("auth-signup-ip", clientIpFrom(req.headers))}`,
-        20,
-        15 * 60 * 1000
+        AUTH_RATE_LIMITS.signup.ip.limit,
+        AUTH_RATE_LIMITS.signup.ip.windowMs
       ),
     ]);
     if (!emailLimit.allowed || !ipLimit.allowed) {
