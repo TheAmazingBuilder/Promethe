@@ -26,10 +26,10 @@ describe("PwaRoot", () => {
   it("announces offline and online transitions", () => {
     render(<PwaRoot />);
 
-    window.dispatchEvent(new Event("offline"));
+    fireEvent(window, new Event("offline"));
     expect(screen.getByRole("status").textContent).toContain("You are offline");
 
-    window.dispatchEvent(new Event("online"));
+    fireEvent(window, new Event("online"));
     expect(screen.queryByRole("status")).toBeNull();
   });
 
@@ -80,7 +80,7 @@ describe("PwaRoot", () => {
     window.dispatchEvent(installEvent);
     expect(await screen.findByRole("button", { name: "Install Promethe" })).toBeTruthy();
 
-    window.dispatchEvent(new Event("appinstalled"));
+    fireEvent(window, new Event("appinstalled"));
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: "Install Promethe" })).toBeNull();
     });
