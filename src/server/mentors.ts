@@ -490,8 +490,8 @@ export async function acceptInvitation(
     );
   }
   if (invitation.expiresAt.getTime() <= Date.now()) {
-    await db.mentorInvitation.update({
-      where: { id: invitation.id },
+    await db.mentorInvitation.updateMany({
+      where: { id: invitation.id, status: "PENDING", expiresAt: { lte: new Date() } },
       data: { status: "EXPIRED" },
     });
     throw new MentorValidationError("INVITE_EXPIRED", "This invitation has expired.");
@@ -514,6 +514,21 @@ export async function acceptInvitation(
 
   const permissions = parsePermissions(invitation.permissionsJson);
   const result = await db.$transaction(async (tx) => {
+    // Claim the invitation atomically before granting access. This prevents
+    // concurrent acceptance or a revoke/expiry racing the initial read.
+    const claimed = await tx.mentorInvitation.updateMany({
+      where: {
+        id: invitation.id,
+        status: "PENDING",
+        inviteeEmail: viewer.email.toLowerCase(),
+        expiresAt: { gt: new Date() },
+      },
+      data: { status: "ACCEPTED" },
+    });
+    if (claimed.count !== 1) {
+      throw new MentorValidationError("INVITE_NOT_PENDING", "This invitation has already been handled.");
+    }
+
     // Upsert: a previously revoked/paused pair is reactivated with the new scope.
     const data = {
       status: "ACTIVE",
@@ -533,10 +548,6 @@ export async function acceptInvitation(
       where: { ownerId_mentorId: { ownerId: invitation.ownerId, mentorId: viewer.id } },
       create: { ownerId: invitation.ownerId, mentorId: viewer.id, ...data },
       update: data,
-    });
-    await tx.mentorInvitation.update({
-      where: { id: invitation.id },
-      data: { status: "ACCEPTED" },
     });
     return access;
   });
@@ -571,10 +582,26 @@ export async function declineInvitation(
   if (invitation.inviteeEmail !== viewer.email.toLowerCase()) {
     throw new MentorValidationError("INVITE_NOT_FOUND", "Invitation not found.", 404);
   }
-  await db.mentorInvitation.update({
-    where: { id: invitation.id },
+  const now = new Date();
+  if (invitation.expiresAt <= now) {
+    await db.mentorInvitation.updateMany({
+      where: { id: invitation.id, status: "PENDING", expiresAt: { lte: now } },
+      data: { status: "EXPIRED" },
+    });
+    throw new MentorValidationError("INVITE_EXPIRED", "This invitation has expired.");
+  }
+  const declined = await db.mentorInvitation.updateMany({
+    where: {
+      id: invitation.id,
+      status: "PENDING",
+      inviteeEmail: viewer.email.toLowerCase(),
+      expiresAt: { gt: now },
+    },
     data: { status: "DECLINED" },
   });
+  if (declined.count !== 1) {
+    throw new MentorValidationError("INVITE_NOT_PENDING", "This invitation has already been handled.");
+  }
 }
 
 // ── id-based variants (in-app invitation center) ──────────────────────────
@@ -626,6 +653,7 @@ export async function acceptInvitationById(
   if (
     !invitation ||
     invitation.status !== "PENDING" ||
+    invitation.expiresAt.getTime() <= Date.now() ||
     invitation.inviteeEmail !== viewer.email.toLowerCase()
   ) {
     throw new MentorValidationError("INVITE_NOT_FOUND", "Invitation not found.", 404);
@@ -633,10 +661,18 @@ export async function acceptInvitationById(
   const token = `mtr_${generateToken()}`;
   // Reuse the token flow by minting a fresh single-use token bound to the
   // SAME invitation row (the old hashed token is replaced).
-  await db.mentorInvitation.update({
-    where: { id: invitation.id },
+  const rotated = await db.mentorInvitation.updateMany({
+    where: {
+      id: invitation.id,
+      status: "PENDING",
+      inviteeEmail: viewer.email.toLowerCase(),
+      expiresAt: { gt: new Date() },
+    },
     data: { tokenHash: hashToken(token) },
   });
+  if (rotated.count !== 1) {
+    throw new MentorValidationError("INVITE_NOT_FOUND", "Invitation not found.", 404);
+  }
   return acceptInvitation(token, viewer);
 }
 
@@ -648,14 +684,23 @@ export async function declineInvitationById(
   if (
     !invitation ||
     invitation.status !== "PENDING" ||
+    invitation.expiresAt.getTime() <= Date.now() ||
     invitation.inviteeEmail !== viewer.email.toLowerCase()
   ) {
     throw new MentorValidationError("INVITE_NOT_FOUND", "Invitation not found.", 404);
   }
-  await db.mentorInvitation.update({
-    where: { id: invitation.id },
+  const declined = await db.mentorInvitation.updateMany({
+    where: {
+      id: invitation.id,
+      status: "PENDING",
+      inviteeEmail: viewer.email.toLowerCase(),
+      expiresAt: { gt: new Date() },
+    },
     data: { status: "DECLINED" },
   });
+  if (declined.count !== 1) {
+    throw new MentorValidationError("INVITE_NOT_PENDING", "This invitation has already been handled.");
+  }
 }
 
 // ── mentor side: context & mentees ───────────────────────────────────────────
