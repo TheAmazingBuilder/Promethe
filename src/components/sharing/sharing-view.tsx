@@ -190,10 +190,18 @@ export function SharingView() {
           <CardDescription>{t("createCardDesc")}</CardDescription>
         </CardHeader>
         <CardContent>
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            {t("newLink")}
-          </Button>
+          {accountsQuery.isError ? (
+            <QueryErrorState
+              title="Unable to load trading accounts"
+              description="Report sharing is paused until account data loads, so you do not accidentally share a broader report than intended."
+              onRetry={() => void accountsQuery.refetch()}
+            />
+          ) : (
+            <Button onClick={() => setCreateOpen(true)} disabled={accountsQuery.isLoading}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              {t("newLink")}
+            </Button>
+          )}
         </CardContent>
       </Card>
 
