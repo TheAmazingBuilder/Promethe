@@ -28,8 +28,8 @@ function readTestEnvFiles(): Record<string, string> {
   for (const file of [".env", ".env.local", ".env.test", ".env.test.local"]) {
     const filePath = path.join(ROOT, file);
     if (!existsSync(filePath)) continue;
-    for (const line of readFileSync(filePath, "utf8").split(/\\r?\\n/)) {
-      const match = line.match(/^\\s*(?:export\\s+)?(DATABASE_URL|DIRECT_URL|TEST_DATABASE_URL|TEST_DIRECT_URL)\\s*=\\s*(.*?)\\s*$/);
+    for (const line of readFileSync(filePath, "utf8").split(/\r?\n/)) {
+      const match = line.match(/^\s*(?:export\s+)?(DATABASE_URL|DIRECT_URL|TEST_DATABASE_URL|TEST_DIRECT_URL)\s*=\s*(.*?)\s*$/);
       if (!match) continue;
       let value = match[2];
       if (
@@ -38,7 +38,7 @@ function readTestEnvFiles(): Record<string, string> {
       ) {
         value = value.slice(1, -1);
       } else {
-        value = value.replace(/\\s+#.*$/, "").trim();
+        value = value.replace(/\s+#.*$/, "").trim();
       }
       values[match[1]] = value;
     }
