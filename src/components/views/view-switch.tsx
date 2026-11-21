@@ -424,9 +424,12 @@ export function ViewSwitch() {
   // globals.css). The first mount skips the fade - the dashboard widgets
   // already have their own entrance animation. Replaces the previous
   // framer-motion AnimatePresence (same 150 ms, same ease).
-  const firstRender = React.useRef(true);
+  const [hasMounted, setHasMounted] = React.useState(false);
   React.useEffect(() => {
-    firstRender.current = false;
+    // Defer the mounted flag until after the initial paint so the first view
+    // does not animate. Later viewKey changes can then use the fade class.
+    const frame = window.requestAnimationFrame(() => setHasMounted(true));
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   // Reduced motion: no transition at all, the page just swaps.
@@ -434,7 +437,7 @@ export function ViewSwitch() {
   return (
     <div
       key={viewKey}
-      className={firstRender.current ? undefined : "view-fade-in"}
+      className={hasMounted ? "view-fade-in" : undefined}
     >
       {view}
     </div>
