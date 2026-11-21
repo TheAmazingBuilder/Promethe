@@ -148,6 +148,21 @@ describe("ingest engine — full lifecycle", () => {
     const mismatched = await db.brokerConnection.findUniqueOrThrow({ where: { id: connection.id } });
     expect(mismatched.status).toBe("MISMATCH");
 
+    // Even the previously bound terminal stays blocked until the owner
+    // explicitly resets the binding; MISMATCH is a sticky safety state.
+    await expect(
+      processIngestPayload(await freshConnection(), envelope([
+        {
+          eventId: "MT5:TestBroker-Live:11223344:HB:after-mismatch",
+          type: "HEARTBEAT",
+          time: serverNow(),
+          balance: "10000",
+          equity: "10000",
+          openPositions: 0,
+        },
+      ]))
+    ).rejects.toMatchObject({ code: "CONNECTION_MISMATCH" });
+
     // Owner resets the binding from the UI → PENDING again.
     connection = await db.brokerConnection.update({
       where: { id: connection.id },
