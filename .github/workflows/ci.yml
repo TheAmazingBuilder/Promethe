@@ -10,7 +10,7 @@ on:
       - Features-promethe
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: promethe-ci-${{ github.ref }}
@@ -36,48 +36,6 @@ jobs:
       - name: Generate Prisma Client
         run: bunx prisma generate
 
-      - name: Bootstrap initial versioned Prisma migration
-        if: github.ref == 'refs/heads/Features-promethe'
-        run: |
-          MIGRATION_DIR="prisma/migrations/20261121000000_initial_baseline"
-          if [ -f "$MIGRATION_DIR/migration.sql" ]; then
-            echo "Initial migration already exists; skipping bootstrap."
-            exit 0
-          fi
-          mkdir -p "$MIGRATION_DIR"
-          DATABASE_URL="postgresql://test:test@127.0.0.1:5432/promethe?schema=promethe_test" \
-          DIRECT_URL="postgresql://test:test@127.0.0.1:5432/promethe?schema=promethe_test" \
-            bunx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script \
-            > "$MIGRATION_DIR/migration.sql"
-          sed -i '1,2d' "$MIGRATION_DIR/migration.sql"
-          sed -i '1{/^$/d;}' "$MIGRATION_DIR/migration.sql"
-          printf 'provider = "postgresql"\n' > prisma/migrations/migration_lock.toml
-          cat > tests/unit/prisma-migrations.test.ts <<'EOF'
-          import { readFileSync, readdirSync } from "node:fs";
-          import { join } from "node:path";
-          import { describe, expect, it } from "vitest";
-
-          const migrationRoot = join(process.cwd(), "prisma", "migrations");
-          const initialDir = join(migrationRoot, "20261121000000_initial_baseline");
-          const sql = readFileSync(join(initialDir, "migration.sql"), "utf8");
-          const lock = readFileSync(join(migrationRoot, "migration_lock.toml"), "utf8");
-
-          describe("versioned Prisma baseline", () => {
-            it("uses a timestamped PostgreSQL migration directory", () => {
-              expect(readdirSync(migrationRoot)).toContain("20261121000000_initial_baseline");
-              expect(lock.trim()).toBe('provider = "postgresql"');
-            });
-
-            it("contains the complete initial schema without destructive statements", () => {
-              expect((sql.match(/^CREATE TABLE /gm) ?? []).length).toBe(96);
-              expect((sql.match(/^CREATE INDEX /gm) ?? []).length).toBeGreaterThan(100);
-              expect((sql.match(/^ALTER TABLE .* ADD CONSTRAINT .* FOREIGN KEY/gm) ?? []).length).toBeGreaterThan(100);
-              expect(sql).not.toMatch(/^DROP (TABLE|INDEX|SCHEMA)|^TRUNCATE |^DELETE FROM /m);
-              expect(sql).not.toContain("promethe_test");
-            });
-          });
-          EOF
-
       - name: Validate Prisma schema
         env:
           DATABASE_URL: postgresql://test:test@127.0.0.1:5432/promethe?schema=promethe_test
@@ -93,52 +51,3 @@ jobs:
 
       - name: Unit tests
         run: bun run test:unit
-
-      - name: Commit generated Prisma baseline
-        if: success() && github.ref == 'refs/heads/Features-promethe'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require("fs");
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const branch = context.ref.replace("refs/heads/", "");
-            const migrationPath = "prisma/migrations/20261121000000_initial_baseline/migration.sql";
-            try {
-              await github.rest.repos.getContent({ owner, repo, path: migrationPath, ref: branch });
-              core.info("Initial Prisma migration is already committed.");
-              return;
-            } catch (error) {
-              if (error.status !== 404) throw error;
-            }
-
-            const files = [
-              migrationPath,
-              "prisma/migrations/migration_lock.toml",
-              "tests/unit/prisma-migrations.test.ts",
-            ];
-            const ref = await github.rest.git.getRef({ owner, repo, ref: `heads/${branch}` });
-            const parentSha = ref.data.object.sha;
-            const parentCommit = await github.rest.git.getCommit({ owner, repo, commit_sha: parentSha });
-            const treeItems = [];
-            for (const path of files) {
-              const content = fs.readFileSync(path, "utf8");
-              const blob = await github.rest.git.createBlob({
-                owner, repo, content, encoding: "utf-8",
-              });
-              treeItems.push({ path, mode: "100644", type: "blob", sha: blob.data.sha });
-            }
-            const tree = await github.rest.git.createTree({
-              owner, repo, base_tree: parentCommit.data.tree.sha, tree: treeItems,
-            });
-            const commit = await github.rest.git.createCommit({
-              owner, repo,
-              message: "chore(prisma): add versioned initial PostgreSQL baseline",
-              tree: tree.data.sha,
-              parents: [parentSha],
-            });
-            await github.rest.git.updateRef({
-              owner, repo, ref: `heads/${branch}`, sha: commit.data.sha, force: false,
-            });
-            core.info(`Committed initial Prisma baseline: ${commit.data.sha}`);
-
