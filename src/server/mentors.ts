@@ -14,7 +14,7 @@
  */
 import type { Prisma, MentorAccess } from "@prisma/client";
 import { db } from "@/lib/db";
-import { generateToken, hashToken, tokenPrefixOf } from "@/lib/tokens";
+import { generateToken, hashRateLimitIdentifier, hashToken, tokenPrefixOf } from "@/lib/tokens";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import {
   AccessDeniedError,
@@ -148,9 +148,10 @@ export async function createInvitation(
   ownerId: string,
   input: MentorInviteInput
 ): Promise<InviteResult> {
-  // Rate limit: 10 invitations per owner per day (DB bucket, hashed key shape
-  // kept internal — the key contains no personal data).
-  const rl = await consumeRateLimit(`mentor-inv:${ownerId}`, 10, 24 * 60 * 60 * 1000);
+  // Rate limit: 10 invitations per owner per day. Pseudonymize the owner id
+  // before it becomes part of the durable PostgreSQL bucket key.
+  const ownerKey = hashRateLimitIdentifier("mentor-invitation-owner", ownerId);
+  const rl = await consumeRateLimit(`mentor-inv:${ownerKey}`, 10, 24 * 60 * 60 * 1000);
   if (!rl.allowed) {
     throw new MentorValidationError(
       "INVITE_RATE_LIMITED",
