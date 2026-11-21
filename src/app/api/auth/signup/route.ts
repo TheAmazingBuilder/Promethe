@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { signupSchema, zodFieldErrors } from "@/lib/auth/validators";
-import { rateLimit, sweepRateLimits } from "@/lib/rate-limit";
+import { consumeRateLimit } from "@/lib/rate-limit";
+import { clientIpFrom, hashRateLimitIdentifier } from "@/lib/tokens";
 import { createSession } from "@/server/session";
 import { createUserWithDefaults } from "@/server/users";
 
@@ -32,13 +33,28 @@ export async function POST(req: Request) {
     const timezone = parsed.data.timezone || "UTC";
     const locale = parsed.data.locale || "en";
 
-    if (!rateLimit(`signup:${email}`, 5, 15 * 60 * 1000)) {
+    const [emailLimit, ipLimit] = await Promise.all([
+      consumeRateLimit(
+        `auth:signup:email:${hashRateLimitIdentifier("auth-signup-email", email)}`,
+        5,
+        15 * 60 * 1000
+      ),
+      consumeRateLimit(
+        `auth:signup:ip:${hashRateLimitIdentifier("auth-signup-ip", clientIpFrom(req.headers))}`,
+        20,
+        15 * 60 * 1000
+      ),
+    ]);
+    if (!emailLimit.allowed || !ipLimit.allowed) {
       return NextResponse.json(
         {
           error: "RATE_LIMITED",
-          message: "Too many attempts for this email. Please try again in a few minutes.",
+          message: "Too many attempts. Please try again in a few minutes.",
         },
-        { status: 429 }
+        {
+          status: 429,
+          headers: { "Retry-After": String(Math.max(1, Math.ceil((Math.max(emailLimit.resetAt, ipLimit.resetAt) - Date.now()) / 1000))) },
+        }
       );
     }
 
@@ -62,7 +78,6 @@ export async function POST(req: Request) {
       locale,
     });
     await createSession(session.user.id);
-    sweepRateLimits();
 
     return NextResponse.json(session, { status: 201 });
   } catch (error) {
