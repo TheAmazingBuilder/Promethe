@@ -1834,7 +1834,7 @@ model AccountDeletionRequest {
   userId       String    @unique @map("user_id")
   requestedAt  DateTime  @default(now()) @map("requested_at")
   scheduledFor DateTime  @map("scheduled_for")
-  /// PENDING | CANCELLED | COMPLETED
+  /// PENDING | PROCESSING (completedAt is the lease timestamp) | CANCELLED | COMPLETED
   status       String    @default("PENDING")
   completedAt  DateTime? @map("completed_at")
 
