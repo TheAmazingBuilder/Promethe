@@ -61,7 +61,7 @@ function clamp(v: number, min: number, max: number): number {
 
 /** Normalizes any partial record into valid preferences (never throws). */
 export function normalizeA11yPreferences(
-  raw: Partial<A11yPreferences> | null | undefined
+  raw: Partial<Record<keyof A11yPreferences, unknown>> | null | undefined
 ): A11yPreferences {
   const d = DEFAULT_A11Y_PREFERENCES;
   if (!raw) return { ...d };
