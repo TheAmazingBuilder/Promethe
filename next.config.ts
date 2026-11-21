@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
   output: "standalone",
   /* config options here */
   reactStrictMode: false,
+  // Never ship a build with skipped TypeScript diagnostics.
+  typescript: { ignoreBuildErrors: false },
   // Dev assets (/_next/*) are served through the sandbox preview proxy.
   allowedDevOrigins: ["*.space-z.ai"],
   experimental: {

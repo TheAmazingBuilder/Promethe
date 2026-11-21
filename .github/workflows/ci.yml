@@ -51,3 +51,11 @@ jobs:
 
       - name: Unit tests
         run: bun run test:unit
+
+      - name: Production build (includes strict TypeScript validation)
+        env:
+          DATABASE_URL: postgresql://test:test@127.0.0.1:5432/promethe?schema=promethe_test
+          DIRECT_URL: postgresql://test:test@127.0.0.1:5432/promethe?schema=promethe_test
+          TOKEN_PEPPER: 0000000000000000000000000000000000000000000000000000000000000000
+          IP_HASH_PEPPER: 1111111111111111111111111111111111111111111111111111111111111111
+        run: bun run build
