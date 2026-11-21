@@ -23,6 +23,7 @@ import {
   createImportBatch,
   importChunk,
   completeImportBatch,
+  recordBatchCounts,
 } from "@/server/import";
 import {
   listCandidates,
@@ -220,7 +221,16 @@ describe("chunked import", () => {
       },
     });
 
+    await recordBatchCounts(user.id, batchId, {
+      created: 3,
+      updated: 0,
+      duplicates: 0,
+      manualSkipped: 0,
+      errors: 1,
+      parsed: 3,
+    });
     const result = await completeImportBatch(user.id, batchId);
+    expect(result.batch.status).toBe("PARTIAL");
     expect(result.reconciliation.created).toBeGreaterThanOrEqual(1);
 
     const candidates = await listCandidates(user.id, {});
