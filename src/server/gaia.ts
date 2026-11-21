@@ -665,6 +665,17 @@ export async function updateNote(
   const note = await findActiveNote(userId, noteId);
   if (!note) throw NOTE_NOT_FOUND();
 
+  // A note may only reference a folder owned by the same user. The create
+  // path already enforces this; PATCH must enforce it before snapshotting or
+  // writing so a foreign folder id cannot be attached to this note.
+  if (parsed.folderId !== undefined && parsed.folderId !== null) {
+    const folder = await db.noteFolder.findFirst({
+      where: { userId, id: parsed.folderId },
+      select: { id: true },
+    });
+    if (!folder) throw FOLDER_NOT_FOUND();
+  }
+
   const hasMeaningfulChange =
     parsed.title !== undefined ||
     parsed.icon !== undefined ||
