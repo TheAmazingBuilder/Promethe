@@ -9,7 +9,18 @@ const serviceWorker = readFileSync(
 describe("PWA private-data cache policy", () => {
   it("uses a new cache namespace to purge caches from the previous worker", () => {
     expect(serviceWorker).toContain('const CACHE_NAME = "promethe-v2-private-safe"');
+    expect(serviceWorker).toContain('const CACHE_PREFIX = "promethe-"');
     expect(serviceWorker).not.toContain('const CACHE_NAME = "promethe-v1"');
+  });
+
+  it("only removes obsolete caches owned by Promethe during activation", () => {
+    const activationStart = serviceWorker.indexOf('self.addEventListener("activate"');
+    const fetchStart = serviceWorker.indexOf('self.addEventListener("fetch"');
+    const activationHandler = serviceWorker.slice(activationStart, fetchStart);
+
+    expect(activationHandler).toContain("key.startsWith(CACHE_PREFIX)");
+    expect(activationHandler).toContain("key !== CACHE_NAME");
+    expect(activationHandler).not.toMatch(/filter\(\(key\) => key !== CACHE_NAME\)/);
   });
 
   it("does not precache the authenticated application root", () => {
@@ -27,7 +38,7 @@ describe("PWA private-data cache policy", () => {
     expect(navigationStart).toBeGreaterThan(-1);
     const navigationHandler = serviceWorker.slice(navigationStart);
     expect(navigationHandler).toContain('fetch(request, { cache: "no-store" })');
-    expect(navigationHandler).toContain('new Response(OFFLINE_HTML');
+    expect(navigationHandler).toContain("new Response(OFFLINE_HTML");
     expect(navigationHandler).not.toContain("cache.put(");
     expect(navigationHandler).not.toContain("caches.match(request)");
   });
