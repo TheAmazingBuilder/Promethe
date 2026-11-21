@@ -39,8 +39,8 @@ const FALLBACK_TEST_DATABASE_URL =
   "postgresql://invalid:invalid@127.0.0.1:1/promethe_test?schema=promethe_test";
 
 function projectRef(url: URL): string | null {
-  const direct = url.hostname.match(/^db\\.([a-z0-9-]+)\\.supabase\\.co$/i)?.[1];
-  const pooled = url.username.match(/^postgres\\.([a-z0-9-]+)$/i)?.[1];
+  const direct = url.hostname.match(/^db\.([a-z0-9-]+)\.supabase\.co$/i)?.[1];
+  const pooled = url.username.match(/^postgres\.([a-z0-9-]+)$/i)?.[1];
   return direct ?? pooled ?? null;
 }
 
