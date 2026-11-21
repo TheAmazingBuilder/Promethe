@@ -13,8 +13,8 @@ export type PrivacyMode = "OFF" | "HIDE" | "BLUR";
 
 export const PRIVACY_MODES: readonly PrivacyMode[] = ["OFF", "HIDE", "BLUR"];
 
-export function isPrivacyMode(v: string): v is PrivacyMode {
-  return (PRIVACY_MODES as readonly string[]).includes(v);
+export function isPrivacyMode(v: unknown): v is PrivacyMode {
+  return typeof v === "string" && (PRIVACY_MODES as readonly string[]).includes(v);
 }
 
 /**
