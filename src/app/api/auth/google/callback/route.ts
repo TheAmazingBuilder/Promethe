@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { createSession } from "@/server/session";
 import { createUserWithDefaults } from "@/server/users";
+import { verifiedGoogleEmail } from "@/lib/auth/google";
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
@@ -65,8 +66,8 @@ export async function GET(req: Request) {
       email_verified?: boolean;
       name?: string;
     };
-    const email = profile.email?.toLowerCase().trim();
-    if (!email || profile.email_verified === false) return fail();
+    const email = verifiedGoogleEmail(profile);
+    if (!email) return fail();
 
     const existing = await db.user.findUnique({
       where: { email },
