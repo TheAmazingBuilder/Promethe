@@ -366,13 +366,18 @@ export async function completeImportBatch(
   const batch = await db.importBatch.findFirst({ where: { id: batchId, userId } });
   if (!batch) throw new ImportError("BATCH_NOT_FOUND", 404);
 
-  // Aggregate the chunk counters stored progressively in countsJson:
-  // importChunk appends nothing — the client sums chunks; here we read what
-  // the client sent at completion for the final record.
-  const payloadCounts = batch.countsJson;
-  void payloadCounts;
-
-  const status = "IMPORTED";
+  // recordBatchCounts persists the client-aggregated counters immediately
+  // before this call. Preserve PARTIAL when the client reported row errors;
+  // otherwise this unconditional IMPORTED write would erase that state.
+  let counts: { errors?: number } = {};
+  try {
+    counts = JSON.parse(batch.countsJson) as { errors?: number };
+  } catch {
+    // Older/malformed counters are treated as zero errors for compatibility.
+  }
+  const status = Number.isFinite(counts.errors) && (counts.errors ?? 0) > 0
+    ? "PARTIAL"
+    : "IMPORTED";
   const updated = await db.importBatch.update({
     where: { id: batch.id },
     data: { status },
