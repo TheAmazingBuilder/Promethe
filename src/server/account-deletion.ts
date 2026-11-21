@@ -24,6 +24,7 @@ import { notifyInApp } from "@/server/notifications";
 import { deleteUploadObjects } from "@/server/uploads";
 
 export const DELETION_GRACE_DAYS = 7;
+const DELETION_PROCESSING_LEASE_MS = 5 * 60 * 1000;
 
 export type DeletionState = {
   status: "PENDING" | "CANCELLED" | "COMPLETED";
@@ -38,7 +39,7 @@ export type ScheduleResult =
 /** Current deletion state for the settings view + app banner. */
 export async function getDeletionState(userId: string): Promise<DeletionState> {
   const row = await db.accountDeletionRequest.findFirst({
-    where: { userId, status: "PENDING" },
+    where: { userId, status: { in: ["PENDING", "PROCESSING"] } },
     orderBy: { requestedAt: "desc" },
   });
   if (row) {
@@ -68,10 +69,11 @@ export async function scheduleAccountDeletion(
     return { ok: false, code: "BAD_PASSWORD" };
   }
 
-  const existing = await db.accountDeletionRequest.findFirst({
-    where: { userId, status: "PENDING" },
+  const existing = await db.accountDeletionRequest.findUnique({
+    where: { userId },
+    select: { status: true },
   });
-  if (existing) {
+  if (existing?.status === "PENDING" || existing?.status === "PROCESSING") {
     return { ok: false, code: "ALREADY_PENDING" };
   }
 
@@ -144,50 +146,97 @@ export interface DeletionExecutionReport {
 export async function executeDueDeletions(
   now: Date = new Date()
 ): Promise<DeletionExecutionReport> {
+  const staleLeaseBefore = new Date(now.getTime() - DELETION_PROCESSING_LEASE_MS);
   const due = await db.accountDeletionRequest.findMany({
-    where: { status: "PENDING", scheduledFor: { lte: now } },
-    select: { userId: true },
+    where: {
+      scheduledFor: { lte: now },
+      OR: [
+        { status: "PENDING" },
+        { status: "PROCESSING", completedAt: { lte: staleLeaseBefore } },
+      ],
+    },
+    select: { userId: true, status: true, completedAt: true },
   });
 
   const report: DeletionExecutionReport = { executed: 0, tombstones: [] };
 
-  for (const { userId } of due) {
-    const tombstoneId = hashUserId(userId);
+  for (const candidate of due) {
+    // Claim the request before touching Storage. Cancellation only updates
+    // PENDING rows, so a successful compare-and-set starts execution.
+    if (candidate.status === "PROCESSING" && !candidate.completedAt) continue;
+    const claimedAt = now;
+    const claimWhere =
+      candidate.status === "PROCESSING"
+        ? {
+            userId: candidate.userId,
+            status: "PROCESSING",
+            completedAt: candidate.completedAt!,
+          }
+        : {
+            userId: candidate.userId,
+            status: "PENDING",
+            scheduledFor: { lte: now },
+          };
+
+    let claim;
     try {
-      // Keep the object keys before the user cascade removes screenshot rows.
+      claim = await db.accountDeletionRequest.updateMany({
+        where: claimWhere,
+        data: { status: "PROCESSING", completedAt: claimedAt },
+      });
+    } catch (error) {
+      console.error("[deletion] claim failed:", error);
+      continue;
+    }
+    if (claim.count !== 1) continue;
+
+    const tombstoneId = hashUserId(candidate.userId);
+    try {
+      // Keep object keys before the user cascade removes screenshot rows.
       const screenshotRows = await db.tradeScreenshot.findMany({
-        where: { userId },
+        where: { userId: candidate.userId },
         select: { storagePath: true },
       });
 
-      // Remove private objects first. If Storage is unavailable, keep the
-      // account and its pending deletion request intact so the cron can retry.
-      // Missing objects are treated as already deleted (idempotent retry).
-      await deleteUploadObjects(
-        screenshotRows.map((row) => row.storagePath)
-      );
+      // Missing objects are idempotent. On Storage failure, release the
+      // lease to PENDING so a later cron can retry.
+      await deleteUploadObjects(screenshotRows.map((row) => row.storagePath));
 
       await db.$transaction(async (tx) => {
-        // Tombstone first (same tx): proof of intentional deletion, irreversible.
+        // A reclaimed lease must not let a slow, old worker delete the user.
+        const stillOwned = await tx.accountDeletionRequest.updateMany({
+          where: {
+            userId: candidate.userId,
+            status: "PROCESSING",
+            completedAt: claimedAt,
+          },
+          data: { completedAt: claimedAt },
+        });
+        if (stillOwned.count !== 1) {
+          throw new Error("Account deletion processing lease was lost.");
+        }
+
         await tx.deletedUserTombstone.upsert({
           where: { id: tombstoneId },
           create: { id: tombstoneId, completedAt: now },
           update: { completedAt: now },
         });
-        // Cascade: profile, accounts, trades, executions, screenshots rows,
-        // comments, mentor accesses (both directions), consents, sessions,
-        // notifications… every table. Comments the user wrote on OTHER
-        // users' journals are deleted too (their personal data — RGPD
-        // requires it; the schema chose hard delete over anonymisation).
-        await tx.user.delete({ where: { id: userId } });
+        await tx.user.delete({ where: { id: candidate.userId } });
       });
 
       report.executed += 1;
       report.tombstones.push(tombstoneId);
     } catch (error) {
-      // One user's failure must not block the others; the row stays PENDING
-      // and the next cron run retries.
-      console.error(`[deletion] failed for user (hashed) ${tombstoneId}:`, error);
+      // Release only our own lease; never reset a newer worker's claim.
+      await db.accountDeletionRequest.updateMany({
+        where: {
+          userId: candidate.userId,
+          status: "PROCESSING",
+          completedAt: claimedAt,
+        },
+        data: { status: "PENDING", completedAt: null },
+      }).catch(() => undefined);
+      console.error("[deletion] failed for user (hashed) " + tombstoneId + ":", error);
     }
   }
 
