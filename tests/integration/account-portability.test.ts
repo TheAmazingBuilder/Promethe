@@ -23,8 +23,6 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { strFromU8, unzipSync } from "fflate";
 import { db } from "@/lib/db";
 import { createUserWithDefaults } from "@/server/users";
@@ -42,7 +40,9 @@ import {
 import { listConsents } from "@/server/consent";
 import { runDailyMaintenance } from "@/server/maintenance";
 import { hashUserId } from "@/lib/tokens";
-import { UPLOAD_ROOT } from "@/server/uploads";
+import { mockSupabaseStorage } from "../helpers/supabase-storage";
+
+const storage = mockSupabaseStorage();
 
 let aliceId: string;
 let bobId: string;
@@ -51,6 +51,7 @@ let aliceAccountId: string;
 let aliceTradeId: string;
 let aliceShotId: string;
 let shotStoragePath: string;
+let caraStoragePath: string;
 
 const SHOT_BYTES = Buffer.from(
   "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c6360000002000154a24f5f0000000049454e44ae426082",
@@ -152,9 +153,8 @@ beforeAll(async () => {
 
   // Screenshot file + row for Alice.
   aliceShotId = "shot_export_0001";
-  shotStoragePath = path.posix.join(aliceId, aliceTradeId, `${aliceShotId}.png`);
-  await mkdir(path.join(UPLOAD_ROOT, aliceId, aliceTradeId), { recursive: true });
-  await writeFile(path.join(UPLOAD_ROOT, shotStoragePath), SHOT_BYTES);
+  shotStoragePath = `${aliceId}/${aliceTradeId}/${aliceShotId}.png`;
+  storage.objects.set(shotStoragePath, { bytes: SHOT_BYTES, contentType: "image/png" });
   await db.tradeScreenshot.create({
     data: {
       id: aliceShotId,
@@ -223,9 +223,8 @@ beforeAll(async () => {
     },
   });
   const caraShotId = "shot_cara_0001";
-  const caraStoragePath = path.posix.join(caraId, caraTrade.id, `${caraShotId}.png`);
-  await mkdir(path.join(UPLOAD_ROOT, caraId, caraTrade.id), { recursive: true });
-  await writeFile(path.join(UPLOAD_ROOT, caraStoragePath), SHOT_BYTES);
+  caraStoragePath = `${caraId}/${caraTrade.id}/${caraShotId}.png`;
+  storage.objects.set(caraStoragePath, { bytes: SHOT_BYTES, contentType: "image/png" });
   await db.tradeScreenshot.create({
     data: {
       id: caraShotId,
@@ -238,10 +237,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Best-effort cleanup (the test DB is recreated by pretest anyway).
-  for (const userId of [aliceId, bobId, caraId]) {
-    if (userId) await rm(path.join(UPLOAD_ROOT, userId), { recursive: true, force: true }).catch(() => undefined);
-  }
+  storage.restore();
   await db.$disconnect();
 });
 
@@ -332,8 +328,9 @@ describe("data export (portability)", () => {
 
   it("includes the screenshot file with byte-identical content", async () => {
     const inZip = Buffer.from(zip[`screenshots/${aliceShotId}.png`]);
-    const onDisk = await readFile(path.join(UPLOAD_ROOT, shotStoragePath));
-    expect(inZip.equals(onDisk)).toBe(true);
+    const stored = storage.objects.get(shotStoragePath);
+    expect(stored).toBeDefined();
+    expect(inZip.equals(Buffer.from(stored!.bytes))).toBe(true);
   });
 
   it("exports Bob's comment on Alice's trade under onMyTrades", () => {
@@ -471,11 +468,8 @@ describe("account deletion (erasure)", () => {
     expect(caraHash).not.toBe(caraId);
     expect(caraHash).toHaveLength(64);
 
-    // Uploads directory removed from disk.
-    const dirExists = await readFile(path.join(UPLOAD_ROOT, caraId))
-      .then(() => true)
-      .catch(() => false);
-    expect(dirExists).toBe(false);
+    // Supabase Storage object removed with the account cascade.
+    expect(storage.objects.has(caraStoragePath)).toBe(false);
 
     // Alice and Bob untouched.
     expect(await db.user.findUnique({ where: { id: aliceId } })).not.toBeNull();
