@@ -38,25 +38,31 @@ const fileTestEnv = readTestEnvFiles();
 const FALLBACK_TEST_DATABASE_URL =
   "postgresql://invalid:invalid@127.0.0.1:1/promethe_test?schema=promethe_test";
 
-function validateTestDatabaseUrl(value: string, name: string): string {
+function projectRef(url: URL): string | null {
+  const direct = url.hostname.match(/^db\\.([a-z0-9-]+)\\.supabase\\.co$/i)?.[1];
+  const pooled = url.username.match(/^postgres\\.([a-z0-9-]+)$/i)?.[1];
+  return direct ?? pooled ?? null;
+}
+
+function sameDatabaseProject(left: URL, right: URL): boolean {
+  const leftRef = projectRef(left);
+  const rightRef = projectRef(right);
+  if (leftRef && rightRef) return leftRef === rightRef;
+  return left.hostname === right.hostname;
+}
+
+function validateTestDatabaseUrl(value: string, name: string): URL {
   let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
+  try { url = new URL(value); } catch {
     throw new Error(`${name} must be a valid PostgreSQL connection URL.`);
   }
-
   if (url.protocol !== "postgres:" && url.protocol !== "postgresql:") {
     throw new Error(`${name} must use PostgreSQL; SQLite is not supported.`);
   }
-
   if (url.searchParams.get("schema") !== TEST_SCHEMA) {
-    throw new Error(
-      `${name} must target the isolated "${TEST_SCHEMA}" schema, never "public".`
-    );
+    throw new Error(`${name} must target the isolated "${TEST_SCHEMA}" schema, never "public".`);
   }
-
-  return value;
+  return url;
 }
 
 const configuredTestDatabaseUrl =
@@ -64,39 +70,44 @@ const configuredTestDatabaseUrl =
 const configuredTestDirectUrl =
   process.env.TEST_DIRECT_URL ?? fileTestEnv.TEST_DIRECT_URL;
 
-const testDatabaseUrl = configuredTestDatabaseUrl
-  ? validateTestDatabaseUrl(configuredTestDatabaseUrl, "TEST_DATABASE_URL")
-  : FALLBACK_TEST_DATABASE_URL;
+const testDatabaseUrl = validateTestDatabaseUrl(
+  configuredTestDatabaseUrl ?? FALLBACK_TEST_DATABASE_URL,
+  "TEST_DATABASE_URL"
+);
+const testDirectUrl = validateTestDatabaseUrl(
+  configuredTestDirectUrl ?? testDatabaseUrl.toString(),
+  "TEST_DIRECT_URL"
+);
 
-const testDirectUrl = configuredTestDirectUrl
-  ? validateTestDatabaseUrl(configuredTestDirectUrl, "TEST_DIRECT_URL")
-  : testDatabaseUrl;
+if (
+  testDatabaseUrl.pathname !== testDirectUrl.pathname ||
+  testDatabaseUrl.searchParams.get("schema") !== testDirectUrl.searchParams.get("schema") ||
+  !sameDatabaseProject(testDatabaseUrl, testDirectUrl)
+) {
+  throw new Error(
+    "TEST_DATABASE_URL and TEST_DIRECT_URL must target the same database and Supabase project, with schema=promethe_test."
+  );
+}
 
 for (const [name, productionValue] of [
   ["DATABASE_URL", process.env.DATABASE_URL ?? fileTestEnv.DATABASE_URL],
   ["DIRECT_URL", process.env.DIRECT_URL ?? fileTestEnv.DIRECT_URL],
 ] as const) {
   if (!productionValue) continue;
-
   let productionUrl: URL;
-  try {
-    productionUrl = new URL(productionValue);
-  } catch {
+  try { productionUrl = new URL(productionValue); } catch {
     throw new Error(name + " must be a valid PostgreSQL URL.");
   }
-
-  const testUrl = new URL(testDatabaseUrl);
-  const sameDatabase =
-    productionUrl.hostname === testUrl.hostname &&
-    productionUrl.pathname === testUrl.pathname;
-  const sameSchema =
-    productionUrl.searchParams.get("schema") ===
-    testUrl.searchParams.get("schema");
-
-  if (sameDatabase && sameSchema) {
-    throw new Error(
-      name + " points to the same schema as TEST_DATABASE_URL. Refusing to run tests."
-    );
+  for (const testUrl of [testDatabaseUrl, testDirectUrl]) {
+    const sameDatabase =
+      productionUrl.pathname === testUrl.pathname &&
+      productionUrl.searchParams.get("schema") === testUrl.searchParams.get("schema") &&
+      sameDatabaseProject(productionUrl, testUrl);
+    if (sameDatabase) {
+      throw new Error(
+        name + " points to the same database schema as a test connection. Refusing to run tests."
+      );
+    }
   }
 }
 
