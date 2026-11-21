@@ -65,7 +65,7 @@ describe("tradesToCsv spreadsheet formula protection", () => {
     expect(csv).toContain("'=1+1");
     expect(csv).toContain("'+SUM(1,2)");
     expect(csv).toContain("'@SUM(1,2)");
-    expect(csv).toContain("\"'=HYPERLINK");
+    expect(csv).toContain("'\\t=HYPERLINK");
     expect(csv).toContain("'\r\n=1+1");
     expect(csv).toContain("' -cmd|payload");
   });
