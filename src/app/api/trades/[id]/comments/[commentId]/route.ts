@@ -16,7 +16,7 @@ type Ctx = { params: Promise<{ id: string; commentId: string }> };
 export async function PATCH(req: Request, ctx: Ctx) {
   try {
     const session = await requireUser();
-    const { id: _tradeId, commentId } = await ctx.params;
+    const { id: tradeId, commentId } = await ctx.params;
     const body = await req.json().catch(() => null);
     const parsed = commentEditSchema.safeParse(body);
     if (!parsed.success) {
@@ -29,7 +29,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
         { status: 422 }
       );
     }
-    const comment = await editComment(session.user.id, commentId, parsed.data);
+    const comment = await editComment(session.user.id, commentId, parsed.data, tradeId);
     return NextResponse.json({ comment });
   } catch (error) {
     return apiError(error, "trades/[id]/comments/[commentId]");
@@ -39,8 +39,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
 export async function DELETE(_req: Request, ctx: Ctx) {
   try {
     const session = await requireUser();
-    const { id: _tradeId, commentId } = await ctx.params;
-    await deleteComment(session.user.id, commentId);
+    const { id: tradeId, commentId } = await ctx.params;
+    await deleteComment(session.user.id, commentId, tradeId);
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     return apiError(error, "trades/[id]/comments/[commentId]");
