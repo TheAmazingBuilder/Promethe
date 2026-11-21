@@ -83,23 +83,25 @@ export function tradesToCsv(rows: TradeListItemDTO[]): string {
         t.setupType,
         t.entryTime,
         t.exitTime,
-        csvField(t.entryPrice, true),
-        csvField(t.exitPrice, true),
-        csvField(t.stopLoss, true),
-        csvField(t.takeProfit, true),
-        csvField(t.lots, true),
-        csvField(t.riskPercent, true),
-        csvField(t.pips, true),
-        csvField(t.netPnl, true),
+        t.entryPrice,
+        t.exitPrice,
+        t.stopLoss,
+        t.takeProfit,
+        t.lots,
+        t.riskPercent,
+        t.pips,
+        t.netPnl,
         t.pnlCurrency,
-        csvField(t.rMultiple, true),
+        t.rMultiple,
         t.resultType,
         t.exitReason,
         t.emotionBefore,
         t.followedPlan == null ? null : yn(t.followedPlan),
         yn(t.isDraft),
       ]
-        .map((value) => value)
+        .map((value, index) =>
+          csvField(value, [12, 13, 14, 15, 16, 17, 18, 19, 21].includes(index))
+        )
         .join(",")
     );
   }
