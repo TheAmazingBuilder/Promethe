@@ -124,7 +124,7 @@ export function parseImportFile(content: ImportFileContent): ParseResult {
     if (rows.length === 0) {
       throw new ImportParseError("EMPTY_FILE", "The file is empty or unreadable.");
     }
-    const warnings = [];
+    const warnings: ImportParseWarning[] = [];
 
     switch (detected.format) {
       case "MT5_CSV": {
