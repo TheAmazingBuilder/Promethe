@@ -52,6 +52,7 @@ dev.out.log
 /prompt
 
 server.log
+/upload/
 /uploads/
 
 # Skills directory
