@@ -80,6 +80,18 @@ export function hashIp(ip: string): string {
   return createHmac("sha256", pepper).update(ip).digest("hex").slice(0, 32);
 }
 
+/**
+ * Domain-separated HMAC for identifiers used in durable rate-limit keys.
+ * The original identifier (email, IP, etc.) never enters the database.
+ */
+export function hashRateLimitIdentifier(namespace: string, value: string): string {
+  const pepper = requirePepper(IP_PEPPER_ENV);
+  return createHmac("sha256", pepper)
+    .update(`${namespace}\0${value}`)
+    .digest("hex")
+    .slice(0, 32);
+}
+
 /** Extracts a best-effort client IP from proxy headers (x-forwarded-for). */
 export function clientIpFrom(headers: Headers): string {
   const forwarded = headers.get("x-forwarded-for");
