@@ -84,16 +84,27 @@ self.addEventListener("fetch", (event) => {
 
   if (isStaticAsset(url)) {
     event.respondWith(
-      caches.match(request).then((cached) => {
-        const network = fetch(request).then((response) => {
-          if (response.ok && response.type === "basic") {
-            const copy = response.clone();
-            void caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        });
-        return cached ?? network;
-      })
+      caches.open(CACHE_NAME).then((cache) =>
+        cache.match(request).then((cached) => {
+          const network = fetch(request)
+            .then((response) => {
+              if (response.ok && response.type === "basic") {
+                const copy = response.clone();
+                void cache.put(request, copy).catch(() => {
+                  // Cache storage is an optimization; never fail the request
+                  // just because the browser refused to persist an asset.
+                });
+              }
+              return response;
+            })
+            .catch((error) => {
+              if (cached) return cached;
+              throw error;
+            });
+
+          return cached ?? network;
+        })
+      )
     );
     return;
   }

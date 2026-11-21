@@ -33,6 +33,18 @@ describe("PWA private-data cache policy", () => {
     expect(serviceWorker).toContain('if (url.pathname.startsWith("/api/")) return;');
   });
 
+  it("scopes static asset lookups to its own cache and falls back safely offline", () => {
+    const staticStart = serviceWorker.indexOf("if (isStaticAsset(url))");
+    const navigationStart = serviceWorker.indexOf('if (request.mode === "navigate")');
+    const staticHandler = serviceWorker.slice(staticStart, navigationStart);
+
+    expect(staticHandler).toContain("caches.open(CACHE_NAME)");
+    expect(staticHandler).toContain("cache.match(request)");
+    expect(staticHandler).toContain(".catch((error) => {");
+    expect(staticHandler).toContain("if (cached) return cached;");
+    expect(staticHandler).not.toContain("caches.match(request)");
+  });
+
   it("does not persist navigation responses or replay cached pages offline", () => {
     const navigationStart = serviceWorker.indexOf('if (request.mode === "navigate")');
     expect(navigationStart).toBeGreaterThan(-1);

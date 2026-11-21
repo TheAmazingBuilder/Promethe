@@ -11,7 +11,8 @@ describe("ErrorFallback", () => {
 
     expect(screen.getByRole("alert")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Something went wrong" })).toBeTruthy();
-    expect(screen.getByText(/saved data has not been changed/i)).toBeTruthy();
+    expect(screen.getByText(/check whether it was saved/i)).toBeTruthy();
+    expect(screen.queryByText(/saved data has not been changed/i)).toBeNull();
     expect(screen.queryByText(/stack trace|TypeError|undefined/i)).toBeNull();
   });
 
