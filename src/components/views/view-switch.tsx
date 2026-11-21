@@ -419,9 +419,7 @@ export function ViewSwitch() {
     }
   }
 
-  // Reduced motion: no transition at all, the page just swaps.
-  if (reduceMotion) return <>{view}</>;
-
+  // Keep hooks unconditional: reduced-motion preferences may change at runtime.
   // Short opacity-only fade between pages (150 ms, CSS keyframe in
   // globals.css). The first mount skips the fade - the dashboard widgets
   // already have their own entrance animation. Replaces the previous
@@ -430,6 +428,9 @@ export function ViewSwitch() {
   React.useEffect(() => {
     firstRender.current = false;
   }, []);
+
+  // Reduced motion: no transition at all, the page just swaps.
+  if (reduceMotion) return <>{view}</>;
   return (
     <div
       key={viewKey}
