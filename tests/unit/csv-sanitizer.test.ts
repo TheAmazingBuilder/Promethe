@@ -4,10 +4,10 @@ import { buildErrorReportCsv } from "@/hooks/use-import";
 
 describe("spreadsheet-safe CSV exports", () => {
   it("neutralizes formula prefixes after leading whitespace and control characters", () => {
-    expect(escapeCsvField("=1+1")).toBe(""'=1+1"");
-    expect(escapeCsvField("+SUM(1,2)")).toBe(""'+SUM(1,2)"");
-    expect(escapeCsvField("\t@SUM(1,2)")).toBe(""'\t@SUM(1,2)"");
-    expect(escapeCsvField("-1+cmd|payload")).toBe(""'-1+cmd|payload"");
+    expect(escapeCsvField("=1+1")).toBe('"\\'=1+1"');
+    expect(escapeCsvField("+SUM(1,2)")).toBe('"\\'+SUM(1,2)"');
+    expect(escapeCsvField("\\t@SUM(1,2)")).toBe('"\\'\\t@SUM(1,2)"');
+    expect(escapeCsvField("-1+cmd|payload")).toBe('"\\'-1+cmd|payload"');
   });
 
   it("quotes and escapes embedded quotes using RFC 4180 rules", () => {
@@ -20,12 +20,12 @@ describe("spreadsheet-safe CSV exports", () => {
         row: 1,
         externalId: '=HYPERLINK("https://example.invalid","Open")',
         code: "INVALID_ROW",
-        detail: "\t+cmd|/C calc",
+        detail: "\\t+cmd|/C calc",
       },
     ]);
 
-    expect(csv).toContain(""'=HYPERLINK(""https://example.invalid"",""Open"")"");
-    expect(csv).toContain(""'\t+cmd|/C calc"");
+    expect(csv).toContain('"\\'=HYPERLINK(""https://example.invalid"",""Open"")"');
+    expect(csv).toContain('"\\'\\t+cmd|/C calc"');
     expect(csv.startsWith('"row","externalId","code","detail"')).toBe(true);
   });
 });
