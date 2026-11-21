@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { verifyPassword, hashPassword } from "@/lib/auth/password";
 import { loginSchema, zodFieldErrors } from "@/lib/auth/validators";
-import { rateLimit } from "@/lib/rate-limit";
+import { consumeRateLimit } from "@/lib/rate-limit";
+import { clientIpFrom, hashRateLimitIdentifier } from "@/lib/tokens";
 import { createSession } from "@/server/session";
 import { ensureUserSetup } from "@/server/users";
 
@@ -30,13 +31,28 @@ export async function POST(req: Request) {
 
     const { email, password } = parsed.data;
 
-    if (!rateLimit(`login:${email}`, 10, 5 * 60 * 1000)) {
+    const [emailLimit, ipLimit] = await Promise.all([
+      consumeRateLimit(
+        `auth:login:email:${hashRateLimitIdentifier("auth-login-email", email)}`,
+        10,
+        5 * 60 * 1000
+      ),
+      consumeRateLimit(
+        `auth:login:ip:${hashRateLimitIdentifier("auth-login-ip", clientIpFrom(req.headers))}`,
+        30,
+        5 * 60 * 1000
+      ),
+    ]);
+    if (!emailLimit.allowed || !ipLimit.allowed) {
       return NextResponse.json(
         {
           error: "RATE_LIMITED",
           message: "Too many attempts. Please try again in a few minutes.",
         },
-        { status: 429 }
+        {
+          status: 429,
+          headers: { "Retry-After": String(Math.max(1, Math.ceil((Math.max(emailLimit.resetAt, ipLimit.resetAt) - Date.now()) / 1000))) },
+        }
       );
     }
 
