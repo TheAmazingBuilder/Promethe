@@ -256,18 +256,48 @@ export async function upsertSymbolMapping(
   });
   if (!instrument) throw new BrokerSyncError("INSTRUMENT_NOT_FOUND", 422);
 
+  let targetInstrumentId = instrument.id;
   if (input.pipSize) {
-    // The user confirmed/adjusted the pip convention for this instrument.
-    await db.instrument.update({
-      where: { id: instrument.id },
-      data: { pipSize: input.pipSize },
-    });
+    // Shared catalog instruments are immutable from a user's mapping screen.
+    // Materialize a user-owned copy before applying a personal pip convention,
+    // so one user's broker setup cannot change calculations for every user.
+    if (instrument.userId === null) {
+      const personalInstrument = await db.instrument.upsert({
+        where: { userId_symbol: { userId, symbol: instrument.symbol } },
+        create: {
+          userId,
+          symbol: instrument.symbol,
+          name: instrument.name,
+          assetClass: instrument.assetClass,
+          baseCurrency: instrument.baseCurrency,
+          quoteCurrency: instrument.quoteCurrency,
+          digits: instrument.digits,
+          pipSize: input.pipSize,
+          pointSize: instrument.pointSize,
+          contractSize: instrument.contractSize,
+          tickSize: instrument.tickSize,
+          tickValue: instrument.tickValue,
+          marketTimezone: instrument.marketTimezone,
+          isActive: instrument.isActive,
+        },
+        update: { pipSize: input.pipSize },
+      });
+      targetInstrumentId = personalInstrument.id;
+    } else {
+      const updated = await db.instrument.updateMany({
+        where: { id: instrument.id, userId },
+        data: { pipSize: input.pipSize },
+      });
+      if (updated.count !== 1) {
+        throw new BrokerSyncError("INSTRUMENT_NOT_FOUND", 422);
+      }
+    }
   }
 
   await db.symbolMapping.upsert({
     where: { userId_brokerSymbol: { userId, brokerSymbol: input.brokerSymbol } },
-    update: { instrumentId: input.instrumentId },
-    create: { userId, brokerSymbol: input.brokerSymbol, instrumentId: input.instrumentId },
+    update: { instrumentId: targetInstrumentId },
+    create: { userId, brokerSymbol: input.brokerSymbol, instrumentId: targetInstrumentId },
   });
 }
 
