@@ -37,12 +37,27 @@ const HEADERS: string[] = [
   "Draft",
 ];
 
-/** RFC 4180 field escaping. */
-function csvField(value: string | null | undefined): string {
+/**
+ * Spreadsheet formula neutralization + RFC 4180 field escaping.
+ *
+ * Untrusted text beginning (possibly after whitespace/control characters)
+ * with =, +, - or @ is prefixed with an apostrophe so spreadsheet software
+ * treats it as text. Numeric DTO fields opt into strict decimal validation,
+ * preserving legitimate negative amounts without allowing "-1+..." payloads.
+ */
+const NUMERIC_VALUE = /^-?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?$/;
+const FORMULA_PREFIX = /^[\\s\\u0000-\\u001F\\uFEFF]*[=+\\-@]/;
+
+function csvField(
+  value: string | null | undefined,
+  numeric = false,
+): string {
   if (value == null) return "";
-  const s = String(value);
-  if (/[",\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
+  const raw = String(value);
+  const isValidNumber = numeric && NUMERIC_VALUE.test(raw);
+  const safe = !isValidNumber && FORMULA_PREFIX.test(raw) ? `'${raw}` : raw;
+  if (/[",\\r\\n]/.test(safe)) return `"${safe.replace(/"/g, '""')}"`;
+  return safe;
 }
 
 function yn(v: boolean | null | undefined): string {
@@ -68,23 +83,23 @@ export function tradesToCsv(rows: TradeListItemDTO[]): string {
         t.setupType,
         t.entryTime,
         t.exitTime,
-        t.entryPrice,
-        t.exitPrice,
-        t.stopLoss,
-        t.takeProfit,
-        t.lots,
-        t.riskPercent,
-        t.pips,
-        t.netPnl,
+        csvField(t.entryPrice, true),
+        csvField(t.exitPrice, true),
+        csvField(t.stopLoss, true),
+        csvField(t.takeProfit, true),
+        csvField(t.lots, true),
+        csvField(t.riskPercent, true),
+        csvField(t.pips, true),
+        csvField(t.netPnl, true),
         t.pnlCurrency,
-        t.rMultiple,
+        csvField(t.rMultiple, true),
         t.resultType,
         t.exitReason,
         t.emotionBefore,
         t.followedPlan == null ? null : yn(t.followedPlan),
         yn(t.isDraft),
       ]
-        .map(csvField)
+        .map((value) => value)
         .join(",")
     );
   }
