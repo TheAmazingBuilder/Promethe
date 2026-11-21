@@ -44,13 +44,13 @@ function clearOAuthCookies(response: NextResponse): NextResponse {
  * code. Only an explicitly verified Google email may be linked to an account.
  */
 export async function GET(req: Request) {
-  const home = new URL("/", req.url);
+  const redirectUri = googleRedirectUri();
+  const home = new URL("/", redirectUri ?? "http://localhost:3000");
   const fail = () => clearOAuthCookies(NextResponse.redirect(home));
 
   try {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const redirectUri = googleRedirectUri();
     if (!clientId || !clientSecret || !redirectUri) return fail();
 
     const url = new URL(req.url);
