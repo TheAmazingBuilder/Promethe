@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/server/session";
 import { apiError } from "@/server/api";
 import { consumeRateLimit, sweepRateLimits } from "@/lib/rate-limit";
+import { hashRateLimitIdentifier } from "@/lib/tokens";
 import { sendTestMessage } from "@/server/integrations/delivery";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -16,7 +17,7 @@ export async function POST(_req: Request, ctx: Ctx) {
     const { id } = await ctx.params;
     sweepRateLimits();
     const rl = await consumeRateLimit(
-      `integrations-test:${session.user.id}`,
+      `integrations-test:${hashRateLimitIdentifier("integration-test-user", session.user.id)}`,
       5,
       60 * 1000
     );
