@@ -45,8 +45,8 @@ const HEADERS: string[] = [
  * treats it as text. Numeric DTO fields opt into strict decimal validation,
  * preserving legitimate negative amounts without allowing "-1+..." payloads.
  */
-const NUMERIC_VALUE = /^-?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?$/;
-const FORMULA_PREFIX = /^[\\s\\u0000-\\u001F\\uFEFF]*[=+\\-@]/;
+const NUMERIC_VALUE = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+const FORMULA_PREFIX = /^[\s\u0000-\u001F\uFEFF]*[=+\-@]/;
 
 function csvField(
   value: string | null | undefined,
