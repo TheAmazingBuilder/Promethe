@@ -297,7 +297,7 @@ describe("deleteTrade → trash", () => {
 
     const detail = await getTradeDetail(userA.id, trade.id);
     expect(detail?.id).toBe(trade.id);
-    const list = await listTrades(userA.id, { page: 1, pageSize: 25 });
+    const list = await listTrades(userA.id, DEFAULT_LIST_QUERY);
     expect(list.total).toBe(1);
     const analytics = await getAnalytics(userA.id, { period: "all" });
     expect(analytics.stats?.tradeCount ?? 0).toBe(1);
