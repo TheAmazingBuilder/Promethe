@@ -17,6 +17,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { QueryErrorState } from "@/components/ui/query-error-state";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { YearCalendar } from "@/components/charts/year-calendar";
 import { Money, Sensitive } from "@/components/privacy/money";
@@ -82,7 +83,7 @@ export function CalendarView() {
   const { data: accountsData } = useAccounts();
   const accounts = accountsData ?? [];
   const effectiveAccount = accountId === "all" ? undefined : accountId;
-  const { data, isLoading } = useCalendar(
+  const { data, isLoading, isError, refetch } = useCalendar(
     cursor.year,
     cursor.month,
     effectiveAccount,
@@ -156,6 +157,13 @@ export function CalendarView() {
         }
       />
 
+      {mode === "month" && isError ? (
+        <QueryErrorState
+          title="Calendar data could not be loaded"
+          description="Check your connection and try again. Your journal entries are safe."
+          onRetry={() => void refetch()}
+        />
+      ) : (
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         {/* Year contribution calendar (v2.5 M2) */}
         {mode === "year" ? (
@@ -413,6 +421,7 @@ export function CalendarView() {
         </>
         )}
       </div>
+      )}
 
       {/* MRT wave 2 — day-detail panel, below the grid. */}
       {mode === "month" && selectedDay ? (
