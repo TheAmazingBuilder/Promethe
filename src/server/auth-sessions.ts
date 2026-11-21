@@ -12,6 +12,9 @@ import {
   storedSessionMatchesToken,
 } from "@/lib/auth/session-token";
 
+// Keep the established server helper export used by security tests and callers.
+export { sessionFingerprint };
+
 export interface SessionRow {
   /** Short public fingerprint — never the raw token. */
   fingerprint: string;
