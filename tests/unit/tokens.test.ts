@@ -9,6 +9,7 @@ import {
   constantTimeEqual,
   generateToken,
   hashIp,
+  hashRateLimitIdentifier,
   hashToken,
   hashUserId,
   tokenMatches,
@@ -84,6 +85,24 @@ describe("hashIp", () => {
     expect(h1).not.toBe(h3);
     expect(h1).toMatch(/^[0-9a-f]{32}$/);
     expect(h1).not.toContain("203.0.113");
+  });
+});
+
+describe("hashRateLimitIdentifier", () => {
+  it("pseudonymises identifiers deterministically", () => {
+    const first = hashRateLimitIdentifier("auth-login-email", "trader@example.test");
+    const second = hashRateLimitIdentifier("auth-login-email", "trader@example.test");
+    expect(first).toBe(second);
+    expect(first).toMatch(/^[0-9a-f]{32}$/);
+    expect(first).not.toContain("trader");
+  });
+
+  it("separates namespaces and identifier values", () => {
+    const email = hashRateLimitIdentifier("auth-login-email", "same-value");
+    const ip = hashRateLimitIdentifier("auth-login-ip", "same-value");
+    const other = hashRateLimitIdentifier("auth-login-email", "other-value");
+    expect(email).not.toBe(ip);
+    expect(email).not.toBe(other);
   });
 });
 
