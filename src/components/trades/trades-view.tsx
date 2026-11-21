@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -1563,24 +1564,29 @@ export function TradesView() {
         ) : (
           <Card className="gap-0 py-4">
             <CardContent className="px-4">
-              <div className="flex flex-col items-center gap-3 py-12 text-center">
-                <div className="rounded-full bg-muted p-3">
-                  <CandlestickChart
-                    className="h-6 w-6 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <p className="font-medium">{t("emptyTitle")}</p>
+              <EmptyState
+                className="py-12"
+                icon={
+                  <div className="rounded-full bg-muted p-3">
+                    <CandlestickChart
+                      className="h-6 w-6 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                  </div>
+                }
+                title={<p className="font-medium">{t("emptyTitle")}</p>}
+                description={
                   <p className="mx-auto max-w-sm text-sm text-muted-foreground">
                     {t("emptyDesc")}
                   </p>
-                </div>
-                <Button onClick={() => navigate("/trades/quick")}>
-                  <Zap className="h-4 w-4" aria-hidden="true" />
-                  {t("emptyCta")}
-                </Button>
-              </div>
+                }
+                actions={
+                  <Button onClick={() => navigate("/trades/quick")}>
+                    <Zap className="h-4 w-4" aria-hidden="true" />
+                    {t("emptyCta")}
+                  </Button>
+                }
+              />
             </CardContent>
           </Card>
         )

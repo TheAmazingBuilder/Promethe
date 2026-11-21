@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { QueryErrorState } from "@/components/ui/query-error-state";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { YearCalendar } from "@/components/charts/year-calendar";
 import { Money, Sensitive } from "@/components/privacy/money";
@@ -413,9 +414,14 @@ export function CalendarView() {
           {data != null &&
           data.summary.tradingDays === 0 &&
           Object.keys(data.days).length === 0 ? (
-            <p className="text-center text-sm text-muted-foreground">
-              {t("emptyTitle")} - {t("emptyDesc")}
-            </p>
+            <EmptyState
+              className="gap-0 py-0"
+              title={
+                <p className="text-center text-sm text-muted-foreground">
+                  {t("emptyTitle")} - {t("emptyDesc")}
+                </p>
+              }
+            />
           ) : null}
         </div>
         </>

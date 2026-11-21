@@ -24,6 +24,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -317,16 +318,21 @@ export function TrashView() {
               {t("loadError")}
             </p>
           ) : items.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-10 text-center">
-              <Trash2
-                className="h-10 w-10 text-muted-foreground/40"
-                aria-hidden="true"
-              />
-              <p className="text-sm font-medium">{t("emptyTitle")}</p>
-              <p className="max-w-sm text-xs text-muted-foreground">
-                {t("emptyDescription")}
-              </p>
-            </div>
+            <EmptyState
+              className="gap-2 py-10"
+              icon={
+                <Trash2
+                  className="h-10 w-10 text-muted-foreground/40"
+                  aria-hidden="true"
+                />
+              }
+              title={<p className="text-sm font-medium">{t("emptyTitle")}</p>}
+              description={
+                <p className="max-w-sm text-xs text-muted-foreground">
+                  {t("emptyDescription")}
+                </p>
+              }
+            />
           ) : (
             <ul className="divide-y">
               {items.map((item) => {
