@@ -164,7 +164,11 @@ export function releaseAutoPrivacy(): void {
  * decides before calling.
  */
 export function loadPrivacyState(
-  prefs: PrivacyPreferences,
+  prefs: Partial<Omit<PrivacyPreferences, "mode" | "scope" | "auto">> & {
+    mode?: unknown;
+    scope?: Partial<PrivacyScope>;
+    auto?: Partial<PrivacyAutoEnable>;
+  },
   opts: { adopt: boolean }
 ): void {
   const normalized: PrivacyPreferences = {
