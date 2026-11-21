@@ -100,7 +100,14 @@ export function calcPlannedRR(
   const risk = stopDistance(direction, entry, stopLoss);
   if (!risk || risk.lte(0)) return null;
   if (takeProfit === null || takeProfit === undefined) return null;
-  const reward = toD(takeProfit).minus(toD(entry)).abs();
+
+  // Reward must be on the profitable side of entry. Using abs() here
+  // incorrectly turned a TP placed beyond the stop / against the trade
+  // direction into a positive planned R:R.
+  const reward =
+    direction === "LONG"
+      ? toD(takeProfit).minus(toD(entry))
+      : toD(entry).minus(toD(takeProfit));
   if (reward.lte(0)) return null;
   return reward.div(risk);
 }
