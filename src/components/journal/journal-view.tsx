@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { DateField } from "@/components/ui/date-field";
 import { Skeleton } from "@/components/ui/skeleton";
+import { QueryErrorState } from "@/components/ui/query-error-state";
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
@@ -100,7 +101,12 @@ export function JournalView({ date }: { date?: string }) {
   );
   const day = date ?? today;
 
-  const { data: entry, isLoading } = useJournalEntry(day);
+  const {
+    data: entry,
+    isLoading,
+    isError,
+    refetch,
+  } = useJournalEntry(day);
   // Day P&L — reuses the calendar month payload (cached, shared with /calendar).
   const { data: calendarData } = useCalendar(
     Number(day.slice(0, 4)),
@@ -263,6 +269,14 @@ export function JournalView({ date }: { date?: string }) {
         }
       />
 
+      {isError ? (
+        <QueryErrorState
+          title="Journal entry could not be loaded"
+          description="Your saved journal data is safe. Check your connection and try again."
+          onRetry={() => void refetch()}
+        />
+      ) : (
+      <>
       {/* Scores + save bar */}
       <Card>
         <CardHeader className="pb-3">
@@ -411,6 +425,8 @@ export function JournalView({ date }: { date?: string }) {
           </CardContent>
         </Card>
       </div>
+      </>
+      )}
     </section>
   );
 }
