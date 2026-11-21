@@ -28,6 +28,13 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
+const deleteUploadObjectsMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+
+vi.mock("@/server/uploads", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/server/uploads")>();
+  return { ...actual, deleteUploadObjects: deleteUploadObjectsMock };
+});
+
 import { db } from "@/lib/db";
 import { withDeleted } from "@/lib/trash/deleted-scope";
 import { TRASH_RETENTION_DAYS } from "@/lib/trash/constants";
@@ -408,7 +415,11 @@ describe("purgeExpiredTrash", () => {
       },
     });
 
+    deleteUploadObjectsMock.mockClear();
     const report = await purgeExpiredTrash(new Date(now));
+    expect(deleteUploadObjectsMock).toHaveBeenCalledWith([
+      `${userA.id}/${oldTrade.id}/old.png`,
+    ]);
     expect(report.trades).toBeGreaterThanOrEqual(1);
     expect(report.journalEntries).toBeGreaterThanOrEqual(1);
     expect(report.changeLogsPruned).toBeGreaterThanOrEqual(1);

@@ -455,7 +455,8 @@ describe("strategies (checklist, versions, stats)", () => {
     expect(await listVersions(userB.id, strategy.id)).toBeNull();
 
     // Delete a version.
-    expect(await deleteVersion(userA.id, strategy.id, versions[0].id)).toBe(true);
+    const deletion = await deleteVersion(userA.id, strategy.id, versions[0].id);
+    expect(deletion).toEqual({ deleted: true, protected: false });
     expect(await listVersions(userA.id, strategy.id)).toHaveLength(1);
     await db.strategy.delete({ where: { id: strategy.id } });
   });
