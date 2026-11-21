@@ -1,17 +1,17 @@
 /**
  * Active sessions — server-side (never imported by client code).
  *
- * AuthSession rows hold only a token id, the user id and two dates: no
- * device, browser or IP is ever recorded, so the UI shows the sign-in and
- * expiry dates honestly and says the device is not recorded.
- *
- * The raw token id is never sent to the client: each row is identified by
- * a short fingerprint (first 16 hex chars of sha256(token)). Revocation
- * matches on that fingerprint server-side. The current session can never
- * be revoked here — signing out is the way to end it.
+ * AuthSession rows contain a versioned SHA-256 digest of the bearer token,
+ * the user id and two dates: no device, browser or IP is ever recorded.
+ * The raw token is never sent to the client: each row is identified by a
+ * short SHA-256 fingerprint. Revocation matches on that fingerprint.
  */
-import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
+import {
+  hashSessionToken,
+  sessionFingerprint,
+  storedSessionMatchesToken,
+} from "@/lib/auth/session-token";
 
 export interface SessionRow {
   /** Short public fingerprint — never the raw token. */
@@ -19,11 +19,6 @@ export interface SessionRow {
   createdAt: string;
   expiresAt: string;
   current: boolean;
-}
-
-/** Deterministic fingerprint for a session token. */
-export function sessionFingerprint(token: string): string {
-  return createHash("sha256").update(token).digest("hex").slice(0, 16);
 }
 
 /** All sessions of the user, newest first, with the current one flagged. */
@@ -39,7 +34,7 @@ export async function listSessions(
     fingerprint: sessionFingerprint(row.id),
     createdAt: row.createdAt.toISOString(),
     expiresAt: row.expiresAt.toISOString(),
-    current: currentToken !== undefined && row.id === currentToken,
+    current: currentToken !== undefined && storedSessionMatchesToken(row.id, currentToken),
   }));
 }
 
@@ -56,7 +51,7 @@ export async function revokeSession(
   const rows = await db.authSession.findMany({ where: { userId } });
   const target = rows.find((row) => sessionFingerprint(row.id) === fingerprint);
   if (!target) return { ok: false, code: "NOT_FOUND" };
-  if (currentToken !== undefined && target.id === currentToken) {
+  if (currentToken !== undefined && storedSessionMatchesToken(target.id, currentToken)) {
     return { ok: false, code: "CURRENT_SESSION" };
   }
   await db.authSession.delete({ where: { id: target.id } });
