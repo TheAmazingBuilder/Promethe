@@ -58,3 +58,11 @@ export const MAX_SKEW_SECONDS = 10 * 60;
 export function withinSkew(sentAt: number, now: Date = new Date()): boolean {
   return Math.abs(now.getTime() / 1000 - sentAt) <= MAX_SKEW_SECONDS;
 }
+
+/** Revocation is sticky: a token remains invalid even if its hash still exists. */
+export function isRevokedConnection(connection: {
+  status: string;
+  revokedAt?: Date | null;
+}): boolean {
+  return connection.status === "REVOKED" || connection.revokedAt != null;
+}
