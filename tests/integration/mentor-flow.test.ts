@@ -321,6 +321,25 @@ describe("mentor invitations", () => {
         where: { ownerId_mentorId: { ownerId, mentorId: outsiderId } },
       })
     ).resolves.toBeNull();
+
+    // An expired PENDING row must not block a fresh invitation while the
+    // daily maintenance cron has not yet marked it EXPIRED.
+    const reinvited = await createInvitation(ownerId, {
+      email: "outsider@test.local",
+      permissions: {
+        accountScope: "ALL",
+        accountIds: [],
+        strategyScope: "ALL",
+        strategyIds: [],
+        canViewAmounts: true,
+        canViewJournal: false,
+        canViewScreenshots: false,
+        canViewAnalytics: true,
+        canComment: false,
+        expiresAt: null,
+      },
+    });
+    expect(reinvited.invitation.status).toBe("PENDING");
   });
 
   it("refuses self-mentorat on the context builder", async () => {
