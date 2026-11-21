@@ -27,6 +27,8 @@ import type { Prisma } from "@prisma/client";
 import { createUserWithDefaults, setHandle } from "@/server/users";
 import {
   acceptInvitation,
+  acceptInvitationById,
+  declineInvitationById,
   createInvitation,
   listMentees,
   listMentors,
@@ -284,6 +286,41 @@ describe("mentor invitations", () => {
         email: "mentor@test.local",
       })
     ).rejects.toMatchObject({ code: "INVITE_NOT_PENDING" });
+  });
+
+  it("does not allow expired invitations to be accepted or declined by id", async () => {
+    const { invitation } = await createInvitation(ownerId, {
+      email: "outsider@test.local",
+      permissions: {
+        accountScope: "ALL",
+        accountIds: [],
+        strategyScope: "ALL",
+        strategyIds: [],
+        canViewAmounts: true,
+        canViewJournal: false,
+        canViewScreenshots: false,
+        canViewAnalytics: true,
+        canComment: false,
+        expiresAt: null,
+      },
+    });
+    await db.mentorInvitation.update({
+      where: { id: invitation.id },
+      data: { expiresAt: new Date(Date.now() - 1_000) },
+    });
+
+    await expect(
+      acceptInvitationById(invitation.id, { id: outsiderId, email: "outsider@test.local" })
+    ).rejects.toMatchObject({ code: "INVITE_NOT_FOUND", status: 404 });
+    await expect(
+      declineInvitationById(invitation.id, { id: outsiderId, email: "outsider@test.local" })
+    ).rejects.toMatchObject({ code: "INVITE_NOT_FOUND", status: 404 });
+
+    await expect(
+      db.mentorAccess.findUnique({
+        where: { ownerId_mentorId: { ownerId, mentorId: outsiderId } },
+      })
+    ).resolves.toBeNull();
   });
 
   it("refuses self-mentorat on the context builder", async () => {
