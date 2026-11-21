@@ -15,7 +15,8 @@
     "db:reset:test": "bun scripts/test-db.ts",
     "test:unit": "vitest run tests/unit",
     "test:integration": "bun scripts/test-db.ts && vitest run tests/integration",
-    "test:all": "bun run test:unit && bun run test:integration"
+    "test:all": "bun run test:unit && bun run test:integration",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
