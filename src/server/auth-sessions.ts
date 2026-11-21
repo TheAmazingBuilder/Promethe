@@ -8,7 +8,6 @@
  */
 import { db } from "@/lib/db";
 import {
-  hashSessionToken,
   sessionFingerprint,
   storedSessionMatchesToken,
 } from "@/lib/auth/session-token";
