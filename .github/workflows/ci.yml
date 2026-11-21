@@ -79,6 +79,9 @@ jobs:
           EOF
 
       - name: Validate Prisma schema
+        env:
+          DATABASE_URL: postgresql://test:test@127.0.0.1:5432/promethe?schema=promethe_test
+          DIRECT_URL: postgresql://test:test@127.0.0.1:5432/promethe?schema=promethe_test
         run: bunx prisma validate
 
 
