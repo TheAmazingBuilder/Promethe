@@ -119,8 +119,8 @@ export default defineConfig({
     env: {
       // Never fall back to DATABASE_URL: missing test configuration must fail
       // against an unreachable local URL rather than touching production.
-      DATABASE_URL: testDatabaseUrl,
-      DIRECT_URL: testDirectUrl,
+      DATABASE_URL: testDatabaseUrl.toString(),
+      DIRECT_URL: testDirectUrl.toString(),
       TOKEN_PEPPER: "test-token-pepper-0123456789abcdef",
       IP_HASH_PEPPER: "test-ip-pepper-fedcba9876543210",
     },
