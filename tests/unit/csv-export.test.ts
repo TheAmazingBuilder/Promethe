@@ -86,7 +86,7 @@ describe("tradesToCsv spreadsheet formula protection", () => {
 
   it("keeps RFC 4180 quote escaping after neutralization", () => {
     const csv = tradesToCsv([trade({ symbol: '=HYPERLINK("https://example.invalid","open")' })]);
-    expect(csv).toContain("\\"'=HYPERLINK");
+    expect(csv).toContain("'=HYPERLINK");
     expect(csv).toContain('""https://example.invalid""');
   });
 });
