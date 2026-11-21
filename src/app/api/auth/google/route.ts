@@ -1,6 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { googleCodeChallenge, googleRedirectUri } from "@/lib/auth/google";
+import { consumeRateLimit } from "@/lib/rate-limit";
+import { clientIpFrom, hashRateLimitIdentifier } from "@/lib/tokens";
+import { AUTH_RATE_LIMITS } from "@/server/auth-rate-limit-policy";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const CALLBACK_COOKIE_PATH = "/api/auth/google/callback";
@@ -12,7 +15,25 @@ const OAUTH_COOKIE_MAX_AGE = 10 * 60;
  * The callback URI is explicit in production and cannot be overridden by
  * an untrusted request Host header.
  */
-export async function GET() {
+export async function GET(req: Request) {
+  const limit = AUTH_RATE_LIMITS.google.ip;
+  const ipLimit = await consumeRateLimit(
+    "auth:google:ip:" + hashRateLimitIdentifier("auth-google-ip", clientIpFrom(req.headers)),
+    limit.limit,
+    limit.windowMs
+  );
+  if (!ipLimit.allowed) {
+    return NextResponse.json(
+      { error: "RATE_LIMITED", message: "Too many sign-in attempts. Please wait before trying again." },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(Math.max(1, Math.ceil((ipLimit.resetAt - Date.now()) / 1000))),
+        },
+      }
+    );
+  }
+
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const redirectUri = googleRedirectUri();
 
