@@ -18,7 +18,7 @@ export function ErrorFallback({
         <AlertTriangle aria-hidden="true" className="size-6" />
       </div>
       <div className="max-w-md space-y-2">
-        <h1 className="text-xl font-semibold">Something went wrong</h1>
+        <div role="heading" aria-level={1} className="text-xl font-semibold">Something went wrong</div>
         <p className="text-sm text-muted-foreground">
           Promethe couldn’t display this page. Your saved data has not been
           changed by this error. Try loading the page again.
