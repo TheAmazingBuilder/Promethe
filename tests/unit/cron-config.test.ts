@@ -31,7 +31,7 @@ describe("Vercel cron configuration", () => {
 
     for (const cron of crons) {
       expect(cron.path.startsWith("/")).toBe(true);
-      expect(cron.schedule.trim().split(/\\s+/)).toHaveLength(5);
+      expect(cron.schedule.trim().split(/\s+/)).toHaveLength(5);
     }
   });
 });
