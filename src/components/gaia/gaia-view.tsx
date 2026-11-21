@@ -21,6 +21,7 @@ import {
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { QueryErrorState } from "@/components/ui/query-error-state";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
@@ -238,7 +239,13 @@ export function GaiaView() {
         </div>
       </header>
 
-      {overviewQuery.isLoading ? (
+      {overviewQuery.isError ? (
+        <QueryErrorState
+          title="Gaïa could not be loaded"
+          description="Your notes are safe. Check your connection and try again."
+          onRetry={() => void overviewQuery.refetch()}
+        />
+      ) : overviewQuery.isLoading ? (
         <div className="space-y-3">
           <Skeleton className="h-24 w-full" />
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
