@@ -3,6 +3,7 @@
  * This is intentionally destructive, but only against schema "promethe_test".
  */
 import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -22,6 +23,31 @@ function sameDatabaseProject(left: URL, right: URL): boolean {
   return left.hostname === right.hostname;
 }
 
+function readTestEnvFiles(): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const file of [".env", ".env.local", ".env.test", ".env.test.local"]) {
+    const filePath = path.join(ROOT, file);
+    if (!existsSync(filePath)) continue;
+    for (const line of readFileSync(filePath, "utf8").split(/\\r?\\n/)) {
+      const match = line.match(/^\\s*(?:export\\s+)?(DATABASE_URL|DIRECT_URL|TEST_DATABASE_URL|TEST_DIRECT_URL)\\s*=\\s*(.*?)\\s*$/);
+      if (!match) continue;
+      let value = match[2];
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      } else {
+        value = value.replace(/\\s+#.*$/, "").trim();
+      }
+      values[match[1]] = value;
+    }
+  }
+  return values;
+}
+
+const fileEnv = readTestEnvFiles();
+
 function parseTestUrl(value: string | undefined, name: string): URL {
   if (!value) {
     throw new Error(`${name} is required. Configure a PostgreSQL URL with schema=${TEST_SCHEMA}; refusing to run database tests.`);
@@ -39,8 +65,8 @@ function parseTestUrl(value: string | undefined, name: string): URL {
   return url;
 }
 
-const testDatabaseUrl = parseTestUrl(process.env.TEST_DATABASE_URL, "TEST_DATABASE_URL");
-const testDirectUrl = parseTestUrl(process.env.TEST_DIRECT_URL, "TEST_DIRECT_URL");
+const testDatabaseUrl = parseTestUrl(process.env.TEST_DATABASE_URL ?? fileEnv.TEST_DATABASE_URL, "TEST_DATABASE_URL");
+const testDirectUrl = parseTestUrl(process.env.TEST_DIRECT_URL ?? fileEnv.TEST_DIRECT_URL, "TEST_DIRECT_URL");
 
 if (
   testDatabaseUrl.pathname !== testDirectUrl.pathname ||
@@ -51,8 +77,8 @@ if (
 }
 
 const productionUrls = [
-  ["DATABASE_URL", process.env.DATABASE_URL],
-  ["DIRECT_URL", process.env.DIRECT_URL],
+  ["DATABASE_URL", process.env.DATABASE_URL ?? fileEnv.DATABASE_URL],
+  ["DIRECT_URL", process.env.DIRECT_URL ?? fileEnv.DIRECT_URL],
 ] as const;
 const testUrls = [testDatabaseUrl, testDirectUrl];
 
