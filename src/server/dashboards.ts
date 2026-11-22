@@ -261,7 +261,8 @@ async function insertWidgets(
   dashboardId: string,
   blueprints: readonly WidgetBlueprint[],
   invalidConfig: "fallback" | "skip",
-  recordSkip?: (widgetIndex: number, type: string, reason: ImportSkipReason) => void
+  recordSkip?: (widgetIndex: number, type: string, reason: ImportSkipReason) => void,
+  client: Pick<Prisma.TransactionClient, "dashboardWidget"> = db
 ): Promise<void> {
   const existingLg: WidgetLayout[] = [];
   for (const [widgetIndex, blueprint] of blueprints.entries()) {
@@ -323,8 +324,11 @@ async function insertWidgets(
   }
 }
 
-async function nextOrder(userId: string): Promise<number> {
-  const aggregate = await db.dashboard.aggregate({
+async function nextOrder(
+  userId: string,
+  client: Pick<Prisma.TransactionClient, "dashboard"> = db
+): Promise<number> {
+  const aggregate = await client.dashboard.aggregate({
     where: { userId },
     _max: { order: true },
   });
@@ -397,11 +401,6 @@ export async function createDashboard(
   userId: string,
   input: DashboardCreate
 ): Promise<DashboardDTO> {
-  const count = await db.dashboard.count({ where: { userId } });
-  if (count >= MAX_DASHBOARDS) {
-    throw new DashboardValidationError("TOO_MANY_DASHBOARDS", 409);
-  }
-
   let blueprints: WidgetBlueprint[] = [];
   let templateKey: string | null = null;
   if (input.templateKey != null) {
@@ -413,18 +412,31 @@ export async function createDashboard(
     blueprints = templateToBlueprints(template.dashboards[0]?.widgets ?? []);
   }
 
-  const dashboard = await db.dashboard.create({
-    data: {
-      userId,
-      name: input.name,
-      icon: input.icon,
-      order: await nextOrder(userId),
-      isDefault: count === 0,
-      templateKey,
-    },
+  // Dashboard and its initial widgets form one logical operation. If widget
+  // persistence fails, roll back the dashboard instead of leaving it empty.
+  return db.$transaction(async (tx) => {
+    const count = await tx.dashboard.count({ where: { userId } });
+    if (count >= MAX_DASHBOARDS) {
+      throw new DashboardValidationError("TOO_MANY_DASHBOARDS", 409);
+    }
+    const dashboard = await tx.dashboard.create({
+      data: {
+        userId,
+        name: input.name,
+        icon: input.icon,
+        order: await nextOrder(userId, tx),
+        isDefault: count === 0,
+        templateKey,
+      },
+    });
+    await insertWidgets(userId, dashboard.id, blueprints, "fallback", undefined, tx);
+    const row = await tx.dashboard.findFirst({
+      where: { id: dashboard.id, userId },
+      include: { widgets: true },
+    });
+    if (!row) throw new DashboardValidationError("DASHBOARD_NOT_FOUND", 404);
+    return toDashboardDTO(row);
   });
-  await insertWidgets(userId, dashboard.id, blueprints, "fallback");
-  return loadDashboardDTO(userId, dashboard.id);
 }
 
 export async function patchDashboard(
@@ -432,57 +444,67 @@ export async function patchDashboard(
   dashboardId: string,
   patch: DashboardPatch
 ): Promise<DashboardDTO> {
-  const existing = await requireDashboard(userId, dashboardId);
-
-  if (patch.isDefault === true) {
-    // Exactly one default at a time — unset the others first.
-    await db.dashboard.updateMany({
-      where: { userId, isDefault: true, NOT: { id: existing.id } },
-      data: { isDefault: false },
+  return db.$transaction(async (tx) => {
+    const existing = await tx.dashboard.findFirst({
+      where: { id: dashboardId, userId },
     });
-  }
+    if (!existing) throw new DashboardValidationError("DASHBOARD_NOT_FOUND", 404);
 
-  const updated = await db.dashboard.update({
-    where: { id: existing.id },
-    data: {
-      ...(patch.name != null ? { name: patch.name } : {}),
-      ...(patch.icon != null ? { icon: patch.icon } : {}),
-      ...(patch.isDefault != null ? { isDefault: patch.isDefault } : {}),
-    },
-    include: { widgets: true },
+    if (patch.isDefault === true) {
+      // Keep the default switch atomic: never commit with zero defaults
+      // because the second write failed after clearing the previous one.
+      await tx.dashboard.updateMany({
+        where: { userId, isDefault: true, NOT: { id: existing.id } },
+        data: { isDefault: false },
+      });
+    }
+
+    const updated = await tx.dashboard.update({
+      where: { id: existing.id },
+      data: {
+        ...(patch.name != null ? { name: patch.name } : {}),
+        ...(patch.icon != null ? { icon: patch.icon } : {}),
+        ...(patch.isDefault != null ? { isDefault: patch.isDefault } : {}),
+      },
+      include: { widgets: true },
+    });
+    return toDashboardDTO(updated);
   });
-  return toDashboardDTO(updated);
 }
 
 export async function deleteDashboard(
   userId: string,
   dashboardId: string
 ): Promise<void> {
-  const existing = await requireDashboard(userId, dashboardId);
-
-  const remaining = await db.dashboard.count({
-    where: { userId, NOT: { id: existing.id } },
-  });
-  if (remaining === 0) {
-    throw new DashboardValidationError("LAST_DASHBOARD", 409);
-  }
-
-  const wasDefault = existing.isDefault;
-  await db.dashboard.delete({ where: { id: existing.id } }); // widgets cascade
-
-  if (wasDefault) {
-    // Promote the first remaining dashboard (lowest order).
-    const first = await db.dashboard.findFirst({
-      where: { userId },
-      orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+  await db.$transaction(async (tx) => {
+    const existing = await tx.dashboard.findFirst({
+      where: { id: dashboardId, userId },
     });
-    if (first) {
-      await db.dashboard.update({
-        where: { id: first.id },
-        data: { isDefault: true },
-      });
+    if (!existing) throw new DashboardValidationError("DASHBOARD_NOT_FOUND", 404);
+
+    const remaining = await tx.dashboard.count({
+      where: { userId, NOT: { id: existing.id } },
+    });
+    if (remaining === 0) {
+      throw new DashboardValidationError("LAST_DASHBOARD", 409);
     }
-  }
+
+    await tx.dashboard.delete({ where: { id: existing.id } }); // widgets cascade
+
+    if (existing.isDefault) {
+      // Promote the first remaining dashboard in the same transaction.
+      const first = await tx.dashboard.findFirst({
+        where: { userId },
+        orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+      });
+      if (first) {
+        await tx.dashboard.update({
+          where: { id: first.id },
+          data: { isDefault: true },
+        });
+      }
+    }
+  });
 }
 
 export async function reorderDashboards(
