@@ -306,7 +306,7 @@ async function insertWidgets(
     const stored = migrateLayouts(1, layouts).layouts;
     if (stored.lg) existingLg.push(stored.lg);
 
-    await db.dashboardWidget.create({
+    await client.dashboardWidget.create({
       data: {
         dashboardId,
         userId,
