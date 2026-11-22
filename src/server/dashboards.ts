@@ -362,37 +362,41 @@ async function loadDashboardDTO(
  * direct port of the v2 home view).
  */
 export async function listDashboards(userId: string): Promise<DashboardDTO[]> {
-  let rows = await db.dashboard.findMany({
-    where: { userId },
-    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
-    include: { widgets: true },
-  });
-
-  if (rows.length === 0) {
-    // nameKey resolution is impossible server-side — the default bootstrap
-    // stores the literal English name ("Daily"); the UI may rename it.
-    const created = await db.dashboard.create({
-      data: {
-        userId,
-        name: "Daily",
-        icon: DEFAULT_DASHBOARD.icon,
-        order: 0,
-        isDefault: true,
-        templateKey: null,
-      },
-    });
-    await insertWidgets(
-      userId,
-      created.id,
-      templateToBlueprints(DEFAULT_DASHBOARD.widgets),
-      "fallback"
-    );
-    rows = await db.dashboard.findMany({
+  const rows = await db.$transaction(async (tx) => {
+    let dashboards = await tx.dashboard.findMany({
       where: { userId },
       orderBy: [{ order: "asc" }, { createdAt: "asc" }],
       include: { widgets: true },
     });
-  }
+
+    if (dashboards.length === 0) {
+      // Bootstrap the dashboard and its widgets as one atomic operation.
+      const created = await tx.dashboard.create({
+        data: {
+          userId,
+          name: "Daily",
+          icon: DEFAULT_DASHBOARD.icon,
+          order: 0,
+          isDefault: true,
+          templateKey: null,
+        },
+      });
+      await insertWidgets(
+        userId,
+        created.id,
+        templateToBlueprints(DEFAULT_DASHBOARD.widgets),
+        "fallback",
+        undefined,
+        tx
+      );
+      dashboards = await tx.dashboard.findMany({
+        where: { userId },
+        orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+        include: { widgets: true },
+      });
+    }
+    return dashboards;
+  });
 
   return rows.map(toDashboardDTO);
 }
@@ -775,29 +779,42 @@ export async function applyTemplate(
   dashboardId: string,
   templateKey: string
 ): Promise<{ dashboard: DashboardDTO; skipped: DashboardImportSkip[] }> {
-  const dashboard = await requireDashboard(userId, dashboardId);
-
   const template = getTemplate(templateKey);
   if (!template) {
     throw new DashboardValidationError("TEMPLATE_NOT_FOUND", 404);
   }
 
-  await db.dashboardWidget.deleteMany({
-    where: { dashboardId: dashboard.id },
-  });
-
   const skipped: DashboardImportSkip[] = [];
   const blueprints = templateToBlueprints(
     template.dashboards[0]?.widgets ?? []
   );
-  await insertWidgets(userId, dashboard.id, blueprints, "fallback", (widgetIndex, type, reason) =>
-    skipped.push({ dashboardIndex: 0, widgetIndex, type, reason })
-  );
+  const dashboard = await db.$transaction(async (tx) => {
+    const existing = await tx.dashboard.findFirst({
+      where: { id: dashboardId, userId },
+    });
+    if (!existing) throw new DashboardValidationError("DASHBOARD_NOT_FOUND", 404);
 
-  return {
-    dashboard: await loadDashboardDTO(userId, dashboard.id),
-    skipped,
-  };
+    await tx.dashboardWidget.deleteMany({
+      where: { dashboardId: existing.id },
+    });
+    await insertWidgets(
+      userId,
+      existing.id,
+      blueprints,
+      "fallback",
+      (widgetIndex, type, reason) =>
+        skipped.push({ dashboardIndex: 0, widgetIndex, type, reason }),
+      tx
+    );
+    const updated = await tx.dashboard.findFirst({
+      where: { id: existing.id, userId },
+      include: { widgets: true },
+    });
+    if (!updated) throw new DashboardValidationError("DASHBOARD_NOT_FOUND", 404);
+    return toDashboardDTO(updated);
+  });
+
+  return { dashboard, skipped };
 }
 
 export async function saveAsTemplate(
