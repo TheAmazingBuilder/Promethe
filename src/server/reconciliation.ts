@@ -242,6 +242,8 @@ export async function countPendingCandidates(userId: string): Promise<number> {
 // ── Merge ───────────────────────────────────────────────────────────────────
 
 interface MergeSnapshot {
+  /** Exact candidate merged; optional for snapshots written before this field existed. */
+  candidateId?: string;
   absorbed: {
     trade: Record<string, unknown>;
     executions: Record<string, unknown>[];
@@ -300,6 +302,7 @@ export async function mergeCandidate(
       ]);
 
     const snapshot: MergeSnapshot = {
+      candidateId: candidate.id,
       absorbed: {
         trade: manual as unknown as Record<string, unknown>,
         executions: executions as unknown as Record<string, unknown>[],
@@ -550,9 +553,12 @@ export async function undoMerge(userId: string, mergeLogId: string): Promise<{ r
     const account = await tx.account.findUniqueOrThrow({ where: { id: survivor.accountId } });
     await recomputeSyncedTrade({ trade: survivor, instrument, account, tx });
 
-    // ── Reopen the candidate + mark the log undone ──
+    // Reopen only the candidate belonging to this merge. Older snapshots
+    // predate candidateId, so retain the legacy fallback for those logs.
     await tx.reconciliationCandidate.updateMany({
-      where: { brokerTradeId: log.survivingTradeId, status: "MERGED" },
+      where: snapshot.candidateId
+        ? { id: snapshot.candidateId, userId, status: "MERGED" }
+        : { brokerTradeId: log.survivingTradeId, userId, status: "MERGED" },
       data: { status: "PENDING", resolvedAt: null },
     });
     await tx.tradeMergeLog.update({
