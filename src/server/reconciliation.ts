@@ -260,12 +260,22 @@ export async function mergeCandidate(
   userId: string,
   candidateId: string
 ): Promise<{ survivingTradeId: string; mergeLogId: string }> {
-  const candidate = await db.reconciliationCandidate.findFirst({
-    where: { id: candidateId, userId, status: "PENDING" },
-  });
-  if (!candidate) throw new ReconciliationError("CANDIDATE_NOT_FOUND", 404);
-
   return db.$transaction(async (tx) => {
+    // Claim the candidate before touching either trade. The conditional write
+    // prevents concurrent merge/reject requests from both proceeding; any
+    // later failure rolls this claim back with the rest of the transaction.
+    const claimed = await tx.reconciliationCandidate.updateMany({
+      where: { id: candidateId, userId, status: "PENDING" },
+      data: { status: "MERGED", resolvedAt: new Date() },
+    });
+    if (claimed.count === 0) {
+      throw new ReconciliationError("CANDIDATE_NOT_FOUND", 404);
+    }
+    const candidate = await tx.reconciliationCandidate.findFirst({
+      where: { id: candidateId, userId, status: "MERGED" },
+    });
+    if (!candidate) throw new ReconciliationError("CANDIDATE_NOT_FOUND", 404);
+
     const manual = await tx.trade.findFirst({
       where: { id: candidate.manualTradeId, userId },
     });
@@ -350,7 +360,7 @@ export async function mergeCandidate(
           update: {},
           create: { tradeId: broker.id, tagId: tag.tagId },
         })
-        .catch(() => undefined);
+        ;
     }
     if (review) {
       const brokerReview = await tx.tradeReview.findFirst({ where: { tradeId: broker.id } });
@@ -383,11 +393,7 @@ export async function mergeCandidate(
     // ── Delete the absorbed trade ──
     await tx.trade.delete({ where: { id: manual.id } });
 
-    // ── Mark the candidate + write the undo log ──
-    await tx.reconciliationCandidate.update({
-      where: { id: candidate.id },
-      data: { status: "MERGED", resolvedAt: new Date() },
-    });
+    // The candidate was claimed at the start of this transaction.
     const mergeLog = await tx.tradeMergeLog.create({
       data: {
         userId,
@@ -502,16 +508,16 @@ export async function undoMerge(userId: string, mergeLogId: string): Promise<{ r
           update: {},
           create: { tradeId: absorbed.id, tagId: tag.tagId },
         })
-        .catch(() => undefined);
+        ;
       await tx.tradeTag.deleteMany({
         where: { tradeId: log.survivingTradeId, tagId: tag.tagId },
-      }).catch(() => undefined);
+      });
     }
     if (snapshot.absorbed.reviewExisted) {
       await tx.tradeReview.updateMany({
         where: { tradeId: log.survivingTradeId },
         data: { tradeId: absorbed.id },
-      }).catch(() => undefined);
+      });
     }
     if (snapshot.absorbed.eventLinkIds.length > 0) {
       await tx.tradeEventLink.updateMany({
@@ -523,7 +529,7 @@ export async function undoMerge(userId: string, mergeLogId: string): Promise<{ r
       await tx.marketContextSnapshot.updateMany({
         where: { id: snapshot.absorbed.marketContextId },
         data: { tradeId: absorbed.id },
-      }).catch(() => undefined);
+      });
     }
     if (snapshot.absorbed.shareLinkIds.length > 0) {
       await tx.shareLink.updateMany({
