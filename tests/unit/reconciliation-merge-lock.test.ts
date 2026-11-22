@@ -13,10 +13,7 @@ vi.mock("@/lib/sync/process", () => ({
   recomputeSyncedTrade: vi.fn(),
 }));
 
-import {
-  mergeCandidate,
-  ReconciliationError,
-} from "@/server/reconciliation";
+import { mergeCandidate } from "@/server/reconciliation";
 
 describe("reconciliation merge claim", () => {
   beforeEach(() => {
