@@ -718,50 +718,53 @@ export async function importDashboards(
   }
 
   const skipped: DashboardImportSkip[] = [];
-  let limitReached = false;
 
-  for (const [dashboardIndex, dashboardInput] of payload.dashboards.entries()) {
-    const count = await db.dashboard.count({ where: { userId } });
-    if (count >= MAX_DASHBOARDS) {
-      limitReached = true;
-    }
-    if (limitReached) {
-      skipped.push({
-        dashboardIndex,
-        widgetIndex: -1,
-        type: "",
-        reason: "LIMIT_REACHED",
+  // Import all accepted dashboards in one transaction. A persistence error
+  // must not leave a partially imported dashboard collection behind.
+  await db.$transaction(async (tx) => {
+    let limitReached = false;
+    for (const [dashboardIndex, dashboardInput] of payload.dashboards.entries()) {
+      const count = await tx.dashboard.count({ where: { userId } });
+      if (count >= MAX_DASHBOARDS) limitReached = true;
+      if (limitReached) {
+        skipped.push({
+          dashboardIndex,
+          widgetIndex: -1,
+          type: "",
+          reason: "LIMIT_REACHED",
+        });
+        continue;
+      }
+
+      const created = await tx.dashboard.create({
+        data: {
+          userId,
+          name: dashboardInput.name,
+          icon: dashboardInput.icon ?? "layout-dashboard",
+          order: await nextOrder(userId, tx),
+          isDefault: count === 0,
+          templateKey: null,
+        },
       });
-      continue;
-    }
 
-    const created = await db.dashboard.create({
-      data: {
+      const blueprints: WidgetBlueprint[] = dashboardInput.widgets.map((w) => ({
+        type: w.type,
+        title: w.title ?? null,
+        config: w.config,
+        layouts: w.layouts,
+        periodOverride: w.periodOverride ?? null,
+      }));
+      await insertWidgets(
         userId,
-        name: dashboardInput.name,
-        icon: dashboardInput.icon ?? "layout-dashboard",
-        order: await nextOrder(userId),
-        isDefault: count === 0,
-        templateKey: null,
-      },
-    });
-
-    const blueprints: WidgetBlueprint[] = dashboardInput.widgets.map((w) => ({
-      type: w.type,
-      title: w.title ?? null,
-      config: w.config,
-      layouts: w.layouts,
-      periodOverride: w.periodOverride ?? null,
-    }));
-    await insertWidgets(
-      userId,
-      created.id,
-      blueprints,
-      "skip",
-      (widgetIndex, type, reason) =>
-        skipped.push({ dashboardIndex, widgetIndex, type, reason })
-    );
-  }
+        created.id,
+        blueprints,
+        "skip",
+        (widgetIndex, type, reason) =>
+          skipped.push({ dashboardIndex, widgetIndex, type, reason }),
+        tx
+      );
+    }
+  });
 
   const dashboards = await listDashboards(userId);
   return { dashboards, skipped };
