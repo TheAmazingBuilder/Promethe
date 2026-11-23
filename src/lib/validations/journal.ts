@@ -22,7 +22,7 @@ export const journalEntrySchema = z.object({
   primaryScenario: z.string().max(4000, "tooLong").nullish(),
   alternateScenario: z.string().max(4000, "tooLong").nullish(),
   invalidationConditions: z.string().max(4000, "tooLong").nullish(),
-  maxRiskPercent: z.string().trim().regex(/^(?:[0-9]{1,2}(?:\\.[0-9]{1,2})?|100(?:\\.0{1,2})?)$/, "invalidRisk").refine((value) => Number(value) > 0, "invalidRisk").nullish(),
+  maxRiskPercent: z.string().trim().regex(/^(?:[0-9]{1,2}(?:\.[0-9]{1,2})?|100(?:\.0{1,2})?)$/, "invalidRisk").refine((value) => Number(value) > 0, "invalidRisk").nullish(),
   mood: score.nullish(),
   sleepQuality: score.nullish(),
   disciplineScore: score.nullish(),
