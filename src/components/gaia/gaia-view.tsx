@@ -25,7 +25,7 @@ import { QueryErrorState } from "@/components/ui/query-error-state";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
-import { navigate, useRoute } from "@/lib/router";
+import { navigateShallow, useRoute } from "@/lib/router";
 import {
   GAIA_DEFAULT_PARAMS,
   gaiaErrorMessage,
@@ -84,7 +84,7 @@ export function GaiaView() {
         else params.set(key, value);
       }
       const qs = params.toString();
-      navigate(`/gaia${qs === "" ? "" : `?${qs}`}`);
+      navigateShallow(`/gaia${qs === "" ? "" : `?${qs}`}`);
     },
     [query],
   );
