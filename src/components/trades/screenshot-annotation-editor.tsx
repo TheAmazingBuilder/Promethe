@@ -196,7 +196,7 @@ export function ScreenshotAnnotationEditor({
   const save = useSaveScreenshotAnnotations();
   const svgRef = React.useRef<SVGSVGElement>(null);
   const [annotations, setAnnotations] = React.useState<ScreenshotAnnotation[]>([]);
-  const [tool, setTool] = React.useState<DrawingTool>("RECTANGLE");
+  const [tool, setTool] = React.useState<ScreenshotAnnotation["type"]>("RECTANGLE");
   const [color, setColor] = React.useState("#f59e0b");
   const [noteText, setNoteText] = React.useState("");
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
