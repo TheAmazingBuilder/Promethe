@@ -488,7 +488,6 @@ export function computeTraderScore(
   }
   const months = [...monthly.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   const profitableMonths = months.filter(([, pnl]) => pnl.gt(0)).length;
-  const monthlyRs = months.map(([, pnl]) => pnl.toNumber());
   const monthlyRByMonth = new Map<string, { sum: Decimal; count: number }>();
   for (const trade of ordered) {
     if (trade.rMultiple == null) continue;
