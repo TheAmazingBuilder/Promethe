@@ -229,9 +229,9 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
       whatWentWell: trade.review?.whatWentWell ?? "",
       whatToImprove: trade.review?.whatToImprove ?? "",
     });
-  }, [trade?.id, trade?.review?.updatedAt]);
+  }, [trade]);
 
-  const setReviewField = <K extends keyof TradeReviewInput>(
+  const setReviewField = <K extends keyof TradeReviewInput,>(
     key: K,
     value: TradeReviewInput[K],
   ) => setReviewDraft((current) => ({ ...current, [key]: value }));
