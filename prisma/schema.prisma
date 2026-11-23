@@ -39,8 +39,10 @@ model User {
   trades           Trade[]
   tags             Tag[]
   screenshots      TradeScreenshot[]
-  journalEntries   JournalEntry[]
-  tradingRules     TradingRule[]
+  journalEntries       JournalEntry[]
+  journalPeriodReviews JournalPeriodReview[]
+  journalTemplates     JournalTemplate[]
+  tradingRules         TradingRule[]
   goals            Goal[]
   savedViews       SavedView[]
 
@@ -759,6 +761,51 @@ model JournalEntry {
   @@unique([userId, date])
   @@index([userId])
   @@map("journal_entries")
+}
+
+/// Qualitative weekly/monthly Journal reflection. Quantitative reports stay in Analytics.
+model JournalPeriodReview {
+  id                    String   @id @default(cuid())
+  userId                String   @map("user_id")
+  periodType            String   @map("period_type") // WEEKLY | MONTHLY
+  periodStart           String   @map("period_start") // YYYY-MM-DD
+  periodEnd             String   @map("period_end") // YYYY-MM-DD
+  whatWentWell          String?  @map("what_went_well")
+  whatToImprove         String?  @map("what_to_improve")
+  keyLesson             String?  @map("key_lesson")
+  nextCommitment        String?  @map("next_commitment")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, periodType, periodStart])
+  @@index([userId, periodType])
+  @@map("journal_period_reviews")
+}
+
+/// Reusable daily preparation presets. Trade templates remain in TradeTemplate.
+model JournalTemplate {
+  id                     String   @id @default(cuid())
+  userId                 String   @map("user_id")
+  name                   String
+  description            String?
+  marketBias             String?  @map("market_bias")
+  preMarketPlan          String?  @map("pre_market_plan")
+  keyLevels              String?  @map("key_levels")
+  primaryScenario        String?  @map("primary_scenario")
+  alternateScenario      String?  @map("alternate_scenario")
+  invalidationConditions String?  @map("invalidation_conditions")
+  maxRiskPercent         String?  @map("max_risk_percent")
+  isDefault              Boolean  @default(false) @map("is_default")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId, isDefault])
+  @@map("journal_templates")
 }
 
 /// Personal trading rules (max trades/day, max daily loss, …) — phase 6 violation detection.
