@@ -17,7 +17,7 @@ describe("Risk / Reward copy consistency", () => {
 
   it("uses clear, trader-friendly explanations", () => {
     expect(messages).toContain("Compare win rates and reward-to-risk ratios.");
-    expect(messages).toContain("Break-even level");
+    expect(messages).toContain("Break-even win rate at {rr}:1");
     expect(messages).toContain("This is only a projection, not a promise.");
     expect(messages).not.toContain("the less risk you need to take");
   });
