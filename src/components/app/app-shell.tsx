@@ -17,7 +17,6 @@ import {
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarHeader,
   SidebarInset,
   SidebarProvider,
@@ -117,8 +116,7 @@ export function AppShell({
         <SidebarContent data-tour="nav">
           <NavList activeView={activeNavView} />
         </SidebarContent>
-        <SidebarFooter className="border-t border-sidebar-border px-4 py-3" />
-      </Sidebar>
+        </Sidebar>
 
       {/* ── Content column ── */}
       <SidebarInset>
