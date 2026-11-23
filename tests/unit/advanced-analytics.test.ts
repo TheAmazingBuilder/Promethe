@@ -18,6 +18,7 @@ import {
   computeLifecycle,
   computeSequences,
   computeSetupRanking,
+  computeSeasonality,
   computeTraderScore,
   isAlmostTp,
   type AdvancedTrade,
@@ -231,6 +232,27 @@ describe("setups", () => {
     expect(rank.decidedSampleSize).toBe(0);
     expect(rank.expectancy).toBe(1);
     expect(rank.category).toBe("unproven");
+  });
+});
+
+describe("seasonality", () => {
+  it("requires five valid R and five decided trades before issuing a verdict", () => {
+    const trades = Array.from({ length: 5 }, (_, i) =>
+      makeTrade({
+        localEntryDate: "2026-01-15",
+        localYear: 2026,
+        localMonth: 1,
+        localDayOfMonth: 15,
+        localIsoWeek: 3,
+        rMultiple: i < 3 ? "1" : null,
+        resultType: i < 3 ? "WIN" : "BREAKEVEN",
+      })
+    );
+    const cell = computeSeasonality(trades).months[0];
+    expect(cell.count).toBe(5);
+    expect(cell.rSampleSize).toBe(3);
+    expect(cell.decidedSampleSize).toBe(0);
+    expect(cell.verdict).toBe("insufficient");
   });
 });
 

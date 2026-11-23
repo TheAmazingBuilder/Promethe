@@ -1017,7 +1017,12 @@ export type SeasonVerdict = "positive" | "negative" | "neutral" | "insufficient"
 export interface SeasonCell {
   key: string;
   label: string;
+  /** All trades in the cell. */
   count: number;
+  /** Trades with a finite R multiple. */
+  rSampleSize: number;
+  /** WIN/LOSS trades used for the Wilson interval. */
+  decidedSampleSize: number;
   winRate: number | null;
   wilsonLower: number | null;
   wilsonUpper: number | null;
@@ -1047,11 +1052,15 @@ export interface SeasonalityResult {
 }
 
 function seasonVerdict(
-  count: number,
+  rSampleSize: number,
+  decidedSampleSize: number,
   avgR: number | null,
   wilson: { lower: number; upper: number } | null
 ): SeasonVerdict {
-  if (count < MIN_SAMPLE_SEASON_CELL) return "insufficient";
+  if (
+    rSampleSize < MIN_SAMPLE_SEASON_CELL ||
+    decidedSampleSize < MIN_SAMPLE_SEASON_CELL
+  ) return "insufficient";
   if (
     wilson != null &&
     wilson.lower > 0.5 &&
@@ -1091,6 +1100,8 @@ function seasonCells(
         key,
         label: g.label,
         count: list.length,
+        rSampleSize: rs.length,
+        decidedSampleSize: decided,
         winRate:
           decided > 0 ? round((wins / decided) * 100, 1) : null,
         wilsonLower:
@@ -1101,7 +1112,7 @@ function seasonCells(
         netPnl: list
           .reduce((acc, t) => acc.plus(toD(t.netPnl ?? 0)), D0)
           .toString(),
-        verdict: seasonVerdict(list.length, avgR, wilson),
+        verdict: seasonVerdict(rs.length, decided, avgR, wilson),
       };
     });
 }

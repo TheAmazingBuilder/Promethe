@@ -133,8 +133,10 @@ export type EdgeVerdict = "yes" | "not-yet" | "no";
 export interface EdgeCheck {
   verdict: EdgeVerdict;
   expectancyR: number | null;
-  /** Closed trades in the window. */
+  /** All closed trades in the window. */
   sampleSize: number;
+  /** Trades with a finite R multiple; used for the edge sample threshold. */
+  rSampleSize: number;
   /** Lower bound of the 95% range for mean R, null when not computable. */
   meanRLower95: number | null;
   sqn: number | null;
@@ -340,6 +342,7 @@ export function checkEdge(
     .map((t) => (t.rMultiple == null ? null : Number(t.rMultiple)))
     .filter((v): v is number => v != null && Number.isFinite(v));
   const n = trades.length;
+  const rSampleSize = rs.length;
   const expectancy =
     stats.expectancyR != null ? Number(stats.expectancyR) : null;
   const sqn = advanced.sqn != null ? Number(advanced.sqn) : null;
@@ -352,14 +355,15 @@ export function checkEdge(
     }
   }
   const expText = expectancy != null ? `${fmtR(expectancy)}` : "n/a";
-  if (n < MIN_TRADES_FOR_EDGE) {
+  if (rSampleSize < MIN_TRADES_FOR_EDGE) {
     return {
       verdict: "not-yet",
       expectancyR: expectancy,
       sampleSize: n,
+      rSampleSize,
       meanRLower95: lower95,
       sqn: sqn != null ? round(sqn, 2) : null,
-      reason: `Only ${n} trades in the last 30 days. At least ${MIN_TRADES_FOR_EDGE} trades are needed before the edge can be judged.`,
+      reason: `Only ${rSampleSize} of ${n} closed trades have a valid R multiple in the last 30 days. At least ${MIN_TRADES_FOR_EDGE} valid R observations are needed before the edge can be judged.`,
     };
   }
   if (expectancy == null || expectancy <= 0) {
@@ -367,9 +371,10 @@ export function checkEdge(
       verdict: "no",
       expectancyR: expectancy,
       sampleSize: n,
+      rSampleSize,
       meanRLower95: lower95,
       sqn: sqn != null ? round(sqn, 2) : null,
-      reason: `Expectancy is ${expText} over ${n} trades. The edge is not positive in this window.`,
+      reason: `Expectancy is ${expText} over ${rSampleSize} valid R observations (${n} closed trades). The edge is not positive in this window.`,
     };
   }
   if (lower95 != null && lower95 > 0) {
@@ -379,7 +384,7 @@ export function checkEdge(
       sampleSize: n,
       meanRLower95: lower95,
       sqn: sqn != null ? round(sqn, 2) : null,
-      reason: `Expectancy is ${expText} over ${n} trades, and the lower bound of the 95% range is still above zero (${fmtR(lower95)}).`,
+      reason: `Expectancy is ${expText} over ${rSampleSize} valid R observations (${n} closed trades), and the lower bound of the 95% range is still above zero (${fmtR(lower95)}).`,
     };
   }
   return {
@@ -388,7 +393,7 @@ export function checkEdge(
     sampleSize: n,
     meanRLower95: lower95,
     sqn: sqn != null ? round(sqn, 2) : null,
-    reason: `Expectancy is ${expText} over ${n} trades, but the 95% range still reaches below zero (${fmtR(lower95)}). More trades are needed.`,
+    reason: `Expectancy is ${expText} over ${rSampleSize} valid R observations (${n} closed trades), but the 95% range still reaches below zero (${fmtR(lower95)}). More trades are needed.`,
   };
 }
 

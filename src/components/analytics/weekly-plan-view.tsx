@@ -274,7 +274,12 @@ export function WeeklyPlanView() {
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">{t("sample")}</dt>
-                    <dd className="font-semibold tabular-nums">{plan.edge.sampleSize}</dd>
+                    <dd className="font-semibold tabular-nums">
+                      {plan.edge.sampleSize}
+                      <span className="block text-xs font-normal text-muted-foreground">
+                        {plan.edge.rSampleSize} R
+                      </span>
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">{t("sqn")}</dt>

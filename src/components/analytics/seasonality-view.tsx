@@ -98,6 +98,9 @@ export function SeasonalityView() {
               <TableCell className="font-medium">{labelOf(cell)}</TableCell>
               <TableCell className="text-right tabular-nums">
                 {cell.count}
+                <span className="block text-xs text-muted-foreground">
+                  {cell.rSampleSize} R · {cell.decidedSampleSize} D
+                </span>
               </TableCell>
               <TableCell className="text-right tabular-nums">
                 {fmtPctValue(cell.winRate)}
