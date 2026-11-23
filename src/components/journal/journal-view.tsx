@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Daily Journal — a focused trading-day workspace.
+ * Journal — a focused trading-day workspace.
  * Keeps the existing JournalEntry contract and API mutations unchanged.
  */
 import * as React from "react";
