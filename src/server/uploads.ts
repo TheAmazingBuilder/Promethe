@@ -10,6 +10,7 @@
  */
 import { createId } from "@/lib/id";
 import { db } from "@/lib/db";
+import { screenshotAnnotationsDocumentSchema, screenshotAnnotationsInputSchema, type ScreenshotAnnotation } from "@/lib/validations/screenshot-annotations";
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 const DEFAULT_BUCKET = "trade-screenshots";
@@ -86,6 +87,11 @@ function objectUrl(baseUrl: string, bucket: string, objectPath: string) {
 function normalizeStoragePath(storagePath: string) {
   // Compatibility for rows created by the former local-filesystem backend.
   return storagePath.replace(/^uploads\//, "");
+}
+
+/** Sidecar path derived from the screenshot object; no DB column or migration is needed. */
+export function screenshotAnnotationStoragePath(storagePath: string): string {
+  return normalizeStoragePath(storagePath).replace(/\\.[^.]+$/, ".annotations.json");
 }
 
 async function storageRequest(
@@ -296,10 +302,68 @@ export async function updateUpload(
   return { id: row.id, label: row.label, caption: row.caption, createdAt: row.createdAt.toISOString(), url: `/api/v1/uploads/${row.id}` };
 }
 
+export async function readScreenshotAnnotations(
+  userId: string,
+  screenshotId: string
+): Promise<ScreenshotAnnotation[] | null> {
+  const row = await db.tradeScreenshot.findFirst({
+    where: { id: screenshotId, userId },
+    select: { storagePath: true },
+  });
+  if (!row) return null;
+
+  const response = await storageRequest(screenshotAnnotationStoragePath(row.storagePath));
+  if (await isMissingObjectResponse(response)) return [];
+  if (!response.ok) throw new UploadStorageError();
+
+  const payload: unknown = await response.json().catch(() => null);
+  const parsed = screenshotAnnotationsDocumentSchema.safeParse(payload);
+  if (!parsed.success) throw new UploadStorageError();
+  return parsed.data.annotations;
+}
+
+export async function saveScreenshotAnnotations(
+  userId: string,
+  screenshotId: string,
+  input: ScreenshotAnnotation[]
+): Promise<ScreenshotAnnotation[] | null> {
+  const parsed = screenshotAnnotationsInputSchema.safeParse(input);
+  if (!parsed.success) throw new UploadValidationError("INVALID_SCREENSHOT_ANNOTATIONS");
+
+  const row = await db.tradeScreenshot.findFirst({
+    where: { id: screenshotId, userId },
+    select: { storagePath: true },
+  });
+  if (!row) return null;
+
+  const document = {
+    version: 1 as const,
+    updatedAt: new Date().toISOString(),
+    annotations: parsed.data,
+  };
+  const body = JSON.stringify(document);
+  if (Buffer.byteLength(body, "utf8") > 96 * 1024) {
+    throw new UploadValidationError("SCREENSHOT_ANNOTATIONS_TOO_LARGE");
+  }
+
+  const response = await storageRequest(screenshotAnnotationStoragePath(row.storagePath), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "private, max-age=0, no-store",
+      "x-upsert": "true",
+    },
+    body,
+  });
+  if (!response.ok) throw new UploadStorageError();
+  return parsed.data;
+}
+
 export async function deleteUpload(userId: string, id: string): Promise<boolean> {
   const row = await db.tradeScreenshot.findFirst({ where: { id, userId } });
   if (!row) return false;
 
+  await removeStorageObject(screenshotAnnotationStoragePath(row.storagePath));
   await removeStorageObject(normalizeStoragePath(row.storagePath));
   await db.tradeScreenshot.deleteMany({ where: { id, userId } });
   return true;
@@ -311,9 +375,10 @@ export async function deleteUpload(userId: string, id: string): Promise<boolean>
  */
 export async function deleteUploadObjects(storagePaths: string[]): Promise<void> {
   const results = await Promise.allSettled(
-    storagePaths.map((storagePath) =>
-      removeStorageObject(normalizeStoragePath(storagePath))
-    )
+    storagePaths.flatMap((storagePath) => [
+      removeStorageObject(screenshotAnnotationStoragePath(storagePath)),
+      removeStorageObject(normalizeStoragePath(storagePath)),
+    ])
   );
   if (results.some((result) => result.status === "rejected")) {
     throw new UploadStorageError();
