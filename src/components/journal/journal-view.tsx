@@ -635,14 +635,14 @@ export function JournalView({ date }: { date?: string }) {
                   {dayActivity?.screenshots?.map((screenshot) => (
                     <a
                       key={screenshot.id}
-                      href={`/api/uploads/${screenshot.id}`}
+                      href={`/api/v1/uploads/${screenshot.id}`}
                       target="_blank"
                       rel="noreferrer"
                       className="group overflow-hidden rounded-xl border border-border/70 bg-muted/20 transition-colors hover:border-primary/40"
                     >
                       <div className="relative aspect-[16/9] overflow-hidden bg-muted">
                         <Image
-                          src={`/api/uploads/${screenshot.id}`}
+                          src={`/api/v1/uploads/${screenshot.id}`}
                           alt={`${screenshot.symbol} chart screenshot`}
                           fill
                           unoptimized
