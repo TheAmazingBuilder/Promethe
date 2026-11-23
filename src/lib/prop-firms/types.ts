@@ -13,7 +13,6 @@ export interface PropFirmRuleSetDTO {
   timezone: string;
   notes: string | null;
   isGlobal: boolean;
-  challengeCount: number;
   updatedAt: string;
 }
 

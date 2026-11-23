@@ -35,9 +35,7 @@ const CHALLENGE_INCLUDE = {
 } as const;
 
 type ChallengeRow = Prisma.PropChallengeGetPayload<{ include: typeof CHALLENGE_INCLUDE }>;
-type RuleSetRow = Prisma.PropFirmRuleSetGetPayload<{
-  include: { _count: { select: { challenges: true } } };
-}>;
+type RuleSetRow = Prisma.PropFirmRuleSetGetPayload<Record<string, never>>;
 
 function day(date: Date | null): string | null {
   return date == null ? null : date.toISOString().slice(0, 10);
@@ -63,7 +61,6 @@ function toRuleSetDTO(row: RuleSetRow): PropFirmRuleSetDTO {
     timezone: row.timezone,
     notes: row.notes,
     isGlobal: row.userId == null,
-    challengeCount: row._count.challenges,
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -140,7 +137,6 @@ export async function listPropFirmWorkspace(userId: string): Promise<PropFirmWor
   const [ruleSets, challenges] = await Promise.all([
     db.propFirmRuleSet.findMany({
       where: { OR: [{ userId: null }, { userId }] },
-      include: { _count: { select: { challenges: true } } },
       orderBy: [{ userId: "asc" }, { firm: "asc" }, { name: "asc" }],
     }),
     db.propChallenge.findMany({
@@ -169,7 +165,6 @@ export async function createPropFirmRuleSet(
       timezone: input.timezone,
       notes: input.notes ?? null,
     },
-    include: { _count: { select: { challenges: true } } },
   });
   return toRuleSetDTO(row);
 }
@@ -219,7 +214,7 @@ export async function createPropChallenge(
       : Promise.resolve(null),
   ]);
   if (!account || (input.ruleSetId != null && !ruleSet)) return null;
-  const phases = input.phases ?? (ruleSet ? parseRuleSnapshot(ruleSet.phases) : []);
+  const phases = ruleSet ? parseRuleSnapshot(ruleSet.phases) : (input.phases ?? []);
   if (phases.length === 0) return null;
   const initialPhase = input.currentPhase === "PHASE_2" || input.currentPhase === "FUNDED"
     ? input.currentPhase
