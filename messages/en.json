@@ -519,7 +519,37 @@
         "detailMonthlyStd": "Monthly average R spread",
         "detailRiskCompliant": "Trades within 2% risk",
         "detailDrawdown": "Max drawdown",
-        "scoreNote": "Each component is scored out of 25. Risk counts as compliant when risk per trade is 2% or less."
+        "scoreNote": "Each component is scored out of 25. Risk counts as compliant when risk per trade is 2% or less.",
+        "reviewsTitle": "Structured trade reviews",
+        "reviewsDesc": "Review coverage, execution quality and recurring mistakes from your saved post-trade reviews.",
+        "reviewCoverage": "Review coverage",
+        "reviewedTrades": "Reviewed trades",
+        "reviewPlanRate": "Plan adherence",
+        "reviewPlanAnswers": "Plan answers",
+        "reviewScoresTitle": "Review score averages",
+        "reviewScoresDesc": "Average of answered scores only. The count shows the available sample for each dimension.",
+        "reviewScore": {
+          "planAdherence": "Plan adherence",
+          "execution": "Execution",
+          "entry": "Entry",
+          "exit": "Exit",
+          "riskManagement": "Risk management",
+          "emotionalControl": "Emotional control"
+        },
+        "reviewDecisionsTitle": "Would you take it again?",
+        "reviewDecisionsDesc": "Distribution of explicit answers in saved reviews.",
+        "reviewYes": "Yes",
+        "reviewNo": "No",
+        "reviewMaybe": "Maybe",
+        "reviewPlaybookTitle": "Playbook alignment",
+        "playbook": {
+          "MATCHED": "Matched",
+          "PARTIAL": "Partially matched",
+          "OFF_PLAYBOOK": "Off playbook"
+        },
+        "reviewMistakesTitle": "Most reported mistakes",
+        "reviewMistakesDesc": "Mistake tags selected in your post-trade reviews.",
+        "reviewMistakesEmpty": "No mistake tags have been recorded in this period."
       },
       "setups": {
         "title": "Setup ranking",

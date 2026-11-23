@@ -59,7 +59,20 @@ const TRADE_INCLUDE = {
   strategy: true,
   tags: { include: { tag: true } },
   ruleViolations: { select: { ruleId: true } },
-  review: { select: { playbookMatch: true } },
+  review: {
+    select: {
+      playbookMatch: true,
+      followedPlan: true,
+      planAdherenceScore: true,
+      executionQuality: true,
+      entryQuality: true,
+      exitQuality: true,
+      riskManagementScore: true,
+      emotionalControlScore: true,
+      wouldTakeAgain: true,
+      mistakeTagIds: true,
+    },
+  },
 } as const;
 
 type Row = Prisma.TradeGetPayload<{ include: typeof TRADE_INCLUDE }>;
@@ -130,8 +143,31 @@ export async function loadAdvancedTrades(
   // may have changed its display currency since those trades were closed.
   const scoped = scopeTradesToCurrency(rows, currency);
   const timeMap = await computeTimeInProfit(scoped.trades);
+  const mistakeTagIds = [...new Set(scoped.trades.flatMap((trade) => {
+    if (!trade.review?.mistakeTagIds) return [];
+    try {
+      const parsed: unknown = JSON.parse(trade.review.mistakeTagIds);
+      return Array.isArray(parsed)
+        ? parsed.filter((id): id is string => typeof id === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  }))];
+  const mistakeTags = mistakeTagIds.length > 0
+    ? await db.tag.findMany({
+        where: {
+          id: { in: mistakeTagIds },
+          kind: "MISTAKE",
+          deletedAt: null,
+          OR: [{ userId }, { userId: null }],
+        },
+        select: { id: true, name: true },
+      })
+    : [];
+  const mistakeTagNames = new Map(mistakeTags.map((tag) => [tag.id, tag.name]));
   const trades: AdvancedTrade[] = scoped.trades.map((t) =>
-    toAdvancedTrade(t, timezone, prefs.tradingDay, timeMap.get(t.id))
+    toAdvancedTrade(t, timezone, prefs.tradingDay, timeMap.get(t.id), mistakeTagNames)
   );
   return {
     trades,
@@ -188,7 +224,8 @@ function toAdvancedTrade(
   t: Row,
   timezone: string,
   tradingDay: Parameters<typeof getTradingDay>[2],
-  time?: { profitMin: number | null; lossMin: number | null }
+  time?: { profitMin: number | null; lossMin: number | null },
+  mistakeTagNames: ReadonlyMap<string, string> = new Map()
 ): AdvancedTrade {
   const exit = t.exitTime ?? t.entryTime;
   // Daily attribution follows the user's TRADING day (default MIDNIGHT_LOCAL
@@ -259,6 +296,30 @@ function toAdvancedTrade(
       .map((tt) => ({ id: tt.tag.id, name: tt.tag.name, color: tt.tag.color })),
     violationCount: t.ruleViolations.length,
     playbookMatch: t.review?.playbookMatch ?? null,
+    review: t.review == null ? null : {
+      followedPlan: t.review.followedPlan,
+      planAdherenceScore: t.review.planAdherenceScore,
+      executionQuality: t.review.executionQuality,
+      entryQuality: t.review.entryQuality,
+      exitQuality: t.review.exitQuality,
+      riskManagementScore: t.review.riskManagementScore,
+      emotionalControlScore: t.review.emotionalControlScore,
+      wouldTakeAgain: t.review.wouldTakeAgain,
+      mistakeTags: (() => {
+        if (!t.review?.mistakeTagIds) return [];
+        try {
+          const parsed: unknown = JSON.parse(t.review.mistakeTagIds);
+          return Array.isArray(parsed)
+            ? parsed
+                .filter((id): id is string => typeof id === "string")
+                .map((id) => mistakeTagNames.get(id))
+                .filter((name): name is string => name != null)
+            : [];
+        } catch {
+          return [];
+        }
+      })(),
+    },
     riskPercent: t.riskPercent?.toString() ?? null,
     setupQualityRating: t.setupQualityRating,
     localYear: entryLocal != null ? Number(entryLocal.date.slice(0, 4)) : null,

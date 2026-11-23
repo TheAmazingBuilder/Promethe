@@ -87,6 +87,18 @@ export interface AdvancedTrade extends AnalyticsTrade {
   /** Declared playbook match at review time (MATCHED | PARTIAL |
    * OFF_PLAYBOOK), null when the trade was never reviewed. */
   playbookMatch?: string | null;
+  /** Structured post-trade review, distinct from entry-time trade fields. */
+  review?: {
+    followedPlan: boolean | null;
+    planAdherenceScore: number | null;
+    executionQuality: number | null;
+    entryQuality: number | null;
+    exitQuality: number | null;
+    riskManagementScore: number | null;
+    emotionalControlScore: number | null;
+    wouldTakeAgain: string | null;
+    mistakeTags: string[];
+  } | null;
   riskPercent: string | null;
   setupQualityRating: number | null;
   /** Local calendar parts of the ENTRY (user timezone, server-computed). */
@@ -1346,11 +1358,100 @@ export function computeAnomalies(trades: AdvancedTrade[]): AnomaliesResult {
 
 // ── Whole payload ────────────────────────────────────────────────────────────
 
+export interface ReviewScoreMetric {
+  average: number | null;
+  count: number;
+}
+
+export interface TradeReviewAnalytics {
+  closedTrades: number;
+  reviewedTrades: number;
+  coveragePct: number | null;
+  plan: { followed: number; notFollowed: number; unanswered: number; ratePct: number | null };
+  scores: {
+    planAdherence: ReviewScoreMetric;
+    execution: ReviewScoreMetric;
+    entry: ReviewScoreMetric;
+    exit: ReviewScoreMetric;
+    riskManagement: ReviewScoreMetric;
+    emotionalControl: ReviewScoreMetric;
+  };
+  wouldTakeAgain: { yes: number; no: number; maybe: number; unanswered: number };
+  playbookMatch: { matched: number; partial: number; offPlaybook: number; unclassified: number };
+  topMistakes: Array<{ label: string; count: number }>;
+}
+
+function reviewScore(values: Array<number | null>): ReviewScoreMetric {
+  const valid = values.filter((value): value is number =>
+    value != null && Number.isInteger(value) && value >= 1 && value <= 5
+  );
+  return {
+    average: valid.length === 0 ? null : round(mean(valid), 2),
+    count: valid.length,
+  };
+}
+
+/** Aggregate only explicit review answers; missing answers stay unanswered. */
+export function computeTradeReviewAnalytics(trades: AdvancedTrade[]): TradeReviewAnalytics {
+  const reviewed = trades.filter((trade) => trade.review != null);
+  const followed = reviewed.filter((trade) => trade.review?.followedPlan === true).length;
+  const notFollowed = reviewed.filter((trade) => trade.review?.followedPlan === false).length;
+  const planAnswered = followed + notFollowed;
+  const would = { yes: 0, no: 0, maybe: 0, unanswered: 0 };
+  const playbook = { matched: 0, partial: 0, offPlaybook: 0, unclassified: 0 };
+  const mistakes = new Map<string, number>();
+
+  for (const trade of reviewed) {
+    const answer = trade.review?.wouldTakeAgain;
+    if (answer === "YES") would.yes += 1;
+    else if (answer === "NO") would.no += 1;
+    else if (answer === "MAYBE") would.maybe += 1;
+    else would.unanswered += 1;
+
+    const match = trade.playbookMatch;
+    if (match === "MATCHED") playbook.matched += 1;
+    else if (match === "PARTIAL") playbook.partial += 1;
+    else if (match === "OFF_PLAYBOOK") playbook.offPlaybook += 1;
+    else playbook.unclassified += 1;
+
+    for (const label of new Set(trade.review?.mistakeTags ?? [])) {
+      mistakes.set(label, (mistakes.get(label) ?? 0) + 1);
+    }
+  }
+
+  return {
+    closedTrades: trades.length,
+    reviewedTrades: reviewed.length,
+    coveragePct: trades.length === 0 ? null : round((reviewed.length / trades.length) * 100, 1),
+    plan: {
+      followed,
+      notFollowed,
+      unanswered: reviewed.length - planAnswered,
+      ratePct: planAnswered === 0 ? null : round((followed / planAnswered) * 100, 1),
+    },
+    scores: {
+      planAdherence: reviewScore(reviewed.map((trade) => trade.review?.planAdherenceScore ?? null)),
+      execution: reviewScore(reviewed.map((trade) => trade.review?.executionQuality ?? null)),
+      entry: reviewScore(reviewed.map((trade) => trade.review?.entryQuality ?? null)),
+      exit: reviewScore(reviewed.map((trade) => trade.review?.exitQuality ?? null)),
+      riskManagement: reviewScore(reviewed.map((trade) => trade.review?.riskManagementScore ?? null)),
+      emotionalControl: reviewScore(reviewed.map((trade) => trade.review?.emotionalControlScore ?? null)),
+    },
+    wouldTakeAgain: would,
+    playbookMatch: playbook,
+    topMistakes: [...mistakes.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+      .slice(0, 8),
+  };
+}
+
 export interface AdvancedAnalytics {
   lifecycle: LifecycleResult;
   exits: ExitsResult;
   score: TraderScore;
   scoreHistory: ScoreHistoryPoint[];
+  reviews: TradeReviewAnalytics;
   setups: SetupRank[];
   confluences: ConfluencesResult;
   grades: GradesResult;
@@ -1381,6 +1482,7 @@ export function computeAdvancedAnalyticsModules(
   // the replayed history for pure callers and tests.
   if (want.has("score")) {
     out.score = computeTraderScore(trades, stats, advanced);
+    out.reviews = computeTradeReviewAnalytics(trades);
   }
   if (want.has("setups")) out.setups = computeSetupRanking(trades);
   if (want.has("confluences")) out.confluences = computeConfluences(trades);

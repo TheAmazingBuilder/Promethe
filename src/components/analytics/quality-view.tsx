@@ -55,6 +55,7 @@ export function QualityView() {
     "score"
   );
   const score = data?.advanced.score ?? null;
+  const reviews = data?.advanced.reviews ?? null;
   const history = data?.advanced.scoreHistory ?? [];
   const currency = data?.currency ?? "USD";
 
@@ -191,6 +192,94 @@ export function QualityView() {
               }
             />
           </div>
+
+          {reviews != null ? (
+            <section className="space-y-4" aria-labelledby="review-analytics-title">
+              <div>
+                <h2 id="review-analytics-title" className="text-lg font-semibold">{t("reviewsTitle")}</h2>
+                <p className="text-sm text-muted-foreground">{t("reviewsDesc")}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <AdvKpi label={t("reviewCoverage")} value={fmtPctValue(reviews.coveragePct)} />
+                <AdvKpi label={t("reviewedTrades")} value={`${reviews.reviewedTrades} / ${reviews.closedTrades}`} />
+                <AdvKpi label={t("reviewPlanRate")} value={fmtPctValue(reviews.plan.ratePct)} />
+                <AdvKpi label={t("reviewPlanAnswers")} value={`${reviews.plan.followed} / ${reviews.plan.followed + reviews.plan.notFollowed}`} />
+              </div>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">{t("reviewScoresTitle")}</CardTitle>
+                    <CardDescription>{t("reviewScoresDesc")}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {([
+                      ["planAdherence", reviews.scores.planAdherence],
+                      ["execution", reviews.scores.execution],
+                      ["entry", reviews.scores.entry],
+                      ["exit", reviews.scores.exit],
+                      ["riskManagement", reviews.scores.riskManagement],
+                      ["emotionalControl", reviews.scores.emotionalControl],
+                    ] as const).map(([key, metric]) => (
+                      <div key={key} className="space-y-1">
+                        <div className="flex items-center justify-between gap-2 text-sm">
+                          <span>{t(`reviewScore.${key}`)}</span>
+                          <span className="tabular-nums text-muted-foreground">
+                            {metric.average == null ? "—" : `${fmtNum(metric.average, 2)} / 5`}
+                            <span className="ml-2 text-xs">({metric.count})</span>
+                          </span>
+                        </div>
+                        <Progress value={metric.average == null ? 0 : (metric.average / 5) * 100} />
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">{t("reviewDecisionsTitle")}</CardTitle>
+                    <CardDescription>{t("reviewDecisionsDesc")}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div><p className="text-xl font-semibold tabular-nums">{reviews.wouldTakeAgain.yes}</p><p className="text-xs text-muted-foreground">{t("reviewYes")}</p></div>
+                      <div><p className="text-xl font-semibold tabular-nums">{reviews.wouldTakeAgain.no}</p><p className="text-xs text-muted-foreground">{t("reviewNo")}</p></div>
+                      <div><p className="text-xl font-semibold tabular-nums">{reviews.wouldTakeAgain.maybe}</p><p className="text-xs text-muted-foreground">{t("reviewMaybe")}</p></div>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">{t("reviewPlaybookTitle")}</p>
+                      {([
+                        ["MATCHED", reviews.playbookMatch.matched],
+                        ["PARTIAL", reviews.playbookMatch.partial],
+                        ["OFF_PLAYBOOK", reviews.playbookMatch.offPlaybook],
+                      ] as const).map(([key, count]) => (
+                        <div key={key} className="flex justify-between text-sm">
+                          <span>{t(`playbook.${key}`)}</span><span className="tabular-nums text-muted-foreground">{count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">{t("reviewMistakesTitle")}</CardTitle>
+                  <CardDescription>{t("reviewMistakesDesc")}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {reviews.topMistakes.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">{t("reviewMistakesEmpty")}</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {reviews.topMistakes.map((mistake) => (
+                        <Badge key={mistake.label} variant="outline">
+                          {mistake.label} · {mistake.count}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </section>
+          ) : null}
 
           <Card>
             <CardHeader>

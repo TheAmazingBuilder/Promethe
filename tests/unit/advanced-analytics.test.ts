@@ -21,6 +21,7 @@ import {
   computeSetupRanking,
   computeSeasonality,
   computeTraderScore,
+  computeTradeReviewAnalytics,
   isAlmostTp,
   type AdvancedTrade,
 } from "@/lib/analytics/advanced";
@@ -124,6 +125,54 @@ describe("stats helpers", () => {
     expect(robustZ(8, spread)).not.toBeNull();
     expect(Math.abs(robustZ(8, spread)!)).toBeGreaterThan(3);
     expect(Math.abs(robustZ(0.5, spread)!)).toBeLessThan(1);
+  });
+});
+
+describe("structured trade reviews", () => {
+  it("calculates review coverage and score averages from answered samples only", () => {
+    const trades = [
+      makeTrade({ review: {
+        followedPlan: true, planAdherenceScore: 5, executionQuality: 4,
+        entryQuality: 4, exitQuality: 3, riskManagementScore: 5,
+        emotionalControlScore: 4, wouldTakeAgain: "YES", mistakeTags: ["FOMO"],
+      }, playbookMatch: "MATCHED" }),
+      makeTrade({ review: {
+        followedPlan: false, planAdherenceScore: 2, executionQuality: null,
+        entryQuality: null, exitQuality: null, riskManagementScore: 3,
+        emotionalControlScore: null, wouldTakeAgain: "NO", mistakeTags: ["FOMO", "EARLY_EXIT"],
+      }, playbookMatch: "OFF_PLAYBOOK" }),
+      makeTrade({ review: null }),
+    ];
+    const result = computeTradeReviewAnalytics(trades);
+    expect(result.closedTrades).toBe(3);
+    expect(result.reviewedTrades).toBe(2);
+    expect(result.coveragePct).toBeCloseTo(66.7, 1);
+    expect(result.plan.ratePct).toBe(50);
+    expect(result.scores.planAdherence).toEqual({ average: 3.5, count: 2 });
+    expect(result.scores.execution).toEqual({ average: 4, count: 1 });
+    expect(result.wouldTakeAgain).toEqual({ yes: 1, no: 1, maybe: 0, unanswered: 0 });
+    expect(result.playbookMatch.matched).toBe(1);
+    expect(result.playbookMatch.offPlaybook).toBe(1);
+    expect(result.topMistakes).toEqual([
+      { label: "FOMO", count: 2 },
+      { label: "EARLY_EXIT", count: 1 },
+    ]);
+  });
+
+  it("keeps missing reviews and unanswered review fields distinct", () => {
+    const result = computeTradeReviewAnalytics([
+      makeTrade({ review: {
+        followedPlan: null, planAdherenceScore: null, executionQuality: null,
+        entryQuality: null, exitQuality: null, riskManagementScore: null,
+        emotionalControlScore: null, wouldTakeAgain: null, mistakeTags: [],
+      }, playbookMatch: null }),
+    ]);
+    expect(result.coveragePct).toBe(100);
+    expect(result.plan.ratePct).toBeNull();
+    expect(result.plan.unanswered).toBe(1);
+    expect(result.scores.entry).toEqual({ average: null, count: 0 });
+    expect(result.wouldTakeAgain.unanswered).toBe(1);
+    expect(result.playbookMatch.unclassified).toBe(1);
   });
 });
 
