@@ -117,13 +117,7 @@ export function AppShell({
         <SidebarContent data-tour="nav">
           <NavList activeView={activeNavView} />
         </SidebarContent>
-        <SidebarFooter className="border-t border-sidebar-border px-4 py-3">
-          <p className="text-[11px] leading-relaxed text-sidebar-foreground/60 group-data-[collapsible=icon]:hidden">
-            {t("sidebarNote1")}
-            <br />
-            {t("sidebarNote2")}
-          </p>
-        </SidebarFooter>
+        <SidebarFooter className="border-t border-sidebar-border px-4 py-3" />
       </Sidebar>
 
       {/* ── Content column ── */}
