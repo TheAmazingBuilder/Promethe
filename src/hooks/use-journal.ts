@@ -278,3 +278,60 @@ export function useDeleteStrategy() {
     },
   });
 }
+
+
+export type JournalPeriodType = "WEEKLY" | "MONTHLY";
+
+export interface JournalPeriodReviewDTO {
+  id: string;
+  userId: string;
+  periodType: JournalPeriodType;
+  periodStart: string;
+  periodEnd: string;
+  whatWentWell: string | null;
+  whatToImprove: string | null;
+  keyLesson: string | null;
+  nextCommitment: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface JournalPeriodReviewInput {
+  periodType: JournalPeriodType;
+  periodStart: string;
+  periodEnd: string;
+  whatWentWell?: string | null;
+  whatToImprove?: string | null;
+  keyLesson?: string | null;
+  nextCommitment?: string | null;
+}
+
+export function useJournalPeriodReview(periodType: JournalPeriodType, periodStart: string) {
+  return useQuery({
+    queryKey: ["journal", "period-review", periodType, periodStart],
+    queryFn: async () => (
+      await apiFetch<{ review: JournalPeriodReviewDTO | null }>(
+        `/api/v1/journal/period-reviews?periodType=${periodType}&periodStart=${periodStart}`,
+      )
+    ).review,
+    enabled: Boolean(periodStart),
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useSaveJournalPeriodReview() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: JournalPeriodReviewInput) => (
+      await apiFetch<{ review: JournalPeriodReviewDTO }>(
+        "/api/v1/journal/period-reviews",
+        { method: "PUT", body: JSON.stringify(input) },
+      )
+    ).review,
+    onSuccess: async (review) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["journal", "period-review", review.periodType, review.periodStart],
+      });
+    },
+  });
+}

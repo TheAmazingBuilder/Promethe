@@ -48,6 +48,7 @@ import {
   useRecentJournal,
   useSaveJournalEntry,
 } from "@/hooks/use-journal";
+import { JournalPeriodReviewPanel } from "./journal-period-review";
 import { ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import { fmtDateInTz, pnlClass } from "@/lib/format";
@@ -956,6 +957,8 @@ export function JournalView({ date }: { date?: string }) {
               </Button>
             </div>
           </div>
+
+          <JournalPeriodReviewPanel selectedDay={day} />
 
           <Card className="border-border/70 shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">

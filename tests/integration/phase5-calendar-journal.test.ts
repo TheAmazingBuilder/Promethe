@@ -12,9 +12,11 @@ import {
 import {
   deleteJournalEntry,
   getJournalEntry,
+  getJournalPeriodReview,
   journalDays,
   listRecentJournal,
   upsertJournalEntry,
+  upsertJournalPeriodReview,
 } from "@/server/journal";
 import { getCalendar, getCalendarDay } from "@/server/calendar";
 import { getPropStatus } from "@/server/prop-status";
@@ -211,6 +213,25 @@ describe("journal entries", () => {
     expect([...days].sort()).toEqual(["2026-01-06", "2026-01-07", "2026-01-09"]);
     const feb = await journalDays(userA.id, "2026-02-01", "2026-02-28");
     expect(feb.size).toBe(0);
+  });
+
+  it("stores weekly qualitative reviews per user and period", async () => {
+    const input = {
+      periodType: "WEEKLY" as const,
+      periodStart: "2026-01-05",
+      periodEnd: "2026-01-11",
+      whatWentWell: "Waited for confirmation.",
+      whatToImprove: "Avoid late entries.",
+      keyLesson: "Patience protects execution quality.",
+      nextCommitment: "Stop trading after the daily limit.",
+    };
+    const saved = await upsertJournalPeriodReview(userA.id, input);
+    expect(saved.periodType).toBe("WEEKLY");
+    expect(saved.whatWentWell).toBe(input.whatWentWell);
+
+    const loaded = await getJournalPeriodReview(userA.id, "WEEKLY", "2026-01-05");
+    expect(loaded?.nextCommitment).toBe(input.nextCommitment);
+    expect(await getJournalPeriodReview(userB.id, "WEEKLY", "2026-01-05")).toBeNull();
   });
 
   it("listRecentJournal is user-scoped, searchable and filterable", async () => {
