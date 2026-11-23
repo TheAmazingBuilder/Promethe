@@ -1602,7 +1602,7 @@
     "rrBudgetOpenRisk": "Open risk",
     "rrBudgetRealizedLoss": "Realized losses today",
     "rrBudgetNote": "This budget includes the risk in your open positions and your realized losses for today. A prop firm daily-loss limit may count realized losses differently, so do not treat these figures as interchangeable.",
-    "rrBudgetOver": "Daily risk budget used up. New trades add risk on top of a budget that is already consumed — consider stopping for today.",
+    "rrBudgetOver": "Daily risk budget used up. New trades add risk on top of a budget that is already consumed - consider stopping for today.",
     "rrBudgetPercentLabel": "Daily budget (% of balance)",
     "rrBudgetSave": "Save budget",
     "rrBudgetClear": "Clear budget",
