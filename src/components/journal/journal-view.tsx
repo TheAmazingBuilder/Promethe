@@ -664,6 +664,38 @@ export function JournalView({ date }: { date?: string }) {
                 </div>
               )}
             </CardContent>
+          <Card className="border-border/70 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">Behavioral patterns</CardTitle>
+                  <CardDescription className="mt-1 text-xs">
+                    Mistakes already tagged in Trade Review for this day&apos;s closed trades.
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="rounded-full">
+                  {(dayActivity?.behavioralMistakes ?? []).reduce((total, item) => total + item.count, 0)} tags
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {(dayActivity?.behavioralMistakes?.length ?? 0) === 0 ? (
+                <p className="rounded-lg border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
+                  No mistake tags recorded in Trade Review for this day.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {dayActivity?.behavioralMistakes?.map((mistake) => (
+                    <Badge key={mistake.id} variant="outline" className="gap-2 rounded-lg px-3 py-2">
+                      <span>{mistake.name}</span>
+                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">{mistake.count}</span>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           </Card>
 
           <Card className="border-border/70 shadow-sm">

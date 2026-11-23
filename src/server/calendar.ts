@@ -233,6 +233,7 @@ export async function getCalendarDay(
       screenshots: {
         select: { id: true, tradeId: true, label: true, caption: true, createdAt: true },
       },
+      review: { select: { mistakeTagIds: true } },
     },
     orderBy: { exitTime: "desc" },
   });
@@ -241,6 +242,39 @@ export async function getCalendarDay(
   );
   const trades = dayRows.map((t) => toTradeListItem(t));
   const summary = summarizeDayTrades(trades);
+
+  // Aggregate existing Trade Review mistake tags; never ask the trader to tag
+  // the same behavior again at the daily Journal level.
+  const mistakeCounts = new Map<string, number>();
+  for (const trade of dayRows) {
+    const raw = trade.review?.mistakeTagIds;
+    if (!raw) continue;
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        for (const id of new Set(parsed.filter((value): value is string => typeof value === "string"))) {
+          mistakeCounts.set(id, (mistakeCounts.get(id) ?? 0) + 1);
+        }
+      }
+    } catch {
+      // A malformed legacy review tag payload must not break the calendar.
+    }
+  }
+  const mistakeTags = mistakeCounts.size > 0
+    ? await db.tag.findMany({
+        where: {
+          id: { in: [...mistakeCounts.keys()] },
+          kind: "MISTAKE",
+          deletedAt: null,
+          OR: [{ userId }, { userId: null }],
+        },
+        select: { id: true, name: true, color: true },
+      })
+    : [];
+  const behavioralMistakes = mistakeTags
+    .map((tag) => ({ ...tag, count: mistakeCounts.get(tag.id) ?? 0 }))
+    .filter((tag) => tag.count > 0)
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
   return {
     date,
@@ -258,6 +292,7 @@ export async function getCalendarDay(
         createdAt: screenshot.createdAt.toISOString(),
       }))
     ),
+    behavioralMistakes,
     ...summary,
   };
 }

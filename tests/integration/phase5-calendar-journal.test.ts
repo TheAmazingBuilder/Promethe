@@ -16,7 +16,7 @@ import {
   listRecentJournal,
   upsertJournalEntry,
 } from "@/server/journal";
-import { getCalendar } from "@/server/calendar";
+import { getCalendar, getCalendarDay } from "@/server/calendar";
 import { getPropStatus } from "@/server/prop-status";
 import {
   createStrategy,
@@ -236,12 +236,31 @@ describe("calendar (local-day bucketing, America/Toronto)", () => {
   beforeAll(async () => {
     // January 2026, all on account A.
     // 2026-01-06 15:05 Toronto (20:05 UTC) → +340 (green day, 2 trades)
-    await makeTrade({
+    const reviewedTrade = await makeTrade({
       userId: userA.id,
       accountId: accountAId,
       exitTime: new Date("2026-01-06T20:05:00Z"),
       netPnl: "200",
       rMultiple: "1.2",
+    });
+    const fomoTag = await db.tag.create({
+      data: { userId: userA.id, name: "FOMO", kind: "MISTAKE" },
+    });
+    await db.tradeReview.create({
+      data: {
+        tradeId: reviewedTrade.id,
+        userId: userA.id,
+        mistakeTagIds: JSON.stringify([fomoTag.id]),
+      },
+    });
+    await db.tradeScreenshot.create({
+      data: {
+        tradeId: reviewedTrade.id,
+        userId: userA.id,
+        storagePath: "test/journal-gallery.webp",
+        label: "ENTRY",
+        caption: "Entry confirmation",
+      },
     });
     await makeTrade({
       userId: userA.id,
@@ -279,6 +298,24 @@ describe("calendar (local-day bucketing, America/Toronto)", () => {
       exitTime: new Date("2026-01-06T20:05:00Z"),
       netPnl: "9999",
     });
+  });
+
+  it("surfaces private screenshots and aggregates Trade Review mistakes for the day", async () => {
+    const payload = await getCalendarDay(userA.id, { date: "2026-01-06" });
+    expect(payload.screenshots).toHaveLength(1);
+    expect(payload.screenshots?.[0]).toMatchObject({
+      tradeId: expect.any(String),
+      symbol: "XAUUSD",
+      label: "ENTRY",
+      caption: "Entry confirmation",
+    });
+    expect(payload.behavioralMistakes).toEqual([
+      expect.objectContaining({ name: "FOMO", count: 1 }),
+    ]);
+
+    const otherUser = await getCalendarDay(userB.id, { date: "2026-01-06" });
+    expect(otherUser.screenshots).toHaveLength(0);
+    expect(otherUser.behavioralMistakes).toHaveLength(0);
   });
 
   it("buckets exits in the user's local day (UTC+5h shift for Toronto in EST)", async () => {

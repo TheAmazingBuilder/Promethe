@@ -957,6 +957,13 @@ export interface JournalDayScreenshotDTO {
   createdAt: string;
 }
 
+export interface JournalDayMistakeDTO {
+  id: string;
+  name: string;
+  color: string;
+  count: number;
+}
+
 export interface CalendarDayPayload {
   /** Trading day YYYY-MM-DD. */
   date: string;
@@ -968,6 +975,8 @@ export interface CalendarDayPayload {
   trades: TradeListItemDTO[];
   /** Existing private trade screenshots, surfaced in the daily Journal gallery. */
   screenshots?: JournalDayScreenshotDTO[];
+  /** Aggregated from existing TradeReview mistake tags; no duplicate Journal input. */
+  behavioralMistakes?: JournalDayMistakeDTO[];
   /** Day totals over `trades` (same math as the month grid). */
   netPnl: string;
   tradeCount: number;
