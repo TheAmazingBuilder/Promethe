@@ -249,8 +249,14 @@ interface MergeSnapshot {
     executions: Record<string, unknown>[];
     tags: { tagId: string }[];
     screenshotIds: string[];
-    reviewExisted: boolean;
+    /** Full one-to-one child snapshots preserve rows even when survivor already has one. */
+    review?: Record<string, unknown> | null;
+    reviewMovedToSurvivor?: boolean;
+    /** Legacy flag for snapshots created before full child snapshots existed. */
+    reviewExisted?: boolean;
     eventLinkIds: string[];
+    marketContext?: Record<string, unknown> | null;
+    marketContextMovedToSurvivor?: boolean;
     marketContextId: string | null;
     shareLinkIds: string[];
     modificationIds: string[];
@@ -289,17 +295,21 @@ export async function mergeCandidate(
     }
 
     // ── Snapshot the absorbed side (for undo ≤ 30 days) ──
-    const [executions, tags, screenshots, review, eventLinks, marketContext, shareLinks, modifications] =
-      await Promise.all([
-        tx.tradeExecution.findMany({ where: { tradeId: manual.id } }),
-        tx.tradeTag.findMany({ where: { tradeId: manual.id } }),
-        tx.tradeScreenshot.findMany({ where: { tradeId: manual.id } }),
-        tx.tradeReview.findFirst({ where: { tradeId: manual.id } }),
-        tx.tradeEventLink.findMany({ where: { tradeId: manual.id } }),
-        tx.marketContextSnapshot.findFirst({ where: { tradeId: manual.id } }),
-        tx.shareLink.findMany({ where: { targetId: manual.id, type: "TRADE" } }),
-        tx.tradeModification.findMany({ where: { tradeId: manual.id } }),
-      ]);
+    const [
+      executions, tags, screenshots, review, brokerReview, eventLinks,
+      marketContext, brokerMarketContext, shareLinks, modifications,
+    ] = await Promise.all([
+      tx.tradeExecution.findMany({ where: { tradeId: manual.id } }),
+      tx.tradeTag.findMany({ where: { tradeId: manual.id } }),
+      tx.tradeScreenshot.findMany({ where: { tradeId: manual.id } }),
+      tx.tradeReview.findFirst({ where: { tradeId: manual.id } }),
+      tx.tradeReview.findFirst({ where: { tradeId: broker.id } }),
+      tx.tradeEventLink.findMany({ where: { tradeId: manual.id } }),
+      tx.marketContextSnapshot.findFirst({ where: { tradeId: manual.id } }),
+      tx.marketContextSnapshot.findFirst({ where: { tradeId: broker.id } }),
+      tx.shareLink.findMany({ where: { targetId: manual.id, type: "TRADE" } }),
+      tx.tradeModification.findMany({ where: { tradeId: manual.id } }),
+    ]);
 
     const snapshot: MergeSnapshot = {
       candidateId: candidate.id,
@@ -308,8 +318,12 @@ export async function mergeCandidate(
         executions: executions as unknown as Record<string, unknown>[],
         tags: tags.map((tag) => ({ tagId: tag.tagId })),
         screenshotIds: screenshots.map((shot) => shot.id),
+        review: review as unknown as Record<string, unknown> | null,
+        reviewMovedToSurvivor: Boolean(review && !brokerReview),
         reviewExisted: review !== null,
         eventLinkIds: eventLinks.map((link) => link.id),
+        marketContext: marketContext as unknown as Record<string, unknown> | null,
+        marketContextMovedToSurvivor: Boolean(marketContext && !brokerMarketContext),
         marketContextId: marketContext?.id ?? null,
         shareLinkIds: shareLinks.map((link) => link.id),
         modificationIds: modifications.map((modification) => modification.id),
@@ -365,20 +379,14 @@ export async function mergeCandidate(
         })
         ;
     }
-    if (review) {
-      const brokerReview = await tx.tradeReview.findFirst({ where: { tradeId: broker.id } });
-      if (!brokerReview) {
-        await tx.tradeReview.updateMany({ where: { tradeId: manual.id }, data: { tradeId: broker.id } });
-      }
+    if (review && !brokerReview) {
+      await tx.tradeReview.updateMany({ where: { id: review.id }, data: { tradeId: broker.id } });
     }
     if (eventLinks.length > 0) {
       await tx.tradeEventLink.updateMany({ where: { tradeId: manual.id }, data: { tradeId: broker.id } });
     }
-    if (marketContext) {
-      const brokerContext = await tx.marketContextSnapshot.findFirst({ where: { tradeId: broker.id } });
-      if (!brokerContext) {
-        await tx.marketContextSnapshot.updateMany({ where: { tradeId: manual.id }, data: { tradeId: broker.id } });
-      }
+    if (marketContext && !brokerMarketContext) {
+      await tx.marketContextSnapshot.updateMany({ where: { id: marketContext.id }, data: { tradeId: broker.id } });
     }
     if (shareLinks.length > 0) {
       await tx.shareLink.updateMany({
@@ -516,7 +524,22 @@ export async function undoMerge(userId: string, mergeLogId: string): Promise<{ r
         where: { tradeId: log.survivingTradeId, tagId: tag.tagId },
       });
     }
-    if (snapshot.absorbed.reviewExisted) {
+    if (snapshot.absorbed.review) {
+      if (snapshot.absorbed.reviewMovedToSurvivor) {
+        await tx.tradeReview.updateMany({
+          where: { id: snapshot.absorbed.review.id, tradeId: log.survivingTradeId },
+          data: { tradeId: absorbed.id },
+        });
+      } else {
+        await tx.tradeReview.create({
+          data: {
+            ...(snapshot.absorbed.review as unknown as Prisma.TradeReviewUncheckedCreateInput),
+            tradeId: absorbed.id,
+          },
+        });
+      }
+    } else if (snapshot.absorbed.reviewExisted) {
+      // Legacy snapshots did not retain the absorbed review's identity.
       await tx.tradeReview.updateMany({
         where: { tradeId: log.survivingTradeId },
         data: { tradeId: absorbed.id },
@@ -528,7 +551,25 @@ export async function undoMerge(userId: string, mergeLogId: string): Promise<{ r
         data: { tradeId: absorbed.id },
       });
     }
-    if (snapshot.absorbed.marketContextId) {
+    if (snapshot.absorbed.marketContext) {
+      if (snapshot.absorbed.marketContextMovedToSurvivor) {
+        await tx.marketContextSnapshot.updateMany({
+          where: {
+            id: snapshot.absorbed.marketContextId!,
+            tradeId: log.survivingTradeId,
+          },
+          data: { tradeId: absorbed.id },
+        });
+      } else {
+        await tx.marketContextSnapshot.create({
+          data: {
+            ...(snapshot.absorbed.marketContext as unknown as Prisma.MarketContextSnapshotUncheckedCreateInput),
+            tradeId: absorbed.id,
+          },
+        });
+      }
+    } else if (snapshot.absorbed.marketContextId) {
+      // Legacy snapshots only retained the id, not the complete row.
       await tx.marketContextSnapshot.updateMany({
         where: { id: snapshot.absorbed.marketContextId },
         data: { tradeId: absorbed.id },
