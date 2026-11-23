@@ -280,6 +280,10 @@ describe("findLeaks", () => {
     expect(findLeaks(payload, ["nothing"])).toHaveLength(0);
   });
 
+  it("does not mistake fractional seconds in ISO timestamps for money", () => {
+    expect(findLeaks({ capturedAt: "2026-11-23T15:56:50.000Z" }, ["50.00"])).toEqual([]);
+    expect(findLeaks({ amount: "50.00" }, ["50.00"])).toHaveLength(1);
+  });
   it("detects leaks via key names", () => {
     const payload = { accountNumber: "hidden" };
     expect(findLeaks(payload, ["accountNumber"])).toHaveLength(1);
