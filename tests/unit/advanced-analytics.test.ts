@@ -229,7 +229,7 @@ describe("setups", () => {
     const rank = computeSetupRanking(trades)[0];
     expect(rank.count).toBe(30);
     expect(rank.rSampleSize).toBe(8);
-    expect(rank.decidedSampleSize).toBe(0);
+    expect(rank.decidedSampleSize).toBe(8);
     expect(rank.expectancy).toBe(1);
     expect(rank.category).toBe("unproven");
   });
@@ -251,7 +251,7 @@ describe("seasonality", () => {
     const cell = computeSeasonality(trades).months[0];
     expect(cell.count).toBe(5);
     expect(cell.rSampleSize).toBe(3);
-    expect(cell.decidedSampleSize).toBe(0);
+    expect(cell.decidedSampleSize).toBe(3);
     expect(cell.verdict).toBe("insufficient");
   });
 });
