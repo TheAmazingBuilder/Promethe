@@ -103,6 +103,25 @@ export interface ExecutionDTO {
   pnl: string | null;
 }
 
+export interface TradeReviewDTO {
+  id: string;
+  playbookMatch: string | null;
+  followedPlan: boolean | null;
+  planAdherenceScore: number | null;
+  executionQuality: number | null;
+  entryQuality: number | null;
+  exitQuality: number | null;
+  riskManagementScore: number | null;
+  emotionalControlScore: number | null;
+  wouldTakeAgain: string | null;
+  mainLesson: string | null;
+  whatWentWell: string | null;
+  whatToImprove: string | null;
+  mistakeTagIds: string[];
+  reviewedAt: string;
+  updatedAt: string;
+}
+
 export interface TradeDetailDTO extends TradeListItemDTO {
   marketCondition: string | null;
   mfePrice: string | null;
@@ -134,6 +153,8 @@ export interface TradeDetailDTO extends TradeListItemDTO {
   exitPlanId: string | null;
   /** Playbook match declared at review time (null = not declared). */
   playbookMatch: string | null;
+  /** Structured review details; null until a review row exists. */
+  review: TradeReviewDTO | null;
   /** Current price override (exposure dashboard), null = entry price. */
   currentPrice: string | null;
   screenshots: ScreenshotDTO[];

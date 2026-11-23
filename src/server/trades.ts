@@ -112,7 +112,7 @@ type TradeFullRow = Prisma.TradeGetPayload<{
     tags: { include: { tag: true } };
     screenshots: true;
     executions: { orderBy: { time: "asc" } };
-    review: { select: { id: true } };
+    review: { select: { id: true, playbookMatch: true, followedPlan: true, planAdherenceScore: true, executionQuality: true, entryQuality: true, exitQuality: true, riskManagementScore: true, emotionalControlScore: true, wouldTakeAgain: true, mainLesson: true, whatWentWell: true, whatToImprove: true, mistakeTagIds: true, reviewedAt: true, createdAt: true, updatedAt: true } };
     // v2.5 M2 — price chart overlay sources
     modifications: { orderBy: { time: "asc" } };
     eventLinks: { include: { event: true } };
@@ -130,7 +130,7 @@ type TradeDetailRow = Omit<
 > & {
   modifications?: TradeFullRow["modifications"];
   eventLinks?: TradeFullRow["eventLinks"];
-  review: { id: string; playbookMatch: string | null } | null;
+  review: TradeFullRow["review"];
 };
 
 /** Shared include for every TradeDetailDTO mapper call site. */
@@ -141,7 +141,7 @@ const DETAIL_INCLUDE = {
   tags: { include: { tag: true } },
   screenshots: { orderBy: { createdAt: "asc" } },
   executions: { orderBy: { time: "asc" } },
-  review: { select: { id: true, playbookMatch: true } },
+  review: { select: { id: true, playbookMatch: true, followedPlan: true, planAdherenceScore: true, executionQuality: true, entryQuality: true, exitQuality: true, riskManagementScore: true, emotionalControlScore: true, wouldTakeAgain: true, mainLesson: true, whatWentWell: true, whatToImprove: true, mistakeTagIds: true, reviewedAt: true, createdAt: true, updatedAt: true } },
   // v2.5 M2 — price chart overlay sources
   modifications: { orderBy: { time: "asc" } },
   eventLinks: { include: { event: true } },
@@ -264,6 +264,24 @@ export function toTradeDetail(t: TradeDetailRow): TradeDetailDTO {
     accountInitialBalance: t.account.initialBalance.toString(),
     exitPlanId: t.exitPlanId,
     playbookMatch: t.review?.playbookMatch ?? null,
+    review: t.review ? {
+      id: t.review.id,
+      playbookMatch: t.review.playbookMatch,
+      followedPlan: t.review.followedPlan,
+      planAdherenceScore: t.review.planAdherenceScore,
+      executionQuality: t.review.executionQuality,
+      entryQuality: t.review.entryQuality,
+      exitQuality: t.review.exitQuality,
+      riskManagementScore: t.review.riskManagementScore,
+      emotionalControlScore: t.review.emotionalControlScore,
+      wouldTakeAgain: t.review.wouldTakeAgain,
+      mainLesson: t.review.mainLesson,
+      whatWentWell: t.review.whatWentWell,
+      whatToImprove: t.review.whatToImprove,
+      mistakeTagIds: parseReviewTagIds(t.review.mistakeTagIds),
+      reviewedAt: t.review.reviewedAt.toISOString(),
+      updatedAt: t.review.updatedAt.toISOString(),
+    } : null,
     currentPrice: s(t.currentPrice),
     screenshots: t.screenshots.map((sc) => ({
       id: sc.id,
@@ -281,7 +299,7 @@ export function toTradeDetail(t: TradeDetailRow): TradeDetailDTO {
       commission: e.commission.toString(),
       pnl: s(e.pnl),
     })),
-    hasReview: t.review !== null,
+    hasReview: Boolean(t.review && (t.review.followedPlan !== null || t.review.planAdherenceScore !== null || t.review.executionQuality !== null || t.review.entryQuality !== null || t.review.exitQuality !== null || t.review.riskManagementScore !== null || t.review.emotionalControlScore !== null || t.review.wouldTakeAgain !== null || t.review.mainLesson || t.review.whatWentWell || t.review.whatToImprove || t.review.mistakeTagIds)),
     // v2.5 M2 — price chart overlay sources (defensive: call sites with a
     // lighter include still work)
     modifications: (t.modifications ?? []).map((m) => ({
@@ -299,6 +317,16 @@ export function toTradeDetail(t: TradeDetailRow): TradeDetailDTO {
       importance: l.event.impact,
     })),
   };
+}
+
+function parseReviewTagIds(value: string | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
 }
 
 // ── Ownership resolution ─────────────────────────────────────────────────────
@@ -1379,4 +1407,84 @@ export async function deleteTrade(userId: string, id: string): Promise<boolean> 
     });
   });
   return true;
+}
+
+
+// ── Structured post-trade review ──────────────────────────────────────────────
+
+export type TradeReviewInput = {
+  playbookMatch?: "MATCHED" | "PARTIAL" | "OFF_PLAYBOOK" | null;
+  followedPlan?: boolean | null;
+  planAdherenceScore?: number | null;
+  executionQuality?: number | null;
+  entryQuality?: number | null;
+  exitQuality?: number | null;
+  riskManagementScore?: number | null;
+  emotionalControlScore?: number | null;
+  wouldTakeAgain?: "YES" | "NO" | "MAYBE" | null;
+  mainLesson?: string | null;
+  whatWentWell?: string | null;
+  whatToImprove?: string | null;
+  mistakeTagIds?: string[];
+};
+
+export async function saveTradeReview(
+  userId: string,
+  tradeId: string,
+  input: TradeReviewInput
+) {
+  const trade = await db.trade.findFirst({
+    where: { id: tradeId, userId },
+    select: { id: true },
+  });
+  if (!trade) return null;
+
+  const mistakeTagIds = await filterOwnTags(userId, input.mistakeTagIds ?? []);
+  const data = {
+    ...(input.playbookMatch !== undefined ? { playbookMatch: input.playbookMatch } : {}),
+    ...(input.followedPlan !== undefined ? { followedPlan: input.followedPlan } : {}),
+    ...(input.planAdherenceScore !== undefined ? { planAdherenceScore: input.planAdherenceScore } : {}),
+    ...(input.executionQuality !== undefined ? { executionQuality: input.executionQuality } : {}),
+    ...(input.entryQuality !== undefined ? { entryQuality: input.entryQuality } : {}),
+    ...(input.exitQuality !== undefined ? { exitQuality: input.exitQuality } : {}),
+    ...(input.riskManagementScore !== undefined ? { riskManagementScore: input.riskManagementScore } : {}),
+    ...(input.emotionalControlScore !== undefined ? { emotionalControlScore: input.emotionalControlScore } : {}),
+    ...(input.wouldTakeAgain !== undefined ? { wouldTakeAgain: input.wouldTakeAgain } : {}),
+    ...(input.mainLesson !== undefined ? { mainLesson: input.mainLesson } : {}),
+    ...(input.whatWentWell !== undefined ? { whatWentWell: input.whatWentWell } : {}),
+    ...(input.whatToImprove !== undefined ? { whatToImprove: input.whatToImprove } : {}),
+    ...(input.mistakeTagIds !== undefined ? { mistakeTagIds: JSON.stringify(mistakeTagIds) } : {}),
+  };
+
+  return db.$transaction(async (tx) => {
+    const review = await tx.tradeReview.upsert({
+      where: { tradeId },
+      create: {
+        tradeId,
+        userId,
+        playbookMatch: input.playbookMatch ?? null,
+        followedPlan: input.followedPlan ?? null,
+        planAdherenceScore: input.planAdherenceScore ?? null,
+        executionQuality: input.executionQuality ?? null,
+        entryQuality: input.entryQuality ?? null,
+        exitQuality: input.exitQuality ?? null,
+        riskManagementScore: input.riskManagementScore ?? null,
+        emotionalControlScore: input.emotionalControlScore ?? null,
+        wouldTakeAgain: input.wouldTakeAgain ?? null,
+        mainLesson: input.mainLesson ?? null,
+        whatWentWell: input.whatWentWell ?? null,
+        whatToImprove: input.whatToImprove ?? null,
+        mistakeTagIds: input.mistakeTagIds !== undefined ? JSON.stringify(mistakeTagIds) : null,
+      },
+      update: data,
+    });
+    await tx.trade.update({
+      where: { id: tradeId },
+      data: {
+        reviewStatus: "REVIEWED",
+        ...(input.followedPlan !== undefined ? { followedPlan: input.followedPlan } : {}),
+      },
+    });
+    return review;
+  });
 }
