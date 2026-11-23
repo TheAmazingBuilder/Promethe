@@ -518,6 +518,15 @@ export function AnalyticsView() {
         </div>
       </div>
 
+      {!isLoading && !isError && data != null && data.excludedTradeCount > 0 ? (
+        <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          {t("currencyScopeNote", {
+            count: data.excludedTradeCount,
+            currency,
+          })}
+        </p>
+      ) : null}
+
       {/* ── Loading ── */}
       {isLoading ? (
         <div className="space-y-6" role="status" aria-live="polite">
@@ -865,14 +874,6 @@ export function AnalyticsView() {
             currency={currency}
           />
 
-          {data != null && data.excludedTradeCount > 0 ? (
-            <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              {t("currencyScopeNote", {
-                count: data.excludedTradeCount,
-                currency,
-              })}
-            </p>
-          ) : null}
           {/* Footer note */}
           <p className="flex flex-wrap items-start gap-2 text-xs text-muted-foreground">
             <Wallet className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
