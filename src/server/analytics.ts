@@ -31,6 +31,7 @@ import { getDisplayPreferences } from "@/server/display-preferences";
 import { getTradingDay, tradingDayOfTrade } from "@/lib/time/trading-day";
 import { selectEquityAccounts } from "@/lib/analytics/account-scope";
 import { scopeTradesToCurrency } from "@/lib/analytics/currency-scope";
+import { resolveOwnedAccount } from "@/server/account-errors";
 
 const TRADE_INCLUDE = {
   instrument: true,
@@ -167,11 +168,8 @@ export async function getAnalytics(
     getDisplayPreferences(userId),
   ]);
 
-  // Account filter must belong to the user (silent fallback to "all").
-  const accountFilter =
-    query.account != null
-      ? (accounts.find((a) => a.id === query.account) ?? null)
-      : null;
+  // Invalid or foreign account IDs are rejected; never widen to all accounts.
+  const accountFilter = resolveOwnedAccount(accounts, query.account);
 
   const where: Prisma.TradeWhereInput = {
     userId,

@@ -20,6 +20,7 @@
 import type { Prisma } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
+import { resolveOwnedAccount } from "@/server/account-errors";
 import { D0, Decimal, toD } from "@/lib/trading/dec";
 import {
   computeEquityCurve,
@@ -847,10 +848,7 @@ async function loadDashboardData(
   // behaviour).
   const dayOf = tradingDayOfTrade(timezone, prefs.tradingDay);
   const todayTradingDay = getTradingDay(new Date(), timezone, prefs.tradingDay);
-  const globalAccount =
-    query.accountId != null
-      ? (accounts.find((a) => a.id === query.accountId) ?? null)
-      : null;
+  const globalAccount = resolveOwnedAccount(accounts, query.accountId);
   const dto = toDashboardDTO(dashboardRow);
 
   // Resolve every loader widget's period + account once, up front. The
@@ -881,7 +879,7 @@ async function loadDashboardData(
     }
     const account =
       widget.accountOverride != null
-        ? (accounts.find((a) => a.id === widget.accountOverride) ?? null)
+        ? resolveOwnedAccount(accounts, widget.accountOverride)
         : globalAccount;
     const period = resolvePeriod(
       { preset: query.preset, accountId: widget.accountOverride ?? null },

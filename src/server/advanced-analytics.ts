@@ -50,6 +50,7 @@ import { parseCustomFields } from "@/lib/custom-fields/validate";
 import { getDisplayPreferences } from "@/server/display-preferences";
 import { getTradingDay, tradingDayOfTrade } from "@/lib/time/trading-day";
 import { scopeTradesToCurrency } from "@/lib/analytics/currency-scope";
+import { resolveOwnedAccount } from "@/server/account-errors";
 import { unstable_cache } from "next/cache";
 
 const TRADE_INCLUDE = {
@@ -103,10 +104,7 @@ export async function loadAdvancedTrades(
     db.account.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
     getDisplayPreferences(userId),
   ]);
-  const accountFilter =
-    accountId != null
-      ? (accounts.find((a) => a.id === accountId) ?? null)
-      : null;
+  const accountFilter = resolveOwnedAccount(accounts, accountId);
   const where: Prisma.TradeWhereInput = {
     userId,
     status: "CLOSED",
