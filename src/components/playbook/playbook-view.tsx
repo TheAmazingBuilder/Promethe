@@ -85,7 +85,7 @@ import { ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import { pnlClass } from "@/lib/format";
 import { Money } from "@/components/privacy/money";
-import { navigate, useRoute } from "@/lib/router";
+import { navigate, navigateShallow, useRoute } from "@/lib/router";
 import type {
   ChecklistTemplateDTO,
   PlaybookRuleDTO,
@@ -2300,7 +2300,7 @@ export function PlaybookView() {
               type="button"
               role="tab"
               aria-selected={active}
-              onClick={() => navigate(`/playbook?tab=${id}`)}
+              onClick={() => navigateShallow(`/playbook?tab=${id}`)}
               className={[
                 "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
                 active
