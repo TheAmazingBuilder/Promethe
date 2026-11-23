@@ -456,7 +456,7 @@ export function JournalView({ date }: { date?: string }) {
                       <span className="text-[11px] text-muted-foreground">New journal entry</span>
                     )}
                   </div>
-                  <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
+                  <h2 className="text-base font-semibold tracking-tight">
                     {isLoading ? <Skeleton className="h-7 w-48" /> : fmtDateInTz(`${day}T12:00:00Z`, "UTC")}
                   </h2>
                   <p className="mt-1 text-xs text-muted-foreground">
