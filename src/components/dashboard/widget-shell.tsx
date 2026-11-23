@@ -271,7 +271,14 @@ export interface WidgetShellProps
   definition: WidgetDefinition | undefined;
   editMode: boolean;
   /** Data entry of this widget from the batched payload. */
-  entry: { data: unknown | null; error: string | null; currency?: string; excludedTradeCount?: number } | undefined;
+  entry:
+    | {
+        data: unknown | null;
+        error: string | null;
+        currency?: string;
+        excludedTradeCount?: number;
+      }
+    | undefined;
   loading: boolean;
   onPatch: (patch: WidgetPatchInput) => void;
   onDuplicate: () => void;

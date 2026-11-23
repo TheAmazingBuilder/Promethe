@@ -51,6 +51,8 @@ export interface DashboardsPayload {
 export interface WidgetDataEntry {
   data: unknown | null;
   error: string | null;
+  currency?: string;
+  excludedTradeCount?: number;
 }
 
 export interface DashboardDataPayload {

@@ -132,7 +132,10 @@ export interface DashboardWidgetDataPayload {
   timezone: string;
   /** ISO production instant. */
   generatedAt: string;
-  widgets: Record<string, { data: unknown | null; error: string | null; currency?: string; excludedTradeCount?: number }>;
+  widgets: Record<
+    string,
+    { data: unknown | null; error: string | null; currency?: string; excludedTradeCount?: number }
+  >;
   requirements: Requirements;
 }
 
@@ -977,7 +980,7 @@ async function loadDashboardData(
         CLOSED_DATASET_WIDGETS.has(widget.type) &&
         widget.type !== "recent-trades";
       const currencyScope =
-        shouldScopeCurrency && account == null
+        shouldScopeCurrency
           ? scopeTradesToCurrency(accountScoped, widgetCurrency)
           : { trades: accountScoped, excludedTradeCount: 0 };
       const scoped = currencyScope.trades;

@@ -114,7 +114,7 @@ export async function getMonthlyReport(
       exitTime: { gte: start, lt: end },
       ...(accountFilter ? { accountId: accountFilter.id } : {}),
     },
-    include: { instrument: true, strategy: true, account: { select: { id: true, currency: true } } },
+    include: { instrument: true, strategy: true },
     orderBy: { exitTime: "asc" },
   });
   const currencyScope = scopeTradesToCurrency(

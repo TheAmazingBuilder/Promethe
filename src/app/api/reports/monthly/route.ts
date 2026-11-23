@@ -22,8 +22,10 @@ export async function GET(req: Request) {
     const report = await getMonthlyReport(session.user.id, month, accountId);
     if (!report) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Invalid month." },
-        { status: 422 }
+        accountId != null
+          ? { error: "NOT_FOUND", message: "Account not found." }
+          : { error: "VALIDATION", message: "Invalid month." },
+        { status: accountId != null ? 404 : 422 }
       );
     }
     return NextResponse.json(report);
