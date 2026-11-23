@@ -83,6 +83,35 @@ describe("computeAdvancedStats", () => {
     expect(Number(adv.sqn)).toBeCloseTo(5.6568, 3);
   });
 
+  it("uses R-aware outcomes and excludes breakevens from win-rate denominator", () => {
+    const trades = [
+      trade({ netPnl: "25", rMultiple: "0.05", resultType: "BREAKEVEN" }),
+      trade({ netPnl: "-15", rMultiple: "-0.05", resultType: "BREAKEVEN" }),
+      trade({ netPnl: "100", rMultiple: "1", resultType: "WIN" }),
+      trade({ netPnl: "-50", rMultiple: "-1", resultType: "LOSS" }),
+    ];
+    const stats = computeTradeStats(trades);
+    expect(stats.wins).toBe(1);
+    expect(stats.losses).toBe(1);
+    expect(stats.breakevens).toBe(2);
+    expect(stats.winRate).toBe("50");
+    // Cash-based metrics still include the actual P&L of BE-classified trades.
+    expect(stats.grossWin).toBe("125");
+    expect(stats.grossLoss).toBe("65");
+  });
+
+  it("falls back to P&L sign when historical trades have no resultType", () => {
+    const trades = [
+      trade({ netPnl: "10", resultType: null }),
+      trade({ netPnl: "-10", resultType: null }),
+      trade({ netPnl: "0", resultType: null }),
+    ];
+    const stats = computeTradeStats(trades);
+    expect(stats.wins).toBe(1);
+    expect(stats.losses).toBe(1);
+    expect(stats.breakevens).toBe(1);
+    expect(stats.winRate).toBe("50");
+  });
   it("payoff ratio = avgWin / avgLoss", () => {
     const trades = [
       trade({ netPnl: "300", rMultiple: "2", resultType: "WIN" }),

@@ -44,7 +44,7 @@ export interface TradeStats {
   wins: number;
   losses: number;
   breakevens: number;
-  /** 0-100. */
+  /** 0-100: wins / (wins + losses); breakevens are excluded. */
   winRate: string | null;
   netPnl: string;
   grossWin: string;
@@ -134,22 +134,37 @@ export function computeTradeStats(
     .map((t) => (t.rMultiple == null ? null : toD(t.rMultiple)))
     .filter((r): r is Decimal => r !== null);
 
-  const wins = pnls.filter((p) => p.gt(0));
-  const losses = pnls.filter((p) => p.lt(0));
-  const breakevens = pnls.length - wins.length - losses.length;
+  // Outcome classification follows the stored R-aware resultType. Older
+  // trades without a classification fall back to the sign of realized P&L.
+  const outcomes = ordered.map((trade, index) => {
+    const stored = trade.resultType;
+    if (stored === "WIN" || stored === "LOSS" || stored === "BREAKEVEN") {
+      return stored;
+    }
+    const pnl = pnls[index];
+    return pnl.gt(0) ? "WIN" : pnl.lt(0) ? "LOSS" : "BREAKEVEN";
+  });
+  const wins = outcomes.filter((outcome) => outcome === "WIN").length;
+  const losses = outcomes.filter((outcome) => outcome === "LOSS").length;
+  const breakevens = outcomes.filter((outcome) => outcome === "BREAKEVEN").length;
+  const decidedTrades = wins + losses;
 
-  const grossWin = sum(wins);
-  const grossLoss = sum(losses).abs();
+  // Money-based metrics still use actual P&L signs, including small R-aware
+  // breakeven trades, so profit factor and net P&L reconcile to cash results.
+  const positivePnls = pnls.filter((pnl) => pnl.gt(0));
+  const negativePnls = pnls.filter((pnl) => pnl.lt(0));
+  const grossWin = sum(positivePnls);
+  const grossLoss = sum(negativePnls).abs();
 
   // Streaks (WIN/LOSS, breakeven keeps the current streak going).
   let maxWinStreak = 0;
   let maxLossStreak = 0;
   let cur = 0;
-  for (const t of ordered) {
-    if (t.resultType === "WIN") {
+  for (const outcome of outcomes) {
+    if (outcome === "WIN") {
       cur = cur >= 0 ? cur + 1 : 1;
       maxWinStreak = Math.max(maxWinStreak, cur);
-    } else if (t.resultType === "LOSS") {
+    } else if (outcome === "LOSS") {
       cur = cur <= 0 ? cur - 1 : -1;
       maxLossStreak = Math.max(maxLossStreak, -cur);
     }
@@ -181,14 +196,14 @@ export function computeTradeStats(
 
   return {
     tradeCount: ordered.length,
-    wins: wins.length,
-    losses: losses.length,
+    wins,
+    losses,
     breakevens,
     winRate:
-      ordered.length === 0
+      decidedTrades === 0
         ? null
-        : new Decimal(wins.length)
-            .div(ordered.length)
+        : new Decimal(wins)
+            .div(decidedTrades)
             .times(100)
             .toString(),
     netPnl: sum(pnls).toString(),
@@ -200,13 +215,13 @@ export function computeTradeStats(
         : grossLoss.isZero()
           ? "Infinity"
           : grossWin.div(grossLoss).toString(),
-    avgWin: avg(wins),
-    avgLoss: avg(losses.map((l) => l.abs())),
-    maxWin: wins.length === 0 ? null : wins.reduce((m, v) => (v.gt(m) ? v : m)).toString(),
+    avgWin: avg(positivePnls),
+    avgLoss: avg(negativePnls.map((loss) => loss.abs())),
+    maxWin: positivePnls.length === 0 ? null : positivePnls.reduce((m, v) => (v.gt(m) ? v : m)).toString(),
     maxLoss:
-      losses.length === 0
+      negativePnls.length === 0
         ? null
-        : losses.reduce((m, v) => (v.lt(m) ? v : m)).toString(),
+        : negativePnls.reduce((m, v) => (v.lt(m) ? v : m)).toString(),
     avgR: avg(rs),
     expectancyR:
       rs.length === 0 ? null : sum(rs).div(rs.length).toString(),
