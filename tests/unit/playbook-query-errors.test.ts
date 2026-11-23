@@ -33,4 +33,10 @@ describe("Playbook query error recovery", () => {
       expect(source).toContain(refetch);
     }
   });
+  it("uses shallow navigation when switching Playbook tabs", () => {
+    expect(source).toContain('import { navigate, navigateShallow, useRoute }');
+    expect(source).toContain('onClick={() => navigateShallow(`/playbook?tab=${id}`)}');
+    expect(source).not.toContain('onClick={() => navigate(`/playbook?tab=${id}`)}');
+  });
+
 });
