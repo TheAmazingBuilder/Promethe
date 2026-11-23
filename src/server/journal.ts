@@ -10,6 +10,7 @@
  */
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { foldText } from "@/lib/search/text";
 import { withDeleted } from "@/lib/trash/deleted-scope";
 import { refreshJournalSearchText } from "@/server/search-index";
 import type { JournalEntryDTO } from "@/lib/trading/dto";
@@ -50,14 +51,41 @@ export async function getJournalEntry(
 }
 
 /** Most recent entries for the journal index (last 90 days of activity). */
+export interface JournalHistoryFilters {
+  q?: string;
+  from?: string;
+  to?: string;
+  mood?: number;
+  discipline?: number;
+}
+
 export async function listRecentJournal(
   userId: string,
-  limit = 30
+  limit = 30,
+  filters: JournalHistoryFilters = {},
 ): Promise<JournalEntryDTO[]> {
+  const terms = filters.q?.trim()
+    ? foldText(filters.q).split(" ").filter(Boolean).slice(0, 8)
+    : [];
   const rows = await db.journalEntry.findMany({
-    where: { userId },
+    where: {
+      userId,
+      ...(filters.from || filters.to
+        ? {
+            date: {
+              ...(filters.from ? { gte: filters.from } : {}),
+              ...(filters.to ? { lte: filters.to } : {}),
+            },
+          }
+        : {}),
+      ...(filters.mood != null ? { mood: filters.mood } : {}),
+      ...(filters.discipline != null ? { disciplineScore: filters.discipline } : {}),
+      ...(terms.length > 0
+        ? { AND: terms.map((term) => ({ searchText: { contains: term } })) }
+        : {}),
+    },
     orderBy: { date: "desc" },
-    take: limit,
+    take: Math.max(1, Math.min(limit, 100)),
   });
   return rows.map(toJournalDTO);
 }

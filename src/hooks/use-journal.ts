@@ -74,11 +74,27 @@ export function useJournalEntry(date: string) {
   });
 }
 
-export function useRecentJournal() {
+export interface JournalHistoryQuery {
+  q?: string;
+  from?: string;
+  to?: string;
+  mood?: number | null;
+  discipline?: number | null;
+  limit?: number;
+}
+
+export function useRecentJournal(filters: JournalHistoryQuery = {}) {
+  const params = new URLSearchParams();
+  if (filters.q?.trim()) params.set("q", filters.q.trim());
+  if (filters.from) params.set("from", filters.from);
+  if (filters.to) params.set("to", filters.to);
+  if (filters.mood != null) params.set("mood", String(filters.mood));
+  if (filters.discipline != null) params.set("discipline", String(filters.discipline));
+  params.set("limit", String(filters.limit ?? 30));
   return useQuery({
-    queryKey: ["journal", "recent"],
+    queryKey: ["journal", "recent", filters],
     queryFn: async () =>
-      (await apiFetch<{ entries: JournalEntryDTO[] }>("/api/v1/journal")).entries,
+      (await apiFetch<{ entries: JournalEntryDTO[] }>(`/api/v1/journal?${params.toString()}`)).entries,
     staleTime: 60 * 1000,
   });
 }

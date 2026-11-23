@@ -36,10 +36,19 @@ export const journalEntrySchema = z.object({
 
 export type JournalEntryInput = z.infer<typeof journalEntrySchema>;
 
-/** GET /api/v1/journal - either ?date=YYYY-MM-DD (single day) or no param (recent list). */
+/** GET /api/v1/journal — one date or filtered Journal history. */
 export const journalQuerySchema = z.object({
   date: isoDay.optional(),
-});
+  q: z.string().trim().max(120, "tooLong").optional(),
+  from: isoDay.optional(),
+  to: isoDay.optional(),
+  mood: z.coerce.number().int().min(1).max(5).optional(),
+  discipline: z.coerce.number().int().min(1).max(5).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+}).refine(
+  ({ from, to }) => from == null || to == null || from <= to,
+  { message: "invalidDate", path: ["from"] },
+);
 
 /** DELETE /api/v1/journal?date=YYYY-MM-DD */
 export const journalDeleteQuerySchema = z.object({

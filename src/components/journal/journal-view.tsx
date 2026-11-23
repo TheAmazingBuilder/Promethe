@@ -213,7 +213,20 @@ export function JournalView({ date }: { date?: string }) {
     Number(day.slice(0, 4)),
     Number(day.slice(5, 7)),
   );
-  const { data: recentEntries = [], isLoading: recentLoading } = useRecentJournal();
+  const [historySearchInput, setHistorySearchInput] = React.useState("");
+  const [historyQuery, setHistoryQuery] = React.useState("");
+  const [historyFrom, setHistoryFrom] = React.useState("");
+  const [historyTo, setHistoryTo] = React.useState("");
+  const [historyMood, setHistoryMood] = React.useState("");
+  const [historyDiscipline, setHistoryDiscipline] = React.useState("");
+  const { data: recentEntries = [], isLoading: recentLoading } = useRecentJournal({
+    q: historyQuery || undefined,
+    from: historyFrom || undefined,
+    to: historyTo || undefined,
+    mood: historyMood ? Number(historyMood) : undefined,
+    discipline: historyDiscipline ? Number(historyDiscipline) : undefined,
+    limit: 50,
+  });
   const dayPnl = calendarData?.days?.[day] ?? null;
   const {
     data: dayActivity,
@@ -957,6 +970,60 @@ export function JournalView({ date }: { date?: string }) {
               </Badge>
             </CardHeader>
             <CardContent className="pt-0">
+              <div className="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.6fr)_repeat(4,minmax(0,1fr))_auto_auto]">
+                <Input
+                  value={historySearchInput}
+                  onChange={(event) => setHistorySearchInput(event.target.value)}
+                  placeholder="Search plans, levels, lessons and market bias..."
+                  className="h-10"
+                  maxLength={120}
+                  aria-label="Search Journal history"
+                />
+                <Input inputType="date" value={historyFrom} onChange={(event) => setHistoryFrom(event.target.value)} aria-label="From date" className="h-10" />
+                <Input inputType="date" value={historyTo} onChange={(event) => setHistoryTo(event.target.value)} aria-label="To date" className="h-10" />
+                <select
+                  value={historyMood}
+                  onChange={(event) => setHistoryMood(event.target.value)}
+                  aria-label="Filter by mood"
+                  className="h-10 rounded-md border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">Any mood</option>
+                  {[1, 2, 3, 4, 5].map((score) => <option key={score} value={score}>Mood {score}/5</option>)}
+                </select>
+                <select
+                  value={historyDiscipline}
+                  onChange={(event) => setHistoryDiscipline(event.target.value)}
+                  aria-label="Filter by discipline"
+                  className="h-10 rounded-md border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">Any discipline</option>
+                  {[1, 2, 3, 4, 5].map((score) => <option key={score} value={score}>Discipline {score}/5</option>)}
+                </select>
+                <Button
+                  size="sm"
+                  onClick={() => setHistoryQuery(historySearchInput.trim())}
+                  disabled={Boolean(historyFrom && historyTo && historyFrom > historyTo)}
+                >
+                  Search
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setHistorySearchInput("");
+                    setHistoryQuery("");
+                    setHistoryFrom("");
+                    setHistoryTo("");
+                    setHistoryMood("");
+                    setHistoryDiscipline("");
+                  }}
+                >
+                  Clear
+                </Button>
+              </div>
+              {historyFrom && historyTo && historyFrom > historyTo ? (
+                <p className="mb-3 text-xs text-destructive">The start date must be before the end date.</p>
+              ) : null}
               {recentLoading ? (
                 <div className="space-y-2">
                   <Skeleton className="h-12 w-full" />
@@ -965,14 +1032,18 @@ export function JournalView({ date }: { date?: string }) {
                 </div>
               ) : recentEntries.length === 0 ? (
                 <p className="rounded-lg border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
-                  {t("recent.empty")}
+                  {historyQuery || historyFrom || historyTo || historyMood || historyDiscipline
+                    ? "No Journal entries match these filters."
+                    : t("recent.empty")}
                 </p>
               ) : (
                 <div className="divide-y divide-border/60">
-                  {recentEntries.slice(0, 5).map((recent) => {
+                  {recentEntries.slice(0, 10).map((recent) => {
                     const isCurrent = recent.date === day;
                     const summary =
                       recent.keyLesson?.trim() ||
+                      recent.primaryScenario?.trim() ||
+                      recent.keyLevels?.trim() ||
                       recent.marketBias?.trim() ||
                       recent.preMarketPlan?.trim() ||
                       recent.postMarketReview?.trim() ||

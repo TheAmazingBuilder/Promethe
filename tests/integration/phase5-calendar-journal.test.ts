@@ -213,13 +213,27 @@ describe("journal entries", () => {
     expect(feb.size).toBe(0);
   });
 
-  it("listRecentJournal is user-scoped and newest first", async () => {
+  it("listRecentJournal is user-scoped, searchable and filterable", async () => {
     const entries = await listRecentJournal(userA.id);
     expect(entries.length).toBeGreaterThanOrEqual(3);
     for (let i = 1; i < entries.length; i++) {
       expect(entries[i - 1].date >= entries[i].date).toBe(true);
     }
     expect(entries.every((e) => e.date !== "2026-01-08")).toBe(true);
+
+    const byText = await listRecentJournal(userA.id, 30, { q: "patience" });
+    expect(byText.some((entry) => entry.date === "2026-01-06")).toBe(true);
+
+    const byRange = await listRecentJournal(userA.id, 30, {
+      from: "2026-01-07",
+      to: "2026-01-09",
+    });
+    expect(byRange.map((entry) => entry.date)).toEqual(
+      expect.arrayContaining(["2026-01-07", "2026-01-09"]),
+    );
+
+    const byMood = await listRecentJournal(userA.id, 30, { mood: 5 });
+    expect(byMood.map((entry) => entry.date)).toContain("2026-01-06");
   });
 
   it("deletes only the owner's entry", async () => {

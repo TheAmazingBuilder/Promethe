@@ -36,7 +36,7 @@ export async function GET(req: Request) {
     const parsed = journalQuerySchema.safeParse(raw);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Invalid date.", fieldErrors: zodFieldErrors(parsed.error) },
+        { error: "VALIDATION", message: "Invalid Journal history filters.", fieldErrors: zodFieldErrors(parsed.error) },
         { status: 422 }
       );
     }
@@ -44,7 +44,7 @@ export async function GET(req: Request) {
       const entry = await getJournalEntry(session.user.id, parsed.data.date);
       return NextResponse.json({ entry });
     }
-    const entries = await listRecentJournal(session.user.id);
+    const entries = await listRecentJournal(session.user.id, parsed.data.limit, parsed.data);
     return NextResponse.json({ entries });
   } catch (error) {
     return apiError(error, "journal");
