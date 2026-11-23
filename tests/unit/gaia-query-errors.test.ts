@@ -23,3 +23,18 @@ describe("Gaïa query error recovery", () => {
     expect(gaiaEditor).toContain("onClose");
   });
 });
+
+describe("Gaïa in-page navigation", () => {
+  it("uses synchronous shallow history updates for tab and note navigation", () => {
+    const router = readFileSync(
+      new URL("../../src/lib/router.ts", import.meta.url),
+      "utf8"
+    );
+    expect(router).toContain("export function navigateShallow");
+    expect(router).toContain('window.history.pushState(null, "", target)');
+    expect(router).toContain("window.dispatchEvent(new Event(ROUTE_CHANGE_EVENT))");
+    expect(gaiaView).toContain("import { navigateShallow, useRoute }");
+    expect(gaiaView).toContain("navigateShallow(`/gaia");
+    expect(gaiaView).not.toContain("navigate(`/gaia");
+  });
+});
