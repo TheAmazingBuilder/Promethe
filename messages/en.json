@@ -65,8 +65,8 @@
     "propFirmsDesc": "Challenges, evaluation rules, payouts and costs",
     "analytics": "Analytics",
     "analyticsDesc": "KPIs, equity curve, insights",
-    "journal": "Daily journal",
-    "journalDesc": "Mood, discipline, lessons",
+    "journal": "Journal",
+    "journalDesc": "Daily trading reflections, discipline and lessons",
     "strategies": "Strategies",
     "strategiesDesc": "Checklists and per-strategy stats",
     "playbook": "Playbook",
@@ -911,7 +911,7 @@
     "writeJournal": "Write the journal"
   },
   "journalView": {
-    "title": "Daily journal",
+    "title": "Journal",
     "subtitle": "Plan, review, mood and discipline - one journal per trading day",
     "prevDay": "Previous day",
     "nextDay": "Next day",
