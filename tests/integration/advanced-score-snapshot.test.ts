@@ -35,6 +35,7 @@ let instrumentId: string;
 let userA: { id: string };
 let userB: { id: string };
 let accountAId: string;
+let accountA2Id: string;
 let accountBId: string;
 
 async function makeUser(email: string) {
@@ -116,6 +117,16 @@ beforeAll(async () => {
   const a = await makeUser("adv-score-a@test.local");
   userA = a.user;
   accountAId = a.accountId;
+  const secondAccount = await db.account.create({
+    data: {
+      userId: userA.id,
+      name: "Second account",
+      currency: "CAD",
+      initialBalance: "10000",
+    },
+  });
+  accountA2Id = secondAccount.id;
+
   const b = await makeUser("adv-score-b@test.local");
   userB = b.user;
   accountBId = b.accountId;
@@ -135,6 +146,12 @@ beforeAll(async () => {
   await seedSnapshot(userB.id, new Date(Date.UTC(2026, 1, 10)), 70, 10);
   for (let i = 0; i < 5; i++) {
     await seedClosedTrade(userB.id, accountBId, i);
+  }
+
+  // User A's second account has its own trade sample; its score must not
+  // reuse or overwrite the user's global daily snapshot.
+  for (let i = 20; i < 23; i++) {
+    await seedClosedTrade(userA.id, accountA2Id, i);
   }
 });
 
@@ -220,6 +237,28 @@ describe("trader score from snapshots", () => {
     ]) {
       expect(Number.isInteger(c)).toBe(true);
     }
+  });
+
+  it("does not reuse or overwrite the global snapshot for an account filter", async () => {
+    const globalBefore = await db.traderScoreSnapshot.findUnique({
+      where: { userId_date: { userId: userA.id, date: utcDay(new Date()) } },
+    });
+    expect(globalBefore?.score).toBe(42);
+
+    const payload = await getAdvancedAnalytics(userA.id, {
+      period: "all",
+      account: accountA2Id,
+      module: "score",
+    });
+
+    expect(payload.accountId).toBe(accountA2Id);
+    expect(payload.advanced.score.trades).toBe(3);
+    expect(payload.advanced.score.total).not.toBe(42);
+    const globalAfter = await db.traderScoreSnapshot.findUnique({
+      where: { userId_date: { userId: userA.id, date: utcDay(new Date()) } },
+    });
+    expect(globalAfter?.score).toBe(42);
+    expect(globalAfter?.tradeCount).toBe(12);
   });
 
   it("loads history from snapshots only (no replay)", async () => {

@@ -26,6 +26,7 @@ import { db } from "@/lib/db";
 import {
   computeAdvancedAnalytics,
   computeAdvancedAnalyticsModules,
+  computeScoreHistory,
   computeTraderScore,
   isAlmostTp,
   scoreGrade,
@@ -354,7 +355,8 @@ async function persistAdvanced(
   userId: string,
   trades: AdvancedTrade[],
   computed: Partial<AdvancedAnalytics>,
-  now: Date
+  now: Date,
+  persistGlobalScore: boolean
 ): Promise<void> {
   // Lifecycle rows (only trades with MFE/MAE or candle time data).
   const withData = trades.filter(
@@ -401,7 +403,7 @@ async function persistAdvanced(
   }
 
   // Today's score snapshot (only when the score module was computed).
-  if (computed.score != null && trades.length > 0) {
+  if (persistGlobalScore && computed.score != null && trades.length > 0) {
     const day = utcDay(now);
     const s = computed.score;
     const components = {
@@ -508,12 +510,18 @@ export async function getAdvancedAnalytics(
   // month's point is the freshly computed score (same >= 3 trades bar
   // as the replay).
   if (modules.includes("score") && computed.score != null) {
-    const [history, today] = await Promise.all([
-      loadScoreHistoryFromSnapshots(userId),
-      db.traderScoreSnapshot.findUnique({
-        where: { userId_date: { userId, date: utcDay(now) } },
-      }),
-    ]);
+    // Snapshots are intentionally user-global (the daily cron computes all
+    // accounts together). Never apply a global snapshot to a filtered account,
+    // and never let an account-scoped request overwrite that global row.
+    if (query.account != null) {
+      computed.scoreHistory = computeScoreHistory(trades);
+    } else {
+      const [history, today] = await Promise.all([
+        loadScoreHistoryFromSnapshots(userId),
+        db.traderScoreSnapshot.findUnique({
+          where: { userId_date: { userId, date: utcDay(now) } },
+        }),
+      ]);
     if (today != null) {
       computed.score = {
         ...computed.score,
@@ -541,10 +549,11 @@ export async function getAdvancedAnalytics(
       });
       history.sort((a, b) => a.month.localeCompare(b.month));
     }
-    computed.scoreHistory = history;
+      computed.scoreHistory = history;
+    }
   }
   try {
-    await persistAdvanced(userId, trades, computed, now);
+    await persistAdvanced(userId, trades, computed, now, query.account == null);
   } catch (error) {
     // Persistence must never break the read path.
     console.error("[advanced-analytics] persist failed", error);
