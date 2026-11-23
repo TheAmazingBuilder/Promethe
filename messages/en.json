@@ -1569,6 +1569,7 @@
       "annotationDeleteSelected": "Delete selected",
       "annotationUndo": "Undo",
       "annotationClear": "Clear all",
+      "annotationCancel": "Cancel",
       "annotationSave": "Save annotations",
       "annotationSaved": "Screenshot annotations saved",
       "annotationOriginalPreserved": "The original screenshot stays unchanged. Annotations are stored separately.",

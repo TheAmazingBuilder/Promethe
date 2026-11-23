@@ -416,7 +416,7 @@ export function ScreenshotAnnotationEditor({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("annotationCancel")}</Button>
           <Button onClick={() => void onSave()} disabled={query.isLoading || query.isError || save.isPending}>
             {save.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
             {t("annotationSave")}
