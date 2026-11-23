@@ -36,6 +36,8 @@ export interface AnalyticsTrade extends StatTrade {
   fees: string | null;
   /** Local calendar date (YYYY-MM-DD) of the EXIT - P&L attribution. */
   localDate: string | null;
+  /** Local calendar date (YYYY-MM-DD) of the ENTRY - trade-frequency attribution. */
+  localEntryDate?: string | null;
   /** Local weekday of the ENTRY 1 (Monday) → 7 (Sunday) - decision dimension. */
   localWeekday: number | null;
   /** Local entry hour 0-23 - decision dimension. */
@@ -283,22 +285,21 @@ export interface Insight {
   weight: number;
 }
 
-interface DailyAggregate {
+interface DailyTradeCount {
   date: string;
-  pnl: Decimal;
   count: number;
 }
 
-function dailyPnlMap(trades: AnalyticsTrade[]): Map<string, DailyAggregate> {
-  const map = new Map<string, DailyAggregate>();
-  for (const t of trades) {
-    const day = t.localDate ?? t.exitTime.slice(0, 10);
-    const prev = map.get(day);
-    if (prev) {
-      prev.pnl = prev.pnl.plus(toD(t.netPnl ?? 0));
-      prev.count += 1;
+/** Count trades by local ENTRY date; P&L attribution remains on localDate. */
+function dailyEntryMap(trades: AnalyticsTrade[]): Map<string, DailyTradeCount> {
+  const map = new Map<string, DailyTradeCount>();
+  for (const trade of trades) {
+    const day = trade.localEntryDate ?? trade.entryTime.slice(0, 10);
+    const current = map.get(day);
+    if (current) {
+      current.count += 1;
     } else {
-      map.set(day, { date: day, pnl: toD(t.netPnl ?? 0), count: 1 });
+      map.set(day, { date: day, count: 1 });
     }
   }
   return map;
@@ -507,8 +508,8 @@ export function computeInsights(
     }
   }
 
-  // ── Overtrading: busy days (≥ 5 trades) vs light days (≤ 2) ──
-  const daily = [...dailyPnlMap(ordered).values()];
+  // ── Overtrading: busy ENTRY days (≥ 5 trades) vs light days (≤ 2) ──
+  const daily = [...dailyEntryMap(ordered).values()];
   const busy = daily.filter((d) => d.count >= 5);
   const light = daily.filter((d) => d.count <= 2);
   if (busy.length >= 2 && light.length >= 2) {
@@ -519,7 +520,7 @@ export function computeInsights(
       return rs.length === 0 ? null : mean(rs);
     };
     const busyTrades = ordered.filter((t) => {
-      const day = t.localDate ?? t.exitTime.slice(0, 10);
+      const day = t.localEntryDate ?? t.entryTime.slice(0, 10);
       return busy.some((d) => d.date === day);
     });
     const lightTrades = ordered.filter((t) => {
