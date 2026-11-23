@@ -54,7 +54,8 @@ async function makeUser(email: string) {
 async function seedClosedTrade(
   userId: string,
   accountId: string,
-  index: number
+  index: number,
+  pnlCurrency = "USD"
 ) {
   const day = new Date(Date.UTC(2026, 9, 10 + index, 14, 0, 0));
   const win = index % 2 === 0;
@@ -71,6 +72,7 @@ async function seedClosedTrade(
       exitPrice: "2010",
       lots: "1",
       netPnl: win ? "100" : "-50",
+      pnlCurrency,
       rMultiple: win ? "1" : "-0.5",
       resultType: win ? "WIN" : "LOSS",
       followedPlan: true,
@@ -151,7 +153,7 @@ beforeAll(async () => {
   // User A's second account has its own trade sample; its score must not
   // reuse or overwrite the user's global daily snapshot.
   for (let i = 20; i < 23; i++) {
-    await seedClosedTrade(userA.id, accountA2Id, i);
+    await seedClosedTrade(userA.id, accountA2Id, i, "CAD");
   }
 });
 
@@ -253,6 +255,7 @@ describe("trader score from snapshots", () => {
 
     expect(payload.accountId).toBe(accountA2Id);
     expect(payload.advanced.score.trades).toBe(3);
+    expect(payload.excludedTradeCount).toBe(0);
     expect(payload.advanced.score.total).not.toBe(globalBefore?.score);
     const globalAfter = await db.traderScoreSnapshot.findUnique({
       where: { userId_date: { userId: userA.id, date: utcDay(new Date()) } },
