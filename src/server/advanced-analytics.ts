@@ -125,7 +125,20 @@ export async function loadAdvancedTrades(
   const timezone = profile?.timezone ?? "UTC";
   const currency = accountFilter?.currency ?? profile?.baseCurrency ?? "USD";
 
-  // Historical P&L keeps the currency recorded on each trade. An account\n  // may have changed its display currency since those trades were closed.\n  const scoped = scopeTradesToCurrency(rows, currency);\n  const timeMap = await computeTimeInProfit(scoped.trades);\n  const trades: AdvancedTrade[] = scoped.trades.map((t) =>\n    toAdvancedTrade(t, timezone, prefs.tradingDay, timeMap.get(t.id))\n  );\n  return {\n    trades,\n    timezone,\n    currency,\n    tradingDay: prefs.tradingDay,\n    excludedTradeCount: scoped.excludedTradeCount,\n  };
+  // Historical P&L keeps the currency recorded on each trade. An account
+  // may have changed its display currency since those trades were closed.
+  const scoped = scopeTradesToCurrency(rows, currency);
+  const timeMap = await computeTimeInProfit(scoped.trades);
+  const trades: AdvancedTrade[] = scoped.trades.map((t) =>
+    toAdvancedTrade(t, timezone, prefs.tradingDay, timeMap.get(t.id))
+  );
+  return {
+    trades,
+    timezone,
+    currency,
+    tradingDay: prefs.tradingDay,
+    excludedTradeCount: scoped.excludedTradeCount,
+  };
 }
 
 /**

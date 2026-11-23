@@ -78,7 +78,6 @@ export function ActionRow({
   onToggle: (rule: PlanAction["rule"], done: boolean) => void;
 }) {
   const t = useTranslations("analytics.advanced.weeklyPlan");
-  const tAnalytics = useTranslations("analytics");
   const id = `weekly-action-${action.rule}`;
   return (
     <li
@@ -150,6 +149,7 @@ export function ActionRow({
 
 export function WeeklyPlanView() {
   const t = useTranslations("analytics.advanced.weeklyPlan");
+  const tAnalytics = useTranslations("analytics");
   const [accountId, setAccountId] = React.useState<string>("all");
   const account = accountId === "all" ? undefined : accountId;
   const { data, isLoading, isError, refetch } = useWeeklyPlan(account);
