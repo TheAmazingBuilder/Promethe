@@ -29,6 +29,7 @@ import { parseCustomFields } from "@/lib/custom-fields/validate";
 import { activeCustomFieldDefinitions } from "@/server/custom-fields";
 import { getDisplayPreferences } from "@/server/display-preferences";
 import { getTradingDay, tradingDayOfTrade } from "@/lib/time/trading-day";
+import { selectEquityAccounts } from "@/lib/analytics/account-scope";
 
 const TRADE_INCLUDE = {
   instrument: true,
@@ -37,21 +38,6 @@ const TRADE_INCLUDE = {
 } as const;
 
 type Row = Prisma.TradeGetPayload<{ include: typeof TRADE_INCLUDE }>;
-
-/**
- * Select the accounts that contribute to the equity starting balance.
- * A single-account view must never include the balances of sibling accounts;
- * the global view keeps the existing same-currency aggregation convention.
- */
-export function selectEquityAccounts<T extends { id: string; currency: string }>(
-  accounts: T[],
-  accountFilter: T | null,
-  currency: string
-): T[] {
-  return accountFilter != null
-    ? [accountFilter]
-    : accounts.filter((account) => account.currency === currency);
-}
 
 /** Period start (UTC Date) - null for "all". Exported for the
  * when-you-trade endpoint, which filters the same closed trades. */

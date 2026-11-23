@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { selectEquityAccounts } from "@/server/analytics";
+import { selectEquityAccounts } from "@/lib/analytics/account-scope";
 
 describe("selectEquityAccounts", () => {
   const accounts = [
