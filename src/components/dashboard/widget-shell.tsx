@@ -271,7 +271,7 @@ export interface WidgetShellProps
   definition: WidgetDefinition | undefined;
   editMode: boolean;
   /** Data entry of this widget from the batched payload. */
-  entry: { data: unknown | null; error: string | null } | undefined;
+  entry: { data: unknown | null; error: string | null; currency?: string; excludedTradeCount?: number } | undefined;
   loading: boolean;
   onPatch: (patch: WidgetPatchInput) => void;
   onDuplicate: () => void;
@@ -422,6 +422,14 @@ export function WidgetShell({
         tabIndex={0}
         className="@container relative min-h-0 flex-1 overflow-auto p-3 focus-visible:outline-none"
       >
+        {entry?.excludedTradeCount != null && entry.excludedTradeCount > 0 ? (
+          <p className="mb-2 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+            {t("currencyScopeNote", {
+              count: entry.excludedTradeCount,
+              currency: entry.currency ?? "—",
+            })}
+          </p>
+        ) : null}
         {definition == null ? (
           unavailableFallback
         ) : hasError ? (

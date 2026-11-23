@@ -79,6 +79,7 @@ import { listGoalsWithProgress } from "@/server/goals";
 import { recentViolations } from "@/server/rules";
 import { DashboardValidationError } from "@/server/dashboards";
 import { toDashboardDTO } from "@/server/dashboards";
+import { scopeTradesToCurrency } from "@/lib/analytics/currency-scope";
 
 // ── Requirements (feature prerequisites, registry "requires") ────────────────
 
@@ -131,7 +132,7 @@ export interface DashboardWidgetDataPayload {
   timezone: string;
   /** ISO production instant. */
   generatedAt: string;
-  widgets: Record<string, { data: unknown | null; error: string | null }>;
+  widgets: Record<string, { data: unknown | null; error: string | null; currency?: string; excludedTradeCount?: number }>;
   requirements: Requirements;
 }
 
@@ -957,19 +958,32 @@ async function loadDashboardData(
     openRows,
   };
 
-  const widgets: Record<string, { data: unknown | null; error: string | null }> =
-    {};
+  const widgets: DashboardWidgetDataPayload["widgets"] = {};
 
   for (const { widget, account, period } of resolved) {
     try {
-      const scoped =
+      const accountScoped =
         account != null
           ? trades.filter((t) => t.accountId === account.id)
           : trades;
+      const widgetCurrency = account?.currency ?? ctx.currency;
+      // Money-based aggregates must never combine raw P&L from different
+      // currencies. Recent-trade and open-position lists remain cross-currency
+      // because each row carries its own pnlCurrency.
+      const shouldScopeCurrency =
+        CLOSED_DATASET_WIDGETS.has(widget.type) &&
+        widget.type !== "recent-trades";
+      const currencyScope =
+        shouldScopeCurrency && account == null
+          ? scopeTradesToCurrency(accountScoped, ctx.accounts, widgetCurrency)
+          : { trades: accountScoped, excludedTradeCount: 0 };
+      const scoped = currencyScope.trades;
       const sample = applyPeriod(scoped, period);
       widgets[widget.id] = {
         data: await computeWidgetData(ctx, widget, account, scoped, sample, period),
         error: null,
+        currency: widgetCurrency,
+        excludedTradeCount: currencyScope.excludedTradeCount,
       };
     } catch (error) {
       if (error instanceof DashboardValidationError) {

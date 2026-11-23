@@ -71,7 +71,7 @@ beforeAll(async () => {
   const accounts = await db.account.findMany({ where: { userId: user.id } });
   accountA = accounts[0].id;
   const accountBRow = await db.account.create({
-    data: { userId: user.id, name: "Second", currency: "USD", initialBalance: "10000" },
+    data: { userId: user.id, name: "Second", currency: "CAD", initialBalance: "10000" },
   });
   accountB = accountBRow.id;
 
@@ -173,6 +173,7 @@ beforeAll(async () => {
     return w;
   };
   await addWidget("kpi", "kpi-strip");
+  await addWidget("kpiCad", "kpi-strip", { accountOverride: accountB });
   await addWidget("recent", "recent-trades");
   await addWidget("open", "open-trades");
   await addWidget("compare", "period-compare", {
@@ -224,9 +225,12 @@ describe("dashboard dataset scoping (SQL, not JS)", () => {
       preset: "last30",
       accountId: null,
     });
-    const kpi = payload.widgets[widgetIds.kpi].data as KpiWidgetData;
-    expect(kpi.stats.tradeCount).toBe(2);
-    expect(kpi.stats.netPnl).toBe("50");
+    const kpiEntry = payload.widgets[widgetIds.kpi];
+    const kpi = kpiEntry.data as KpiWidgetData;
+    expect(kpi.stats.tradeCount).toBe(1);
+    expect(kpi.stats.netPnl).toBe("100");
+    expect(kpiEntry.currency).toBe("USD");
+    expect(kpiEntry.excludedTradeCount).toBe(1);
     const recent = payload.widgets[widgetIds.recent].data as {
       trades: Array<{ id: string }>;
     };
@@ -250,8 +254,8 @@ describe("dashboard dataset scoping (SQL, not JS)", () => {
       accountId: null,
     });
     const kpi = payload.widgets[widgetIds.kpi].data as KpiWidgetData;
-    expect(kpi.stats.tradeCount).toBe(4);
-    expect(kpi.stats.netPnl).toBe("570");
+    expect(kpi.stats.tradeCount).toBe(3);
+    expect(kpi.stats.netPnl).toBe("620");
   });
 
   it("global account filter scopes every widget", async () => {
@@ -270,6 +274,19 @@ describe("dashboard dataset scoping (SQL, not JS)", () => {
       openPositions: Array<{ id: string }>;
     };
     expect(open.openPositions.map((t) => t.id)).toEqual([tradeIds.openA]);
+  });
+
+  it("uses the selected account currency for a per-widget account override", async () => {
+    const payload = await getDashboardData(user.id, dashboardId, {
+      preset: "all",
+      accountId: null,
+    });
+    const entry = payload.widgets[widgetIds.kpiCad];
+    const kpi = entry.data as KpiWidgetData;
+    expect(entry.currency).toBe("CAD");
+    expect(entry.excludedTradeCount).toBe(0);
+    expect(kpi.stats.tradeCount).toBe(1);
+    expect(kpi.stats.netPnl).toBe("-50");
   });
 
   it("a static-only dashboard needs no trade dataset", async () => {

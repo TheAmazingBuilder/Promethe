@@ -815,7 +815,7 @@ export function DashboardsView() {
           type={w.type}
           data={entry?.data ?? null}
           config={w.config}
-          currency={currency}
+          currency={entry?.currency ?? currency}
           timezone={timezone}
           heightPx={chartHeightPx(w)}
         />

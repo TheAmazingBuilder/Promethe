@@ -3405,7 +3405,8 @@
     "metricSample": "{count, plural, =0 {no trade} one {# trade} other {# trades}} in sample",
     "metricLowSample": "Low sample size - interpret with caution.",
     "emptyWidgetsTitle": "This dashboard is empty",
-    "emptyWidgetsDesc": "Add widgets to build your perfect dashboard."
+    "emptyWidgetsDesc": "Add widgets to build your perfect dashboard.",
+    "currencyScopeNote": "{count} trades in other currencies excluded. Figures use {currency} only."
   },
   "focus": {
     "exit": "Exit focus",
