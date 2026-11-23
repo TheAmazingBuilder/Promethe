@@ -1,16 +1,13 @@
 /**
- * Keep monetary aggregates inside one account currency.
- * Raw P&L values from different currencies are not additive; until historical
- * FX conversion is available, only trades matching the displayed currency
- * may contribute to money-based statistics.
+ * Keep monetary aggregates inside one trade currency.
+ * A trade's stored pnlCurrency is authoritative: the account currency may
+ * change later, but historical P&L must retain its original denomination.
  */
-export function scopeTradesToCurrency<T extends { accountId: string }>(
+export function scopeTradesToCurrency<T extends { pnlCurrency: string }>(
   trades: T[],
-  accounts: Array<{ id: string; currency: string }>,
   currency: string
 ): { trades: T[]; excludedTradeCount: number } {
-  const currencyByAccount = new Map(accounts.map((account) => [account.id, account.currency]));
-  const included = trades.filter((trade) => currencyByAccount.get(trade.accountId) === currency);
+  const included = trades.filter((trade) => trade.pnlCurrency === currency);
   return {
     trades: included,
     excludedTradeCount: trades.length - included.length,

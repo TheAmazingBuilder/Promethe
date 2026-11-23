@@ -191,7 +191,7 @@ export async function getAnalytics(
   const currency =
     accountFilter?.currency ?? profile?.baseCurrency ?? "USD";
 
-  const currencyScope = scopeTradesToCurrency(rows, accounts, currency);
+  const currencyScope = scopeTradesToCurrency(rows, currency);
   const trades = currencyScope.trades.map((t) => toAnalyticsTrade(t, timezone, prefs.tradingDay));
 
   const dayOf = tradingDayOfTrade(timezone, prefs.tradingDay);

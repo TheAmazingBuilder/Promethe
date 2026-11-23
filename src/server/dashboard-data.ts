@@ -221,6 +221,8 @@ type AccountRow = Prisma.AccountGetPayload<Record<string, never>>;
  * list-item DTOs.
  */
 interface DashboardTrade extends AnalyticsTrade {
+  /** Stored P&L denomination; do not infer from mutable account settings. */
+  pnlCurrency: string;
   /** Narrowed from StatTrade's optional - always set by the mapper below. */
   strategyName: string | null;
   pips: string | null;
@@ -283,6 +285,7 @@ function toDashboardTrade(
     lots: t.lots.toString(),
     accountId: t.accountId,
     accountName: t.account.name,
+    pnlCurrency: t.pnlCurrency,
     timeframe: t.timeframe,
     setupType: t.setupType,
     marketCondition: t.marketCondition,
@@ -975,7 +978,7 @@ async function loadDashboardData(
         widget.type !== "recent-trades";
       const currencyScope =
         shouldScopeCurrency && account == null
-          ? scopeTradesToCurrency(accountScoped, ctx.accounts, widgetCurrency)
+          ? scopeTradesToCurrency(accountScoped, widgetCurrency)
           : { trades: accountScoped, excludedTradeCount: 0 };
       const scoped = currencyScope.trades;
       const sample = applyPeriod(scoped, period);

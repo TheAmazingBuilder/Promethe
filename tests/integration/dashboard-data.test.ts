@@ -107,6 +107,7 @@ beforeAll(async () => {
     exitTime: new Date(Date.UTC(2026, 10, 13, 16, 0, 0)),
     exitPrice: "1995",
     netPnl: "-50",
+    pnlCurrency: "CAD",
     rMultiple: "-0.5",
     resultType: "LOSS",
   });

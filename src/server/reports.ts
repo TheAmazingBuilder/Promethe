@@ -119,7 +119,6 @@ export async function getMonthlyReport(
   });
   const currencyScope = scopeTradesToCurrency(
     rows,
-    accountFilter ? [accountFilter] : accounts,
     currency
   );
 
