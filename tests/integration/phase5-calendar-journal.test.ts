@@ -12,8 +12,11 @@ import {
 import {
   deleteJournalEntry,
   getJournalEntry,
+  createJournalTemplate,
+  deleteJournalTemplate,
   getJournalPeriodReview,
   journalDays,
+  listJournalTemplates,
   listRecentJournal,
   upsertJournalEntry,
   upsertJournalPeriodReview,
@@ -213,6 +216,22 @@ describe("journal entries", () => {
     expect([...days].sort()).toEqual(["2026-01-06", "2026-01-07", "2026-01-09"]);
     const feb = await journalDays(userA.id, "2026-02-01", "2026-02-28");
     expect(feb.size).toBe(0);
+  });
+
+  it("creates and deletes Journal templates with strict user ownership", async () => {
+    const template = await createJournalTemplate(userA.id, {
+      name: "XAU London breakout",
+      description: "Preparation for the London session.",
+      marketBias: "Bullish above 2340",
+      keyLevels: "2340 / 2352",
+      primaryScenario: "Wait for a confirmed breakout and retest.",
+      maxRiskPercent: "0.5",
+    });
+    const templates = await listJournalTemplates(userA.id);
+    expect(templates.some((item) => item.id === template.id)).toBe(true);
+    expect(await listJournalTemplates(userB.id)).toHaveLength(0);
+    expect(await deleteJournalTemplate(userB.id, template.id)).toBe(false);
+    expect(await deleteJournalTemplate(userA.id, template.id)).toBe(true);
   });
 
   it("stores weekly qualitative reviews per user and period", async () => {

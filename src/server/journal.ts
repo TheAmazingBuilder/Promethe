@@ -217,3 +217,45 @@ export async function upsertJournalPeriodReview(
     update: values,
   });
 }
+
+
+export interface JournalTemplateInput {
+  name: string;
+  description?: string | null;
+  marketBias?: string | null;
+  preMarketPlan?: string | null;
+  keyLevels?: string | null;
+  primaryScenario?: string | null;
+  alternateScenario?: string | null;
+  invalidationConditions?: string | null;
+  maxRiskPercent?: string | null;
+}
+
+export async function listJournalTemplates(userId: string) {
+  return db.journalTemplate.findMany({
+    where: { userId },
+    orderBy: [{ isDefault: "desc" }, { name: "asc" }],
+  });
+}
+
+export async function createJournalTemplate(userId: string, input: JournalTemplateInput) {
+  return db.journalTemplate.create({
+    data: {
+      userId,
+      name: input.name,
+      description: input.description ?? null,
+      marketBias: input.marketBias ?? null,
+      preMarketPlan: input.preMarketPlan ?? null,
+      keyLevels: input.keyLevels ?? null,
+      primaryScenario: input.primaryScenario ?? null,
+      alternateScenario: input.alternateScenario ?? null,
+      invalidationConditions: input.invalidationConditions ?? null,
+      maxRiskPercent: input.maxRiskPercent ?? null,
+    },
+  });
+}
+
+export async function deleteJournalTemplate(userId: string, id: string): Promise<boolean> {
+  const result = await db.journalTemplate.deleteMany({ where: { id, userId } });
+  return result.count > 0;
+}

@@ -117,3 +117,19 @@ export const journalPeriodReviewSchema = z.object({
   (value) => isValidJournalPeriodRange(value.periodType, value.periodStart, value.periodEnd),
   { message: "invalidPeriodRange", path: ["periodEnd"] },
 );
+
+
+export const journalTemplateSchema = z.object({
+  name: z.string().trim().min(1, "required").max(60, "tooLong"),
+  description: z.string().max(300, "tooLong").nullish(),
+  marketBias: z.string().max(500, "tooLong").nullish(),
+  preMarketPlan: z.string().max(4000, "tooLong").nullish(),
+  keyLevels: z.string().max(2000, "tooLong").nullish(),
+  primaryScenario: z.string().max(4000, "tooLong").nullish(),
+  alternateScenario: z.string().max(4000, "tooLong").nullish(),
+  invalidationConditions: z.string().max(2000, "tooLong").nullish(),
+  maxRiskPercent: z.string().trim()
+    .regex(/^(?:[0-9]{1,2}(?:[.][0-9]{1,2})?|100(?:[.]0{1,2})?)$/, "invalidRisk")
+    .refine((value) => Number(value) > 0, "invalidRisk")
+    .nullish(),
+});
