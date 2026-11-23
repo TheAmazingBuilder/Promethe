@@ -130,7 +130,7 @@ function SectionHeading({
   title,
   description,
 }: {
-  icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   eyebrow: string;
   title: string;
   description: string;
