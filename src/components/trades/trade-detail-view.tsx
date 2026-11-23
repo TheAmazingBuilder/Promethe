@@ -246,8 +246,11 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
     if (!trade) return;
     const customAnswers = (reviewQuestions.data ?? []).map((question) => {
       const answer = reviewDraft.customAnswers?.find((item) => item.questionId === question.id)?.answer;
-      const valid = question.type === "SCALE" ? typeof answer === "number" && Number.isInteger(answer) && answer >= 1 && answer <= 5 : question.type === "BOOLEAN" ? typeof answer === "boolean" : question.type === "TEXT" && typeof answer === "string" && answer.trim().length > 0;
-      return { questionId: question.id, answer: valid ? answer : null };
+      let normalizedAnswer: string | number | boolean | null = null;
+      if (question.type === "SCALE" && typeof answer === "number" && Number.isInteger(answer) && answer >= 1 && answer <= 5) normalizedAnswer = answer;
+      else if (question.type === "BOOLEAN" && typeof answer === "boolean") normalizedAnswer = answer;
+      else if (question.type === "TEXT" && typeof answer === "string" && answer.trim().length > 0) normalizedAnswer = answer;
+      return { questionId: question.id, answer: normalizedAnswer };
     });
     saveTradeReview.mutate(
       { tradeId: trade.id, review: { ...reviewDraft, customAnswers } },
