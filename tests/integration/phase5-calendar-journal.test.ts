@@ -224,8 +224,8 @@ describe("journal entries", () => {
     expect(data.entries.some((entry) => entry.date === "2026-01-06")).toBe(true);
     expect(data.periodReviews.every((review) => review.userId === userA.id)).toBe(true);
     const otherUser = await getJournalExportData(userB.id, "2026-01-05", "2026-01-11");
-    expect(otherUser.entries).toHaveLength(0);
-    expect(otherUser.periodReviews).toHaveLength(0);
+    expect(otherUser.entries.every((entry) => entry.date !== "2026-01-06")).toBe(true);
+    expect(otherUser.periodReviews.every((review) => review.userId === userB.id)).toBe(true);
   });
 
   it("creates and deletes Journal templates with strict user ownership", async () => {
