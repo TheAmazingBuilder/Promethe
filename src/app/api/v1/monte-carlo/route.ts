@@ -43,7 +43,14 @@ export async function POST(req: Request) {
     return NextResponse.json(payload, { status: 201 });
   } catch (error) {
     if (error instanceof MonteCarloDataError) {
-      return NextResponse.json({ error: error.code, message: error.code === "ACCOUNT_NOT_FOUND" ? "Account not found." : "At least five closed trades with a valid R-multiple are required." }, { status: error.status });
+      const message = error.code === "ACCOUNT_NOT_FOUND"
+        ? "Account not found."
+        : error.code === "MONTE_CARLO_BALANCE_INVALID"
+          ? "The selected account must have a positive initial balance."
+          : error.code === "MONTE_CARLO_OUTCOME_OUT_OF_RANGE"
+            ? "A historical R-multiple is outside the supported range of -20R to +20R. Review the trade data before simulating."
+            : "At least five closed trades with a valid R-multiple are required.";
+      return NextResponse.json({ error: error.code, message }, { status: error.status });
     }
     return apiError(error, "monte-carlo");
   }

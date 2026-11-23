@@ -474,6 +474,14 @@ export function AnalyticsView() {
           <Button
             variant="outline"
             size="sm"
+            onClick={() => navigate("/analytics/monte-carlo")}
+          >
+            <Target className="h-4 w-4" aria-hidden="true" />
+            {tAdv("tabs.monte-carlo")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => navigate("/analytics/heatmaps")}
           >
             <Grid3x3 className="h-4 w-4" aria-hidden="true" />

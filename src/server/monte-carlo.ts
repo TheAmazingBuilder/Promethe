@@ -56,16 +56,23 @@ export async function createMonteCarloRun(userId: string, input: MonteCarloInput
     select: { rMultiple: true },
     orderBy: { exitTime: "asc" },
   });
-  const outcomesR = rows.flatMap((row) => {
+  const allOutcomes = rows.flatMap((row) => {
     if (row.rMultiple == null) return [];
     const value = Number(row.rMultiple.toString());
-    return Number.isFinite(value) && Math.abs(value) <= 20 ? [value] : [];
+    return Number.isFinite(value) ? [value] : [];
   });
+  if (allOutcomes.some((value) => Math.abs(value) > 20)) {
+    throw new MonteCarloDataError("MONTE_CARLO_OUTCOME_OUT_OF_RANGE", 422);
+  }
+  const outcomesR = allOutcomes;
   if (outcomesR.length < 5) {
     throw new MonteCarloDataError("MONTE_CARLO_INSUFFICIENT_HISTORY", 422);
   }
 
   const startingBalance = Number(account.initialBalance.toString());
+  if (!Number.isFinite(startingBalance) || startingBalance <= 0) {
+    throw new MonteCarloDataError("MONTE_CARLO_BALANCE_INVALID", 422);
+  }
   const result = simulateMonteCarlo({
     outcomesR,
     startingBalance,
