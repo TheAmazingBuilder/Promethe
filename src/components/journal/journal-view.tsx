@@ -613,6 +613,56 @@ export function JournalView({ date }: { date?: string }) {
 
           <Card className="border-border/70 shadow-sm">
             <CardHeader className="pb-3">
+              <CardTitle className="text-base">Plan vs execution</CardTitle>
+              <CardDescription className="mt-1 text-xs">
+                Compare what you intended to do with the trades actually closed during this trading day.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 pt-0 md:grid-cols-2">
+              <div className="space-y-3 rounded-xl border border-border/70 bg-muted/15 p-4">
+                <Badge variant="outline">Planned</Badge>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Market bias</p>
+                  <p className="mt-1 text-sm font-medium">{form.marketBias || "No market bias recorded"}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Primary scenario</p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm">{form.primaryScenario || form.preMarketPlan || "No scenario recorded"}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Maximum planned risk</p>
+                  <p className="mt-1 text-sm font-medium">{form.maxRiskPercent ? `${form.maxRiskPercent}%` : "Not specified"}</p>
+                </div>
+              </div>
+              <div className="space-y-3 rounded-xl border border-border/70 bg-muted/15 p-4">
+                <Badge variant="outline">Actual</Badge>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Closed trades</p>
+                    <p className="mt-1 text-lg font-semibold tabular-nums">{dayActivity?.tradeCount ?? 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Win / loss</p>
+                    <p className="mt-1 text-lg font-semibold tabular-nums">{dayActivity?.wins ?? 0} / {dayActivity?.losses ?? 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Net P&amp;L</p>
+                    <Money signed value={dayActivity?.netPnl ?? null} currency={dayActivity?.currency ?? "USD"} className="mt-1 block text-lg font-semibold tabular-nums" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total R</p>
+                    <p className="mt-1 text-lg font-semibold tabular-nums">{dayActivity?.totalR ?? "—"}</p>
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs leading-relaxed text-muted-foreground md:col-span-2">
+                Use the post-market reflection below to explain whether you followed the plan, what changed, and why. Trade-level adherence remains documented in Trade Review.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/70 shadow-sm">
+            <CardHeader className="pb-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <CardTitle className="text-base">Chart gallery</CardTitle>
