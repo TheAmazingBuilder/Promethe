@@ -188,8 +188,8 @@ describe("structured trade reviews", () => {
     } }));
     const result = computeTradeReviewAnalytics(trades);
     expect(result.customQuestions).toEqual([
-      { questionId: "q-bool", question: "Waited for confirmation", type: "BOOLEAN", answered: 2, average: null, scaleDistribution: [0, 0, 0, 0, 0], booleanYes: 1, booleanNo: 1 },
       { questionId: "q-scale", question: "Setup clarity", type: "SCALE", answered: 2, average: 3, scaleDistribution: [0, 1, 0, 1, 0], booleanYes: 0, booleanNo: 0 },
+      { questionId: "q-bool", question: "Waited for confirmation", type: "BOOLEAN", answered: 2, average: null, scaleDistribution: [0, 0, 0, 0, 0], booleanYes: 1, booleanNo: 1 },
       { questionId: "q-text", question: "What did you learn?", type: "TEXT", answered: 2, average: null, scaleDistribution: [0, 0, 0, 0, 0], booleanYes: 0, booleanNo: 0 },
     ]);
     expect(JSON.stringify(result.customQuestions)).not.toContain("private answer");
