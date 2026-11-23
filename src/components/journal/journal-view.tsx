@@ -728,6 +728,8 @@ export function JournalView({ date }: { date?: string }) {
                 </div>
               )}
             </CardContent>
+          </Card>
+
           <Card className="border-border/70 shadow-sm">
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between gap-3">
@@ -758,8 +760,6 @@ export function JournalView({ date }: { date?: string }) {
                 </div>
               )}
             </CardContent>
-          </Card>
-
           </Card>
 
           <Card className="border-border/70 shadow-sm">
