@@ -108,7 +108,7 @@ export async function getMonthlyReport(
   month: string,
   accountId?: string | null
 ): Promise<MonthlyReport | null> {
-  if (!/^\\d{4}-(0[1-9]|1[0-2])$/.test(month)) return null;
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return null;
 
   const [profile, accounts] = await Promise.all([
     db.profile.findUnique({ where: { id: userId } }),
