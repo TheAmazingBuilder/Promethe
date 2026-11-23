@@ -30,6 +30,7 @@ export const VIEW_IDS = [
   "gaia",
   "rules",
   "accounts",
+  "prop-firms",
   "instruments",
   "tags",
   "templates",
@@ -122,6 +123,7 @@ const PATH_TO_VIEW: Record<string, ViewId> = {
   regles: "rules",
   accounts: "accounts",
   comptes: "accounts",
+  "prop-firms": "prop-firms",
   instruments: "instruments",
   tags: "tags",
   tools: "tools",
@@ -217,6 +219,7 @@ const KNOWN_FIRST_SEGMENTS = new Set([
   "mentor",
   "invitation",
   "broker-sync",
+  "prop-firms",
 ]);
 
 function queryFromSearchParams(
@@ -448,6 +451,8 @@ export function routeToPath(route: AppRoute): string {
       return withSearch("/rules", query);
     case "accounts":
       return withSearch("/accounts", query);
+    case "prop-firms":
+      return withSearch("/prop-firms", query);
     case "instruments":
       return withSearch("/instruments", query);
     case "tags":

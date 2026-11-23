@@ -56,6 +56,9 @@ const RulesView = dynamic(() => import("@/components/rules/rules-view").then((m)
 const AccountsView = dynamic(() => import("@/components/settings-views/accounts-view").then((m) => m.AccountsView), {
   loading: () => <ViewLoading />,
 });
+const PropFirmsView = dynamic(() => import("@/components/prop-firms/prop-firms-view").then((m) => m.PropFirmsView), {
+  loading: () => <ViewLoading />,
+});
 const InstrumentsView = dynamic(() => import("@/components/settings-views/instruments-view").then((m) => m.InstrumentsView), {
   loading: () => <ViewLoading />,
 });
@@ -337,6 +340,9 @@ export function ViewSwitch() {
       break;
     case "accounts":
       view = <AccountsView />;
+      break;
+    case "prop-firms":
+      view = <PropFirmsView />;
       break;
     case "instruments":
       view = <InstrumentsView />;
