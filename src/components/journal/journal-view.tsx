@@ -124,6 +124,45 @@ function ScorePicker({
   );
 }
 
+function ScalePicker({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number | null;
+  onChange: (value: number | null) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-border/70 bg-background/70 p-3.5">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <span className="text-sm font-medium">{label}</span>
+        <span className="text-xs tabular-nums text-muted-foreground">{value == null ? "Not rated" : `${value}/5`}</span>
+      </div>
+      <div className="grid grid-cols-5 gap-1.5" role="group" aria-label={label}>
+        {SCORES.map((score) => (
+          <button
+            key={score}
+            type="button"
+            aria-label={`${label}: ${score} of 5`}
+            aria-pressed={value === score}
+            onClick={() => onChange(value === score ? null : score)}
+            className={[
+              "h-9 rounded-lg border text-sm font-semibold tabular-nums transition-colors",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              value === score
+                ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                : "border-border/70 bg-card text-muted-foreground hover:border-primary/50 hover:bg-muted hover:text-foreground",
+            ].join(" ")}
+          >
+            {score}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SectionHeading({
   icon: Icon,
   eyebrow,
@@ -181,11 +220,20 @@ export function JournalView({ date }: { date?: string }) {
     date: "",
     preMarketPlan: "",
     postMarketReview: "",
+    keyLevels: "",
+    primaryScenario: "",
+    alternateScenario: "",
+    invalidationConditions: "",
+    maxRiskPercent: "",
     mood: null,
     sleepQuality: null,
     disciplineScore: null,
+    stressLevel: null,
+    energyLevel: null,
+    focusLevel: null,
     keyLesson: "",
     marketBias: "",
+    nextSessionCommitment: "",
   });
   const [hydratedFor, setHydratedFor] = React.useState<string | null>(null);
 
@@ -195,11 +243,20 @@ export function JournalView({ date }: { date?: string }) {
       date: day,
       preMarketPlan: entry?.preMarketPlan ?? "",
       postMarketReview: entry?.postMarketReview ?? "",
+      keyLevels: entry?.keyLevels ?? "",
+      primaryScenario: entry?.primaryScenario ?? "",
+      alternateScenario: entry?.alternateScenario ?? "",
+      invalidationConditions: entry?.invalidationConditions ?? "",
+      maxRiskPercent: entry?.maxRiskPercent ?? "",
       mood: entry?.mood ?? null,
       sleepQuality: entry?.sleepQuality ?? null,
       disciplineScore: entry?.disciplineScore ?? null,
+      stressLevel: entry?.stressLevel ?? null,
+      energyLevel: entry?.energyLevel ?? null,
+      focusLevel: entry?.focusLevel ?? null,
       keyLesson: entry?.keyLesson ?? "",
       marketBias: entry?.marketBias ?? "",
+      nextSessionCommitment: entry?.nextSessionCommitment ?? "",
     });
     setHydratedFor(day);
   }, [day, entry, isLoading, hydratedFor]);
@@ -216,9 +273,18 @@ export function JournalView({ date }: { date?: string }) {
           form.postMarketReview ||
           form.keyLesson ||
           form.marketBias ||
+          form.keyLevels ||
+          form.primaryScenario ||
+          form.alternateScenario ||
+          form.invalidationConditions ||
+          form.maxRiskPercent ||
+          form.nextSessionCommitment ||
           form.mood != null ||
           form.sleepQuality != null ||
-          form.disciplineScore != null,
+          form.disciplineScore != null ||
+          form.stressLevel != null ||
+          form.energyLevel != null ||
+          form.focusLevel != null,
       );
     }
     return (
@@ -226,9 +292,18 @@ export function JournalView({ date }: { date?: string }) {
       (form.postMarketReview ?? "") !== (entry.postMarketReview ?? "") ||
       (form.keyLesson ?? "") !== (entry.keyLesson ?? "") ||
       (form.marketBias ?? "") !== (entry.marketBias ?? "") ||
+      (form.keyLevels ?? "") !== (entry.keyLevels ?? "") ||
+      (form.primaryScenario ?? "") !== (entry.primaryScenario ?? "") ||
+      (form.alternateScenario ?? "") !== (entry.alternateScenario ?? "") ||
+      (form.invalidationConditions ?? "") !== (entry.invalidationConditions ?? "") ||
+      (form.maxRiskPercent ?? "") !== (entry.maxRiskPercent ?? "") ||
+      (form.nextSessionCommitment ?? "") !== (entry.nextSessionCommitment ?? "") ||
       form.mood !== entry.mood ||
       form.sleepQuality !== entry.sleepQuality ||
-      form.disciplineScore !== entry.disciplineScore
+      form.disciplineScore !== entry.disciplineScore ||
+      form.stressLevel !== entry.stressLevel ||
+      form.energyLevel !== entry.energyLevel ||
+      form.focusLevel !== entry.focusLevel
     );
   }, [form, entry]);
 
@@ -257,11 +332,20 @@ export function JournalView({ date }: { date?: string }) {
         date: day,
         preMarketPlan: "",
         postMarketReview: "",
+        keyLevels: "",
+        primaryScenario: "",
+        alternateScenario: "",
+        invalidationConditions: "",
+        maxRiskPercent: "",
         mood: null,
         sleepQuality: null,
         disciplineScore: null,
+        stressLevel: null,
+        energyLevel: null,
+        focusLevel: null,
         keyLesson: "",
         marketBias: "",
+        nextSessionCommitment: "",
       });
       toast({ title: t("deleted") });
     } catch (error) {
@@ -280,12 +364,15 @@ export function JournalView({ date }: { date?: string }) {
   const isToday = day === today;
   const completedSections = [
     Boolean(form.preMarketPlan?.trim()),
-    Boolean(form.postMarketReview?.trim()),
+    Boolean(form.keyLevels?.trim() || form.primaryScenario?.trim() || form.alternateScenario?.trim()),
+    form.maxRiskPercent != null && form.maxRiskPercent !== "",
     form.mood != null && form.sleepQuality != null && form.disciplineScore != null,
-    Boolean(form.marketBias?.trim()),
+    form.stressLevel != null && form.energyLevel != null && form.focusLevel != null,
+    Boolean(form.postMarketReview?.trim()),
     Boolean(form.keyLesson?.trim()),
+    Boolean(form.nextSessionCommitment?.trim()),
   ].filter(Boolean).length;
-  const completion = Math.round((completedSections / 5) * 100);
+  const completion = Math.round((completedSections / 8) * 100);
 
   return (
     <section
@@ -491,6 +578,39 @@ export function JournalView({ date }: { date?: string }) {
                 kind="discipline"
                 icon={Target}
               />
+              <ScalePicker label="Stress" value={form.stressLevel ?? null} onChange={(value) => set("stressLevel", value)} />
+              <ScalePicker label="Energy" value={form.energyLevel ?? null} onChange={(value) => set("energyLevel", value)} />
+              <ScalePicker label="Focus" value={form.focusLevel ?? null} onChange={(value) => set("focusLevel", value)} />
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/70 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Execution plan</CardTitle>
+              <CardDescription className="text-xs">Turn your market view into scenarios, invalidation rules and a defined risk limit.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 pt-0 md:grid-cols-2">
+              <div className="space-y-2">
+                <label htmlFor="journal-key-levels" className="text-sm font-medium">Key levels</label>
+                <Textarea id="journal-key-levels" value={form.keyLevels ?? ""} onChange={(event) => set("keyLevels", event.target.value || null)} placeholder="Support, resistance, liquidity zones..." rows={3} maxLength={4000} />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="journal-primary-scenario" className="text-sm font-medium">Primary scenario</label>
+                <Textarea id="journal-primary-scenario" value={form.primaryScenario ?? ""} onChange={(event) => set("primaryScenario", event.target.value || null)} placeholder="What needs to happen for your preferred setup?" rows={3} maxLength={4000} />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="journal-alternate-scenario" className="text-sm font-medium">Alternative scenario</label>
+                <Textarea id="journal-alternate-scenario" value={form.alternateScenario ?? ""} onChange={(event) => set("alternateScenario", event.target.value || null)} placeholder="What is your plan if the main scenario fails?" rows={3} maxLength={4000} />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="journal-invalidation" className="text-sm font-medium">Invalidation conditions</label>
+                <Textarea id="journal-invalidation" value={form.invalidationConditions ?? ""} onChange={(event) => set("invalidationConditions", event.target.value || null)} placeholder="What would make you stop looking for this setup?" rows={3} maxLength={4000} />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <label htmlFor="journal-max-risk" className="text-sm font-medium">Maximum planned risk (%)</label>
+                <Input id="journal-max-risk" inputMode="decimal" value={form.maxRiskPercent ?? ""} onChange={(event) => set("maxRiskPercent", event.target.value || null)} placeholder="e.g. 1" maxLength={6} className="h-10 max-w-40" />
+                <p className="text-xs text-muted-foreground">Set a daily ceiling before trading. This does not change account or trade risk settings.</p>
+              </div>
             </CardContent>
           </Card>
 
@@ -572,6 +692,10 @@ export function JournalView({ date }: { date?: string }) {
                   maxLength={2000}
                   className="h-10 border-border/70 bg-muted/20 focus-visible:bg-background"
                 />
+                <div className="mt-4 space-y-2">
+                  <label htmlFor="journal-next-commitment" className="text-sm font-medium">Next-session commitment</label>
+                  <Textarea id="journal-next-commitment" value={form.nextSessionCommitment ?? ""} onChange={(event) => set("nextSessionCommitment", event.target.value || null)} placeholder="One specific behavior you will apply next session..." rows={3} maxLength={2000} />
+                </div>
               </CardContent>
             </Card>
           </div>

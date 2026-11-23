@@ -732,11 +732,21 @@ model JournalEntry {
   date             String
   preMarketPlan    String?  @map("pre_market_plan") // markdown
   postMarketReview String?  @map("post_market_review") // markdown
-  mood             Int? // 1-5
-  sleepQuality     Int?     @map("sleep_quality") // 1-5
-  disciplineScore  Int?     @map("discipline_score") // 1-5
-  keyLesson        String?  @map("key_lesson")
-  marketBias       String?  @map("market_bias")
+  // Structured daily preparation (nullable for backwards compatibility).
+  keyLevels              String?  @map("key_levels")
+  primaryScenario        String?  @map("primary_scenario")
+  alternateScenario      String?  @map("alternate_scenario")
+  invalidationConditions String?  @map("invalidation_conditions")
+  maxRiskPercent         String?  @map("max_risk_percent")
+  mood                   Int? // 1-5
+  sleepQuality           Int?     @map("sleep_quality") // 1-5
+  disciplineScore        Int?     @map("discipline_score") // 1-5
+  stressLevel            Int?     @map("stress_level") // 1-5
+  energyLevel            Int?     @map("energy_level") // 1-5
+  focusLevel             Int?     @map("focus_level") // 1-5
+  keyLesson              String?  @map("key_lesson")
+  marketBias             String?  @map("market_bias")
+  nextSessionCommitment  String?  @map("next_session_commitment")
   // ── v2.5 Module 4 — soft delete (trash) + global search ──
   deletedAt  DateTime? @map("deleted_at")
   deletedBy  String?   @map("deleted_by")

@@ -18,11 +18,20 @@ export const journalEntrySchema = z.object({
   date: isoDay,
   preMarketPlan: z.string().max(20000, "tooLong").nullish(),
   postMarketReview: z.string().max(20000, "tooLong").nullish(),
+  keyLevels: z.string().max(4000, "tooLong").nullish(),
+  primaryScenario: z.string().max(4000, "tooLong").nullish(),
+  alternateScenario: z.string().max(4000, "tooLong").nullish(),
+  invalidationConditions: z.string().max(4000, "tooLong").nullish(),
+  maxRiskPercent: z.string().trim().regex(/^(?:[0-9]{1,2}(?:\\.[0-9]{1,2})?|100(?:\\.0{1,2})?)$/, "invalidRisk").refine((value) => Number(value) > 0, "invalidRisk").nullish(),
   mood: score.nullish(),
   sleepQuality: score.nullish(),
   disciplineScore: score.nullish(),
+  stressLevel: score.nullish(),
+  energyLevel: score.nullish(),
+  focusLevel: score.nullish(),
   keyLesson: z.string().max(2000, "tooLong").nullish(),
   marketBias: z.string().max(500, "tooLong").nullish(),
+  nextSessionCommitment: z.string().max(2000, "tooLong").nullish(),
 });
 
 export type JournalEntryInput = z.infer<typeof journalEntrySchema>;

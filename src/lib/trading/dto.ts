@@ -892,11 +892,20 @@ export interface JournalEntryDTO {
   date: string;
   preMarketPlan: string | null;
   postMarketReview: string | null;
+  keyLevels: string | null;
+  primaryScenario: string | null;
+  alternateScenario: string | null;
+  invalidationConditions: string | null;
+  maxRiskPercent: string | null;
   mood: number | null;
   sleepQuality: number | null;
   disciplineScore: number | null;
+  stressLevel: number | null;
+  energyLevel: number | null;
+  focusLevel: number | null;
   keyLesson: string | null;
   marketBias: string | null;
+  nextSessionCommitment: string | null;
   updatedAt: string;
 }
 

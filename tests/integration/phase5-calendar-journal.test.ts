@@ -151,19 +151,37 @@ describe("journal entries", () => {
     const created = await upsertJournalEntry(userA.id, {
       date: "2026-01-06",
       preMarketPlan: "Plan v1",
+      keyLevels: "2,350 resistance",
+      primaryScenario: "Wait for rejection",
+      maxRiskPercent: "1.5",
+      stressLevel: 2,
+      energyLevel: 4,
+      focusLevel: 5,
+      nextSessionCommitment: "Wait for confirmation",
       mood: 3,
     });
     expect(created.preMarketPlan).toBe("Plan v1");
+    expect(created.keyLevels).toBe("2,350 resistance");
+    expect(created.primaryScenario).toBe("Wait for rejection");
+    expect(created.maxRiskPercent).toBe("1.5");
+    expect(created.stressLevel).toBe(2);
+    expect(created.energyLevel).toBe(4);
+    expect(created.focusLevel).toBe(5);
+    expect(created.nextSessionCommitment).toBe("Wait for confirmation");
     expect(created.mood).toBe(3);
 
     const updated = await upsertJournalEntry(userA.id, {
       date: "2026-01-06",
       preMarketPlan: "Plan v2",
+      keyLevels: "2,360 resistance",
+      stressLevel: 1,
       mood: 5,
       keyLesson: "Patience",
     });
     expect(updated.id).toBe(created.id);
     expect(updated.preMarketPlan).toBe("Plan v2");
+    expect(updated.keyLevels).toBe("2,360 resistance");
+    expect(updated.stressLevel).toBe(1);
     expect(updated.keyLesson).toBe("Patience");
 
     const rows = await db.journalEntry.findMany({
