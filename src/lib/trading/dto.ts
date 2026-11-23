@@ -103,8 +103,25 @@ export interface ExecutionDTO {
   pnl: string | null;
 }
 
+export interface TradeReviewAnswerDTO {
+  questionId: string;
+  question: string;
+  type: "SCALE" | "BOOLEAN" | "TEXT";
+  answer: number | boolean | string;
+}
+
+export interface ReviewQuestionTemplateDTO {
+  id: string;
+  question: string;
+  type: "SCALE" | "BOOLEAN" | "TEXT";
+  order: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export interface TradeReviewDTO {
   id: string;
+  customAnswers?: TradeReviewAnswerDTO[];
   playbookMatch: string | null;
   followedPlan: boolean | null;
   planAdherenceScore: number | null;

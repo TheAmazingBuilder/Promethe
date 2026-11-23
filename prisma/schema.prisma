@@ -959,6 +959,8 @@ model TradeReview {
   whatToImprove         String?  @map("what_to_improve")
   /// JSON string[] of tag ids (mistake tags)
   mistakeTagIds         String?  @map("mistake_tag_ids")
+  /// JSON snapshots of custom review answers.
+  customAnswers         String?  @map("custom_answers")
   reviewedAt            DateTime @default(now()) @map("reviewed_at")
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")

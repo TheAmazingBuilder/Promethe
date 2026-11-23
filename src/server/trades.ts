@@ -112,7 +112,7 @@ type TradeFullRow = Prisma.TradeGetPayload<{
     tags: { include: { tag: true } };
     screenshots: true;
     executions: { orderBy: { time: "asc" } };
-    review: { select: { id: true, playbookMatch: true, followedPlan: true, planAdherenceScore: true, executionQuality: true, entryQuality: true, exitQuality: true, riskManagementScore: true, emotionalControlScore: true, wouldTakeAgain: true, mainLesson: true, whatWentWell: true, whatToImprove: true, mistakeTagIds: true, reviewedAt: true, createdAt: true, updatedAt: true } };
+    review: { select: { id: true, playbookMatch: true, followedPlan: true, planAdherenceScore: true, executionQuality: true, entryQuality: true, exitQuality: true, riskManagementScore: true, emotionalControlScore: true, wouldTakeAgain: true, mainLesson: true, whatWentWell: true, whatToImprove: true, mistakeTagIds: true, customAnswers: true, reviewedAt: true, createdAt: true, updatedAt: true } };
     // v2.5 M2 — price chart overlay sources
     modifications: { orderBy: { time: "asc" } };
     eventLinks: { include: { event: true } };
@@ -279,6 +279,7 @@ export function toTradeDetail(t: TradeDetailRow): TradeDetailDTO {
       whatWentWell: t.review.whatWentWell,
       whatToImprove: t.review.whatToImprove,
       mistakeTagIds: parseReviewTagIds(t.review.mistakeTagIds),
+      customAnswers: parseCustomReviewAnswers(t.review.customAnswers),
       reviewedAt: t.review.reviewedAt.toISOString(),
       updatedAt: t.review.updatedAt.toISOString(),
     } : null,
@@ -299,7 +300,7 @@ export function toTradeDetail(t: TradeDetailRow): TradeDetailDTO {
       commission: e.commission.toString(),
       pnl: s(e.pnl),
     })),
-    hasReview: Boolean(t.review && (t.review.followedPlan !== null || t.review.planAdherenceScore !== null || t.review.executionQuality !== null || t.review.entryQuality !== null || t.review.exitQuality !== null || t.review.riskManagementScore !== null || t.review.emotionalControlScore !== null || t.review.wouldTakeAgain !== null || t.review.mainLesson || t.review.whatWentWell || t.review.whatToImprove || t.review.mistakeTagIds)),
+    hasReview: Boolean(t.review && (t.review.followedPlan !== null || t.review.planAdherenceScore !== null || t.review.executionQuality !== null || t.review.entryQuality !== null || t.review.exitQuality !== null || t.review.riskManagementScore !== null || t.review.emotionalControlScore !== null || t.review.wouldTakeAgain !== null || t.review.mainLesson || t.review.whatWentWell || t.review.whatToImprove || t.review.mistakeTagIds || (t.review.customAnswers && t.review.customAnswers !== "[]"))),
     // v2.5 M2 — price chart overlay sources (defensive: call sites with a
     // lighter include still work)
     modifications: (t.modifications ?? []).map((m) => ({
@@ -1413,6 +1414,7 @@ export async function deleteTrade(userId: string, id: string): Promise<boolean> 
 // ── Structured post-trade review ──────────────────────────────────────────────
 
 export type TradeReviewInput = {
+  customAnswers?: Array<{ questionId: string; answer: string | number | boolean }>;
   playbookMatch?: "MATCHED" | "PARTIAL" | "OFF_PLAYBOOK" | null;
   followedPlan?: boolean | null;
   planAdherenceScore?: number | null;
@@ -1427,6 +1429,19 @@ export type TradeReviewInput = {
   whatToImprove?: string | null;
   mistakeTagIds?: string[];
 };
+
+function parseCustomReviewAnswers(raw: string | null): Array<{ questionId: string; question: string; type: "SCALE" | "BOOLEAN" | "TEXT"; answer: string | number | boolean }> {
+  if (!raw) return [];
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (!Array.isArray(value)) return [];
+    return value.filter((item): item is { questionId: string; question: string; type: "SCALE" | "BOOLEAN" | "TEXT"; answer: string | number | boolean } => {
+      if (typeof item !== "object" || item === null) return false;
+      const entry = item as Record<string, unknown>;
+      return typeof entry.questionId === "string" && typeof entry.question === "string" && ["SCALE", "BOOLEAN", "TEXT"].includes(String(entry.type)) && (typeof entry.answer === "string" || typeof entry.answer === "number" || typeof entry.answer === "boolean");
+    });
+  } catch { return []; }
+}
 
 export async function saveTradeReview(
   userId: string,
@@ -1457,6 +1472,24 @@ export async function saveTradeReview(
   };
 
   return db.$transaction(async (tx) => {
+    let customAnswersJson: string | undefined;
+    if (input.customAnswers !== undefined) {
+      const previous = await tx.tradeReview.findUnique({ where: { tradeId }, select: { customAnswers: true } });
+      const previousSnapshots = parseCustomReviewAnswers(previous?.customAnswers ?? null);
+      const requestedIds = input.customAnswers.map((answer) => answer.questionId);
+      const templates = requestedIds.length ? await tx.reviewQuestionTemplate.findMany({ where: { userId, id: { in: requestedIds }, isActive: true } }) : [];
+      if (templates.length !== new Set(requestedIds).size) throw new TradeValidationError("INVALID_REVIEW_QUESTION");
+      const activeIds = new Set(templates.map((template) => template.id));
+      const snapshots = input.customAnswers.map((entry) => {
+        const template = templates.find((item) => item.id === entry.questionId);
+        if (!template) throw new TradeValidationError("INVALID_REVIEW_QUESTION");
+        const valid = template.type === "SCALE" ? typeof entry.answer === "number" && Number.isInteger(entry.answer) && entry.answer >= 1 && entry.answer <= 5 : template.type === "BOOLEAN" ? typeof entry.answer === "boolean" : template.type === "TEXT" && typeof entry.answer === "string" && entry.answer.trim().length > 0 && entry.answer.length <= 2000;
+        if (!valid) throw new TradeValidationError("INVALID_REVIEW_ANSWER");
+        return { questionId: template.id, question: template.question, type: template.type as "SCALE" | "BOOLEAN" | "TEXT", answer: entry.answer };
+      });
+      const archivedSnapshots = previousSnapshots.filter((snapshot) => !activeIds.has(snapshot.questionId));
+      customAnswersJson = JSON.stringify([...archivedSnapshots, ...snapshots]);
+    }
     const review = await tx.tradeReview.upsert({
       where: { tradeId },
       create: {
@@ -1475,8 +1508,9 @@ export async function saveTradeReview(
         whatWentWell: input.whatWentWell ?? null,
         whatToImprove: input.whatToImprove ?? null,
         mistakeTagIds: input.mistakeTagIds !== undefined ? JSON.stringify(mistakeTagIds) : null,
+        customAnswers: customAnswersJson ?? null,
       },
-      update: data,
+      update: { ...data, ...(customAnswersJson !== undefined ? { customAnswers: customAnswersJson } : {}) },
     });
     await tx.trade.update({
       where: { id: tradeId },

@@ -14,7 +14,10 @@ export const tradeReviewSchema = z.object({
   whatWentWell: z.string().trim().max(4000).nullish(),
   whatToImprove: z.string().trim().max(4000).nullish(),
   mistakeTagIds: z.array(z.string().min(1).max(64)).max(20).optional(),
+  customAnswers: z.array(z.object({ questionId: z.string().min(1).max(64), answer: z.union([z.string().trim().min(1).max(2000), z.number().int().min(1).max(5), z.boolean()]) })).max(20).optional(),
 }).superRefine((value, ctx) => {
+  const answerIds = value.customAnswers?.map((answer) => answer.questionId) ?? [];
+  if (new Set(answerIds).size !== answerIds.length) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["customAnswers"], message: "A question can only be answered once." });
   const hasStructuredAnswer = [
     value.followedPlan,
     value.planAdherenceScore,
@@ -27,7 +30,7 @@ export const tradeReviewSchema = z.object({
     value.mainLesson,
     value.whatWentWell,
     value.whatToImprove,
-  ].some((answer) => answer !== undefined && answer !== null && answer !== "");
+  ].some((answer) => answer !== undefined && answer !== null && answer !== "") || (value.customAnswers?.length ?? 0) > 0;
   if (!hasStructuredAnswer) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
