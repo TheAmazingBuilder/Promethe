@@ -40,6 +40,8 @@ const CODE_MESSAGES: Record<string, string> = {
   UNSUPPORTED_TYPE: "Unsupported file type (PNG, JPEG or WebP).",
   INVALID_IMAGE: "The uploaded file is not a valid PNG, JPEG or WebP image.",
   FILE_TOO_LARGE: "File too large (max 5 MB).",
+  INVALID_SCREENSHOT_LABEL: "Choose a valid screenshot stage (Before, Entry, Exit or After).",
+  SCREENSHOT_CAPTION_TOO_LONG: "Screenshot captions cannot exceed 500 characters.",
   STORAGE_UNAVAILABLE: "Screenshot storage is not configured or temporarily unavailable.",
   TRADE_NOT_FOUND: "Screenshot attached to a missing trade.",
   INVALID_PERIOD: "Invalid report period.",
