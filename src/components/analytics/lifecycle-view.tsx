@@ -127,7 +127,7 @@ export function LifecycleView() {
               <CardHeader>
                 <CardTitle className="text-base">{t("maeTitle")}</CardTitle>
                 <CardDescription>
-                  {tRoot("sample", { count: lifecycle.withMfe })}
+                  {tRoot("sample", { count: lifecycle.withMae })}
                 </CardDescription>
               </CardHeader>
               <CardContent>

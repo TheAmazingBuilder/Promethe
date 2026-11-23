@@ -129,8 +129,10 @@ export interface LifecycleBucket {
 
 export interface LifecycleResult {
   total: number;
-  /** Trades with MFE/MAE data (mfePrice + SL recorded). */
+  /** Trades with MFE data. */
   withMfe: number;
+  /** Trades with MAE data. */
+  withMae: number;
   avgMfeR: number | null;
   avgMaeR: number | null;
   medianMfeR: number | null;
@@ -219,16 +221,16 @@ export function computeLifecycle(trades: AdvancedTrade[]): LifecycleResult {
     };
   });
   const withMfe = rows.filter((r) => r.mfeR != null);
+  const withMae = rows.filter((r) => r.maeR != null);
   const mfeValues = withMfe.map((r) => r.mfeR as number);
-  const maeValues = withMfe
-    .map((r) => r.maeR)
-    .filter((v): v is number => v != null);
+  const maeValues = withMae.map((r) => r.maeR as number);
   const almostTp = rows.filter((r) => r.almostTp);
   const withTime = rows.filter((r) => r.timeInProfitPct != null);
   const timePcts = withTime.map((r) => r.timeInProfitPct as number);
   return {
     total: rows.length,
     withMfe: withMfe.length,
+    withMae: withMae.length,
     avgMfeR: round(mean(mfeValues), 2),
     avgMaeR: round(mean(maeValues), 2),
     medianMfeR: round(median(mfeValues), 2),

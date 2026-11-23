@@ -150,6 +150,20 @@ describe("lifecycle", () => {
     expect(res.avgMfeR).toBeCloseTo(1.2, 5);
     expect(res.almostTpCount).toBe(1);
   });
+
+  it("uses the MAE sample independently when some trades have no MAE", () => {
+    const trades = [
+      makeTrade({ mfeR: "2", maeR: "0.5" }),
+      makeTrade({ mfeR: "1", maeR: null }),
+      makeTrade({ mfeR: null, maeR: "0.25" }),
+    ];
+    const res = computeLifecycle(trades);
+    expect(res.withMfe).toBe(2);
+    expect(res.withMae).toBe(2);
+    expect(res.avgMfeR).toBeCloseTo(1.5, 5);
+    expect(res.avgMaeR).toBeCloseTo(0.375, 5);
+    expect(res.maeBuckets.reduce((sum, bucket) => sum + bucket.count, 0)).toBe(2);
+  });
 });
 
 describe("exits", () => {
