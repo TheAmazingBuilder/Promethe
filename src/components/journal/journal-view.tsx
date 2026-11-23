@@ -41,6 +41,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
   useCalendar,
+  useCalendarDay,
   useDeleteJournalEntry,
   useJournalEntry,
   useRecentJournal,
@@ -213,6 +214,12 @@ export function JournalView({ date }: { date?: string }) {
   );
   const { data: recentEntries = [], isLoading: recentLoading } = useRecentJournal();
   const dayPnl = calendarData?.days?.[day] ?? null;
+  const {
+    data: dayActivity,
+    isLoading: tradesLoading,
+    isError: tradesError,
+    refetch: refetchTrades,
+  } = useCalendarDay(day);
   const save = useSaveJournalEntry();
   const del = useDeleteJournalEntry();
 
@@ -536,6 +543,70 @@ export function JournalView({ date }: { date?: string }) {
                   <p className="mt-0.5 text-[10px] text-muted-foreground">Total R multiple</p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/70 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">Trading activity</CardTitle>
+                  <CardDescription className="mt-1 text-xs">
+                    Closed trades attributed to this trading day. Open positions remain in the Trades workspace.
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="rounded-full">
+                  {dayActivity?.tradeCount ?? dayPnl?.tradeCount ?? 0} trades
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {tradesLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-14 w-full" />
+                  <Skeleton className="h-14 w-full" />
+                </div>
+              ) : tradesError ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed p-4">
+                  <p className="text-sm text-muted-foreground">Trading activity could not be loaded.</p>
+                  <Button variant="outline" size="sm" onClick={() => void refetchTrades()}>Retry</Button>
+                </div>
+              ) : (dayActivity?.trades.length ?? 0) === 0 ? (
+                <p className="rounded-lg border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
+                  No closed trades recorded for this trading day.
+                </p>
+              ) : (
+                <div className="divide-y divide-border/60">
+                  {dayActivity?.trades.map((trade) => (
+                    <button
+                      key={trade.id}
+                      type="button"
+                      onClick={() => navigate(`/trades/${trade.id}`)}
+                      className="flex w-full flex-wrap items-center justify-between gap-3 rounded-lg px-2.5 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span className="flex min-w-0 flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold">{trade.symbol}</span>
+                        <Badge variant="outline" className={trade.direction === "LONG" ? "border-gain/30 text-gain" : "border-loss/30 text-loss"}>
+                          {trade.direction === "LONG" ? "BUY" : "SELL"}
+                        </Badge>
+                        <span className="max-w-[220px] truncate text-xs text-muted-foreground">
+                          {trade.strategyName ?? trade.setupType ?? "No strategy"}
+                        </span>
+                        <Badge variant={trade.reviewStatus === "REVIEWED" ? "secondary" : "outline"}>
+                          {trade.reviewStatus === "REVIEWED" ? "Reviewed" : "Review pending"}
+                        </Badge>
+                      </span>
+                      <span className="flex items-center gap-3">
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {trade.rMultiple != null ? `${toD(trade.rMultiple).toFixed(2)}R` : "—"}
+                        </span>
+                        <Money signed value={trade.netPnl} currency={trade.pnlCurrency} className={`text-sm font-semibold tabular-nums ${pnlClass(trade.netPnl)}`} />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
