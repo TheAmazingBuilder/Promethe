@@ -428,6 +428,7 @@ export interface TraderScore {
     sqn: number | null;
     profitableMonths: number;
     months: number;
+    /** Standard deviation of monthly mean R, across months with valid R data. */
     monthlyRStd: number | null;
     riskCompliantRate: number | null;
     maxDrawdown: string | null;

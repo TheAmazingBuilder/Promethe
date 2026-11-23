@@ -172,7 +172,7 @@ export function QualityView() {
               label={t("detailMonthlyStd")}
               value={
                 score.details.monthlyRStd != null
-                  ? fmtSigned(String(score.details.monthlyRStd))
+                  ? fmtNum(String(score.details.monthlyRStd), 2)
                   : "-"
               }
             />
