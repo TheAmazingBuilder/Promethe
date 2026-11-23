@@ -293,6 +293,22 @@ describe("anomalies", () => {
 });
 
 describe("trader score", () => {
+  it("measures monthly consistency in average R, not account-currency P&L", () => {
+    const makeSet = (scale: number) => [
+      makeTrade({ localDate: "2026-01-05", rMultiple: "1", netPnl: String(100 * scale) }),
+      makeTrade({ localDate: "2026-01-15", rMultiple: "3", netPnl: String(300 * scale) }),
+      makeTrade({ localDate: "2026-02-05", rMultiple: "0", netPnl: String(50 * scale), resultType: "BREAKEVEN" }),
+      makeTrade({ localDate: "2026-02-15", rMultiple: "2", netPnl: String(200 * scale) }),
+    ];
+    const scoreFor = (trades: AdvancedTrade[]) => {
+      const stats = computeTradeStats(trades);
+      return computeTraderScore(trades, stats, computeAdvancedStats(trades, stats));
+    };
+    const normal = scoreFor(makeSet(1));
+    const scaled = scoreFor(makeSet(100));
+    expect(normal.details.monthlyRStd).not.toBeNull();
+    expect(scaled.details.monthlyRStd).toBe(normal.details.monthlyRStd);
+  });
   it("stays within 0-100 and rewards a clean, profitable run", () => {
     const trades = Array.from({ length: 20 }, (_, i) =>
       makeTrade({

@@ -515,7 +515,7 @@
         "detailExpectancy": "Expectancy",
         "detailSqn": "SQN",
         "detailMonths": "Profitable months",
-        "detailMonthlyStd": "Monthly P&L spread",
+        "detailMonthlyStd": "Monthly average R spread",
         "detailRiskCompliant": "Trades within 2% risk",
         "detailDrawdown": "Max drawdown",
         "scoreNote": "Each component is scored out of 25. Risk counts as compliant when risk per trade is 2% or less."

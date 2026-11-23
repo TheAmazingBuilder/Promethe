@@ -489,12 +489,26 @@ export function computeTraderScore(
   const months = [...monthly.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   const profitableMonths = months.filter(([, pnl]) => pnl.gt(0)).length;
   const monthlyRs = months.map(([, pnl]) => pnl.toNumber());
-  const monthlyRStd = stdDev(monthlyRs);
+  const monthlyRByMonth = new Map<string, { sum: Decimal; count: number }>();
+  for (const trade of ordered) {
+    if (trade.rMultiple == null) continue;
+    const month = (trade.localDate ?? trade.exitTime.slice(0, 10)).slice(0, 7);
+    const current = monthlyRByMonth.get(month) ?? { sum: D0, count: 0 };
+    current.sum = current.sum.plus(toD(trade.rMultiple));
+    current.count += 1;
+    monthlyRByMonth.set(month, current);
+  }
+  // Compare monthly average R, not monetary P&L, so account size/currency
+  // cannot distort the consistency component.
+  const monthlyRAverages = [...monthlyRByMonth.values()].map((v) =>
+    v.sum.div(v.count).toNumber()
+  );
+  const monthlyRStd = stdDev(monthlyRAverages);
   const consistency =
     (months.length === 0
       ? 0
       : 12.5 * (profitableMonths / months.length)) +
-    (months.length < 2
+    (monthlyRAverages.length < 2
       ? 6.25
       : 12.5 * clamp01(1 - (monthlyRStd ?? 0) / 2));
 
