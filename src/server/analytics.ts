@@ -1,6 +1,6 @@
 /**
  * Analytics aggregation (v2 Phase 4) — powers /analytics: KPIs + advanced
- * stats (SQN, Sharpe/Sortino), equity curve, R distribution, breakdowns and
+ * stats (SQN, recovery factor, payoff), equity curve, R distribution, breakdowns and
  * rule-based insights over CLOSED non-draft trades.
  *
  * Timezone: weekday/hour/localDate are computed here in the user's profile

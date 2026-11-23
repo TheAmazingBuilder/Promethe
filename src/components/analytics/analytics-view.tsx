@@ -382,7 +382,6 @@ export function AnalyticsView() {
         ? t("kpiWinsLosses", { wins: s.wins, losses: s.losses, be: s.breakevens })
         : null,
       sharpe: advanced?.sharpe != null ? fmtNum(advanced.sharpe) : "-",
-      sortino: advanced?.sortino != null ? fmtNum(advanced.sortino) : "-",
       recovery:
         advanced?.recoveryFactor != null ? fmtNum(advanced.recoveryFactor) : "-",
       payoff: advanced?.payoffRatio != null ? fmtNum(advanced.payoffRatio) : "-",
@@ -602,7 +601,7 @@ export function AnalyticsView() {
               <KpiCard
                 label={t("kpiWinRate")}
                 value={kpi.winRate}
-                sub={t("kpiTrades", { count: stats.tradeCount })}
+                sub={t("winRateHint", { decided: stats.wins + stats.losses, total: stats.tradeCount })}
               />
               <KpiCard
                 label={t("kpiProfitFactor")}

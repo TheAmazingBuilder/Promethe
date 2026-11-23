@@ -207,6 +207,7 @@
     "kpisAria": "Indicators",
     "kpiNetPnl": "Net P&L",
     "kpiWinRate": "Win rate",
+    "winRateHint": "{decided} decisive trades out of {total}; breakevens are excluded.",
     "kpiProfitFactor": "Profit factor",
     "kpiExpectancy": "Expectancy (R)",
     "kpiAvgR": "Average R",

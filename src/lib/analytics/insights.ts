@@ -1,8 +1,8 @@
 /**
  * TradeJournal — analytics insights engine (v2 Phase 4).
  *
- * Pure computation over CLOSED trades: advanced KPIs (SQN, Sharpe/Sortino,
- * recovery factor, payoff), R-multiple distribution, multi-dimension
+ * Pure computation over CLOSED trades: advanced KPIs (SQN, recovery factor,
+ * payoff), R-multiple distribution, multi-dimension
  * breakdowns and rule-based insights (« ce qui marche / ce qui coûte »).
  * Client-safe (no Prisma), money and R multiples through decimal.js.
  *
