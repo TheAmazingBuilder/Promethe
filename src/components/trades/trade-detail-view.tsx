@@ -17,6 +17,7 @@ import {
   Trash2,
   X,
   Save,
+  Shapes,
   XCircle,
 } from "lucide-react";
 import {
@@ -103,6 +104,7 @@ import {
   useCreateGaiaNote,
 } from "@/components/gaia/gaia-shared";
 import { ExitPlanCompare } from "@/components/tools/exit-plan-compare";
+import { ScreenshotAnnotationEditor } from "@/components/trades/screenshot-annotation-editor";
 
 import {
   DirectionBadge,
@@ -209,6 +211,12 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
   const [manualPnl, setManualPnl] = React.useState("");
   const [uploading, setUploading] = React.useState(0);
   const [editingScreenshot, setEditingScreenshot] = React.useState<string | null>(null);
+  const [annotationScreenshot, setAnnotationScreenshot] = React.useState<{
+    id: string;
+    url: string;
+    label: string | null;
+    caption: string | null;
+  } | null>(null);
   const [screenshotLabel, setScreenshotLabel] = React.useState("none");
   const [screenshotCaption, setScreenshotCaption] = React.useState("");
 
@@ -1001,6 +1009,9 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
                   alt={shot.caption ?? shot.label ?? trade.symbol}
                   className="h-40 w-full bg-muted object-cover object-top"
                 />
+                <Button variant="ghost" size="icon" className="absolute right-[4.5rem] top-1.5 h-7 w-7 bg-background/80" aria-label={t("screensAnnotate")} onClick={() => setAnnotationScreenshot(shot)}>
+                  <Shapes className="h-4 w-4" aria-hidden="true" />
+                </Button>
                 <Button variant="ghost" size="icon" className="absolute right-10 top-1.5 h-7 w-7 bg-background/80" aria-label={t("screensEditDetails")} onClick={() => openScreenshotEditor(shot)}>
                   <Pencil className="h-4 w-4" aria-hidden="true" />
                 </Button>
@@ -1063,6 +1074,12 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
           <p className="text-xs text-muted-foreground">{t("screensFileHint")}</p>
         </CardContent>
       </Card>
+
+      <ScreenshotAnnotationEditor
+        screenshot={annotationScreenshot}
+        open={annotationScreenshot !== null}
+        onOpenChange={(open) => { if (!open) setAnnotationScreenshot(null); }}
+      />
 
       {/* ── Structured post-trade review ── */}
       <Card>
