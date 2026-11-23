@@ -141,7 +141,7 @@ const DETAIL_INCLUDE = {
   tags: { include: { tag: true } },
   screenshots: { orderBy: { createdAt: "asc" } },
   executions: { orderBy: { time: "asc" } },
-  review: { select: { id: true, playbookMatch: true, followedPlan: true, planAdherenceScore: true, executionQuality: true, entryQuality: true, exitQuality: true, riskManagementScore: true, emotionalControlScore: true, wouldTakeAgain: true, mainLesson: true, whatWentWell: true, whatToImprove: true, mistakeTagIds: true, reviewedAt: true, createdAt: true, updatedAt: true } },
+  review: { select: { id: true, playbookMatch: true, followedPlan: true, planAdherenceScore: true, executionQuality: true, entryQuality: true, exitQuality: true, riskManagementScore: true, emotionalControlScore: true, wouldTakeAgain: true, mainLesson: true, whatWentWell: true, whatToImprove: true, mistakeTagIds: true, customAnswers: true, reviewedAt: true, createdAt: true, updatedAt: true } },
   // v2.5 M2 — price chart overlay sources
   modifications: { orderBy: { time: "asc" } },
   eventLinks: { include: { event: true } },
