@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  benjaminiHochberg,
   binomialTwoSidedP,
   mad,
   robustZ,
@@ -97,6 +98,10 @@ describe("stats helpers", () => {
     expect(big.upper - big.lower).toBeLessThan(small.upper - small.lower);
   });
 
+  it("adjusts multiple p-values with Benjamini-Hochberg in input order", () => {
+    expect(benjaminiHochberg([0.01, 0.04, 0.03])).toEqual([0.03, 0.04, 0.04]);
+    expect(benjaminiHochberg([])).toEqual([]);
+  });
   it("binomial two-sided p-value: balanced sample is not extreme", () => {
     const p = binomialTwoSidedP(50, 100, 0.5);
     expect(p).not.toBeNull();

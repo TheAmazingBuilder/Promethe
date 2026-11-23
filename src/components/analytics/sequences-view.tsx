@@ -124,13 +124,13 @@ export function SequencesView() {
                           {fmtR(row.avgR)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {row.pValue != null ? (
+                          {row.adjustedPValue != null ? (
                             <Badge
                               variant={
                                 row.significant ? "destructive" : "outline"
                               }
                             >
-                              {fmtNum(row.pValue, 3)}
+                              {fmtNum(row.adjustedPValue, 3)}
                             </Badge>
                           ) : (
                             "-"
@@ -143,6 +143,9 @@ export function SequencesView() {
               </div>
               <p className="mt-4 text-xs text-muted-foreground">
                 {t("significant")} · {t("notSignificant")}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("multipleTestNote")}
               </p>
             </CardContent>
           </Card>

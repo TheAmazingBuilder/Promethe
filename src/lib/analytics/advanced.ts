@@ -31,6 +31,7 @@ import {
   type AnalyticsTrade,
 } from "./insights";
 import {
+  benjaminiHochberg,
   binomialTwoSidedP,
   mad,
   mean,
@@ -920,8 +921,11 @@ export interface AfterStreakRow {
   wins: number;
   winRate: number | null;
   avgR: number | null;
-  /** Two-sided binomial p-value vs the overall win rate. */
+  /** Raw two-sided binomial p-value vs the overall win rate. */
   pValue: number | null;
+  /** Benjamini-Hochberg adjusted p-value across available after-streak tests. */
+  adjustedPValue: number | null;
+  /** True only when the adjusted p-value is below 0.05. */
   significant: boolean;
 }
 
@@ -956,6 +960,7 @@ export function computeSequences(trades: AdvancedTrade[]): SequencesResult {
     decided.length === 0 ? null : wins / decided.length;
 
   const after: AfterStreakRow[] = [];
+  const rawPValues: Array<{ index: number; value: number }> = [];
   for (const side of ["WIN", "LOSS"] as const) {
     for (const streak of [1, 2, 3]) {
       const nexts: AdvancedTrade[] = [];
@@ -976,6 +981,8 @@ export function computeSequences(trades: AdvancedTrade[]): SequencesResult {
         baselineWinRate != null && nexts.length >= MIN_SAMPLE_SEQUENCE
           ? binomialTwoSidedP(nextWins, nexts.length, baselineWinRate)
           : null;
+      const rowIndex = after.length;
+      if (pValue != null) rawPValues.push({ index: rowIndex, value: pValue });
       after.push({
         side,
         streak,
@@ -987,10 +994,23 @@ export function computeSequences(trades: AdvancedTrade[]): SequencesResult {
             : round((nextWins / nexts.length) * 100, 1),
         avgR: round(mean(rs), 2),
         pValue: pValue != null ? round(pValue, 3) : null,
-        significant: pValue != null && pValue < 0.05,
+        adjustedPValue: null,
+        significant: false,
       });
     }
   }
+
+  // Correct the family of available after-streak comparisons before marking
+  // any row significant. Cells below the sample threshold are not tests.
+  const adjustedPValues = benjaminiHochberg(rawPValues.map((row) => row.value));
+  rawPValues.forEach(({ index }, i) => {
+    const adjusted = adjustedPValues[i];
+    after[index] = {
+      ...after[index],
+      adjustedPValue: round(adjusted, 3),
+      significant: adjusted < 0.05,
+    };
+  });
 
   let ww = 0;
   let wl = 0;
