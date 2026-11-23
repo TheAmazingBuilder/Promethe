@@ -230,6 +230,9 @@ export async function getCalendarDay(
       account: true,
       strategy: true,
       tags: { include: { tag: true } },
+      screenshots: {
+        select: { id: true, tradeId: true, label: true, caption: true, createdAt: true },
+      },
     },
     orderBy: { exitTime: "desc" },
   });
@@ -245,6 +248,16 @@ export async function getCalendarDay(
     currency,
     timezone,
     trades,
+    screenshots: dayRows.flatMap((trade) =>
+      trade.screenshots.map((screenshot) => ({
+        id: screenshot.id,
+        tradeId: screenshot.tradeId,
+        symbol: trade.instrument.symbol,
+        label: screenshot.label,
+        caption: screenshot.caption,
+        createdAt: screenshot.createdAt.toISOString(),
+      }))
+    ),
     ...summary,
   };
 }

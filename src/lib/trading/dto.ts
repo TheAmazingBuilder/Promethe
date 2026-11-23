@@ -948,6 +948,15 @@ export interface CalendarPayload {
  * `date` — the same bucketing as the month grid, so the panel totals match
  * the grid cell. The journal entry is fetched separately (useJournalEntry).
  */
+export interface JournalDayScreenshotDTO {
+  id: string;
+  tradeId: string;
+  symbol: string;
+  label: string | null;
+  caption: string | null;
+  createdAt: string;
+}
+
 export interface CalendarDayPayload {
   /** Trading day YYYY-MM-DD. */
   date: string;
@@ -957,6 +966,8 @@ export interface CalendarDayPayload {
   timezone: string;
   /** Closed trades of the day, newest exit first. */
   trades: TradeListItemDTO[];
+  /** Existing private trade screenshots, surfaced in the daily Journal gallery. */
+  screenshots?: JournalDayScreenshotDTO[];
   /** Day totals over `trades` (same math as the month grid). */
   netPnl: string;
   tradeCount: number;

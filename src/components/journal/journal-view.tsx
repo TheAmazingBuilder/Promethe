@@ -5,6 +5,7 @@
  * Keeps the existing JournalEntry contract and API mutations unchanged.
  */
 import * as React from "react";
+import Image from "next/image";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -604,6 +605,61 @@ export function JournalView({ date }: { date?: string }) {
                         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                       </span>
                     </button>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/70 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">Chart gallery</CardTitle>
+                  <CardDescription className="mt-1 text-xs">
+                    Private chart screenshots already attached to this day&apos;s trades.
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="rounded-full">
+                  {dayActivity?.screenshots?.length ?? 0} charts
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {(dayActivity?.screenshots?.length ?? 0) === 0 ? (
+                <p className="rounded-lg border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
+                  No chart screenshots attached to this day&apos;s trades yet.
+                </p>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {dayActivity?.screenshots?.map((screenshot) => (
+                    <a
+                      key={screenshot.id}
+                      href={`/api/uploads/${screenshot.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="group overflow-hidden rounded-xl border border-border/70 bg-muted/20 transition-colors hover:border-primary/40"
+                    >
+                      <div className="relative aspect-[16/9] overflow-hidden bg-muted">
+                        <Image
+                          src={`/api/uploads/${screenshot.id}`}
+                          alt={`${screenshot.symbol} chart screenshot`}
+                          fill
+                          unoptimized
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                          className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                        />
+                      </div>
+                      <div className="flex items-start justify-between gap-2 p-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{screenshot.symbol}</p>
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                            {screenshot.caption ?? screenshot.label ?? "Trade screenshot"}
+                          </p>
+                        </div>
+                        <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      </div>
+                    </a>
                   ))}
                 </div>
               )}
