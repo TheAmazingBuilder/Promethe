@@ -218,6 +218,15 @@ describe("journal entries", () => {
     expect(feb.size).toBe(0);
   });
 
+  it("exports only the selected user's daily and period Journal reflections", async () => {
+    const data = await getJournalExportData(userA.id, "2026-01-05", "2026-01-11");
+    expect(data.entries.some((entry) => entry.date === "2026-01-06")).toBe(true);
+    expect(data.periodReviews.every((review) => review.userId === userA.id)).toBe(true);
+    const otherUser = await getJournalExportData(userB.id, "2026-01-05", "2026-01-11");
+    expect(otherUser.entries).toHaveLength(0);
+    expect(otherUser.periodReviews).toHaveLength(0);
+  });
+
   it("creates and deletes Journal templates with strict user ownership", async () => {
     const template = await createJournalTemplate(userA.id, {
       name: "XAU London breakout",

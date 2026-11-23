@@ -133,3 +133,20 @@ export const journalTemplateSchema = z.object({
     .refine((value) => Number(value) > 0, "invalidRisk")
     .nullish(),
 });
+
+
+export const journalExportQuerySchema = z.object({
+  from: isoDay,
+  to: isoDay,
+}).refine((value) => {
+  const from = new Date(`${value.from}T00:00:00.000Z`);
+  const to = new Date(`${value.to}T00:00:00.000Z`);
+  if (
+    Number.isNaN(from.getTime()) ||
+    Number.isNaN(to.getTime()) ||
+    from.toISOString().slice(0, 10) !== value.from ||
+    to.toISOString().slice(0, 10) !== value.to
+  ) return false;
+  const days = (to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000);
+  return days >= 0 && days <= 366;
+}, { message: "invalidDateRange", path: ["to"] });

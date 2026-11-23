@@ -995,7 +995,7 @@ export function JournalView({ date }: { date?: string }) {
               </Badge>
             </CardHeader>
             <CardContent className="pt-0">
-              <div className="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.6fr)_repeat(4,minmax(0,1fr))_auto_auto]">
+              <div className="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.6fr)_repeat(4,minmax(0,1fr))_auto_auto_auto]">
                 <Input
                   value={historySearchInput}
                   onChange={(event) => setHistorySearchInput(event.target.value)}
@@ -1044,6 +1044,16 @@ export function JournalView({ date }: { date?: string }) {
                   }}
                 >
                   Clear
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    window.location.href = `/api/v1/journal/export?from=${historyFrom}&to=${historyTo}`;
+                  }}
+                  disabled={!historyFrom || !historyTo || historyFrom > historyTo}
+                >
+                  Export PDF
                 </Button>
               </div>
               {historyFrom && historyTo && historyFrom > historyTo ? (

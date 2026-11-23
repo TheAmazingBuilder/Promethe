@@ -259,3 +259,31 @@ export async function deleteJournalTemplate(userId: string, id: string): Promise
   const result = await db.journalTemplate.deleteMany({ where: { id, userId } });
   return result.count > 0;
 }
+
+
+export async function getJournalExportData(userId: string, from: string, to: string) {
+  const [entries, periodReviews, account] = await Promise.all([
+    db.journalEntry.findMany({
+      where: { userId, date: { gte: from, lte: to } },
+      orderBy: { date: "asc" },
+    }),
+    db.journalPeriodReview.findMany({
+      where: {
+        userId,
+        periodStart: { lte: to },
+        periodEnd: { gte: from },
+      },
+      orderBy: [{ periodStart: "asc" }, { periodType: "asc" }],
+    }),
+    db.account.findFirst({
+      where: { userId },
+      orderBy: { createdAt: "asc" },
+      select: { currency: true },
+    }),
+  ]);
+  return {
+    entries: entries.map(toJournalDTO),
+    periodReviews,
+    currency: account?.currency ?? "USD",
+  };
+}
