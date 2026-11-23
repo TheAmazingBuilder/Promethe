@@ -33,6 +33,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/ui/page-header";
 import { Money } from "@/components/privacy/money";
 import { useToast } from "@/hooks/use-toast";
+import { useSession } from "@/components/app/session-context";
 import { useAccounts } from "@/hooks/use-trading";
 import {
   useCreatePropChallenge,
@@ -858,10 +859,9 @@ function RuleSetCard({ ruleSet }: { ruleSet: PropFirmRuleSetDTO }) {
 
 export function PropFirmsView() {
   const t = useTranslations("propFirmsView");
-  const { toast } = useToast();
   const { data, isLoading, isError, refetch } = usePropFirmWorkspace();
   const { data: accounts = [] } = useAccounts();
-  const { session } = requireSession();
+  const { session } = useSession();
   const [challengeOpen, setChallengeOpen] = React.useState(false);
   const [ruleSetOpen, setRuleSetOpen] = React.useState(false);
   const [activeChallenge, setActiveChallenge] = React.useState<PropChallengeDTO | null>(null);
@@ -938,12 +938,3 @@ export function PropFirmsView() {
   );
 }
 
-function requireSession() {
-  // The session hook is intentionally kept behind a tiny wrapper to keep
-  // this view's imports explicit and avoid coupling the forms to auth state.
-  return useSessionContext();
-}
-
-function useSessionContext() {
-  return requireSessionContext();
-}
