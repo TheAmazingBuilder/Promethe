@@ -72,6 +72,7 @@ export const VIEW_IDS = [
   "analytics-weekly-plan",
   "analytics-performance-report",
   "analytics-goals",
+  "analytics-monte-carlo",
   // v2.5 Module 4 — productivity & ergonomics
   "trash",
   "search",
@@ -200,6 +201,7 @@ const ANALYTICS_SUB_VIEW: Record<string, ViewId> = {
   "weekly-plan": "analytics-weekly-plan",
   "performance-report": "analytics-performance-report",
   goals: "analytics-goals",
+  "monte-carlo": "analytics-monte-carlo",
 };
 
 /** First segments that belong to the app (English or legacy French). */
@@ -426,6 +428,8 @@ export function routeToPath(route: AppRoute): string {
       return withSearch("/analytics/weekly-plan", query);
     case "analytics-goals":
       return withSearch("/analytics/goals", query);
+    case "analytics-monte-carlo":
+      return withSearch("/analytics/monte-carlo", query);
     case "analytics-performance-report":
       return withSearch("/analytics/performance-report", query);
     case "calendar":

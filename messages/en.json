@@ -429,7 +429,8 @@
         "confluences": "Confluences",
         "grades": "Grades",
         "goals": "Goals",
-        "performance-report": "Performance report"
+        "performance-report": "Performance report",
+        "monte-carlo": "Monte Carlo"
       },
       "sample": "Sample: {count} trades",
       "noData": "Not enough data yet for this view.",

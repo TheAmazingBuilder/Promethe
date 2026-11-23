@@ -41,7 +41,8 @@ export type AdvancedTabId =
   | "anomalies"
   | "weekly-plan"
   | "performance-report"
-  | "goals";
+  | "goals"
+  | "monte-carlo";
 
 export const ADVANCED_TABS: Array<{ id: AdvancedTabId; path: string }> = [
   { id: "lifecycle", path: "/analytics/lifecycle" },
@@ -56,6 +57,7 @@ export const ADVANCED_TABS: Array<{ id: AdvancedTabId; path: string }> = [
   { id: "weekly-plan", path: "/analytics/weekly-plan" },
   { id: "performance-report", path: "/analytics/performance-report" },
   { id: "goals", path: "/analytics/goals" },
+  { id: "monte-carlo", path: "/analytics/monte-carlo" },
 ];
 
 const PERIODS: AnalyticsPeriod[] = ["30d", "90d", "ytd", "all"];
