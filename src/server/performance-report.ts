@@ -50,7 +50,7 @@ export async function getPerformanceReport(
       ? Promise.resolve(null)
       : loadAdvancedTradesCached(userId, accountId, "30d"),
   ]);
-  const { trades, timezone, currency, tradingDay } = main;
+  const { trades, timezone, currency, tradingDay, excludedTradeCount } = main;
   const stats = computeTradeStats(trades, {
     dayOf: tradingDayOfTrade(timezone, tradingDay),
   });
@@ -153,6 +153,7 @@ export async function getPerformanceReport(
     accountId: accountId ?? null,
     currency,
     timezone,
+    excludedTradeCount,
     report,
     plan: planWithDone,
   };

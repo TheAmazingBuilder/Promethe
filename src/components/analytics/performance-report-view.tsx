@@ -185,6 +185,11 @@ export function PerformanceReportView() {
       empty={false}
       sampleCount={report?.sampleSize ?? null}
     >
+      {data != null && data.excludedTradeCount > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {tAnalytics("currencyScopeNote", { count: data.excludedTradeCount, currency: data.currency })}
+        </p>
+      ) : null}
       {report == null ? null : !report.sufficient ? (
         <Card>
           <CardHeader>

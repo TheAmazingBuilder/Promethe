@@ -790,6 +790,8 @@ export interface AdvancedAnalyticsPayload {
   accountId: string | null;
   currency: string;
   timezone: string;
+  /** Closed trades omitted because their stored P&L currency differs. */
+  excludedTradeCount: number;
   advanced: AdvancedAnalytics;
 }
 
@@ -822,6 +824,8 @@ export interface WeeklyPlanPayload {
   accountId: string | null;
   currency: string;
   timezone: string;
+  /** Closed trades omitted because their stored P&L currency differs. */
+  excludedTradeCount: number;
   plan: WeeklyPlan;
 }
 
@@ -832,6 +836,8 @@ export interface PerformanceReportPayload {
   accountId: string | null;
   currency: string;
   timezone: string;
+  /** Closed trades omitted because their stored P&L currency differs. */
+  excludedTradeCount: number;
   report: PerformanceReport;
   /**
    * Phase 2 perf — the standard 30d weekly plan, embedded so the page

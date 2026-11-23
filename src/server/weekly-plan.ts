@@ -41,6 +41,7 @@ interface BuiltPlan {
   currency: string;
   timezone: string;
   accountId: string | null;
+  excludedTradeCount: number;
 }
 
 async function buildPlan(
@@ -48,7 +49,7 @@ async function buildPlan(
   query: WeeklyPlanQuery
 ): Promise<BuiltPlan> {
   const accountId = query.account ?? undefined;
-  const { trades, timezone, currency, tradingDay } = await loadAdvancedTradesCached(
+  const { trades, timezone, currency, tradingDay, excludedTradeCount } = await loadAdvancedTradesCached(
     userId,
     accountId,
     "30d"
@@ -81,7 +82,7 @@ async function buildPlan(
     weekEnd: weekEndSunday(weekStart),
     currency,
   });
-  return { plan, currency, timezone, accountId: accountId ?? null };
+  return { plan, currency, timezone, accountId: accountId ?? null, excludedTradeCount };
 }
 
 /** Sync the persisted checkboxes with the freshly generated plan. */
@@ -140,7 +141,7 @@ export async function getWeeklyPlan(
   userId: string,
   query: WeeklyPlanQuery
 ): Promise<WeeklyPlanPayload> {
-  const { plan, currency, timezone, accountId } = await buildPlan(
+  const { plan, currency, timezone, accountId, excludedTradeCount } = await buildPlan(
     userId,
     query
   );
@@ -160,6 +161,7 @@ export async function getWeeklyPlan(
     accountId,
     currency,
     timezone,
+    excludedTradeCount,
     plan: withDone,
   };
 }

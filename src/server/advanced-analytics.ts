@@ -49,6 +49,7 @@ import type { Prisma } from "@prisma/client";
 import { parseCustomFields } from "@/lib/custom-fields/validate";
 import { getDisplayPreferences } from "@/server/display-preferences";
 import { getTradingDay, tradingDayOfTrade } from "@/lib/time/trading-day";
+import { scopeTradesToCurrency } from "@/lib/analytics/currency-scope";
 import { unstable_cache } from "next/cache";
 
 const TRADE_INCLUDE = {
@@ -88,6 +89,7 @@ interface LoadedTrades {
   timezone: string;
   currency: string;
   tradingDay: Parameters<typeof getTradingDay>[2];
+  excludedTradeCount: number;
 }
 
 /** Closed trades mapped to the advanced engine shape (no persistence). */
@@ -123,11 +125,7 @@ export async function loadAdvancedTrades(
   const timezone = profile?.timezone ?? "UTC";
   const currency = accountFilter?.currency ?? profile?.baseCurrency ?? "USD";
 
-  const timeMap = await computeTimeInProfit(rows);
-  const trades: AdvancedTrade[] = rows.map((t) =>
-    toAdvancedTrade(t, timezone, prefs.tradingDay, timeMap.get(t.id))
-  );
-  return { trades, timezone, currency, tradingDay: prefs.tradingDay };
+  // Historical P&L keeps the currency recorded on each trade. An account\n  // may have changed its display currency since those trades were closed.\n  const scoped = scopeTradesToCurrency(rows, currency);\n  const timeMap = await computeTimeInProfit(scoped.trades);\n  const trades: AdvancedTrade[] = scoped.trades.map((t) =>\n    toAdvancedTrade(t, timezone, prefs.tradingDay, timeMap.get(t.id))\n  );\n  return {\n    trades,\n    timezone,\n    currency,\n    tradingDay: prefs.tradingDay,\n    excludedTradeCount: scoped.excludedTradeCount,\n  };
 }
 
 /**
@@ -484,7 +482,7 @@ export async function getAdvancedAnalytics(
   query: AnalyticsQuery
 ): Promise<AdvancedAnalyticsPayload> {
   const modules = query.module != null ? [query.module] : [...ADVANCED_MODULES];
-  const { trades, timezone, currency, tradingDay } =
+  const { trades, timezone, currency, tradingDay, excludedTradeCount } =
     await loadAdvancedTradesCached(
       userId,
       query.account ?? undefined,
@@ -563,6 +561,7 @@ export async function getAdvancedAnalytics(
     accountId: query.account ?? null,
     currency,
     timezone,
+    excludedTradeCount,
     advanced: { ...EMPTY_ADVANCED, ...computed },
   };
 }

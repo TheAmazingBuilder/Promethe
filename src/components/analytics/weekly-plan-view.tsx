@@ -78,6 +78,7 @@ export function ActionRow({
   onToggle: (rule: PlanAction["rule"], done: boolean) => void;
 }) {
   const t = useTranslations("analytics.advanced.weeklyPlan");
+  const tAnalytics = useTranslations("analytics");
   const id = `weekly-action-${action.rule}`;
   return (
     <li
@@ -174,6 +175,11 @@ export function WeeklyPlanView() {
       sampleCount={plan?.sampleSize ?? null}
       hidePeriod
     >
+      {data != null && data.excludedTradeCount > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {tAnalytics("currencyScopeNote", { count: data.excludedTradeCount, currency: data.currency })}
+        </p>
+      ) : null}
       {plan == null ? null : !plan.sufficient ? (
         <Card>
           <CardHeader>
