@@ -934,7 +934,7 @@ model OfflineSyncLog {
 
 // ── 4.4 Guided trade review ─────────────────────────────────────────────────
 
-/// Structured post-trade review — one per trade. Exists ⇒ Trade.reviewStatus = REVIEWED.
+/// Structured post-trade review — one per trade. A row may also hold only a Playbook match; reviewStatus tracks completion of the structured workflow.
 model TradeReview {
   id                    String   @id @default(cuid())
   tradeId               String   @unique @map("trade_id")

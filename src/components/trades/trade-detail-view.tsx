@@ -65,6 +65,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useSession } from "@/components/app/session-context";
+import { useSaveTradeReview } from "@/hooks/use-trade-review";
+import type { TradeReviewInput } from "@/lib/validations/review";
 import { Money, Sensitive } from "@/components/privacy/money";
 import { PrivateImage } from "@/components/privacy/private-image";
 import { useFormat } from "@/lib/format/use-format";
@@ -166,6 +168,20 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
   const instruments = useInstruments();
   const updateTrade = useUpdateTrade();
   const setPlaybookMatch = useSetPlaybookMatch();
+  const saveTradeReview = useSaveTradeReview();
+  const [reviewDraft, setReviewDraft] = React.useState<TradeReviewInput>({
+    followedPlan: null,
+    planAdherenceScore: null,
+    executionQuality: null,
+    entryQuality: null,
+    exitQuality: null,
+    riskManagementScore: null,
+    emotionalControlScore: null,
+    wouldTakeAgain: null,
+    mainLesson: "",
+    whatWentWell: "",
+    whatToImprove: "",
+  });
   const deleteTrade = useDeleteTrade();
   const closeTrade = useCloseTrade();
   const uploadScreenshot = useUploadScreenshot();
@@ -197,6 +213,39 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
   }, [trade, instruments.data]);
   const isEstimate =
     trade != null && spec != null && spec.quoteCurrency !== trade.accountCurrency;
+
+  React.useEffect(() => {
+    if (!trade) return;
+    setReviewDraft({
+      followedPlan: trade.review?.followedPlan ?? trade.followedPlan ?? null,
+      planAdherenceScore: trade.review?.planAdherenceScore ?? null,
+      executionQuality: trade.review?.executionQuality ?? null,
+      entryQuality: trade.review?.entryQuality ?? null,
+      exitQuality: trade.review?.exitQuality ?? null,
+      riskManagementScore: trade.review?.riskManagementScore ?? null,
+      emotionalControlScore: trade.review?.emotionalControlScore ?? null,
+      wouldTakeAgain: (trade.review?.wouldTakeAgain as "YES" | "NO" | "MAYBE" | null) ?? null,
+      mainLesson: trade.review?.mainLesson ?? "",
+      whatWentWell: trade.review?.whatWentWell ?? "",
+      whatToImprove: trade.review?.whatToImprove ?? "",
+    });
+  }, [trade?.id, trade?.review?.updatedAt]);
+
+  const setReviewField = <K extends keyof TradeReviewInput>(
+    key: K,
+    value: TradeReviewInput[K],
+  ) => setReviewDraft((current) => ({ ...current, [key]: value }));
+
+  const submitReview = () => {
+    if (!trade) return;
+    saveTradeReview.mutate(
+      { tradeId: trade.id, review: reviewDraft },
+      {
+        onSuccess: () => toast({ title: "Trade review saved" }),
+        onError: mutationErrorToast,
+      },
+    );
+  };
 
   // Reset the close form each time the dialog opens.
   React.useEffect(() => {
@@ -964,6 +1013,51 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
         </CardContent>
       </Card>
 
+      {/* ── Structured post-trade review ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Post-trade review</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Rate the decisions and execution separately from the financial result. Leave any score unanswered when it does not apply.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <ReviewScoreField label="Plan adherence" value={reviewDraft.planAdherenceScore ?? null} onChange={(value) => setReviewField("planAdherenceScore", value)} />
+            <ReviewScoreField label="Execution quality" value={reviewDraft.executionQuality ?? null} onChange={(value) => setReviewField("executionQuality", value)} />
+            <ReviewScoreField label="Entry quality" value={reviewDraft.entryQuality ?? null} onChange={(value) => setReviewField("entryQuality", value)} />
+            <ReviewScoreField label="Exit quality" value={reviewDraft.exitQuality ?? null} onChange={(value) => setReviewField("exitQuality", value)} />
+            <ReviewScoreField label="Risk management" value={reviewDraft.riskManagementScore ?? null} onChange={(value) => setReviewField("riskManagementScore", value)} />
+            <ReviewScoreField label="Emotional control" value={reviewDraft.emotionalControlScore ?? null} onChange={(value) => setReviewField("emotionalControlScore", value)} />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <ReviewChoiceField
+              label="Did you follow your plan?"
+              value={reviewDraft.followedPlan == null ? "none" : reviewDraft.followedPlan ? "yes" : "no"}
+              options={[["none", "Not answered"], ["yes", "Yes"], ["no", "No"]]}
+              onChange={(value) => setReviewField("followedPlan", value === "none" ? null : value === "yes")}
+            />
+            <ReviewChoiceField
+              label="Would you take this trade again?"
+              value={reviewDraft.wouldTakeAgain ?? "none"}
+              options={[["none", "Not answered"], ["YES", "Yes"], ["NO", "No"], ["MAYBE", "Maybe"]]}
+              onChange={(value) => setReviewField("wouldTakeAgain", value === "none" ? null : value as "YES" | "NO" | "MAYBE")}
+            />
+          </div>
+          <div className="grid gap-3">
+            <ReviewTextField label="What went well?" value={reviewDraft.whatWentWell ?? ""} onChange={(value) => setReviewField("whatWentWell", value)} />
+            <ReviewTextField label="What would you improve?" value={reviewDraft.whatToImprove ?? ""} onChange={(value) => setReviewField("whatToImprove", value)} />
+            <ReviewTextField label="Main lesson" value={reviewDraft.mainLesson ?? ""} onChange={(value) => setReviewField("mainLesson", value)} />
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={submitReview} disabled={saveTradeReview.isPending}>
+              {saveTradeReview.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+              Save review
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* ── Psychology & notes ── */}
       <Card>
         <CardHeader>
@@ -1308,6 +1402,76 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
 }
 
 // ── Local helpers ────────────────────────────────────────────────────────────
+
+function ReviewScoreField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number | null;
+  onChange: (value: number | null) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <Select value={value == null ? "none" : String(value)} onValueChange={(v) => onChange(v === "none" ? null : Number(v))}>
+        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">Not rated</SelectItem>
+          {[1, 2, 3, 4, 5].map((score) => <SelectItem key={score} value={String(score)}>{score} / 5</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function ReviewChoiceField({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: Array<[string, string]>;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {options.map(([option, title]) => <SelectItem key={option} value={option}>{title}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function ReviewTextField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        maxLength={4000}
+        rows={3}
+        className="flex min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+      />
+    </div>
+  );
+}
 
 /** KPI tile (dashboard-style bordered card, big tabular number). */
 function KpiCell({

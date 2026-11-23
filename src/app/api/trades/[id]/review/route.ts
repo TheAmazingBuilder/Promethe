@@ -27,7 +27,18 @@ export async function POST(req: Request, ctx: Ctx) {
         { status: 404 },
       );
     }
-    return NextResponse.json({ review: { ...review, mistakeTagIds: review.mistakeTagIds ? JSON.parse(review.mistakeTagIds) : [], reviewedAt: review.reviewedAt.toISOString(), createdAt: review.createdAt.toISOString(), updatedAt: review.updatedAt.toISOString() } });
+    let mistakeTagIds: string[] = [];
+    if (review.mistakeTagIds) {
+      try {
+        const parsedTags: unknown = JSON.parse(review.mistakeTagIds);
+        if (Array.isArray(parsedTags)) {
+          mistakeTagIds = parsedTags.filter((tag): tag is string => typeof tag === "string");
+        }
+      } catch {
+        mistakeTagIds = [];
+      }
+    }
+    return NextResponse.json({ review: { ...review, mistakeTagIds, reviewedAt: review.reviewedAt.toISOString(), createdAt: review.createdAt.toISOString(), updatedAt: review.updatedAt.toISOString() } });
   } catch (error) {
     return apiError(error, "trades/[id]/review");
   }
