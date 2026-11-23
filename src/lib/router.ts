@@ -62,6 +62,22 @@ export function navigate(to: string): void {
   window.location.assign(target);
 }
 
+/**
+ * Update an in-page URL without starting an App Router navigation.
+ * Intended for state changes within the same route (for example Gaïa tabs):
+ * the URL and browser history update synchronously, and useRoute is notified
+ * through the same event used by navigate(). Next.js also observes the
+ * native History API and keeps its pathname/search-param hooks in sync.
+ */
+export function navigateShallow(to: string): void {
+  const target = resolveNavigationTarget(to);
+  if (typeof window === "undefined") return;
+  const current = `${window.location.pathname}${window.location.search}`;
+  if (current === target) return;
+  window.history.pushState(null, "", target);
+  window.dispatchEvent(new Event(ROUTE_CHANGE_EVENT));
+}
+
 /** Current route, derived from the Next.js pathname + query string. */
 export function useRoute(): AppRoute {
   const pathname = usePathname();
