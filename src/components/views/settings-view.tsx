@@ -32,6 +32,7 @@ import { COMMON_CURRENCIES } from "@/lib/trading/types";
 import { COMMON_TIMEZONES } from "@/lib/time/zones";
 import { cn } from "@/lib/utils";
 import { MarketSessionsSettingsCard } from "@/components/tools/market-sessions-settings";
+import { ReviewQuestionsSettingsCard } from "@/components/settings-views/review-questions-card";
 
 const THEME_OPTIONS = [
   { value: "light", labelKey: "themeLight", icon: Sun },
@@ -200,6 +201,7 @@ export function SettingsView() {
       <ProfileEditorCard />
 
       <MarketSessionsSettingsCard />
+      <ReviewQuestionsSettingsCard />
 
       <Card>
         <CardHeader>

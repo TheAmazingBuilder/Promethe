@@ -1414,7 +1414,7 @@ export async function deleteTrade(userId: string, id: string): Promise<boolean> 
 // ── Structured post-trade review ──────────────────────────────────────────────
 
 export type TradeReviewInput = {
-  customAnswers?: Array<{ questionId: string; answer: string | number | boolean }>;
+  customAnswers?: Array<{ questionId: string; answer: string | number | boolean | null }>
   playbookMatch?: "MATCHED" | "PARTIAL" | "OFF_PLAYBOOK" | null;
   followedPlan?: boolean | null;
   planAdherenceScore?: number | null;
@@ -1479,15 +1479,16 @@ export async function saveTradeReview(
       const requestedIds = input.customAnswers.map((answer) => answer.questionId);
       const templates = requestedIds.length ? await tx.reviewQuestionTemplate.findMany({ where: { userId, id: { in: requestedIds }, isActive: true } }) : [];
       if (templates.length !== new Set(requestedIds).size) throw new TradeValidationError("INVALID_REVIEW_QUESTION");
-      const activeIds = new Set(templates.map((template) => template.id));
-      const snapshots = input.customAnswers.map((entry) => {
+      const submittedIds = new Set(requestedIds);
+      const snapshots = input.customAnswers.flatMap((entry) => {
         const template = templates.find((item) => item.id === entry.questionId);
         if (!template) throw new TradeValidationError("INVALID_REVIEW_QUESTION");
+        if (entry.answer === null) return [];
         const valid = template.type === "SCALE" ? typeof entry.answer === "number" && Number.isInteger(entry.answer) && entry.answer >= 1 && entry.answer <= 5 : template.type === "BOOLEAN" ? typeof entry.answer === "boolean" : template.type === "TEXT" && typeof entry.answer === "string" && entry.answer.trim().length > 0 && entry.answer.length <= 2000;
         if (!valid) throw new TradeValidationError("INVALID_REVIEW_ANSWER");
-        return { questionId: template.id, question: template.question, type: template.type as "SCALE" | "BOOLEAN" | "TEXT", answer: entry.answer };
+        return [{ questionId: template.id, question: template.question, type: template.type as "SCALE" | "BOOLEAN" | "TEXT", answer: entry.answer }];
       });
-      const archivedSnapshots = previousSnapshots.filter((snapshot) => !activeIds.has(snapshot.questionId));
+      const archivedSnapshots = previousSnapshots.filter((snapshot) => !submittedIds.has(snapshot.questionId));
       customAnswersJson = JSON.stringify([...archivedSnapshots, ...snapshots]);
     }
     const review = await tx.tradeReview.upsert({

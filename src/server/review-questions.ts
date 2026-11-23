@@ -14,6 +14,7 @@ export async function listReviewQuestionTemplates(userId: string, includeInactiv
   return db.reviewQuestionTemplate.findMany({
     where: { userId, ...(includeInactive ? {} : { isActive: true }) },
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+    select: { id: true, question: true, type: true, order: true, isActive: true, createdAt: true },
   });
 }
 
@@ -24,6 +25,7 @@ export async function createReviewQuestionTemplate(userId: string, input: Review
     const last = await tx.reviewQuestionTemplate.findFirst({ where: { userId }, orderBy: { order: "desc" }, select: { order: true } });
     return tx.reviewQuestionTemplate.create({
       data: { userId, question: input.question, type: input.type, order: input.order ?? (last ? last.order + 1 : 0) },
+      select: { id: true, question: true, type: true, order: true, isActive: true, createdAt: true },
     });
   });
 }
@@ -36,6 +38,6 @@ export async function updateReviewQuestionTemplate(userId: string, id: string, p
       const activeCount = await tx.reviewQuestionTemplate.count({ where: { userId, isActive: true } });
       if (activeCount >= MAX_ACTIVE_REVIEW_QUESTIONS) throw new ReviewQuestionLimitError();
     }
-    return tx.reviewQuestionTemplate.update({ where: { id }, data: patch });
+    return tx.reviewQuestionTemplate.update({ where: { id }, data: patch, select: { id: true, question: true, type: true, order: true, isActive: true, createdAt: true } });
   });
 }

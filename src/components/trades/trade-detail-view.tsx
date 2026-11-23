@@ -65,7 +65,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useSession } from "@/components/app/session-context";
-import { useSaveTradeReview } from "@/hooks/use-trade-review";
+import { useReviewQuestions, useSaveTradeReview } from "@/hooks/use-trade-review";
 import type { TradeReviewInput } from "@/lib/validations/review";
 import { Money, Sensitive } from "@/components/privacy/money";
 import { PrivateImage } from "@/components/privacy/private-image";
@@ -169,6 +169,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
   const updateTrade = useUpdateTrade();
   const setPlaybookMatch = useSetPlaybookMatch();
   const saveTradeReview = useSaveTradeReview();
+  const reviewQuestions = useReviewQuestions();
   const [reviewDraft, setReviewDraft] = React.useState<TradeReviewInput>({
     followedPlan: null,
     planAdherenceScore: null,
@@ -181,6 +182,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
     mainLesson: "",
     whatWentWell: "",
     whatToImprove: "",
+    customAnswers: [],
   });
   const deleteTrade = useDeleteTrade();
   const closeTrade = useCloseTrade();
@@ -228,6 +230,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
       mainLesson: trade.review?.mainLesson ?? "",
       whatWentWell: trade.review?.whatWentWell ?? "",
       whatToImprove: trade.review?.whatToImprove ?? "",
+      customAnswers: trade.review?.customAnswers?.map(({ questionId, answer }) => ({ questionId, answer })) ?? [],
     });
   }, [trade]);
 
@@ -236,10 +239,18 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
     value: TradeReviewInput[K],
   ) => setReviewDraft((current) => ({ ...current, [key]: value }));
 
+  const setCustomReviewAnswer = (questionId: string, answer: string | number | boolean | null) => {
+    setReviewDraft((current) => ({ ...current, customAnswers: [ ...(current.customAnswers ?? []).filter((item) => item.questionId !== questionId), ...(answer === null || answer === "" ? [] : [{ questionId, answer }]) ] }));
+  };
   const submitReview = () => {
     if (!trade) return;
+    const customAnswers = (reviewQuestions.data ?? []).map((question) => {
+      const answer = reviewDraft.customAnswers?.find((item) => item.questionId === question.id)?.answer;
+      const valid = question.type === "SCALE" ? typeof answer === "number" && Number.isInteger(answer) && answer >= 1 && answer <= 5 : question.type === "BOOLEAN" ? typeof answer === "boolean" : question.type === "TEXT" && typeof answer === "string" && answer.trim().length > 0;
+      return { questionId: question.id, answer: valid ? answer : null };
+    });
     saveTradeReview.mutate(
-      { tradeId: trade.id, review: reviewDraft },
+      { tradeId: trade.id, review: { ...reviewDraft, customAnswers } },
       {
         onSuccess: () => toast({ title: "Trade review saved" }),
         onError: mutationErrorToast,
@@ -1049,8 +1060,21 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
             <ReviewTextField label="What would you improve?" value={reviewDraft.whatToImprove ?? ""} onChange={(value) => setReviewField("whatToImprove", value)} />
             <ReviewTextField label="Main lesson" value={reviewDraft.mainLesson ?? ""} onChange={(value) => setReviewField("mainLesson", value)} />
           </div>
+          {reviewQuestions.data && reviewQuestions.data.length > 0 && (
+            <div className="space-y-3 border-t pt-4">
+              <div><h3 className="text-sm font-semibold">Your review questions</h3><p className="text-xs text-muted-foreground">Personal prompts configured in Settings.</p></div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {reviewQuestions.data.map((question) => {
+                  const current = reviewDraft.customAnswers?.find((item) => item.questionId === question.id)?.answer;
+                  if (question.type === "SCALE") return <ReviewScoreField key={question.id} label={question.question} value={typeof current === "number" ? current : null} onChange={(value) => setCustomReviewAnswer(question.id, value)} />;
+                  if (question.type === "BOOLEAN") return <ReviewChoiceField key={question.id} label={question.question} value={typeof current === "boolean" ? (current ? "yes" : "no") : "none"} options={[["none", "Not answered"], ["yes", "Yes"], ["no", "No"]]} onChange={(value) => setCustomReviewAnswer(question.id, value === "none" ? null : value === "yes")} />;
+                  return <ReviewTextField key={question.id} label={question.question} value={typeof current === "string" ? current : ""} onChange={(value) => setCustomReviewAnswer(question.id, value)} />;
+                })}
+              </div>
+            </div>
+          )}
           <div className="flex justify-end">
-            <Button onClick={submitReview} disabled={saveTradeReview.isPending}>
+            <Button onClick={submitReview} disabled={saveTradeReview.isPending || reviewQuestions.isLoading}>
               {saveTradeReview.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
               Save review
             </Button>
