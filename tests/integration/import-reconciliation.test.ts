@@ -318,6 +318,39 @@ describe("merge & undo", () => {
   });
 
   it("merges: user journal survives with broker prices", async () => {
+    // Both sides can already have one-to-one children. The absorbed side's
+    // review/context must be snapshotted rather than lost to cascade deletion.
+    await db.tradeReview.create({
+      data: { tradeId: manualTradeId, userId: user.id, mainLesson: "Manual review" },
+    });
+    await db.tradeReview.create({
+      data: { tradeId: brokerTradeId, userId: user.id, mainLesson: "Broker review" },
+    });
+    await db.marketContextSnapshot.create({
+      data: {
+        tradeId: manualTradeId,
+        userId: user.id,
+        instrumentId,
+        timeframe: "H1",
+        atr14Value: "1",
+        atr14Pips: "10",
+        volatilityRegime: "NORMAL",
+        trendRegime: "RANGING",
+      },
+    });
+    await db.marketContextSnapshot.create({
+      data: {
+        tradeId: brokerTradeId,
+        userId: user.id,
+        instrumentId,
+        timeframe: "H1",
+        atr14Value: "2",
+        atr14Pips: "20",
+        volatilityRegime: "HIGH",
+        trendRegime: "TRENDING_UP",
+      },
+    });
+
     const result = await mergeCandidate(user.id, candidateId);
     mergeLogId = result.mergeLogId;
     expect(result.survivingTradeId).toBe(brokerTradeId);
@@ -335,6 +368,10 @@ describe("merge & undo", () => {
     // Children re-pointed.
     expect(await db.tradeScreenshot.count({ where: { tradeId: brokerTradeId } })).toBe(1);
     expect(await db.tradeTag.count({ where: { tradeId: brokerTradeId } })).toBe(1);
+    expect((await db.tradeReview.findUniqueOrThrow({ where: { tradeId: brokerTradeId } })).mainLesson)
+      .toBe("Broker review");
+    expect((await db.marketContextSnapshot.findUniqueOrThrow({ where: { tradeId: brokerTradeId } })).atr14Value.toString())
+      .toBe("2");
     expect(await db.trade.count({ where: { id: manualTradeId } })).toBe(0); // absorbed deleted
 
     // Candidate resolved.
@@ -351,6 +388,14 @@ describe("merge & undo", () => {
     expect(restored.notes).toBe("Manually journaled");
     expect(await db.tradeScreenshot.count({ where: { tradeId: manualTradeId } })).toBe(1);
     expect(await db.tradeTag.count({ where: { tradeId: manualTradeId } })).toBe(1);
+    expect((await db.tradeReview.findUniqueOrThrow({ where: { tradeId: manualTradeId } })).mainLesson)
+      .toBe("Manual review");
+    expect((await db.tradeReview.findUniqueOrThrow({ where: { tradeId: brokerTradeId } })).mainLesson)
+      .toBe("Broker review");
+    expect((await db.marketContextSnapshot.findUniqueOrThrow({ where: { tradeId: manualTradeId } })).atr14Value.toString())
+      .toBe("1");
+    expect((await db.marketContextSnapshot.findUniqueOrThrow({ where: { tradeId: brokerTradeId } })).atr14Value.toString())
+      .toBe("2");
 
     const survivor = await db.trade.findUniqueOrThrow({ where: { id: brokerTradeId } });
     // Pre-merge state restored: notes/review were set on the broker trade in
