@@ -524,7 +524,7 @@ export function computeInsights(
       return busy.some((d) => d.date === day);
     });
     const lightTrades = ordered.filter((t) => {
-      const day = t.localDate ?? t.exitTime.slice(0, 10);
+      const day = t.localEntryDate ?? t.entryTime.slice(0, 10);
       return light.some((d) => d.date === day);
     });
     const busyR = rOf(busyTrades);
