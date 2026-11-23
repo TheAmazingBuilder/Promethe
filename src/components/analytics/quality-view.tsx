@@ -196,7 +196,7 @@ export function QualityView() {
           {reviews != null ? (
             <section className="space-y-4" aria-labelledby="review-analytics-title">
               <div>
-                <h2 id="review-analytics-title" className="text-lg font-semibold">{t("reviewsTitle")}</h2>
+                <h2 id="review-analytics-title" className="text-base font-semibold">{t("reviewsTitle")}</h2>
                 <p className="text-sm text-muted-foreground">{t("reviewsDesc")}</p>
               </div>
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
