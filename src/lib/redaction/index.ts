@@ -309,7 +309,7 @@ export function findLeaks(payload: unknown, forbidden: (string | number)[]): str
       // ISO timestamps are metadata, not monetary values. Their fractional
       // seconds can coincidentally contain a forbidden money probe (e.g.
       // "...:50.000Z" matching "50.00"), so scan them as structured dates.
-      if (/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$/.test(value)) {
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
         return;
       }
       for (const probe of numberProbes) {
