@@ -91,7 +91,7 @@ function normalizeStoragePath(storagePath: string) {
 
 /** Sidecar path derived from the screenshot object; no DB column or migration is needed. */
 export function screenshotAnnotationStoragePath(storagePath: string): string {
-  return normalizeStoragePath(storagePath).replace(/\\.[^.]+$/, ".annotations.json");
+  return normalizeStoragePath(storagePath).replace(/\.[^.]+$/, ".annotations.json");
 }
 
 async function storageRequest(
