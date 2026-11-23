@@ -1483,9 +1483,19 @@ export async function saveTradeReview(
       const snapshots = input.customAnswers.flatMap((entry) => {
         const template = templates.find((item) => item.id === entry.questionId);
         if (!template) throw new TradeValidationError("INVALID_REVIEW_QUESTION");
-        if (entry.answer === null) return [];
+        const previousSnapshot = previousSnapshots.find((snapshot) => snapshot.questionId === entry.questionId);
+        if (entry.answer === null) {
+          // A changed template must not erase an older answer merely because
+          // its previous value no longer matches the new answer control.
+          return previousSnapshot && (previousSnapshot.question !== template.question || previousSnapshot.type !== template.type)
+            ? [previousSnapshot]
+            : [];
+        }
         const valid = template.type === "SCALE" ? typeof entry.answer === "number" && Number.isInteger(entry.answer) && entry.answer >= 1 && entry.answer <= 5 : template.type === "BOOLEAN" ? typeof entry.answer === "boolean" : template.type === "TEXT" && typeof entry.answer === "string" && entry.answer.trim().length > 0 && entry.answer.length <= 2000;
         if (!valid) throw new TradeValidationError("INVALID_REVIEW_ANSWER");
+        // Keep the original question snapshot when the answer itself did not
+        // change. A new answer records the edited question wording/type.
+        if (previousSnapshot && Object.is(previousSnapshot.answer, entry.answer)) return [previousSnapshot];
         return [{ questionId: template.id, question: template.question, type: template.type as "SCALE" | "BOOLEAN" | "TEXT", answer: entry.answer }];
       });
       const archivedSnapshots = previousSnapshots.filter((snapshot) => !submittedIds.has(snapshot.questionId));
