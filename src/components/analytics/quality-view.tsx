@@ -278,6 +278,43 @@ export function QualityView() {
                   )}
                 </CardContent>
               </Card>
+              {reviews.customQuestions.length > 0 ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">{t("customQuestionsTitle")}</CardTitle>
+                    <CardDescription>{t("customQuestionsDesc")}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-3 sm:grid-cols-2">
+                    {reviews.customQuestions.map((metric) => (
+                      <div key={JSON.stringify([metric.questionId, metric.question, metric.type])} className="space-y-2 rounded-lg border p-3">
+                        <p className="text-sm font-medium">{metric.question}</p>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          {metric.type === "SCALE" ? (
+                            <>
+                              <span>{t("customQuestionAverage")}: {metric.average == null ? "—" : `${fmtNum(metric.average, 2)} / 5`}</span>
+                              <span>·</span>
+                              <span>{t("customQuestionAnswers", { count: metric.answered })}</span>
+                            </>
+                          ) : metric.type === "BOOLEAN" ? (
+                            <>
+                              <span>{t("customQuestionYes", { count: metric.booleanYes })}</span>
+                              <span>·</span>
+                              <span>{t("customQuestionNo", { count: metric.booleanNo })}</span>
+                            </>
+                          ) : <span>{t("customQuestionTextAnswers", { count: metric.answered })}</span>}
+                        </div>
+                        {metric.type === "SCALE" ? (
+                          <div className="flex flex-wrap gap-1" aria-label={t("customQuestionScaleDistribution")}>
+                            {metric.scaleDistribution.map((count, index) => (
+                              <Badge key={index} variant="outline">{index + 1}: {count}</Badge>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              ) : null}
             </section>
           ) : null}
 

@@ -98,6 +98,7 @@ export interface AdvancedTrade extends AnalyticsTrade {
     emotionalControlScore: number | null;
     wouldTakeAgain: string | null;
     mistakeTags: string[];
+    customAnswers?: CustomReviewAnswer[];
   } | null;
   riskPercent: string | null;
   setupQualityRating: number | null;
@@ -1363,6 +1364,22 @@ export interface ReviewScoreMetric {
   count: number;
 }
 
+export interface CustomReviewAnswer {
+  questionId: string;
+  question: string;
+  type: "SCALE" | "BOOLEAN" | "TEXT";
+  answer: string | number | boolean;
+}
+export interface CustomQuestionReviewMetric {
+  questionId: string;
+  question: string;
+  type: CustomReviewAnswer["type"];
+  answered: number;
+  average: number | null;
+  scaleDistribution: [number, number, number, number, number];
+  booleanYes: number;
+  booleanNo: number;
+}
 export interface TradeReviewAnalytics {
   closedTrades: number;
   reviewedTrades: number;
@@ -1379,6 +1396,7 @@ export interface TradeReviewAnalytics {
   wouldTakeAgain: { yes: number; no: number; maybe: number; unanswered: number };
   playbookMatch: { matched: number; partial: number; offPlaybook: number; unclassified: number };
   topMistakes: Array<{ label: string; count: number }>;
+  customQuestions: CustomQuestionReviewMetric[];
 }
 
 function reviewScore(values: Array<number | null>): ReviewScoreMetric {
@@ -1400,6 +1418,12 @@ export function computeTradeReviewAnalytics(trades: AdvancedTrade[]): TradeRevie
   const would = { yes: 0, no: 0, maybe: 0, unanswered: 0 };
   const playbook = { matched: 0, partial: 0, offPlaybook: 0, unclassified: 0 };
   const mistakes = new Map<string, number>();
+  const customGroups = new Map<string, {
+    questionId: string; question: string; type: CustomReviewAnswer["type"];
+    answered: number; scaleTotal: number;
+    scaleDistribution: [number, number, number, number, number];
+    booleanYes: number; booleanNo: number;
+  }>();
 
   for (const trade of reviewed) {
     const answer = trade.review?.wouldTakeAgain;
@@ -1416,6 +1440,28 @@ export function computeTradeReviewAnalytics(trades: AdvancedTrade[]): TradeRevie
 
     for (const label of new Set(trade.review?.mistakeTags ?? [])) {
       mistakes.set(label, (mistakes.get(label) ?? 0) + 1);
+    }
+    for (const answer of trade.review?.customAnswers ?? []) {
+      const key = JSON.stringify([answer.questionId, answer.question, answer.type]);
+      const metric = customGroups.get(key) ?? {
+        questionId: answer.questionId, question: answer.question, type: answer.type,
+        answered: 0, scaleTotal: 0,
+        scaleDistribution: [0, 0, 0, 0, 0] as [number, number, number, number, number],
+        booleanYes: 0, booleanNo: 0,
+      };
+      if (answer.type === "SCALE" && typeof answer.answer === "number" &&
+          Number.isInteger(answer.answer) && answer.answer >= 1 && answer.answer <= 5) {
+        metric.answered++;
+        metric.scaleTotal += answer.answer;
+        metric.scaleDistribution[answer.answer - 1]++;
+      } else if (answer.type === "BOOLEAN" && typeof answer.answer === "boolean") {
+        metric.answered++;
+        if (answer.answer) metric.booleanYes++;
+        else metric.booleanNo++;
+      } else if (answer.type === "TEXT" && typeof answer.answer === "string" && answer.answer.trim()) {
+        metric.answered++;
+      }
+      customGroups.set(key, metric);
     }
   }
 
@@ -1443,6 +1489,12 @@ export function computeTradeReviewAnalytics(trades: AdvancedTrade[]): TradeRevie
       .map(([label, count]) => ({ label, count }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
       .slice(0, 8),
+    customQuestions: [...customGroups.values()]
+      .map(({ scaleTotal, ...metric }) => ({
+        ...metric,
+        average: metric.type === "SCALE" && metric.answered > 0 ? round(scaleTotal / metric.answered, 2) : null,
+      }))
+      .sort((a, b) => b.answered - a.answered || a.question.localeCompare(b.question)),
   };
 }
 

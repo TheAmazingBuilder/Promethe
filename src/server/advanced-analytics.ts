@@ -32,6 +32,7 @@ import {
   scoreGrade,
   type AdvancedAnalytics,
   type AdvancedTrade,
+  type CustomReviewAnswer,
   type ScoreHistoryPoint,
 } from "@/lib/analytics/advanced";
 import { ADVANCED_MODULES } from "@/lib/validations/analytics";
@@ -71,6 +72,7 @@ const TRADE_INCLUDE = {
       emotionalControlScore: true,
       wouldTakeAgain: true,
       mistakeTagIds: true,
+      customAnswers: true,
     },
   },
 } as const;
@@ -220,6 +222,29 @@ const EMPTY_ADVANCED: AdvancedAnalytics = (() => {
   return computeAdvancedAnalytics([], stats, computeAdvancedStats([], stats));
 })();
 
+function parseCustomReviewAnalyticsAnswers(value: string | null): CustomReviewAnswer[] {
+  if (!value) return [];
+  let parsed: unknown;
+  try { parsed = JSON.parse(value); } catch { return []; }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.flatMap((entry): CustomReviewAnswer[] => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return [];
+    const record = entry as Record<string, unknown>;
+    if (typeof record.questionId !== "string" || typeof record.question !== "string") return [];
+    if (record.type === "SCALE" && typeof record.answer === "number" &&
+        Number.isInteger(record.answer) && record.answer >= 1 && record.answer <= 5) {
+      return [{ questionId: record.questionId, question: record.question, type: "SCALE", answer: record.answer }];
+    }
+    if (record.type === "BOOLEAN" && typeof record.answer === "boolean") {
+      return [{ questionId: record.questionId, question: record.question, type: "BOOLEAN", answer: record.answer }];
+    }
+    if (record.type === "TEXT" && typeof record.answer === "string" && record.answer.trim().length > 0) {
+      return [{ questionId: record.questionId, question: record.question, type: "TEXT", answer: record.answer }];
+    }
+    return [];
+  });
+}
+
 function toAdvancedTrade(
   t: Row,
   timezone: string,
@@ -319,6 +344,7 @@ function toAdvancedTrade(
           return [];
         }
       })(),
+      customAnswers: parseCustomReviewAnalyticsAnswers(t.review.customAnswers),
     },
     riskPercent: t.riskPercent?.toString() ?? null,
     setupQualityRating: t.setupQualityRating,

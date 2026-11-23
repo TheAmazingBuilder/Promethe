@@ -174,6 +174,26 @@ describe("structured trade reviews", () => {
     expect(result.wouldTakeAgain.unanswered).toBe(1);
     expect(result.playbookMatch.unclassified).toBe(1);
   });
+
+  it("aggregates custom question snapshots without exposing written answers", () => {
+    const trades = [4, 2].map((score, index) => makeTrade({ review: {
+      followedPlan: null, planAdherenceScore: null, executionQuality: null,
+      entryQuality: null, exitQuality: null, riskManagementScore: null,
+      emotionalControlScore: null, wouldTakeAgain: null, mistakeTags: [],
+      customAnswers: [
+        { questionId: "q-scale", question: "Setup clarity", type: "SCALE", answer: score },
+        { questionId: "q-bool", question: "Waited for confirmation", type: "BOOLEAN", answer: index === 0 },
+        { questionId: "q-text", question: "What did you learn?", type: "TEXT", answer: `private answer ${index}` },
+      ],
+    } }));
+    const result = computeTradeReviewAnalytics(trades);
+    expect(result.customQuestions).toEqual([
+      { questionId: "q-bool", question: "Waited for confirmation", type: "BOOLEAN", answered: 2, average: null, scaleDistribution: [0, 0, 0, 0, 0], booleanYes: 1, booleanNo: 1 },
+      { questionId: "q-scale", question: "Setup clarity", type: "SCALE", answered: 2, average: 3, scaleDistribution: [0, 1, 0, 1, 0], booleanYes: 0, booleanNo: 0 },
+      { questionId: "q-text", question: "What did you learn?", type: "TEXT", answered: 2, average: null, scaleDistribution: [0, 0, 0, 0, 0], booleanYes: 0, booleanNo: 0 },
+    ]);
+    expect(JSON.stringify(result.customQuestions)).not.toContain("private answer");
+  });
 });
 
 describe("lifecycle", () => {
