@@ -218,6 +218,7 @@ model Account {
   equitySnapshots          AccountEquitySnapshot[]
   importBatches            ImportBatch[]
   reconciliationCandidates ReconciliationCandidate[]
+  weeklyPlanActions        WeeklyPlanAction[]
 
   @@index([userId])
   @@map("accounts")
@@ -2456,6 +2457,9 @@ model TradeAnomaly {
 model WeeklyPlanAction {
   id        String   @id @default(cuid())
   userId    String   @map("user_id")
+  accountId String?  @map("account_id")
+  /// "__all__" for the global plan, otherwise the selected account ID.
+  scopeKey  String   @default("__all__") @map("scope_key")
   /// Monday of the week, UTC midnight.
   weekStart DateTime @map("week_start")
   /// Stable rule key from the engine (worst-session, worst-hour, ...).
@@ -2469,10 +2473,11 @@ model WeeklyPlanAction {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account Account? @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, weekStart, rule])
-  @@index([userId, weekStart])
+  @@unique([userId, weekStart, scopeKey, rule])
+  @@index([userId, weekStart, scopeKey])
   @@map("weekly_plan_actions")
 }
 

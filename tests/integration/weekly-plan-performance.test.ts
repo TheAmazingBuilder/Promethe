@@ -36,6 +36,7 @@ const XAUUSD_SPEC = {
 let instrumentId: string;
 let user: { id: string };
 let accountId: string;
+let secondAccountId: string;
 
 beforeAll(async () => {
   const existing = await db.instrument.findFirst({
@@ -59,6 +60,10 @@ beforeAll(async () => {
   user = created.user;
   const accounts = await db.account.findMany({ where: { userId: user.id } });
   accountId = accounts[0].id;
+  const secondAccount = await db.account.create({
+    data: { userId: user.id, name: "Second weekly plan account", currency: "USD", initialBalance: "10000" },
+  });
+  secondAccountId = secondAccount.id;
 
   // 6 losing trades, same session, same entry-hour bucket, last 30 days:
   // worst-session + worst-hour + after-loss all fire.
@@ -78,6 +83,35 @@ beforeAll(async () => {
         exitPrice: "1995",
         lots: "1",
         netPnl: "-50",
+        pnlCurrency: "USD",
+        rMultiple: "-0.5",
+        resultType: "LOSS",
+        followedPlan: true,
+        riskPercent: "1",
+        preTradeAnalysis: "",
+        postTradeReview: "",
+      },
+    });
+  }
+
+  // Same losing pattern on a second account; completion flags must not leak.
+  for (let i = 0; i < 6; i++) {
+    const day = new Date(Date.UTC(2026, 10, 10 + i, 14, 0, 0));
+    await db.trade.create({
+      data: {
+        userId: user.id,
+        accountId: secondAccountId,
+        instrumentId,
+        direction: "LONG",
+        status: "CLOSED",
+        session: "LONDON",
+        entryTime: day,
+        exitTime: new Date(day.getTime() + 2 * 60 * 60 * 1000),
+        entryPrice: "2000",
+        exitPrice: "1995",
+        lots: "1",
+        netPnl: "-50",
+        pnlCurrency: "USD",
         rMultiple: "-0.5",
         resultType: "LOSS",
         followedPlan: true,
@@ -112,9 +146,10 @@ describe("weekly plan toggle (no rebuild)", () => {
     });
     const row = await db.weeklyPlanAction.findUnique({
       where: {
-        userId_weekStart_rule: {
+        userId_weekStart_scopeKey_rule: {
           userId: user.id,
           weekStart: new Date(`${plan.weekStart}T00:00:00.000Z`),
+          scopeKey: "__all__",
           rule: first.rule,
         },
       },
@@ -128,6 +163,22 @@ describe("weekly plan toggle (no rebuild)", () => {
     expect(untoggled?.done).toBe(false);
   });
 
+  it("keeps Done this week state isolated between accounts", async () => {
+    const first = await getWeeklyPlan(user.id, { account: accountId });
+    const second = await getWeeklyPlan(user.id, { account: secondAccountId });
+    const firstAction = first.plan.actions[0];
+    expect(second.plan.actions.some((a) => a.rule === firstAction.rule)).toBe(true);
+
+    await toggleWeeklyPlanAction(user.id, { rule: firstAction.rule, done: true }, { account: accountId });
+    const firstAfter = await getWeeklyPlan(user.id, { account: accountId });
+    const secondAfter = await getWeeklyPlan(user.id, { account: secondAccountId });
+    expect(firstAfter.plan.actions.find((a) => a.rule === firstAction.rule)?.done).toBe(true);
+    expect(secondAfter.plan.actions.find((a) => a.rule === firstAction.rule)?.done).toBe(false);
+
+    await toggleWeeklyPlanAction(user.id, { rule: firstAction.rule, done: true }, { account: secondAccountId });
+    const secondDone = await getWeeklyPlan(user.id, { account: secondAccountId });
+    expect(secondDone.plan.actions.find((a) => a.rule === firstAction.rule)?.done).toBe(true);
+  });
   it("returns null for a rule that is not in this week's plan", async () => {
     const { plan } = await getWeeklyPlan(user.id, {});
     const live = new Set(plan.actions.map((a) => a.rule));

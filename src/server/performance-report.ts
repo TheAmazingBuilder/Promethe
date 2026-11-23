@@ -138,7 +138,7 @@ export async function getPerformanceReport(
     currency,
     plan: reportPlan,
   });
-  const doneByRule = await syncWeeklyPlanActions(userId, plan);
+  const doneByRule = await syncWeeklyPlanActions(userId, plan, accountId ?? null);
   const actions = plan.actions.map((a) => ({
     ...a,
     done: doneByRule.get(a.rule) ?? false,
