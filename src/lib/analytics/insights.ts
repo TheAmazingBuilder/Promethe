@@ -283,6 +283,27 @@ export interface Insight {
   weight: number;
 }
 
+interface DailyAggregate {
+  date: string;
+  pnl: Decimal;
+  count: number;
+}
+
+function dailyPnlMap(trades: AnalyticsTrade[]): Map<string, DailyAggregate> {
+  const map = new Map<string, DailyAggregate>();
+  for (const t of trades) {
+    const day = t.localDate ?? t.exitTime.slice(0, 10);
+    const prev = map.get(day);
+    if (prev) {
+      prev.pnl = prev.pnl.plus(toD(t.netPnl ?? 0));
+      prev.count += 1;
+    } else {
+      map.set(day, { date: day, pnl: toD(t.netPnl ?? 0), count: 1 });
+    }
+  }
+  return map;
+}
+
 /** Group stat → compact insight params. */
 function dimParams(g: GroupStat): Record<string, string | number> {
   return {
