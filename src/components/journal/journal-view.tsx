@@ -979,8 +979,8 @@ export function JournalView({ date }: { date?: string }) {
                   maxLength={120}
                   aria-label="Search Journal history"
                 />
-                <Input inputType="date" value={historyFrom} onChange={(event) => setHistoryFrom(event.target.value)} aria-label="From date" className="h-10" />
-                <Input inputType="date" value={historyTo} onChange={(event) => setHistoryTo(event.target.value)} aria-label="To date" className="h-10" />
+                <Input type="date" value={historyFrom} onChange={(event) => setHistoryFrom(event.target.value)} aria-label="From date" className="h-10" />
+                <Input type="date" value={historyTo} onChange={(event) => setHistoryTo(event.target.value)} aria-label="To date" className="h-10" />
                 <select
                   value={historyMood}
                   onChange={(event) => setHistoryMood(event.target.value)}
