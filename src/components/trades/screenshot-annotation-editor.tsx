@@ -57,11 +57,6 @@ function clamp(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
-function annotationLabel(annotation: ScreenshotAnnotation): string {
-  if (annotation.type === "SL" || annotation.type === "TP") return annotation.type;
-  return annotation.text ?? annotation.type;
-}
-
 function AnnotationShape({
   annotation,
   width,
