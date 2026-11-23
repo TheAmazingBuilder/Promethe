@@ -169,3 +169,51 @@ export async function journalDays(
   });
   return new Set(rows.map((r) => r.date));
 }
+
+
+export interface JournalPeriodReviewInput {
+  periodType: "WEEKLY" | "MONTHLY";
+  periodStart: string;
+  periodEnd: string;
+  whatWentWell?: string | null;
+  whatToImprove?: string | null;
+  keyLesson?: string | null;
+  nextCommitment?: string | null;
+}
+
+export async function getJournalPeriodReview(
+  userId: string,
+  periodType: JournalPeriodReviewInput["periodType"],
+  periodStart: string,
+) {
+  return db.journalPeriodReview.findUnique({
+    where: {
+      userId_periodType_periodStart: { userId, periodType, periodStart },
+    },
+  });
+}
+
+export async function upsertJournalPeriodReview(
+  userId: string,
+  input: JournalPeriodReviewInput,
+) {
+  const unique = {
+    userId_periodType_periodStart: {
+      userId,
+      periodType: input.periodType,
+      periodStart: input.periodStart,
+    },
+  };
+  const values = {
+    periodEnd: input.periodEnd,
+    whatWentWell: input.whatWentWell ?? null,
+    whatToImprove: input.whatToImprove ?? null,
+    keyLesson: input.keyLesson ?? null,
+    nextCommitment: input.nextCommitment ?? null,
+  };
+  return db.journalPeriodReview.upsert({
+    where: unique,
+    create: { ...values, userId, periodType: input.periodType, periodStart: input.periodStart },
+    update: values,
+  });
+}

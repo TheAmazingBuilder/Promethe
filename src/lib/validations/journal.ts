@@ -71,3 +71,49 @@ export const calendarDayQuerySchema = z.object({
 });
 
 export type CalendarDayQuery = z.infer<typeof calendarDayQuerySchema>;
+
+
+function isValidJournalPeriodRange(
+  periodType: "WEEKLY" | "MONTHLY",
+  periodStart: string,
+  periodEnd: string,
+): boolean {
+  const start = new Date(`${periodStart}T00:00:00.000Z`);
+  const end = new Date(`${periodEnd}T00:00:00.000Z`);
+  if (
+    Number.isNaN(start.getTime()) ||
+    Number.isNaN(end.getTime()) ||
+    start.toISOString().slice(0, 10) !== periodStart ||
+    end.toISOString().slice(0, 10) !== periodEnd
+  ) return false;
+
+  if (periodType === "WEEKLY") {
+    const daysFromMonday = (start.getUTCDay() + 6) % 7;
+    return daysFromMonday === 0 && end.getTime() - start.getTime() === 6 * 24 * 60 * 60 * 1000;
+  }
+
+  const firstDay = start.getUTCDate() === 1;
+  const lastDay = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)).getUTCDate();
+  return firstDay &&
+    start.getUTCFullYear() === end.getUTCFullYear() &&
+    start.getUTCMonth() === end.getUTCMonth() &&
+    end.getUTCDate() === lastDay;
+}
+
+export const journalPeriodReviewQuerySchema = z.object({
+  periodType: z.enum(["WEEKLY", "MONTHLY"]),
+  periodStart: isoDay,
+});
+
+export const journalPeriodReviewSchema = z.object({
+  periodType: z.enum(["WEEKLY", "MONTHLY"]),
+  periodStart: isoDay,
+  periodEnd: isoDay,
+  whatWentWell: z.string().max(4000, "tooLong").nullish(),
+  whatToImprove: z.string().max(4000, "tooLong").nullish(),
+  keyLesson: z.string().max(3000, "tooLong").nullish(),
+  nextCommitment: z.string().max(2000, "tooLong").nullish(),
+}).refine(
+  (value) => isValidJournalPeriodRange(value.periodType, value.periodStart, value.periodEnd),
+  { message: "invalidPeriodRange", path: ["periodEnd"] },
+);
