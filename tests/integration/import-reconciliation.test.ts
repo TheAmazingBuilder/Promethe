@@ -240,6 +240,22 @@ describe("chunked import", () => {
     expect(pair.manual.screenshotCount).toBe(1);
     expect(Number(pair.score)).toBeGreaterThanOrEqual(0.9);
     expect(pair.reasons.some((r) => r.code === "ENTRY_TIME_STRONG")).toBe(true);
+
+    // A finalized PARTIAL batch is terminal: retries cannot append rows or
+    // overwrite the persisted counters/status after completion.
+    await expect(
+      importChunk(user.id, batchId, { trades: TRADES, cash: [] })
+    ).rejects.toMatchObject({ code: "BATCH_ALREADY_DONE", status: 409 });
+    await expect(
+      recordBatchCounts(user.id, batchId, {
+        created: 0,
+        updated: 0,
+        duplicates: 0,
+        manualSkipped: 0,
+        errors: 0,
+        parsed: 0,
+      })
+    ).rejects.toMatchObject({ code: "BATCH_ALREADY_DONE", status: 409 });
   });
 
   it("manual trades are never overwritten by a re-import", async () => {
