@@ -259,10 +259,16 @@ export function JournalView({ date }: { date?: string }) {
     nextSessionCommitment: "",
   });
   const [hydratedFor, setHydratedFor] = React.useState<string | null>(null);
+  const [savedSignature, setSavedSignature] = React.useState<string | null>(null);
+  const [periodReviewDirty, setPeriodReviewDirty] = React.useState(false);
+  const onPeriodReviewDirtyChange = React.useCallback(
+    (value: boolean) => setPeriodReviewDirty(value),
+    [],
+  );
 
   React.useEffect(() => {
     if (isLoading || hydratedFor === day) return;
-    setForm({
+    const initialForm: JournalEntryInput = {
       date: day,
       preMarketPlan: entry?.preMarketPlan ?? "",
       postMarketReview: entry?.postMarketReview ?? "",
@@ -280,7 +286,9 @@ export function JournalView({ date }: { date?: string }) {
       keyLesson: entry?.keyLesson ?? "",
       marketBias: entry?.marketBias ?? "",
       nextSessionCommitment: entry?.nextSessionCommitment ?? "",
-    });
+    };
+    setForm(initialForm);
+    setSavedSignature(JSON.stringify(initialForm));
     setHydratedFor(day);
   }, [day, entry, isLoading, hydratedFor]);
 
@@ -330,9 +338,27 @@ export function JournalView({ date }: { date?: string }) {
     );
   }, [form, entry]);
 
+  const hasUnsavedChanges = (dirty && savedSignature !== JSON.stringify(form)) || periodReviewDirty;
+
+  React.useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  const navigateSafely = React.useCallback((path: string) => {
+    if (hasUnsavedChanges && !window.confirm("You have unsaved Journal changes. Leave without saving?")) return;
+    navigate(path);
+  }, [hasUnsavedChanges]);
+
   const onSave = async () => {
     try {
       await save.mutateAsync(form);
+      setSavedSignature(JSON.stringify(form));
       toast({ title: t("saved") });
     } catch (error) {
       const err = error instanceof ApiClientError ? error : null;
@@ -351,7 +377,7 @@ export function JournalView({ date }: { date?: string }) {
     if (!window.confirm(t("deleteConfirm", { date: day }))) return;
     try {
       await del.mutateAsync(day);
-      setForm({
+      const clearedForm: JournalEntryInput = {
         date: day,
         preMarketPlan: "",
         postMarketReview: "",
@@ -369,7 +395,9 @@ export function JournalView({ date }: { date?: string }) {
         keyLesson: "",
         marketBias: "",
         nextSessionCommitment: "",
-      });
+      };
+      setForm(clearedForm);
+      setSavedSignature(JSON.stringify(clearedForm));
       toast({ title: t("deleted") });
     } catch (error) {
       const err = error instanceof ApiClientError ? error : null;
@@ -414,7 +442,7 @@ export function JournalView({ date }: { date?: string }) {
               variant="outline"
               size="icon"
               className="h-9 w-9"
-              onClick={() => navigate(`/journal/${shiftDay(day, -1)}`)}
+              onClick={() => navigateSafely(`/journal/${shiftDay(day, -1)}`)}
               aria-label={t("prevDay")}
             >
               <ChevronLeft className="h-4 w-4" aria-hidden="true" />
@@ -425,20 +453,20 @@ export function JournalView({ date }: { date?: string }) {
               className="h-9 w-[170px]"
               value={day}
               onChange={(value) => {
-                if (value) navigate(`/journal/${value}`);
+                if (value && value !== day) navigateSafely(`/journal/${value}`);
               }}
             />
             <Button
               variant="outline"
               size="icon"
               className="h-9 w-9"
-              onClick={() => navigate(`/journal/${shiftDay(day, 1)}`)}
+              onClick={() => navigateSafely(`/journal/${shiftDay(day, 1)}`)}
               aria-label={t("nextDay")}
             >
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </Button>
             {!isToday ? (
-              <Button variant="secondary" size="sm" onClick={() => navigate("/journal")}>
+              <Button variant="secondary" size="sm" onClick={() => navigateSafely("/journal")}>
                 {t("today")}
               </Button>
             ) : null}
@@ -597,7 +625,7 @@ export function JournalView({ date }: { date?: string }) {
                     <button
                       key={trade.id}
                       type="button"
-                      onClick={() => navigate(`/trades/${trade.id}`)}
+                      onClick={() => navigateSafely(`/trades/${trade.id}`)}
                       className="flex w-full flex-wrap items-center justify-between gap-3 rounded-lg px-2.5 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <span className="flex min-w-0 flex-wrap items-center gap-2">
@@ -980,7 +1008,7 @@ export function JournalView({ date }: { date?: string }) {
             </div>
           </div>
 
-          <JournalPeriodReviewPanel selectedDay={day} />
+          <JournalPeriodReviewPanel selectedDay={day} onDirtyChange={onPeriodReviewDirtyChange} />
 
           <Card className="border-border/70 shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
@@ -1087,7 +1115,7 @@ export function JournalView({ date }: { date?: string }) {
                       <button
                         key={recent.id}
                         type="button"
-                        onClick={() => navigate(`/journal/${recent.date}`)}
+                        onClick={() => navigateSafely(`/journal/${recent.date}`)}
                         aria-current={isCurrent ? "date" : undefined}
                         className={[
                           "flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-3 text-left transition-colors",

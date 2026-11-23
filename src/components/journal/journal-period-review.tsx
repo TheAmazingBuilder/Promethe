@@ -46,7 +46,13 @@ function getPeriodRange(day: string, type: JournalPeriodType) {
   return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
 }
 
-export function JournalPeriodReviewPanel({ selectedDay }: { selectedDay: string }) {
+export function JournalPeriodReviewPanel({
+  selectedDay,
+  onDirtyChange,
+}: {
+  selectedDay: string;
+  onDirtyChange: (dirty: boolean) => void;
+}) {
   const [periodType, setPeriodType] = React.useState<JournalPeriodType>("WEEKLY");
   const range = React.useMemo(() => getPeriodRange(selectedDay, periodType), [selectedDay, periodType]);
   const { data: review, isLoading } = useJournalPeriodReview(periodType, range.start);
@@ -77,6 +83,21 @@ export function JournalPeriodReviewPanel({ selectedDay }: { selectedDay: string 
     form.whatToImprove !== (review?.whatToImprove ?? "") ||
     form.keyLesson !== (review?.keyLesson ?? "") ||
     form.nextCommitment !== (review?.nextCommitment ?? "");
+
+  React.useEffect(() => {
+    onDirtyChange(dirty);
+    return () => onDirtyChange(false);
+  }, [dirty, onDirtyChange]);
+
+  React.useEffect(() => {
+    if (!dirty) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [dirty]);
 
   const handleSave = async () => {
     try {
