@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ArrowLeft, Loader2, Play, TrendingDown, Target, Wallet } from "lucide-react";
+import { Loader2, Play, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,6 @@ import { AdvancedShell } from "./advanced-shell";
 import { useAccounts } from "@/hooks/use-trading";
 import { useCreateMonteCarloRun } from "@/hooks/use-monte-carlo";
 import type { MonteCarloResult } from "@/lib/analytics/monte-carlo";
-import { navigate } from "@/lib/router";
 
 function money(value: number, currency: string) {
   return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 }).format(value);

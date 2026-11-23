@@ -98,7 +98,10 @@ const WeeklyPlanView = dynamic(() => import("@/components/analytics/weekly-plan-
 const GoalsView = dynamic(() => import("@/components/analytics/goals-view").then((m) => m.GoalsView), {
   loading: () => <ViewLoading />,
 });
-const MonteCarloView = dynamic(() => import("@/components/analytics/monte-carlo-view").then((m) => m.MonteCarloView), {\n  loading: () => <ViewLoading />,\n});\nconst PerformanceReportView = dynamic(() => import("@/components/analytics/performance-report-view").then((m) => m.PerformanceReportView), {
+const MonteCarloView = dynamic(() => import("@/components/analytics/monte-carlo-view").then((m) => m.MonteCarloView), {
+  loading: () => <ViewLoading />,
+});
+const PerformanceReportView = dynamic(() => import("@/components/analytics/performance-report-view").then((m) => m.PerformanceReportView), {
   loading: () => <ViewLoading />,
 });
 const ChartBuilderView = dynamic(() => import("@/components/charts/chart-builder-view").then((m) => m.ChartBuilderView), {
@@ -298,6 +301,9 @@ export function ViewSwitch() {
       break;
     case "analytics-performance-report":
       view = <PerformanceReportView />;
+      break;
+    case "analytics-monte-carlo":
+      view = <MonteCarloView />;
       break;
     case "analytics-charts":
       view = <ChartBuilderView />;
