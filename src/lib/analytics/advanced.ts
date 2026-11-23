@@ -574,7 +574,12 @@ export type SetupCategory = "proven" | "promising" | "unproven" | "losing";
 
 export interface SetupRank {
   key: string;
+  /** All trades assigned to this setup. */
   count: number;
+  /** Trades with a finite R multiple; used for expectancy thresholds. */
+  rSampleSize: number;
+  /** WIN/LOSS trades; used for the Wilson confidence interval. */
+  decidedSampleSize: number;
   expectancy: number | null;
   winRate: number | null;
   wilsonLower: number | null;
@@ -588,21 +593,32 @@ export interface SetupRank {
 }
 
 export function setupCategory(rank: {
-  count: number;
+  rSampleSize: number;
+  decidedSampleSize: number;
   expectancy: number | null;
   wilsonLower: number | null;
 }): SetupCategory {
-  if (rank.count >= MIN_SAMPLE_SETUP && (rank.expectancy ?? 0) < 0) {
+  if (
+    rank.rSampleSize >= MIN_SAMPLE_SETUP &&
+    rank.expectancy != null &&
+    rank.expectancy < 0
+  ) {
     return "losing";
   }
   if (
-    rank.count >= MIN_SAMPLE_PROVEN &&
-    (rank.expectancy ?? 0) >= 0.2 &&
+    rank.rSampleSize >= MIN_SAMPLE_PROVEN &&
+    rank.decidedSampleSize >= MIN_SAMPLE_PROVEN &&
+    rank.expectancy != null &&
+    rank.expectancy >= 0.2 &&
     (rank.wilsonLower ?? 0) >= 0.35
   ) {
     return "proven";
   }
-  if (rank.count >= MIN_SAMPLE_SETUP && (rank.expectancy ?? 0) > 0) {
+  if (
+    rank.rSampleSize >= MIN_SAMPLE_SETUP &&
+    rank.expectancy != null &&
+    rank.expectancy > 0
+  ) {
     return "promising";
   }
   return "unproven";
@@ -639,6 +655,8 @@ export function computeSetupRanking(trades: AdvancedTrade[]): SetupRank[] {
     const rank: SetupRank = {
       key,
       count: list.length,
+      rSampleSize: rs.length,
+      decidedSampleSize: decided,
       expectancy: expectancy != null ? round(expectancy, 2) : null,
       winRate:
         decided > 0 ? round((wins / decided) * 100, 1) : null,
@@ -687,7 +705,12 @@ export interface ConfluenceRow {
   tagId: string;
   name: string;
   color: string;
+  /** All trades carrying this confluence. */
   count: number;
+  /** Trades with a finite R multiple. */
+  rSampleSize: number;
+  /** WIN/LOSS trades used for the Wilson interval. */
+  decidedSampleSize: number;
   wins: number;
   losses: number;
   breakevens: number;
@@ -750,6 +773,8 @@ export function computeConfluences(trades: AdvancedTrade[]): ConfluencesResult {
       name: group.name,
       color: group.color,
       count: list.length,
+      rSampleSize: rs.length,
+      decidedSampleSize: decided,
       wins,
       losses,
       breakevens,
@@ -789,7 +814,12 @@ export const MIN_SAMPLE_GRADE = 10;
 
 export interface GradeRow {
   grade: string;
+  /** All trades carrying this grade. */
   count: number;
+  /** Trades with a finite R multiple. */
+  rSampleSize: number;
+  /** WIN/LOSS trades used for the Wilson interval. */
+  decidedSampleSize: number;
   wins: number;
   losses: number;
   breakevens: number;
@@ -840,6 +870,8 @@ export function computeGrades(trades: AdvancedTrade[]): GradesResult {
     return {
       grade,
       count: list.length,
+      rSampleSize: rs.length,
+      decidedSampleSize: decided,
       wins,
       losses,
       breakevens,

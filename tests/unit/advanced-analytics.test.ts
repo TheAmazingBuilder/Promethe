@@ -216,6 +216,22 @@ describe("setups", () => {
     expect(byKey.get("C")!.category).toBe("unproven");
     expect(byKey.get("D")!.category).toBe("losing");
   });
+
+  it("does not call a setup proven when most trades have no valid R", () => {
+    const trades = Array.from({ length: 30 }, (_, i) =>
+      makeTrade({
+        setupType: "sparse-R",
+        rMultiple: i < 8 ? "1" : null,
+        resultType: i < 8 ? "WIN" : "BREAKEVEN",
+      })
+    );
+    const rank = computeSetupRanking(trades)[0];
+    expect(rank.count).toBe(30);
+    expect(rank.rSampleSize).toBe(8);
+    expect(rank.decidedSampleSize).toBe(0);
+    expect(rank.expectancy).toBe(1);
+    expect(rank.category).toBe("unproven");
+  });
 });
 
 describe("sequences", () => {

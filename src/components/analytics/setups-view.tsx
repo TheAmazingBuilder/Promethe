@@ -153,6 +153,9 @@ export function SetupsView() {
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
                           {s.count}
+                          <span className="block text-xs font-normal text-muted-foreground">
+                            {s.rSampleSize} R
+                          </span>
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
                           {fmtR(s.expectancy)}
