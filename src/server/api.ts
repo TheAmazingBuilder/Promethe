@@ -20,6 +20,7 @@ import {
   ToolsValidationError,
 } from "@/server/tools";
 import { IntegrationValidationError } from "@/server/integrations/endpoints";
+import { AccountNotFoundError } from "@/server/account-errors";
 
 type CodedError = {
   code: string;
@@ -133,6 +134,7 @@ function isCoded(error: unknown): error is CodedError {
     error instanceof ToolsValidationError ||
     error instanceof ToolsTablesMissingError ||
     error instanceof IntegrationValidationError ||
+    error instanceof AccountNotFoundError ||
     error instanceof AccessDeniedError
   );
 }
