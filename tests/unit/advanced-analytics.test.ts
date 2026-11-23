@@ -161,7 +161,7 @@ describe("lifecycle", () => {
     expect(res.withMfe).toBe(2);
     expect(res.withMae).toBe(2);
     expect(res.avgMfeR).toBeCloseTo(1.5, 5);
-    expect(res.avgMaeR).toBeCloseTo(0.375, 5);
+    expect(res.avgMaeR).toBe(0.38); // Lifecycle values are rounded to two decimals.
     expect(res.maeBuckets.reduce((sum, bucket) => sum + bucket.count, 0)).toBe(2);
   });
 });
