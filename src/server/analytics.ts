@@ -153,7 +153,7 @@ export function toAnalyticsTrade(
     swap: t.swap?.toString() ?? null,
     fees: t.fees?.toString() ?? null,
     localDate: tradingDayOfExit,
-    localEntryDate: entryLocal?.date ?? null,
+    localEntryDate: getTradingDay(t.entryTime, timezone, tradingDay),
     localWeekday:
       entryLocal != null ? weekdayOfIsoDate(entryLocal.date) : null,
     localHour: entryLocal?.hour ?? null,

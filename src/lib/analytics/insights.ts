@@ -36,7 +36,7 @@ export interface AnalyticsTrade extends StatTrade {
   fees: string | null;
   /** Local calendar date (YYYY-MM-DD) of the EXIT - P&L attribution. */
   localDate: string | null;
-  /** Local calendar date (YYYY-MM-DD) of the ENTRY - trade-frequency attribution. */
+  /** User trading-day key (YYYY-MM-DD) of the ENTRY - trade-frequency attribution. */
   localEntryDate?: string | null;
   /** Local weekday of the ENTRY 1 (Monday) → 7 (Sunday) - decision dimension. */
   localWeekday: number | null;
