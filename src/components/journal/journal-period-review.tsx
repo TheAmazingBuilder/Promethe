@@ -12,10 +12,10 @@ import {
 } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  JournalPeriodType,
   useJournalPeriodReview,
   useSaveJournalPeriodReview,
 } from "@/hooks/use-journal";
+import type { JournalPeriodType } from "@/hooks/use-journal";
 
 type FormState = {
   whatWentWell: string;
@@ -53,19 +53,26 @@ export function JournalPeriodReviewPanel({ selectedDay }: { selectedDay: string 
   const save = useSaveJournalPeriodReview();
   const [form, setForm] = React.useState<FormState>(EMPTY);
   const [status, setStatus] = React.useState("");
+  const drafts = React.useRef<Record<string, FormState>>({});
+  const periodKey = `${periodType}:${range.start}`;
 
   React.useEffect(() => {
-    setForm({
+    setForm(drafts.current[periodKey] ?? {
       whatWentWell: review?.whatWentWell ?? "",
       whatToImprove: review?.whatToImprove ?? "",
       keyLesson: review?.keyLesson ?? "",
       nextCommitment: review?.nextCommitment ?? "",
     });
     setStatus("");
-  }, [review?.id, review?.updatedAt, periodType, range.start]);
+  }, [periodKey, review?.id, review?.updatedAt]);
 
-  const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
-    setForm((current) => ({ ...current, [key]: value }));
+  const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
+    setForm((current) => {
+      const next = { ...current, [key]: value };
+      drafts.current[periodKey] = next;
+      return next;
+    });
+  };
   const dirty = form.whatWentWell !== (review?.whatWentWell ?? "") ||
     form.whatToImprove !== (review?.whatToImprove ?? "") ||
     form.keyLesson !== (review?.keyLesson ?? "") ||
@@ -79,6 +86,7 @@ export function JournalPeriodReviewPanel({ selectedDay }: { selectedDay: string 
         periodEnd: range.end,
         ...form,
       });
+      delete drafts.current[periodKey];
       setStatus("Review saved.");
     } catch {
       setStatus("Could not save this review. Please try again.");
