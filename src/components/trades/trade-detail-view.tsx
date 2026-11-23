@@ -16,6 +16,7 @@ import {
   Share2,
   Trash2,
   X,
+  Save,
   XCircle,
 } from "lucide-react";
 import {
@@ -40,6 +41,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
 import {
@@ -121,6 +123,7 @@ import {
   useDeleteTrade,
   useInstruments,
   useTrade,
+  useUpdateScreenshot,
   useUpdateTrade,
   useUploadScreenshot,
 } from "@/hooks/use-trading";
@@ -188,6 +191,7 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
   const closeTrade = useCloseTrade();
   const uploadScreenshot = useUploadScreenshot();
   const deleteScreenshot = useDeleteScreenshot();
+  const updateScreenshot = useUpdateScreenshot();
   const createGaiaNote = useCreateGaiaNote();
 
   const [deleteOpen, setDeleteOpen] = React.useState(false);
@@ -204,6 +208,9 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
   const [useManual, setUseManual] = React.useState(false);
   const [manualPnl, setManualPnl] = React.useState("");
   const [uploading, setUploading] = React.useState(0);
+  const [editingScreenshot, setEditingScreenshot] = React.useState<string | null>(null);
+  const [screenshotLabel, setScreenshotLabel] = React.useState("none");
+  const [screenshotCaption, setScreenshotCaption] = React.useState("");
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -314,6 +321,20 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
       });
       setUploading((n) => Math.max(0, n - 1));
     }
+  };
+
+  const openScreenshotEditor = (shot: { id: string; label: string | null; caption: string | null }) => {
+    setEditingScreenshot(shot.id);
+    setScreenshotLabel(shot.label ?? "none");
+    setScreenshotCaption(shot.caption ?? "");
+  };
+
+  const saveScreenshotDetails = () => {
+    if (!editingScreenshot) return;
+    updateScreenshot.mutate({ id: editingScreenshot, label: screenshotLabel === "none" ? null : screenshotLabel, caption: screenshotCaption.trim() || null }, {
+      onSuccess: () => { toast({ title: t("screensDetailsSaved") }); setEditingScreenshot(null); },
+      onError: mutationErrorToast,
+    });
   };
 
   const onFiles = (files: FileList | null) => {
@@ -947,6 +968,19 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
         </CardContent>
       </Card>
 
+      <Dialog open={editingScreenshot !== null} onOpenChange={(open) => { if (!open) setEditingScreenshot(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{t("screensEditDetails")}</DialogTitle><DialogDescription>{t("screensEditDescription")}</DialogDescription></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2"><Label>{t("screensLabel")}</Label><Select value={screenshotLabel} onValueChange={setScreenshotLabel}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>
+              <SelectItem value="none">{t("screensNoLabel")}</SelectItem>
+              <SelectItem value="BEFORE">{labels.screenshotLabel("BEFORE")}</SelectItem><SelectItem value="ENTRY">{labels.screenshotLabel("ENTRY")}</SelectItem><SelectItem value="EXIT">{labels.screenshotLabel("EXIT")}</SelectItem><SelectItem value="AFTER">{labels.screenshotLabel("AFTER")}</SelectItem>
+            </SelectContent></Select></div>
+            <div className="space-y-2"><Label htmlFor="screenshot-caption">{t("screensCaption")}</Label><Textarea id="screenshot-caption" value={screenshotCaption} onChange={(event) => setScreenshotCaption(event.target.value)} maxLength={500} placeholder={t("screensCaptionPlaceholder")} /><p className="text-xs text-muted-foreground text-right">{screenshotCaption.length}/500</p></div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setEditingScreenshot(null)}>{tCommon("cancel")}</Button><Button onClick={saveScreenshotDetails} disabled={updateScreenshot.isPending || screenshotCaption.length > 500}>{updateScreenshot.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{tCommon("save")}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* ── Screenshots ── */}
       <Card onPaste={onPasteScreens}>
         <CardHeader>
@@ -967,6 +1001,9 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
                   alt={shot.caption ?? shot.label ?? trade.symbol}
                   className="h-40 w-full bg-muted object-cover object-top"
                 />
+                <Button variant="ghost" size="icon" className="absolute right-10 top-1.5 h-7 w-7 bg-background/80" aria-label={t("screensEditDetails")} onClick={() => openScreenshotEditor(shot)}>
+                  <Pencil className="h-4 w-4" aria-hidden="true" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"

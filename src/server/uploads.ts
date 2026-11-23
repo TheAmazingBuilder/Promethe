@@ -273,6 +273,29 @@ export async function readUpload(
   };
 }
 
+export async function updateUpload(
+  userId: string,
+  id: string,
+  input: { label: string | null; caption: string | null }
+): Promise<SavedUpload | null> {
+  const allowedLabels = new Set(["BEFORE", "ENTRY", "EXIT", "AFTER"]);
+  if (input.label !== null && !allowedLabels.has(input.label)) {
+    throw new UploadValidationError("INVALID_SCREENSHOT_LABEL");
+  }
+  const caption = input.caption?.trim() ?? "";
+  if (caption.length > 500) {
+    throw new UploadValidationError("SCREENSHOT_CAPTION_TOO_LONG");
+  }
+  const result = await db.tradeScreenshot.updateMany({
+    where: { id, userId },
+    data: { label: input.label, caption: caption || null },
+  });
+  if (result.count === 0) return null;
+  const row = await db.tradeScreenshot.findFirst({ where: { id, userId } });
+  if (!row) return null;
+  return { id: row.id, label: row.label, caption: row.caption, createdAt: row.createdAt.toISOString(), url: `/api/v1/uploads/${row.id}` };
+}
+
 export async function deleteUpload(userId: string, id: string): Promise<boolean> {
   const row = await db.tradeScreenshot.findFirst({ where: { id, userId } });
   if (!row) return false;

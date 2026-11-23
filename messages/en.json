@@ -1400,7 +1400,11 @@
       "tabReplay": "Replay",
       "confluencesTitle": "Confluences",
       "confluencesEmpty": "No confluence tagged on this trade yet.",
-      "grade": "Setup grade"
+      "grade": "Setup grade",
+      "screensDetailsSaved": "Screenshot details saved",
+      "screensEditDetails": "Edit screenshot details",
+      "screensEditDescription": "Add context to this screenshot without uploading it again.",
+      "screensNoLabel": "No label"
     }
   },
   "settings": {

@@ -459,6 +459,20 @@ export function useUploadScreenshot() {
   });
 }
 
+export function useUpdateScreenshot() {
+  const invalidate = useInvalidateTrades();
+  return useMutation({
+    mutationFn: async (input: { id: string; label: string | null; caption: string | null }) => {
+      const result = await apiFetch<{ upload: { id: string } }>(
+        `/api/v1/uploads/${input.id}`,
+        { method: "PATCH", body: JSON.stringify({ label: input.label, caption: input.caption }) }
+      );
+      return result.upload;
+    },
+    onSuccess: invalidate,
+  });
+}
+
 export function useDeleteScreenshot() {
   const invalidate = useInvalidateTrades();
   return useMutation({
