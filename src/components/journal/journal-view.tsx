@@ -49,6 +49,7 @@ import {
   useSaveJournalEntry,
 } from "@/hooks/use-journal";
 import { JournalPeriodReviewPanel } from "./journal-period-review";
+import { JournalTemplateControls } from "./journal-template-controls";
 import { ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import { fmtDateInTz, pnlClass } from "@/lib/format";
@@ -836,6 +837,27 @@ export function JournalView({ date }: { date?: string }) {
               </div>
             </CardContent>
           </Card>
+
+          <JournalTemplateControls
+            values={{
+              marketBias: form.marketBias,
+              preMarketPlan: form.preMarketPlan,
+              keyLevels: form.keyLevels,
+              primaryScenario: form.primaryScenario,
+              alternateScenario: form.alternateScenario,
+              invalidationConditions: form.invalidationConditions,
+              maxRiskPercent: form.maxRiskPercent,
+            }}
+            onApply={(template) => {
+              set("marketBias", template.marketBias ?? "");
+              set("preMarketPlan", template.preMarketPlan ?? "");
+              set("keyLevels", template.keyLevels ?? "");
+              set("primaryScenario", template.primaryScenario ?? "");
+              set("alternateScenario", template.alternateScenario ?? "");
+              set("invalidationConditions", template.invalidationConditions ?? "");
+              set("maxRiskPercent", template.maxRiskPercent ?? null);
+            }}
+          />
 
           <div className="grid gap-4 xl:grid-cols-2">
             <Card className="border-border/70 shadow-sm">

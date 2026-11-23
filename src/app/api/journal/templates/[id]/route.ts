@@ -16,7 +16,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
         { status: 404 },
       );
     }
-    return new NextResponse(null, { status: 204 });
+    return NextResponse.json({ deleted: true });
   } catch (error) {
     return apiError(error, "journal/templates/[id]");
   }

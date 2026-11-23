@@ -335,3 +335,68 @@ export function useSaveJournalPeriodReview() {
     },
   });
 }
+
+
+export interface JournalTemplateDTO {
+  id: string;
+  userId: string;
+  name: string;
+  description: string | null;
+  marketBias: string | null;
+  preMarketPlan: string | null;
+  keyLevels: string | null;
+  primaryScenario: string | null;
+  alternateScenario: string | null;
+  invalidationConditions: string | null;
+  maxRiskPercent: string | null;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface JournalTemplateInput {
+  name: string;
+  description?: string | null;
+  marketBias?: string | null;
+  preMarketPlan?: string | null;
+  keyLevels?: string | null;
+  primaryScenario?: string | null;
+  alternateScenario?: string | null;
+  invalidationConditions?: string | null;
+  maxRiskPercent?: string | null;
+}
+
+export function useJournalTemplates() {
+  return useQuery({
+    queryKey: ["journal", "templates"],
+    queryFn: async () =>
+      (await apiFetch<{ templates: JournalTemplateDTO[] }>("/api/v1/journal/templates")).templates,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useCreateJournalTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: JournalTemplateInput) => (
+      await apiFetch<{ template: JournalTemplateDTO }>(
+        "/api/v1/journal/templates",
+        { method: "POST", body: JSON.stringify(input) },
+      )
+    ).template,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["journal", "templates"] });
+    },
+  });
+}
+
+export function useDeleteJournalTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      apiFetch<{ deleted: boolean }>(`/api/v1/journal/templates/${id}`, { method: "DELETE" }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["journal", "templates"] });
+    },
+  });
+}
