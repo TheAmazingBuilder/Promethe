@@ -727,6 +727,8 @@ export interface OpenPositionDTO {
 
 export interface DashboardPayload {
   currency: string;
+  /** Closed trades excluded because their stored P&L currency differs from currency. */
+  excludedTradeCount: number;
   accounts: AccountDTO[];
   kpis30d: TradeStatsDTO | null;
   kpisAllTime: TradeStatsDTO | null;

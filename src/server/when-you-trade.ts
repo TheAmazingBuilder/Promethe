@@ -14,6 +14,7 @@ import { getDisplayPreferences } from "@/server/display-preferences";
 import type { AnalyticsQuery } from "@/lib/validations/analytics";
 import type { WhenYouTradePayload } from "@/lib/trading/dto";
 import type { Prisma } from "@prisma/client";
+import { scopeTradesToCurrency } from "@/lib/analytics/currency-scope";
 
 export async function getWhenYouTrade(
   userId: string,
@@ -48,7 +49,8 @@ export async function getWhenYouTrade(
   const timezone = profile?.timezone ?? "UTC";
   const currency =
     accountFilter?.currency ?? profile?.baseCurrency ?? "USD";
-  const trades = rows.map((t) =>
+  const currencyScope = scopeTradesToCurrency(rows, currency);
+  const trades = currencyScope.trades.map((t) =>
     toAnalyticsTrade(t, timezone, prefs.tradingDay)
   );
 
