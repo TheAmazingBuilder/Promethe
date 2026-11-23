@@ -178,7 +178,7 @@ export async function getMentorTradeDetail(
       tags: { include: { tag: true } },
       screenshots: { orderBy: { createdAt: "asc" } },
       executions: { orderBy: { time: "asc" } },
-      review: { select: { id: true, playbookMatch: true } },
+      review: true,
     },
   });
   if (!trade) return null;

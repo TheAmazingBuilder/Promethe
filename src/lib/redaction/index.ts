@@ -140,7 +140,7 @@ const NOTE_KEYS = ["notes", "preTradeAnalysis", "postTradeReview", "lessonLearne
 const STRATEGY_KEYS = ["strategyId", "strategyName"];
 const PSYCH_KEYS = [
   "emotionBefore", "emotionDuring", "emotionAfter", "confidence",
-  "setupQualityRating", "executionRating", "followedPlan", "checklistResults",
+  "setupQualityRating", "executionRating", "followedPlan", "checklistResults", "review",
 ];
 
 // Keys that are ALWAYS stripped from anything going to a public/mentor view —
@@ -170,7 +170,12 @@ export function redactTrade(
 
   if (policy.hideAmounts) out = omit(out, AMOUNT_KEYS);
   if (policy.hideAccountInfo) out = omit(out, ACCOUNT_KEYS);
-  if (policy.hideNotes) out = omit(out, NOTE_KEYS);
+  if (policy.hideNotes) {
+    out = omit(out, NOTE_KEYS);
+    if (isPlainObject(out.review)) {
+      out.review = omit(out.review, ["mainLesson", "whatWentWell", "whatToImprove"]);
+    }
+  }
   if (policy.hideStrategyName) out = omit(out, STRATEGY_KEYS);
   if (policy.hidePsychology) out = omit(out, PSYCH_KEYS);
 

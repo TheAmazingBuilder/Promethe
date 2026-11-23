@@ -52,6 +52,7 @@ const TRADE = {
   postTradeReview: "Managed well, moved SL to BE",
   lessonLearned: "Patience pays",
   notesTag: "gold",
+  review: { id: "review_1", planAdherenceScore: 4, mainLesson: "Wait for confirmation", whatWentWell: "Respected the stop", whatToImprove: "Avoid early entries" },
   screenshots: [
     {
       id: "shot_1",
@@ -142,6 +143,11 @@ describe("redactTrade — full anonymous export", () => {
     expect(executions[0].time).toBe("2025-01-15");
   });
 
+  it("removes free-text review notes when note redaction is enabled", () => {
+    const { trade } = redactTrade(TRADE, { ...NO_REDACTION, hideNotes: true });
+    expect(trade.review).toEqual({ id: "review_1", planAdherenceScore: 4 });
+  });
+
   it("keeps strategy name (allowed by the preset)", () => {
     expect(trade.strategyName).toBe("London Open Gold");
   });
@@ -154,6 +160,7 @@ describe("redactTrade — hidePsychology (mentor journal scope off)", () => {
       expect(trade).not.toHaveProperty(key);
     }
     expect(trade.notes).toBe("Perfect A+ setup at the London open");
+    expect(trade).not.toHaveProperty("review");
   });
 });
 
