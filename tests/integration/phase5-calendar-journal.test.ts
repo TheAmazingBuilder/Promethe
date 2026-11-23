@@ -12,6 +12,7 @@ import {
 import {
   deleteJournalEntry,
   getJournalEntry,
+  getJournalExportData,
   createJournalTemplate,
   deleteJournalTemplate,
   getJournalPeriodReview,
