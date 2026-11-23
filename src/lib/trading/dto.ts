@@ -767,6 +767,8 @@ export interface AnalyticsPayload {
   accountId: string | null;
   currency: string;
   timezone: string;
+  /** Closed trades excluded because their account currency differs from currency. */
+  excludedTradeCount: number;
   stats: TradeStatsDTO | null;
   advanced: AdvancedStats | null;
   equityInitialBalance: string;

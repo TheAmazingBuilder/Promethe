@@ -6,6 +6,7 @@
 import { db } from "@/lib/db";
 import { computeTradeStats, type StatTrade } from "@/lib/analytics/engine";
 import { Decimal, toD } from "@/lib/trading/dec";
+import { scopeTradesToCurrency } from "@/lib/analytics/currency-scope";
 
 export interface MonthlyReportGroup {
   name: string;
@@ -27,6 +28,9 @@ export interface MonthlyReport {
   month: string;
   monthLabel: string;
   currency: string;
+  accountId: string | null;
+  /** Closed trades excluded because their account currency differs from currency. */
+  excludedTradeCount: number;
   tradeCount: number;
   netPnl: string | null;
   /** 0-100, as a string. */
@@ -87,14 +91,20 @@ function groupRows(
 
 export async function getMonthlyReport(
   userId: string,
-  month: string
+  month: string,
+  accountId?: string | null
 ): Promise<MonthlyReport | null> {
   const range = monthRange(month);
   if (!range) return null;
   const [start, end] = range;
 
-  const profile = await db.profile.findUnique({ where: { id: userId } });
-  const currency = profile?.baseCurrency ?? "USD";
+  const [profile, accounts] = await Promise.all([
+    db.profile.findUnique({ where: { id: userId } }),
+    db.account.findMany({ where: { userId }, select: { id: true, currency: true } }),
+  ]);
+  const accountFilter = accountId == null ? null : accounts.find((account) => account.id === accountId) ?? null;
+  if (accountId != null && accountFilter == null) return null;
+  const currency = accountFilter?.currency ?? profile?.baseCurrency ?? "USD";
 
   const rows = await db.trade.findMany({
     where: {
@@ -102,12 +112,18 @@ export async function getMonthlyReport(
       status: "CLOSED",
       isDraft: false,
       exitTime: { gte: start, lt: end },
+      ...(accountFilter ? { accountId: accountFilter.id } : {}),
     },
-    include: { instrument: true, strategy: true },
+    include: { instrument: true, strategy: true, account: { select: { id: true, currency: true } } },
     orderBy: { exitTime: "asc" },
   });
+  const currencyScope = scopeTradesToCurrency(
+    rows,
+    accountFilter ? [accountFilter] : accounts,
+    currency
+  );
 
-  const trades: StatTrade[] = rows.map((t) => ({
+  const trades: StatTrade[] = currencyScope.trades.map((t) => ({
     id: t.id,
     exitTime: (t.exitTime ?? t.entryTime).toISOString(),
     entryTime: t.entryTime.toISOString(),
@@ -153,6 +169,8 @@ export async function getMonthlyReport(
     month,
     monthLabel,
     currency,
+    accountId: accountFilter?.id ?? null,
+    excludedTradeCount: currencyScope.excludedTradeCount,
     tradeCount: trades.length,
     netPnl: stats != null ? stats.netPnl : null,
     winRate: stats != null ? stats.winRate : null,

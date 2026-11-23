@@ -776,7 +776,8 @@
       "matrixCellTip": "{session} on {day}: {count} trades, {pnl}",
       "cellTrades": "{count} trades",
       "timezoneNote": "Hours and weekdays use your local entry time. Based on {total} closed trades."
-    }
+    },
+    "currencyScopeNote": "{count} trades in other currencies were excluded. Monetary statistics below use {currency} only."
   },
   "calendar": {
     "title": "P&L Calendar",

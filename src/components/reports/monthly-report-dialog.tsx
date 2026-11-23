@@ -42,6 +42,8 @@ interface MonthlyReport {
   month: string;
   monthLabel: string;
   currency: string;
+  accountId: string | null;
+  excludedTradeCount: number;
   tradeCount: number;
   netPnl: string | null;
   winRate: string | null;
@@ -70,10 +72,21 @@ async function buildPdf(
   const footerLabel = `Monthly report ${report.monthLabel}`;
 
   pdf.header(`Monthly report – ${report.monthLabel}`, generatedLabel);
+  if (report.excludedTradeCount > 0 && report.tradeCount > 0) {
+    pdf.paragraph(
+      `${report.excludedTradeCount} trades in other currencies were excluded. Figures below use ${report.currency} only.`,
+      footerLabel
+    );
+  }
 
   if (report.tradeCount === 0) {
     pdf.section("No trades", footerLabel);
-    pdf.paragraph("No trades closed this month.", footerLabel);
+    pdf.paragraph(
+      report.excludedTradeCount > 0
+        ? `No trades in ${report.currency} this month. ${report.excludedTradeCount} trades in other currencies were excluded.`
+        : "No trades closed this month.",
+      footerLabel
+    );
     pdf.footer(footerLabel);
     pdf.save(`promethe-report-${report.month}.pdf`);
     return;
@@ -150,9 +163,11 @@ async function buildPdf(
 export function MonthlyReportDialog({
   open,
   onOpenChange,
+  accountId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  accountId?: string;
 }) {
   const t = useTranslations("reports");
   const [month, setMonth] = React.useState(currentMonth);
@@ -164,9 +179,9 @@ export function MonthlyReportDialog({
     setError(null);
     try {
       const report = await apiFetch<MonthlyReport>(
-        `/api/v1/reports/monthly?month=${month}`
+        `/api/v1/reports/monthly?month=${month}${accountId ? `&account=${encodeURIComponent(accountId)}` : ""}`
       );
-      if (report.tradeCount === 0) {
+      if (report.tradeCount === 0 && report.excludedTradeCount === 0) {
         setError(t("empty"));
         return;
       }

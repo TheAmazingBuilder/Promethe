@@ -30,6 +30,7 @@ import { activeCustomFieldDefinitions } from "@/server/custom-fields";
 import { getDisplayPreferences } from "@/server/display-preferences";
 import { getTradingDay, tradingDayOfTrade } from "@/lib/time/trading-day";
 import { selectEquityAccounts } from "@/lib/analytics/account-scope";
+import { scopeTradesToCurrency } from "@/lib/analytics/currency-scope";
 
 const TRADE_INCLUDE = {
   instrument: true,
@@ -190,7 +191,8 @@ export async function getAnalytics(
   const currency =
     accountFilter?.currency ?? profile?.baseCurrency ?? "USD";
 
-  const trades = rows.map((t) => toAnalyticsTrade(t, timezone, prefs.tradingDay));
+  const currencyScope = scopeTradesToCurrency(rows, accounts, currency);
+  const trades = currencyScope.trades.map((t) => toAnalyticsTrade(t, timezone, prefs.tradingDay));
 
   const dayOf = tradingDayOfTrade(timezone, prefs.tradingDay);
   const stats =
@@ -227,6 +229,7 @@ export async function getAnalytics(
     accountId: accountFilter?.id ?? null,
     currency,
     timezone,
+    excludedTradeCount: currencyScope.excludedTradeCount,
     stats,
     advanced,
     equityInitialBalance: initialBalance.toString(),

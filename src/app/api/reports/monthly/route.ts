@@ -12,13 +12,14 @@ export async function GET(req: Request) {
     const session = await requireUser();
     const url = new URL(req.url);
     const month = url.searchParams.get("month") ?? "";
+    const accountId = url.searchParams.get("account");
     if (monthRange(month) == null) {
       return NextResponse.json(
         { error: "VALIDATION", message: "Invalid month (YYYY-MM format)." },
         { status: 422 }
       );
     }
-    const report = await getMonthlyReport(session.user.id, month);
+    const report = await getMonthlyReport(session.user.id, month, accountId);
     if (!report) {
       return NextResponse.json(
         { error: "VALIDATION", message: "Invalid month." },
