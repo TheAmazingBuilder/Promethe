@@ -527,7 +527,7 @@ export async function undoMerge(userId: string, mergeLogId: string): Promise<{ r
     if (snapshot.absorbed.review) {
       if (snapshot.absorbed.reviewMovedToSurvivor) {
         await tx.tradeReview.updateMany({
-          where: { id: snapshot.absorbed.review.id, tradeId: log.survivingTradeId },
+          where: { id: snapshot.absorbed.review.id as string, tradeId: log.survivingTradeId },
           data: { tradeId: absorbed.id },
         });
       } else {
