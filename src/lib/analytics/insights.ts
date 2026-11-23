@@ -51,9 +51,9 @@ export interface AnalyticsTrade extends StatTrade {
 export interface AdvancedStats {
   /** System Quality Number: √N · mean(R) / std(R), R trades only. */
   sqn: string | null;
-  /** Daily Sharpe (annualised, √252) over per-day net P&L. */
+  /** Unavailable until a verified daily equity-return series is available. */
   sharpe: string | null;
-  /** Daily Sortino (annualised, √252) with downside deviation vs 0. */
+  /** Unavailable until a verified daily equity-return series is available. */
   sortino: string | null;
   /** net P&L / max drawdown (> 0 means the curve recovered). */
   recoveryFactor: string | null;
@@ -101,21 +101,9 @@ export function computeAdvancedStats(
     if (sd.gt(0)) sqn = new Decimal(rs.length).sqrt().times(mu).div(sd);
   }
 
-  // Daily Sharpe / Sortino — per local trading day (UTC date fallback).
-  const daily = dailyPnlMap(ordered);
-  const dailyPnls = [...daily.values()].map((d) => d.pnl);
-  let sharpe: Decimal | null = null;
-  let sortino: Decimal | null = null;
-  if (dailyPnls.length >= 3) {
-    const mu = mean(dailyPnls);
-    const sd = stdDev(dailyPnls, mu);
-    if (sd.gt(0)) sharpe = mu.div(sd).times(new Decimal(252).sqrt());
-    const downsideSq = dailyPnls
-      .reduce((acc, p) => acc.plus(Decimal.min(p, D0).pow(2)), D0)
-      .div(dailyPnls.length);
-    const downside = downsideSq.sqrt();
-    if (downside.gt(0)) sortino = mu.div(downside).times(new Decimal(252).sqrt());
-  }
+  // Sharpe and Sortino require daily portfolio returns, not monetary P&L.
+  // We do not yet have a complete, cash-flow-adjusted daily equity-return
+  // series for every account scope, so both ratios intentionally remain null.
 
   // Recovery factor — net P&L over max drawdown.
   const maxDd = toD(stats.maxDrawdown);
@@ -145,8 +133,8 @@ export function computeAdvancedStats(
 
   return {
     sqn: sqn?.toString() ?? null,
-    sharpe: sharpe?.toString() ?? null,
-    sortino: sortino?.toString() ?? null,
+    sharpe: null,
+    sortino: null,
     recoveryFactor: recoveryFactor?.toString() ?? null,
     payoffRatio: payoffRatio?.toString() ?? null,
     avgDurationMin:
@@ -293,27 +281,6 @@ export interface Insight {
   params: Record<string, string | number>;
   /** Sort weight, higher first within a tone. */
   weight: number;
-}
-
-interface DailyAggregate {
-  date: string;
-  pnl: Decimal;
-  count: number;
-}
-
-function dailyPnlMap(trades: AnalyticsTrade[]): Map<string, DailyAggregate> {
-  const map = new Map<string, DailyAggregate>();
-  for (const t of trades) {
-    const day = t.localDate ?? t.exitTime.slice(0, 10);
-    const prev = map.get(day);
-    if (prev) {
-      prev.pnl = prev.pnl.plus(toD(t.netPnl ?? 0));
-      prev.count += 1;
-    } else {
-      map.set(day, { date: day, pnl: toD(t.netPnl ?? 0), count: 1 });
-    }
-  }
-  return map;
 }
 
 /** Group stat → compact insight params. */

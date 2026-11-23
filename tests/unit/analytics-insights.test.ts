@@ -123,10 +123,7 @@ describe("computeAdvancedStats", () => {
     expect(Number(adv.rCoverage)).toBe(25);
   });
 
-  it("Sharpe/Sortino need ≥ 3 distinct local days", () => {
-    const same = [trade(), trade(), trade()];
-    expect(computeAdvancedStats(same, computeTradeStats(same)).sharpe).toBeNull();
-
+  it("does not derive Sharpe or Sortino from monetary daily P&L", () => {
     const multi = [
       trade({ localDate: "2026-01-01", netPnl: "100" }),
       trade({ localDate: "2026-01-02", netPnl: "-50" }),
@@ -134,10 +131,10 @@ describe("computeAdvancedStats", () => {
       trade({ localDate: "2026-01-04", netPnl: "150" }),
     ];
     const adv = computeAdvancedStats(multi, computeTradeStats(multi));
-    expect(adv.sharpe).not.toBeNull();
-    expect(adv.sortino).not.toBeNull();
-    // Sortino penalizes downside only → ≥ Sharpe here.
-    expect(Number(adv.sortino)).toBeGreaterThanOrEqual(Number(adv.sharpe));
+    // A daily P&L series is not a return series: account size and cash flows
+    // are required before these ratios can be calculated defensibly.
+    expect(adv.sharpe).toBeNull();
+    expect(adv.sortino).toBeNull();
   });
 });
 

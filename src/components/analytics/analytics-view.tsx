@@ -641,7 +641,7 @@ export function AnalyticsView() {
                 compact
                 label={t("kpiSharpe")}
                 value={kpi.sharpe}
-                sub={t("kpiSortino", { value: kpi.sortino })}
+                sub={t("riskAdjustedUnavailable")}
               />
               <KpiCard
                 compact
