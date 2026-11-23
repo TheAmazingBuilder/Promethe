@@ -89,6 +89,10 @@ function AnnotationShape({
       event.stopPropagation();
       onSelect(annotation.id);
     },
+    onPointerDown: (event: React.PointerEvent<SVGElement>) => {
+      event.stopPropagation();
+      onSelect(annotation.id);
+    },
     style: { cursor: "pointer" },
   };
 
@@ -114,7 +118,7 @@ function AnnotationShape({
 
   if (annotation.type === "SL" || annotation.type === "TP") {
     return (
-      <g onClick={common.onClick} style={common.style}>
+      <g onClick={common.onClick} onPointerDown={common.onPointerDown} style={common.style}>
         <line
           x1={x1}
           y1={y1}
