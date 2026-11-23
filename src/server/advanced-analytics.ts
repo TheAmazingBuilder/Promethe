@@ -522,34 +522,34 @@ export async function getAdvancedAnalytics(
           where: { userId_date: { userId, date: utcDay(now) } },
         }),
       ]);
-    if (today != null) {
-      computed.score = {
-        ...computed.score,
-        total: today.score,
-        grade: scoreGrade(today.score),
-        components: {
-          discipline: today.discipline,
-          edge: today.edge,
-          consistency: today.consistency,
-          risk: today.risk,
-        },
-        trades: today.tradeCount,
-      };
-    }
-    const currentMonth = now.toISOString().slice(0, 7);
-    if (
-      today == null &&
-      computed.score.trades >= 3 &&
-      !history.some((p) => p.month === currentMonth)
-    ) {
-      history.push({
-        month: currentMonth,
-        score: computed.score.total,
-        trades: computed.score.trades,
-      });
-      history.sort((a, b) => a.month.localeCompare(b.month));
-    }
-      computed.scoreHistory = history;
+      if (today != null) {
+        computed.score = {
+          ...computed.score,
+          total: today.score,
+          grade: scoreGrade(today.score),
+          components: {
+            discipline: today.discipline,
+            edge: today.edge,
+            consistency: today.consistency,
+            risk: today.risk,
+          },
+          trades: today.tradeCount,
+        };
+      }
+      const currentMonth = now.toISOString().slice(0, 7);
+      if (
+        today == null &&
+        computed.score.trades >= 3 &&
+        !history.some((p) => p.month === currentMonth)
+      ) {
+        history.push({
+          month: currentMonth,
+          score: computed.score.total,
+          trades: computed.score.trades,
+        });
+        history.sort((a, b) => a.month.localeCompare(b.month));
+      }
+        computed.scoreHistory = history;
     }
   }
   try {

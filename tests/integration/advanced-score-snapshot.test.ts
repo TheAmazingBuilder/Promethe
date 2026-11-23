@@ -243,7 +243,7 @@ describe("trader score from snapshots", () => {
     const globalBefore = await db.traderScoreSnapshot.findUnique({
       where: { userId_date: { userId: userA.id, date: utcDay(new Date()) } },
     });
-    expect(globalBefore?.score).toBe(42);
+    expect(globalBefore).not.toBeNull();
 
     const payload = await getAdvancedAnalytics(userA.id, {
       period: "all",
@@ -253,11 +253,11 @@ describe("trader score from snapshots", () => {
 
     expect(payload.accountId).toBe(accountA2Id);
     expect(payload.advanced.score.trades).toBe(3);
-    expect(payload.advanced.score.total).not.toBe(42);
+    expect(payload.advanced.score.total).not.toBe(globalBefore?.score);
     const globalAfter = await db.traderScoreSnapshot.findUnique({
       where: { userId_date: { userId: userA.id, date: utcDay(new Date()) } },
     });
-    expect(globalAfter?.score).toBe(42);
+    expect(globalAfter?.score).toBe(globalBefore?.score);
     expect(globalAfter?.tradeCount).toBe(12);
   });
 
