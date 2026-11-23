@@ -17,7 +17,7 @@ import {
   dailyPnl,
   type StatTrade,
 } from "@/lib/analytics/engine";
-import { tradingDayOfTrade } from "@/lib/time/trading-day";
+import { calendarYearStartUtc, tradingDayOfTrade } from "@/lib/time/trading-day";
 import { resolvePeriod } from "@/lib/dashboard/period";
 import {
   computeGoalProgress,
@@ -139,6 +139,21 @@ describe("computeTradeStats / dailyPnl — trading-day attribution", () => {
   });
 });
 
+describe("calendarYearStartUtc — YTD follows the user timezone", () => {
+  it("uses the local year when UTC is already in the next year", () => {
+    const now = new Date("2026-01-01T03:00:00.000Z");
+    expect(calendarYearStartUtc("America/Toronto", now).toISOString()).toBe(
+      "2025-01-01T05:00:00.000Z"
+    );
+  });
+
+  it("uses the local year and offset in Europe/Paris", () => {
+    const now = new Date("2026-01-01T23:00:00.000Z");
+    expect(calendarYearStartUtc("Europe/Paris", now).toISOString()).toBe(
+      "2025-12-31T23:00:00.000Z"
+    );
+  });
+});
 describe("resolvePeriod — 'today' follows the trading day", () => {
   const now = new Date("2024-03-14T22:30:00.000Z"); // 18:30 EDT Mar 14
   const global = { preset: "today" as const, accountId: null };

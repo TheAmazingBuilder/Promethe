@@ -152,6 +152,35 @@ export function tradingDayStartUtc(
   return new Date(base - offsetNoon * 60 * 1000 - 12 * 3600 * 1000);
 }
 
+/**
+ * UTC instant for local midnight on January 1 of the year containing
+ * `instant` in `timezone`. YTD filters must use the user's calendar year,
+ * not the server's UTC year.
+ */
+export function calendarYearStartUtc(
+  timezone: string,
+  instant: Date = new Date()
+): Date {
+  let zone = timezone;
+  let year: number;
+  try {
+    year = Number(
+      new Intl.DateTimeFormat("en-US", {
+        timeZone: timezone,
+        year: "numeric",
+      }).format(instant)
+    );
+  } catch {
+    zone = "UTC";
+    year = instant.getUTCFullYear();
+  }
+  return tradingDayStartUtc(
+    `${year}-01-01`,
+    zone,
+    DEFAULT_TRADING_DAY
+  );
+}
+
 function offsetOf(tz: string, instant: Date): number {
   try {
     const parts = new Intl.DateTimeFormat("en-US", {

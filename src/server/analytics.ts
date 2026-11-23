@@ -28,7 +28,7 @@ import type { Prisma } from "@prisma/client";
 import { parseCustomFields } from "@/lib/custom-fields/validate";
 import { activeCustomFieldDefinitions } from "@/server/custom-fields";
 import { getDisplayPreferences } from "@/server/display-preferences";
-import { getTradingDay, tradingDayOfTrade } from "@/lib/time/trading-day";
+import { calendarYearStartUtc, getTradingDay, tradingDayOfTrade } from "@/lib/time/trading-day";
 import { selectEquityAccounts } from "@/lib/analytics/account-scope";
 import { scopeTradesToCurrency } from "@/lib/analytics/currency-scope";
 import { resolveOwnedAccount } from "@/server/account-errors";
@@ -43,7 +43,10 @@ type Row = Prisma.TradeGetPayload<{ include: typeof TRADE_INCLUDE }>;
 
 /** Period start (UTC Date) - null for "all". Exported for the
  * when-you-trade endpoint, which filters the same closed trades. */
-export function periodCutoff(period: AnalyticsQuery["period"]): Date | null {
+export function periodCutoff(
+  period: AnalyticsQuery["period"],
+  timezone = "UTC"
+): Date | null {
   const now = new Date();
   switch (period) {
     case "30d":
@@ -51,7 +54,7 @@ export function periodCutoff(period: AnalyticsQuery["period"]): Date | null {
     case "90d":
       return new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
     case "ytd":
-      return new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+      return calendarYearStartUtc(timezone, now);
     default:
       return null;
   }
@@ -170,6 +173,7 @@ export async function getAnalytics(
 
   // Invalid or foreign account IDs are rejected; never widen to all accounts.
   const accountFilter = resolveOwnedAccount(accounts, query.account);
+  const timezone = profile?.timezone ?? "UTC";
 
   const where: Prisma.TradeWhereInput = {
     userId,
@@ -177,7 +181,7 @@ export async function getAnalytics(
     isDraft: false,
     ...(accountFilter ? { accountId: accountFilter.id } : {}),
   };
-  const cutoff = periodCutoff(query.period);
+  const cutoff = periodCutoff(query.period, timezone);
   if (cutoff != null) where.exitTime = { gte: cutoff };
 
   const rows = await db.trade.findMany({
@@ -185,7 +189,6 @@ export async function getAnalytics(
     include: TRADE_INCLUDE,
   });
 
-  const timezone = profile?.timezone ?? "UTC";
   const currency =
     accountFilter?.currency ?? profile?.baseCurrency ?? "USD";
 

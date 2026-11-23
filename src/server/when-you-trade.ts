@@ -36,7 +36,7 @@ export async function getWhenYouTrade(
     isDraft: false,
     ...(accountFilter ? { accountId: accountFilter.id } : {}),
   };
-  const cutoff = periodCutoff(query.period);
+  const cutoff = periodCutoff(query.period, profile?.timezone ?? "UTC");
   if (cutoff != null) where.exitTime = { gte: cutoff };
 
   const rows = await db.trade.findMany({

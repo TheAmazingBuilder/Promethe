@@ -48,7 +48,7 @@ import type { AdvancedAnalyticsPayload } from "@/lib/trading/dto";
 import type { Prisma } from "@prisma/client";
 import { parseCustomFields } from "@/lib/custom-fields/validate";
 import { getDisplayPreferences } from "@/server/display-preferences";
-import { getTradingDay, tradingDayOfTrade } from "@/lib/time/trading-day";
+import { calendarYearStartUtc, getTradingDay, tradingDayOfTrade } from "@/lib/time/trading-day";
 import { scopeTradesToCurrency } from "@/lib/analytics/currency-scope";
 import { resolveOwnedAccount } from "@/server/account-errors";
 import { unstable_cache } from "next/cache";
@@ -64,7 +64,10 @@ const TRADE_INCLUDE = {
 
 type Row = Prisma.TradeGetPayload<{ include: typeof TRADE_INCLUDE }>;
 
-function periodCutoff(period: AnalyticsQuery["period"]): Date | null {
+function periodCutoff(
+  period: AnalyticsQuery["period"],
+  timezone = "UTC"
+): Date | null {
   const now = new Date();
   switch (period) {
     case "30d":
@@ -72,7 +75,7 @@ function periodCutoff(period: AnalyticsQuery["period"]): Date | null {
     case "90d":
       return new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
     case "ytd":
-      return new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+      return calendarYearStartUtc(timezone, now);
     default:
       return null;
   }
@@ -105,6 +108,7 @@ export async function loadAdvancedTrades(
     getDisplayPreferences(userId),
   ]);
   const accountFilter = resolveOwnedAccount(accounts, accountId);
+  const timezone = profile?.timezone ?? "UTC";
   const where: Prisma.TradeWhereInput = {
     userId,
     status: "CLOSED",
@@ -112,7 +116,7 @@ export async function loadAdvancedTrades(
     ...(accountFilter ? { accountId: accountFilter.id } : {}),
   };
   if (period) {
-    const cutoff = periodCutoff(period);
+    const cutoff = periodCutoff(period, timezone);
     if (cutoff != null) where.exitTime = { gte: cutoff };
   }
   const rows = await db.trade.findMany({
@@ -120,7 +124,6 @@ export async function loadAdvancedTrades(
     include: TRADE_INCLUDE,
     orderBy: { entryTime: "asc" },
   });
-  const timezone = profile?.timezone ?? "UTC";
   const currency = accountFilter?.currency ?? profile?.baseCurrency ?? "USD";
 
   // Historical P&L keeps the currency recorded on each trade. An account
