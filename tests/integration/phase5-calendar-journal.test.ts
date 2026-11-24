@@ -263,27 +263,32 @@ describe("journal entries", () => {
     expect(await getJournalPeriodReview(userB.id, "WEEKLY", "2026-01-05")).toBeNull();
   });
 
-  it("listRecentJournal is user-scoped, searchable and filterable", async () => {
-    const entries = await listRecentJournal(userA.id);
-    expect(entries.length).toBeGreaterThanOrEqual(3);
-    for (let i = 1; i < entries.length; i++) {
-      expect(entries[i - 1].date >= entries[i].date).toBe(true);
+  it("listRecentJournal is user-scoped, searchable, filterable and paginated", async () => {
+    const firstPage = await listRecentJournal(userA.id, 2);
+    expect(firstPage.entries).toHaveLength(2);
+    expect(firstPage.hasMore).toBe(true);
+    for (let i = 1; i < firstPage.entries.length; i++) {
+      expect(firstPage.entries[i - 1].date >= firstPage.entries[i].date).toBe(true);
     }
-    expect(entries.every((e) => e.date !== "2026-01-08")).toBe(true);
+    expect(firstPage.entries.every((entry) => entry.date !== "2026-01-08")).toBe(true);
+
+    const secondPage = await listRecentJournal(userA.id, 2, {}, 2);
+    expect(secondPage.entries.length).toBeGreaterThanOrEqual(1);
+    expect(secondPage.entries.some((entry) => firstPage.entries.some((first) => first.id === entry.id))).toBe(false);
 
     const byText = await listRecentJournal(userA.id, 30, { q: "patience" });
-    expect(byText.some((entry) => entry.date === "2026-01-06")).toBe(true);
+    expect(byText.entries.some((entry) => entry.date === "2026-01-06")).toBe(true);
 
     const byRange = await listRecentJournal(userA.id, 30, {
       from: "2026-01-07",
       to: "2026-01-09",
     });
-    expect(byRange.map((entry) => entry.date)).toEqual(
+    expect(byRange.entries.map((entry) => entry.date)).toEqual(
       expect.arrayContaining(["2026-01-07", "2026-01-09"]),
     );
 
     const byMood = await listRecentJournal(userA.id, 30, { mood: 5 });
-    expect(byMood.map((entry) => entry.date)).toContain("2026-01-06");
+    expect(byMood.entries.map((entry) => entry.date)).toContain("2026-01-06");
   });
 
   it("deletes only the owner's entry", async () => {

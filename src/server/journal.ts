@@ -67,8 +67,8 @@ export interface JournalHistoryPage {
 export async function listRecentJournal(
   userId: string,
   limit = 30,
-  offset = 0,
   filters: JournalHistoryFilters = {},
+  offset = 0,
 ): Promise<JournalHistoryPage> {
   const terms = filters.q?.trim()
     ? foldText(filters.q).split(" ").filter(Boolean).slice(0, 8)

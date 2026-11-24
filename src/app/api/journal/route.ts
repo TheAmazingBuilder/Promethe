@@ -47,8 +47,8 @@ export async function GET(req: Request) {
     const page = await listRecentJournal(
       session.user.id,
       parsed.data.limit,
-      parsed.data.offset,
       parsed.data,
+      parsed.data.offset,
     );
     return NextResponse.json(page);
   } catch (error) {
