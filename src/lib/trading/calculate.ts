@@ -456,13 +456,25 @@ export function previewTrade(input: TradePreviewInput): TradePreview {
   let riskAmount: Decimal | null = null;
   let realizedRR: Decimal | null = null;
   const dist = stopDistance(input.direction, input.entry, input.stopLoss ?? null);
-  if (dist) {
-    const rate =
-      input.quoteToAccountRate == null ? D1 : toD(input.quoteToAccountRate);
+
+  // Use the exact same quote→account conversion policy as calcPnL.
+  // A missing cross-currency rate means account-currency risk is unknown;
+  // never silently treat the quote currency as the account currency.
+  const conversionRate =
+    input.quoteToAccountRate == null
+      ? resolveConversionRate(
+          input.instrument.quoteCurrency ?? "",
+          input.accountCurrency ?? "",
+          input.fxRates ?? [],
+          null
+        )
+      : toD(input.quoteToAccountRate);
+
+  if (dist && conversionRate?.isFinite() && conversionRate.gt(0)) {
     riskAmount = dist
       .times(toD(input.lots))
       .times(toD(input.instrument.contractSize))
-      .times(rate);
+      .times(conversionRate);
     if (riskAmount.gt(0)) realizedRR = pnl.netPnl.div(riskAmount);
   }
 
