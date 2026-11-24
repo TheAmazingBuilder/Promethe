@@ -13,6 +13,7 @@ import {
   previewTrade,
   calcPlannedRR,
   classifyResult,
+  tradeLevelIssues,
   type TradePreview,
 } from "@/lib/trading/calculate";
 import { detectSessionSafe } from "@/lib/trading/session";
@@ -509,6 +510,12 @@ export function computeDerived(p: ComputeParams) {
       : preview
         ? preview.netPnl
         : null;
+  // grossPnl semantics for MANUAL / BROKER lines (MD §3.3, see
+  // docs/financial-conventions.md §1): grossPnl above
+  // is ALWAYS the price-derived calculated gross, even when netPnl is
+  // the manual/broker value. For those lines gross − net is NOT the
+  // costs and must never be presented as such; commission/swap/fees are
+  // the user-entered cost fields, not reconciled against the manual net.
 
   const rMultiple =
     netPnl !== null && riskAmount && riskAmount.gt(0)
@@ -875,6 +882,17 @@ export async function createTrade(
   if (Number.isNaN(entryTime.getTime())) {
     throw new TradeValidationError("INVALID_DATE");
   }
+  // Directional TP/SL (MD §3.2) — defense in depth behind the zod schema:
+  // a wrong-side level is rejected, never stored with a null plannedRR.
+  const levelIssues = tradeLevelIssues(
+    input.direction,
+    input.entryPrice,
+    input.stopLoss ?? null,
+    input.takeProfit ?? null
+  );
+  if (levelIssues.length > 0) {
+    throw new TradeValidationError(levelIssues[0]);
+  }
   const closed = input.status === "CLOSED";
   if (closed && !input.exitPrice) {
     throw new TradeValidationError("EXIT_PRICE_REQUIRED");
@@ -1074,12 +1092,36 @@ export async function updateTrade(
   const swap = patch.swap ?? current.swap.toString();
   const fees = patch.fees ?? current.fees.toString();
   const pnlSource = patch.pnlSource ?? current.pnlSource;
+  // Carry the stored manual/broker value when the patch does not supply
+  // one (MD §3.3): there is no manualNetPnl column — for a MANUAL (or
+  // BROKER-synced) trade the stored netPnl IS the manual value, and an
+  // edit of unrelated fields must not silently revert it to calculated.
+  // The carry only applies when the CURRENT source is already
+  // non-CALCULATED: switching CALCULATED → MANUAL must not launder the
+  // calculated netPnl into a "manual" value — that switch requires an
+  // explicit value (see the check below).
   const manualNetPnl =
     patch.manualNetPnl !== undefined
       ? patch.manualNetPnl
-      : current.netPnl && current.pnlSource === "MANUAL"
+      : current.pnlSource !== "CALCULATED" && current.netPnl != null
         ? current.netPnl.toString()
         : null;
+
+  // Manual P&L (MD §3.3): a MANUAL trade must always carry its manual
+  // value. Enforced when the patch touches the source/value (a switch to
+  // MANUAL, or clearing the value) or when the patch closes the trade —
+  // the moments a P&L is (re)realized. Historical trades are NOT
+  // re-validated when unrelated fields are edited.
+  const becomesClosed = status === "CLOSED" && current.status !== "CLOSED";
+  if (
+    (patch.pnlSource !== undefined ||
+      patch.manualNetPnl !== undefined ||
+      becomesClosed) &&
+    pnlSource === "MANUAL" &&
+    manualNetPnl == null
+  ) {
+    throw new TradeValidationError("MANUAL_PNL_REQUIRED");
+  }
   const entryTime = patch.entryTime ? new Date(patch.entryTime) : current.entryTime;
   const exitTime =
     patch.exitTime !== undefined
@@ -1090,6 +1132,27 @@ export async function updateTrade(
 
   if (status === "CLOSED" && !exitPrice) {
     throw new TradeValidationError("EXIT_PRICE_REQUIRED");
+  }
+
+  // Directional TP/SL (MD §3.2) on the MERGED values — but only when the
+  // patch actually touches direction/entry/SL/TP. Trades already stored
+  // with a wrong-side level are preserved untouched (no migration, no
+  // re-validation of historical data when editing unrelated fields).
+  if (
+    patch.direction !== undefined ||
+    patch.entryPrice !== undefined ||
+    patch.stopLoss !== undefined ||
+    patch.takeProfit !== undefined
+  ) {
+    const mergedIssues = tradeLevelIssues(
+      direction,
+      entryPrice,
+      stopLoss,
+      takeProfit
+    );
+    if (mergedIssues.length > 0) {
+      throw new TradeValidationError(mergedIssues[0]);
+    }
   }
 
   // Ownership of any changed relation.
@@ -1287,6 +1350,23 @@ export async function closeTrade(
   const swap = input.swap ?? current.swap.toString();
   const fees = input.fees ?? current.fees.toString();
   const pnlSource = input.pnlSource ?? current.pnlSource;
+  // Manual P&L (MD §3.3): carry the stored manual/broker value through
+  // the close when no new value is supplied — closing used to reset it
+  // to the calculated P&L while the label stayed MANUAL. The stored
+  // netPnl IS the manual value for a MANUAL (or BROKER-synced) trade:
+  // there is no manualNetPnl column. A MANUAL close with neither a new
+  // nor a stored value is rejected instead of silently falling back to
+  // the calculation. A BROKER trade with no stored value keeps the
+  // historical calculated fallback (the broker sync supplies the real
+  // broker P&L afterwards); that case is out of scope for this lot.
+  const manualNetPnl =
+    input.manualNetPnl ??
+    (current.pnlSource !== "CALCULATED" && current.netPnl != null
+      ? current.netPnl.toString()
+      : null);
+  if (pnlSource === "MANUAL" && manualNetPnl == null) {
+    throw new TradeValidationError("MANUAL_PNL_REQUIRED");
+  }
 
   const balanceAtEntry = current.accountBalanceAtEntry
     ? new Decimal(current.accountBalanceAtEntry)
@@ -1313,7 +1393,7 @@ export async function closeTrade(
     fxRates,
     detectionSettings,
     pnlSource,
-    manualNetPnl: input.manualNetPnl ?? null,
+    manualNetPnl,
     entryTime: current.entryTime,
     balanceAtEntry,
   });

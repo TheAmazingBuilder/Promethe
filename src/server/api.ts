@@ -35,6 +35,8 @@ const CODE_MESSAGES: Record<string, string> = {
   CHECKLIST_NOT_FOUND: "Checklist item not found.",
   EXIT_PRICE_REQUIRED: "An exit price is required to close a trade.",
   ALREADY_CLOSED: "This trade is already closed.",
+  MANUAL_PNL_REQUIRED:
+    "A manual P&L is required: enter the broker's net P&L or switch back to calculated P&L.",
   INVALID_DATE: "Invalid date.",
   TRADES_ON_ACCOUNT: "This account contains trades – archiving only.",
   UNSUPPORTED_TYPE: "Unsupported file type (PNG, JPEG or WebP).",

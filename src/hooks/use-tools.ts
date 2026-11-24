@@ -99,7 +99,7 @@ function toExposure(dto: ExposureAlertSettingDTO | null): ExposureSettings {
 
 // ── Tool scenarios ───────────────────────────────────────────────────────────
 
-export function useToolScenarios(kind?: "MULTI_TP" | "MARGIN" | "RISK_REWARD") {
+export function useToolScenarios(kind?: "MULTI_TP" | "MARGIN" | "RISK_REWARD" | "POSITION_SIZE" | "PNL_SIMULATOR") {
   return useQuery({
     queryKey: ["tool-scenarios", kind ?? "ALL"],
     queryFn: async () =>

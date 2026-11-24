@@ -96,15 +96,39 @@ export function takeProfitPriceFromPips(
   return (direction === "SHORT" ? e.minus(dist) : e.plus(dist)).toString();
 }
 
-/** Pip distance between entry and a stop price (absolute, direction-aware sign ignored). */
+/**
+ * Pip distance between entry and a price.
+ *
+ * Without `direction`/`level` this is the legacy absolute distance.
+ * With both, it is directional — the same single logic as
+ * calcPlannedRR / stopDistance (MD §3.2): positive = the price sits on
+ * the level's correct side (risk side for a STOP, reward side for a
+ * TAKE_PROFIT), negative = wrong side. A wrong-side level must never
+ * read as a positive distance.
+ */
 export function pipsFromPrices(
   entry: DecimalInput,
   price: DecimalInput,
-  instrument: InstrumentSpec
+  instrument: InstrumentSpec,
+  direction?: Direction | null,
+  level?: "STOP" | "TAKE_PROFIT"
 ): string {
   const pip = toD(instrument.pipSize);
   if (pip.lte(0)) return D0.toString();
-  return toD(price).minus(toD(entry)).abs().div(pip).toString();
+  if (!direction || !level) {
+    return toD(price).minus(toD(entry)).abs().div(pip).toString();
+  }
+  const e = toD(entry);
+  const p = toD(price);
+  const diff =
+    level === "STOP"
+      ? direction === "LONG"
+        ? e.minus(p)
+        : p.minus(e)
+      : direction === "LONG"
+        ? p.minus(e)
+        : e.minus(p);
+  return diff.div(pip).toString();
 }
 
 function findInstrument(

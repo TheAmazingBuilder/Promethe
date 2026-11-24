@@ -74,4 +74,55 @@ describe("computeDerived manual P&L and R multiple", () => {
     expect(result.rMultiple?.toString()).toBe("1");
     expect(result.realizedRR?.toString()).toBe("1");
   });
+
+  it("keeps the price-derived gross P&L on a MANUAL line (gross is not net + costs)", () => {
+    const { base } = fixtures();
+
+    const result = computeDerived({
+      ...base,
+      pnlSource: "MANUAL",
+      manualNetPnl: "25",
+    });
+
+    // Gross stays the calculated price-derived value (10); net is the
+    // authoritative manual value (25). gross - net (= -15) is NOT the
+    // costs and must never be presented as such (MD §3.3).
+    expect(result.grossPnl?.toString()).toBe("10");
+    expect(result.netPnl?.toString()).toBe("25");
+    expect(result.rMultiple?.toString()).toBe("2.5");
+  });
+
+  it("falls back to calculated P&L for MANUAL without a value (require is enforced upstream)", () => {
+    const { base } = fixtures();
+
+    // computeDerived itself keeps the historical fallback so rows
+    // stored before the MANUAL_PNL_REQUIRED rule still derive. The
+    // require lives at the schema (create/close) and server merged
+    // checks (update/close) — never silently here with a MANUAL label
+    // on new writes.
+    const result = computeDerived({
+      ...base,
+      pnlSource: "MANUAL",
+      manualNetPnl: null,
+    });
+
+    expect(result.netPnl?.toString()).toBe("10");
+    expect(result.rMultiple?.toString()).toBe("1");
+  });
+
+  it("returns a null R multiple when the initial risk is zero (no division by zero)", () => {
+    const { base } = fixtures();
+
+    const result = computeDerived({
+      ...base,
+      stopLoss: "100", // SL == entry: no valid risk distance
+      pnlSource: "MANUAL",
+      manualNetPnl: "25",
+    });
+
+    expect(result.netPnl?.toString()).toBe("25");
+    expect(result.riskAmount).toBeNull();
+    expect(result.rMultiple).toBeNull();
+    expect(result.realizedRR).toBeNull();
+  });
 });

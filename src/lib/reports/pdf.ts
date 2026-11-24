@@ -196,10 +196,10 @@ export class ReportPdf {
     this.y += 4;
   }
 
-  /** Mini equity curve (cumulative net P&L, chronological). */
+  /** Mini cumulative P&L curve (not an equity curve: the points plot cumPnl, see below). */
   equityChart(points: EquityPoint[], footerLabel: string): void {
     if (points.length < 2) return;
-    this.section("Equity curve", footerLabel);
+    this.section("Cumulative P&L curve", footerLabel);
     const boxH = 42;
     this.ensureSpace(boxH + 4, footerLabel);
     const boxY = this.y;

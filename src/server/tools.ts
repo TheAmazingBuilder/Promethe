@@ -317,7 +317,15 @@ export async function listFxRates(userId: string): Promise<FxRateDTO[]> {
 export async function listFxRateInputs(userId: string): Promise<CalcFxRateInput[]> {
   try {
     const rates = await listFxRates(userId);
-    return rates.map((r) => ({ base: r.base, quote: r.quote, rate: r.rate }));
+    // Keep date/source: the sizing path surfaces them as rate provenance
+    // (FxRate.rateDate) instead of dropping them at the mapping boundary.
+    return rates.map((r) => ({
+      base: r.base,
+      quote: r.quote,
+      rate: r.rate,
+      date: r.date,
+      source: r.source,
+    }));
   } catch (error) {
     if (error instanceof ToolsTablesMissingError) return [];
     throw error;

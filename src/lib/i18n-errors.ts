@@ -25,6 +25,7 @@ const KNOWN_API_CODES = new Set([
   "CHECKLIST_NOT_FOUND",
   "EXIT_PRICE_REQUIRED",
   "ALREADY_CLOSED",
+  "MANUAL_PNL_REQUIRED",
   "INVALID_DATE",
   "TRADES_ON_ACCOUNT",
   "UNSUPPORTED_TYPE",
@@ -49,6 +50,7 @@ const KNOWN_VALIDATION_CODES = new Set([
   "themeInvalid",
   "invalidDecimal",
   "invalidDate",
+  "manualNetPnlRequired",
   "invalidUrl",
   "invalidColor",
   "required",
@@ -106,7 +108,11 @@ export function sizingErrorMessage(
     reason === "MISSING_QUOTE_CURRENCY" ||
     reason === "MISSING_CONVERSION_RATE" ||
     reason === "INVALID_CONVERSION_RATE" ||
+    reason === "INVALID_CONVERSION_RATE_PAIR" ||
     reason === "INSUFFICIENT_RISK" ||
+    reason === "EQUITY_UNAVAILABLE" ||
+    reason === "RISK_PERCENT_TOO_HIGH" ||
+    reason === "COSTS_EXCEED_RISK" ||
     reason === "INVALID_LOT_CONSTRAINTS"
   ) {
     return t(`errors.sizing.${reason}` as Parameters<TFunction>[0], {

@@ -419,7 +419,11 @@ export function TradeFormView({
       swap: trade.swap,
       fees: trade.fees,
       pnlSource: trade.pnlSource === "MANUAL" ? "MANUAL" : "CALCULATED",
-      manualNetPnl: "",
+      // Prefill the stored manual value (MD §3.3): for a MANUAL trade
+      // the stored netPnl IS the manual value (no separate column), and
+      // saving the form with an empty field would otherwise clear it.
+      manualNetPnl:
+        trade.pnlSource === "MANUAL" && trade.netPnl != null ? trade.netPnl : "",
       exitReason: trade.exitReason ?? "",
       emotionBefore: trade.emotionBefore ?? "",
       emotionDuring: trade.emotionDuring ?? "",
@@ -528,15 +532,27 @@ export function TradeFormView({
     return form.direction === "LONG" ? s.gte(e) : s.lte(e);
   }, [form.stopLoss, form.entryPrice, form.direction]);
 
+  /** TP on the wrong side of the entry for the chosen direction (MD §3.2).
+   * Mirrors slInvalid: a wrong-side TP used to be stored silently with a
+   * null plannedRR; it is now flagged here and rejected by the schema. */
+  const tpInvalid = React.useMemo(() => {
+    const tp = nul(form.takeProfit);
+    const entry = nul(form.entryPrice);
+    if (!tp || !entry) return false;
+    const p = toD(tp);
+    const e = toD(entry);
+    return form.direction === "LONG" ? p.lte(e) : p.gte(e);
+  }, [form.takeProfit, form.entryPrice, form.direction]);
+
   const slPipsText = React.useMemo(() => {
     if (!spec || !form.entryPrice.trim() || !form.stopLoss.trim()) return null;
-    return `${fmtNum(pipsFromPrices(form.entryPrice.trim(), form.stopLoss.trim(), spec), 1)} ${tc("pips")}`;
-  }, [spec, form.entryPrice, form.stopLoss, tc]);
+    return `${fmtNum(pipsFromPrices(form.entryPrice.trim(), form.stopLoss.trim(), spec, form.direction, "STOP"), 1)} ${tc("pips")}`;
+  }, [spec, form.entryPrice, form.stopLoss, form.direction, tc]);
 
   const tpPipsText = React.useMemo(() => {
     if (!spec || !form.entryPrice.trim() || !form.takeProfit.trim()) return null;
-    return `${fmtNum(pipsFromPrices(form.entryPrice.trim(), form.takeProfit.trim(), spec), 1)} ${tc("pips")}`;
-  }, [spec, form.entryPrice, form.takeProfit, tc]);
+    return `${fmtNum(pipsFromPrices(form.entryPrice.trim(), form.takeProfit.trim(), spec, form.direction, "TAKE_PROFIT"), 1)} ${tc("pips")}`;
+  }, [spec, form.entryPrice, form.takeProfit, form.direction, tc]);
 
   // ── Handlers ──
   const set = <K extends keyof TradeFormState>(key: K, value: TradeFormState[K]) =>
@@ -1159,6 +1175,7 @@ export function TradeFormView({
                   value={form.takeProfit}
                   onChange={(e) => set("takeProfit", e.target.value)}
                   className="tabular-nums"
+                  aria-invalid={tpInvalid || undefined}
                 />
               </Field>
               <Field label={t("mfe")} htmlFor="tf-mfe">
@@ -1825,6 +1842,11 @@ export function TradeFormView({
                   {slInvalid && (
                     <p className="rounded-md border border-loss-subtle bg-loss-subtle p-2 text-xs font-medium text-loss">
                       {t("previewInvalidSide")}
+                    </p>
+                  )}
+                  {tpInvalid && (
+                    <p className="rounded-md border border-loss-subtle bg-loss-subtle p-2 text-xs font-medium text-loss">
+                      {t("previewInvalidTpSide")}
                     </p>
                   )}
                   <dl className="space-y-2 text-sm">

@@ -45,6 +45,7 @@ import {
   useDeleteToolScenario,
   useToolScenarios,
 } from "@/hooks/use-tools";
+import { parseRiskRewardScenario } from "@/lib/tools/scenario-payloads";
 import {
   useRiskRewardSummary,
   useSetDailyRiskBudget,
@@ -69,7 +70,11 @@ export function RiskRewardCalculator() {
   const fmt = useFormat();
   const summaryQuery = useRiskRewardSummary();
   const summary = summaryQuery.data ?? null;
-  const currency = summary?.currency ?? "USD";
+  // Currency of a loaded scenario: the summary currency is the default,
+  // but a saved scenario carries its own currency and loading it must
+  // restore that currency (MD §3.5, 6c - it used to be dropped).
+  const [currencyOverride, setCurrencyOverride] = React.useState<string | null>(null);
+  const currency = currencyOverride ?? summary?.currency ?? "USD";
 
   const scenariosQuery = useToolScenarios("RISK_REWARD");
   const scenarios = scenariosQuery.data ?? [];
@@ -191,13 +196,15 @@ export function RiskRewardCalculator() {
   };
 
   const loadScenario = (payload: Record<string, unknown>) => {
-    if (typeof payload.winRate === "string") {
-      setWinRatePct(String(Math.round(Number(payload.winRate) * 100)));
+    const p = parseRiskRewardScenario(payload);
+    if (p.winRate !== undefined) {
+      setWinRatePct(String(Math.round(Number(p.winRate) * 100)));
     }
-    if (typeof payload.rr === "string") setRr(payload.rr);
-    if (typeof payload.riskPerTrade === "string") {
-      setRiskPerTrade(payload.riskPerTrade);
+    if (p.rr !== undefined) setRr(p.rr);
+    if (p.riskPerTrade !== undefined) {
+      setRiskPerTrade(p.riskPerTrade);
     }
+    if (p.currency !== undefined) setCurrencyOverride(p.currency);
   };
 
   const saveBudget = () => {
@@ -462,7 +469,12 @@ export function RiskRewardCalculator() {
                   {typeof s.payload.rr === "string" ? `${s.payload.rr}:1` : "-"}
                   {" · "}
                   {typeof s.payload.riskPerTrade === "string"
-                    ? fmt.money(s.payload.riskPerTrade, currency)
+                    ? fmt.money(
+                        s.payload.riskPerTrade,
+                        typeof s.payload.currency === "string"
+                          ? s.payload.currency
+                          : currency
+                      )
                     : "-"}
                 </span>
                 <Button

@@ -210,7 +210,7 @@ export function ExposureDashboard() {
         <>
           <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Stat label={t("exposureOpenTrades")} value={String(trades.length)} />
-            <Stat label={t("exposureTotalRisk")} value={`${fmtNum(summary.summary.totalOpenRisk, 2)} ${currency}`} />
+            <Stat label={t("exposureTotalRisk")} value={summary.summary.totalOpenRisk !== null ? `${fmtNum(summary.summary.totalOpenRisk, 2)} ${currency}` : "—"} />
             <Stat label={t("exposureNoStopLoss")} value={String(noStopLossCount)} />
             <Stat label={t("exposureAlerts")} value={String(duplications.length)} />
           </dl>
@@ -249,10 +249,10 @@ export function ExposureDashboard() {
                     <tr key={c.currency} className="border-b last:border-0">
                       <td className="px-3 py-2 font-medium">{c.currency}</td>
                       <td className="px-3 py-2 text-right tabular-nums">
-                        {c.notional.gte(0) ? "+" : ""}{fmtNum(c.notional, 0)} {currency}
+                        {c.notional !== null ? `${c.notional.gte(0) ? "+" : ""}${fmtNum(c.notional, 0)} ${currency}` : "—"}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">
-                        {c.risk.gte(0) ? "+" : ""}{fmtNum(c.risk, 2)} {currency}
+                        {c.risk !== null ? `${c.risk.gte(0) ? "+" : ""}${fmtNum(c.risk, 2)} ${currency}` : "—"}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">{c.positionCount}</td>
                     </tr>
@@ -278,7 +278,7 @@ export function ExposureDashboard() {
                     {summary.summary.byInstrument.map((row) => (
                       <tr key={row.key} className="border-b last:border-0">
                         <td className="px-3 py-2 font-medium tabular-nums">{row.key}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.risk, 2)} {currency}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.risk !== null ? `${fmtNum(row.risk, 2)} ${currency}` : "—"}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{row.count}</td>
                       </tr>
                     ))}
@@ -301,7 +301,7 @@ export function ExposureDashboard() {
                     {summary.summary.byStrategy.map((row) => (
                       <tr key={row.key} className="border-b last:border-0">
                         <td className="px-3 py-2 font-medium">{row.key === "" ? t("exposureNoStrategy") : row.key}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.risk, 2)} {currency}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.risk !== null ? `${fmtNum(row.risk, 2)} ${currency}` : "—"}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{row.count}</td>
                       </tr>
                     ))}
@@ -372,7 +372,7 @@ export function ExposureDashboard() {
                           }}
                         />
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums">{fmtNum(d.openRisk, 2)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{d.openRisk !== null ? fmtNum(d.openRisk, 2) : "—"}</td>
                       <td className="px-3 py-2 text-right tabular-nums">
                         {d.floatingPnl !== null ? `${d.floatingPnl.gte(0) ? "+" : ""}${fmtNum(d.floatingPnl, 2)}` : "-"}
                       </td>

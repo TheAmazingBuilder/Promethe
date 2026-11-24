@@ -45,6 +45,8 @@ const GRADE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "o
 export function QualityView() {
   const t = useTranslations("analytics.advanced.quality");
   const tRoot = useTranslations("analytics.advanced");
+  // Same honest qualification as the Analytics KPI strip (MD §3.4).
+  const tAnalytics = useTranslations("analytics");
   const [period, setPeriod] = React.useState<AnalyticsPeriod>("all");
   const [accountId, setAccountId] = React.useState<string>("all");
   const { data, isLoading, isError, refetch } = useAdvancedAnalytics(
@@ -183,6 +185,7 @@ export function QualityView() {
             />
             <AdvKpi
               label={t("detailDrawdown")}
+              sub={tAnalytics("kpiDrawdownHint")}
               value={
                 <Money
                   value={score.details.maxDrawdown}

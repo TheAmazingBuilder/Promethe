@@ -101,10 +101,10 @@ async function buildPdf(
   pdf.kvRow("Average win", pdf.moneyOf(report.avgWin));
   pdf.kvRow("Average loss", pdf.moneyOf(report.avgLoss));
   pdf.kvRow("Total R", report.totalR ?? "-");
-  pdf.kvRow("Max drawdown", pdf.moneyOf(report.maxDrawdown));
+  pdf.kvRow("Max P&L drawdown", pdf.moneyOf(report.maxDrawdown));
   pdf.y += 4;
 
-  // ── Equity curve ──
+  // ── Cumulative P&L curve (not an equity curve: no cash flows, no open positions) ──
   pdf.equityChart(report.equity, footerLabel);
 
   // ── Tables ──

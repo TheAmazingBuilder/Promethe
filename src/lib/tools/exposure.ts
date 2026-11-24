@@ -11,6 +11,15 @@
  * in the same direction on 2+ positions above a configurable % of the
  * account balance. The pre-trade check is advisory only: it never blocks
  * a trade, it warns.
+ *
+ * FX-missing policy (MD §3.6, Lot 1 Phase C): when the quote→account
+ * conversion is unavailable, notionals AND open risk are NULLED — the
+ * same treatment floating P&L already had — never shown unconverted at
+ * 1:1. One exception: an open risk supplied by the server as
+ * `riskAmount` is already in account currency, so it stays known and
+ * only the notionals are nulled. Aggregates that mix in an unknown leg
+ * are null too (never a partial sum presented as a total); the affected
+ * symbols are listed in `missingFxSymbols` and the dashboard warns.
  */
 import { D0, D100, toD, type DecimalInput } from "@/lib/trading/dec";
 import type { Decimal } from "decimal.js";
@@ -37,17 +46,29 @@ export interface OpenTradeLike {
 
 export interface CurrencyLeg {
   currency: string;
-  /** Signed notional in ACCOUNT currency (positive = long the currency). */
-  notional: Decimal;
-  /** Signed open risk attributed to this leg (account currency). */
-  risk: Decimal;
+  /**
+   * Signed notional in ACCOUNT currency (positive = long the currency).
+   * Null when the quote→account conversion is unavailable (see the
+   * FX-missing policy above) — never an unconverted 1:1 figure.
+   */
+  notional: Decimal | null;
+  /**
+   * Signed open risk attributed to this leg (account currency).
+   * Null when the trade's open risk itself is unknown.
+   */
+  risk: Decimal | null;
 }
 
 export interface DecomposedTrade {
   trade: OpenTradeLike;
   legs: CurrencyLeg[];
-  /** Open risk of the whole trade in account currency (0 when no SL). */
-  openRisk: Decimal;
+  /**
+   * Open risk of the whole trade in account currency (0 when no SL).
+   * Null when it is price-derived and the quote→account conversion is
+   * unavailable. Stays known when the server supplied `riskAmount`
+   * (already account currency).
+   */
+  openRisk: Decimal | null;
   hasStopLoss: boolean;
   /** Unrealised P&L in account currency; null when FX conversion is unavailable. */
   floatingPnl: Decimal | null;
@@ -103,12 +124,17 @@ export function decomposeTrade(
     resolveFxRate(quote, accountCurrency, fxRates) === null;
 
   // Open risk: |entry - SL| * units, converted quote -> account.
-  let openRisk = D0;
+  // A server-supplied riskAmount is already account currency, so it
+  // stays known even when FX is missing; a price-derived risk with no
+  // conversion is unknown (null), never estimated at 1:1.
+  let openRisk: Decimal | null = D0;
   if (trade.riskAmount !== null && trade.riskAmount !== undefined && String(trade.riskAmount) !== "") {
     openRisk = toD(trade.riskAmount).abs();
   } else if (trade.stopLoss !== null && trade.stopLoss !== undefined && String(trade.stopLoss) !== "") {
     const dist = entry.minus(toD(trade.stopLoss)).abs();
-    openRisk = toAccount(dist.times(units), quote, accountCurrency, fxRates);
+    openRisk = conversionMissing
+      ? null
+      : toAccount(dist.times(units), quote, accountCurrency, fxRates);
   }
   const hasStopLoss =
     trade.stopLoss !== null && trade.stopLoss !== undefined && String(trade.stopLoss) !== "";
@@ -122,20 +148,26 @@ export function decomposeTrade(
 
   // Legs: base leg = units of base (valued at the current price in quote,
   // then converted); quote leg = -units * price in quote, converted.
+  // With no conversion both legs are quote-denominated, so both notionals
+  // are null; leg risk follows the (possibly known) open risk.
   const legs: CurrencyLeg[] = [];
   const quoteNotional = units.times(current);
-  const quoteLegAccount = toAccount(quoteNotional, quote, accountCurrency, fxRates);
+  const quoteLegAccount = conversionMissing
+    ? null
+    : toAccount(quoteNotional, quote, accountCurrency, fxRates);
+  const legRisk = (s: number): Decimal | null =>
+    openRisk === null ? null : openRisk.times(s).div(2);
   if (base) {
     legs.push({
       currency: base,
-      notional: quoteLegAccount.times(sign),
-      risk: openRisk.times(sign).div(2),
+      notional: quoteLegAccount === null ? null : quoteLegAccount.times(sign),
+      risk: legRisk(sign),
     });
   }
   legs.push({
     currency: quote,
-    notional: quoteLegAccount.times(-sign),
-    risk: openRisk.times(-sign).div(2),
+    notional: quoteLegAccount === null ? null : quoteLegAccount.times(-sign),
+    risk: legRisk(-sign),
   });
 
   return { trade, legs, openRisk, hasStopLoss, floatingPnl, conversionMissing };
@@ -143,43 +175,54 @@ export function decomposeTrade(
 
 export interface CurrencyExposure {
   currency: string;
-  /** Signed aggregate notional (account currency). */
-  notional: Decimal;
-  /** Signed aggregate open risk (account currency). */
-  risk: Decimal;
+  /**
+   * Signed aggregate notional (account currency). Null when any leg's
+   * notional is unknown (FX missing) — a partial sum would understate
+   * the exposure, so no sum is shown at all.
+   */
+  notional: Decimal | null;
+  /** Signed aggregate open risk (account currency); null when any leg's risk is unknown. */
+  risk: Decimal | null;
   /** Number of open positions touching this currency. */
   positionCount: number;
   /** Number of positions with positive exposure to this currency. */
   longPositionCount: number;
   /** Number of positions with negative exposure to this currency. */
   shortPositionCount: number;
-  /** Long and short notionals kept separate for the duplication check. */
-  longNotional: Decimal;
-  shortNotional: Decimal;
+  /** Long and short notionals kept separate for the duplication check; null when unknown. */
+  longNotional: Decimal | null;
+  shortNotional: Decimal | null;
 }
 
 export interface ExposureSummary {
   byCurrency: CurrencyExposure[];
-  byInstrument: { key: string; risk: Decimal; notional: Decimal; count: number }[];
-  byStrategy: { key: string; risk: Decimal; notional: Decimal; count: number }[];
-  totalOpenRisk: Decimal;
+  byInstrument: { key: string; risk: Decimal | null; notional: Decimal | null; count: number }[];
+  byStrategy: { key: string; risk: Decimal | null; notional: Decimal | null; count: number }[];
+  /** Σ open risk of the known trades; null when any trade's open risk is unknown. */
+  totalOpenRisk: Decimal | null;
   noStopLoss: DecomposedTrade[];
   /** Symbols whose quote currency could not be converted into the account currency. */
   missingFxSymbols: string[];
+}
+
+/** Add two amounts, propagating unknown (null) instead of summing around it. */
+function addKnown(a: Decimal | null, b: Decimal | null): Decimal | null {
+  if (a === null || b === null) return null;
+  return a.plus(b);
 }
 
 export function aggregateExposure(
   decomposed: DecomposedTrade[]
 ): ExposureSummary {
   const byCurrency = new Map<string, CurrencyExposure>();
-  const byInstrument = new Map<string, { risk: Decimal; notional: Decimal; count: number }>();
-  const byStrategy = new Map<string, { risk: Decimal; notional: Decimal; count: number }>();
-  let totalOpenRisk = D0;
+  const byInstrument = new Map<string, { risk: Decimal | null; notional: Decimal | null; count: number }>();
+  const byStrategy = new Map<string, { risk: Decimal | null; notional: Decimal | null; count: number }>();
+  let totalOpenRisk: Decimal | null = D0;
   const noStopLoss: DecomposedTrade[] = [];
   const missingFxSymbols = new Set<string>();
 
   for (const d of decomposed) {
-    totalOpenRisk = totalOpenRisk.plus(d.openRisk);
+    totalOpenRisk = addKnown(totalOpenRisk, d.openRisk);
     if (!d.hasStopLoss) noStopLoss.push(d);
     if (d.conversionMissing) missingFxSymbols.add(d.trade.symbol);
     for (const leg of d.legs) {
@@ -193,38 +236,43 @@ export function aggregateExposure(
         longNotional: D0,
         shortNotional: D0,
       };
-      cur.notional = cur.notional.plus(leg.notional);
-      cur.risk = cur.risk.plus(leg.risk);
+      cur.notional = addKnown(cur.notional, leg.notional);
+      cur.risk = addKnown(cur.risk, leg.risk);
       cur.positionCount += 1;
-      if (leg.notional.gt(0)) {
-        cur.longNotional = cur.longNotional.plus(leg.notional);
+      if (leg.notional !== null && leg.notional.gt(0)) {
+        cur.longNotional = addKnown(cur.longNotional, leg.notional);
         cur.longPositionCount++;
-      } else if (leg.notional.lt(0)) {
-        cur.shortNotional = cur.shortNotional.plus(leg.notional);
+      } else if (leg.notional !== null && leg.notional.lt(0)) {
+        cur.shortNotional = addKnown(cur.shortNotional, leg.notional);
         cur.shortPositionCount++;
       }
       byCurrency.set(leg.currency, cur);
     }
-    const inst = byInstrument.get(d.trade.symbol) ?? { risk: D0, notional: D0, count: 0 };
-    inst.risk = inst.risk.plus(d.openRisk);
-    inst.notional = inst.notional.plus(
-      d.legs.reduce((acc, l) => acc.plus(l.notional.abs()), D0).div(2)
+    const inst = byInstrument.get(d.trade.symbol) ?? { risk: D0 as Decimal | null, notional: D0 as Decimal | null, count: 0 };
+    inst.risk = addKnown(inst.risk, d.openRisk);
+    const legsAbs = d.legs.reduce<Decimal | null>(
+      (acc, l) => addKnown(acc, l.notional === null ? null : l.notional.abs()),
+      D0
     );
+    inst.notional = addKnown(inst.notional, legsAbs === null ? null : legsAbs.div(2));
     inst.count += 1;
     byInstrument.set(d.trade.symbol, inst);
 
     const strat = d.trade.strategyName ?? "";
-    const st = byStrategy.get(strat) ?? { risk: D0, notional: D0, count: 0 };
-    st.risk = st.risk.plus(d.openRisk);
-    st.notional = st.notional.plus(
-      d.legs.reduce((acc, l) => acc.plus(l.notional.abs()), D0).div(2)
-    );
+    const st = byStrategy.get(strat) ?? { risk: D0 as Decimal | null, notional: D0 as Decimal | null, count: 0 };
+    st.risk = addKnown(st.risk, d.openRisk);
+    st.notional = addKnown(st.notional, legsAbs === null ? null : legsAbs.div(2));
     st.count += 1;
     byStrategy.set(strat, st);
   }
 
-  const sortDesc = <T extends { risk: Decimal }>(a: T, b: T): number =>
-    b.risk.abs().cmp(a.risk.abs());
+  // Nulls sort last: an unknown exposure is not "small", it is unknown.
+  const sortDesc = <T extends { risk: Decimal | null }>(a: T, b: T): number => {
+    if (a.risk === null && b.risk === null) return 0;
+    if (a.risk === null) return 1;
+    if (b.risk === null) return -1;
+    return b.risk.abs().cmp(a.risk.abs());
+  };
 
   return {
     byCurrency: [...byCurrency.values()].sort(sortDesc),
@@ -262,21 +310,24 @@ export function detectDuplication(
 
   const alerts: DuplicationAlert[] = [];
   for (const currency of summary.byCurrency) {
+    // A currency whose same-direction notional is unknown (FX missing)
+    // cannot be evaluated against the threshold — skip it, never guess.
     const candidates = [
       {
         direction: "LONG" as const,
         positionCount: currency.longPositionCount,
-        notional: currency.longNotional.abs(),
+        notional: currency.longNotional === null ? null : currency.longNotional.abs(),
       },
       {
         direction: "SHORT" as const,
         positionCount: currency.shortPositionCount,
-        notional: currency.shortNotional.abs(),
+        notional: currency.shortNotional === null ? null : currency.shortNotional.abs(),
       },
     ];
 
     for (const candidate of candidates) {
       if (candidate.positionCount < 2) continue;
+      if (candidate.notional === null) continue;
       const pct = candidate.notional.div(balance).times(D100);
       if (pct.gte(threshold)) {
         alerts.push({
@@ -327,8 +378,11 @@ export function checkPreTrade(
     ]);
     const maxPct = toD(settings.maxCurrencyExposurePercent);
     for (const c of after.byCurrency) {
+      // Unknown notionals (FX missing) cannot be compared to the
+      // threshold — skip the currency instead of treating it as 0.
+      if (c.notional === null) continue;
       const beforeCur = before.byCurrency.find((b) => b.currency === c.currency);
-      const beforePct = beforeCur && balance.gt(0)
+      const beforePct = beforeCur && beforeCur.notional !== null && balance.gt(0)
         ? beforeCur.notional.abs().div(balance).times(D100)
         : D0;
       const afterPct = balance.gt(0)

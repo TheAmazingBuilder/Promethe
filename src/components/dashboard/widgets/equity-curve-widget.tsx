@@ -131,8 +131,11 @@ function CurveChart({
   // CSS variables work in SVG presentation attributes (verified) — the
   // curves follow the active palette / theme automatically.
   const color = mode === "equity" ? "var(--gain)" : "var(--loss)";
-  // §3.1: a masked HIDE mode never draws a real currency scale — the equity
-  // curve switches to percent, the fallback (and the drawdown curve) masks.
+  // §3.1: a masked HIDE mode never draws a real currency scale — the
+  // cumulative P&L curve switches to percent, the fallback (and the
+  // drawdown curve) masks. The "equity" mode plots initial balance +
+  // cumulative trade P&L, not account equity (MD §3.4: no cash flows,
+  // no open positions), hence the label.
   const amountsHidden =
     fmt.privacyMode === "HIDE" && fmt.isMasked("amount");
   return (
@@ -140,7 +143,7 @@ function CurveChart({
       className="w-full"
       style={{ height: heightPx }}
       role="img"
-      aria-label={mode === "equity" ? "Equity curve" : "Drawdown curve"}
+      aria-label={mode === "equity" ? "Cumulative P&L curve" : "Drawdown curve"}
     >
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>

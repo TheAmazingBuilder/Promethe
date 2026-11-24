@@ -42,7 +42,10 @@ export interface MonthlyReport {
   avgLoss: string | null;
   totalR: string | null;
   maxDrawdown: string | null;
-  /** Cumulative net P&L per trade, chronological (mini equity curve). */
+  /** Cumulative net P&L per trade, chronological — NOT account equity:
+   * deposits/withdrawals and open positions are not in this series, so
+   * the PDF renders it as the "Cumulative P&L curve". The field keeps
+   * its historical `equity` name for API compatibility. */
   equity: Array<{ date: string; cumPnl: string }>;
   bySymbol: MonthlyReportGroup[];
   byStrategy: MonthlyReportGroup[];
@@ -156,7 +159,9 @@ export async function getMonthlyReport(
 
   const stats = trades.length > 0 ? computeTradeStats(trades) : null;
 
-  // Cumulative net P&L, chronological (equity curve for the PDF).
+  // Cumulative net P&L, chronological (rendered in the PDF as the
+  // "Cumulative P&L curve" — this is not an equity curve: cash flows
+  // and open positions are excluded by construction).
   let cum = toD(0);
   const equity = trades.map((t) => {
     cum = cum.plus(toD(t.netPnl ?? 0));

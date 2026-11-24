@@ -10,7 +10,7 @@
 
 import * as React from "react";
 import { useTranslations } from "next-intl";
-import { ArrowRightLeft, Plus, Trash2, Upload } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, Plus, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { resolveFxRate } from "@/lib/tools/fx";
+import { resolveFxRate, isFxRateStale } from "@/lib/tools/fx";
 import { toD } from "@/lib/trading/dec";
 import {
   isToolsTablesMissing,
@@ -56,13 +56,17 @@ export function CurrencyConverter() {
   const fileRef = React.useRef<HTMLInputElement>(null);
 
   const fxInputs = React.useMemo(
-    () => rates.map((r) => ({ base: r.base, quote: r.quote, rate: r.rate })),
+    () => rates.map((r) => ({ base: r.base, quote: r.quote, rate: r.rate, date: r.date, source: r.source })),
     [rates]
   );
   const resolved = React.useMemo(
     () => resolveFxRate(from, to, fxInputs),
     [from, to, fxInputs]
   );
+  // Freshness (MD §3.6, 7d): the same 7-day stale policy as the sizing
+  // path. The date was previously dropped at this mapping boundary, so
+  // a stale rate converted silently.
+  const rateStale = resolved && from !== to ? isFxRateStale(resolved.date) : false;
   const converted = resolved ? toD(amount || "0").times(resolved.rate) : null;
 
   const addRate = () => {
@@ -146,6 +150,20 @@ export function CurrencyConverter() {
               1 {from} = {fmtNum(resolved.rate, 6)} {to}
               {resolved.triangulated && ` (${t("converterVia", { path: resolved.path.join(" + ") })})`}
             </p>
+            {resolved.date && (
+              <p className="mt-1 text-xs text-muted-foreground tabular-nums">
+                {t("converterColDate")}: {resolved.date}
+                {resolved.source ? ` · ${resolved.source}` : ""}
+              </p>
+            )}
+            {rateStale && (
+              <p className="mx-auto mt-3 flex max-w-md items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-left text-xs text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                {resolved.date
+                  ? t("converterRateStale", { date: resolved.date })
+                  : t("converterRateUndated")}
+              </p>
+            )}
           </>
         ) : (
           <p className="text-sm text-muted-foreground">{t("converterNoRate")}</p>

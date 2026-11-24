@@ -1521,7 +1521,8 @@ model ToolScenario {
   id        String   @id @default(cuid())
   userId    String   @map("user_id")
   name      String
-  /// MULTI_TP | MARGIN | RISK_REWARD
+  /// MULTI_TP | MARGIN | RISK_REWARD | POSITION_SIZE | PNL_SIMULATOR
+  /// (plain String, not an enum: adding a kind needs no migration.)
   kind      String
   /// JSON: calculator inputs (payload shape depends on kind).
   payloadJson String @map("payload_json")

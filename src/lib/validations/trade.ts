@@ -8,6 +8,7 @@
  */
 import { z } from "zod";
 import { TRADE_GRADES } from "@/lib/trading/grades";
+import { tradeLevelIssues } from "@/lib/trading/calculate";
 import {
   ASSET_CLASSES,
   COMMON_CURRENCIES,
@@ -69,7 +70,12 @@ const isoDate = z.string().datetime({ offset: true, message: "invalidDate" });
 
 // ── Trade create / update ────────────────────────────────────────────────────
 
-export const tradeInputSchema = z.object({
+/**
+ * Base trade object. Kept separate from the refined create schema below:
+ * Zod v4 forbids `.partial()` on schemas carrying refinements, and the
+ * PATCH schema must stay partial (merged server-side, see updateTrade).
+ */
+const tradeInputObject = z.object({
   accountId: z.string().min(1, "required"),
   strategyId: z.string().nullish(),
   instrumentId: z.string().min(1, "required"),
@@ -140,24 +146,90 @@ export const tradeInputSchema = z.object({
   expectedUpdatedAt: isoDate.nullish(),
 });
 
+/**
+ * Create schema: the base object + directional TP/SL validation (MD §3.2).
+ * BUY requires TP above entry and SL below; SELL the reverse; entry ==
+ * TP/SL is rejected too. A wrong-side level used to be stored silently
+ * (plannedRR computed as null) — it is now rejected at the API with a
+ * 422 VALIDATION carrying the issue code on the offending field
+ * (TP_WRONG_SIDE / TP_EQUALS_ENTRY on takeProfit, SL_WRONG_SIDE /
+ * SL_EQUALS_ENTRY on stopLoss). Historical trades are NOT migrated and
+ * are NOT re-validated unless those fields are edited (see updateTrade).
+ *
+ * Manual P&L (MD §3.3): pnlSource MANUAL requires manualNetPnl in the
+ * same payload — there is no separate manualNetPnl column (the manual
+ * value IS the stored netPnl), so a MANUAL trade without a value would
+ * silently fall back to the calculated P&L while keeping the MANUAL
+ * label. The value is required whatever the status: an open MANUAL trade
+ * stores its manual value as netPnl (see computeDerived), so until a
+ * realized broker P&L exists the source must stay CALCULATED.
+ */
+export const tradeInputSchema = tradeInputObject.superRefine((v, ctx) => {
+  for (const issue of tradeLevelIssues(
+    v.direction,
+    v.entryPrice,
+    v.stopLoss ?? null,
+    v.takeProfit ?? null
+  )) {
+    ctx.addIssue({
+      code: "custom",
+      message: issue,
+      path: issue.startsWith("TP_") ? ["takeProfit"] : ["stopLoss"],
+    });
+  }
+  if (v.pnlSource === "MANUAL" && (v.manualNetPnl == null || v.manualNetPnl.trim() === "")) {
+    ctx.addIssue({
+      code: "custom",
+      message: "manualNetPnlRequired",
+      path: ["manualNetPnl"],
+    });
+  }
+});
+
 export type TradeInput = z.infer<typeof tradeInputSchema>;
 
 /** PATCH: everything optional, applied on top of the stored trade. */
-export const tradePatchSchema = tradeInputSchema.partial();
+export const tradePatchSchema = tradeInputObject.partial().superRefine((v, ctx) => {
+  // Explicitly clearing the manual value while (staying) MANUAL would
+  // leave a MANUAL label with no manual value. The server merged check
+  // in updateTrade covers the remaining cases (switch to MANUAL without
+  // a value, closing a MANUAL trade without one); the schema cannot see
+  // the stored trade, so it only rejects the explicit clear it can see.
+  if (v.pnlSource === "MANUAL" && v.manualNetPnl === null) {
+    ctx.addIssue({
+      code: "custom",
+      message: "manualNetPnlRequired",
+      path: ["manualNetPnl"],
+    });
+  }
+});
 export type TradePatch = z.infer<typeof tradePatchSchema>;
 
-export const closeTradeSchema = z.object({
-  exitPrice: decimalString,
-  exitTime: isoDate.nullish(), // default: now (server-side)
-  exitReason: z.enum(EXIT_REASONS).nullish(),
-  commission: signedDecimalString.nullish(),
-  swap: signedDecimalString.nullish(),
-  fees: signedDecimalString.nullish(),
-  quoteToAccountRate: optionalDecimal,
-  pnlSource: z.enum(["CALCULATED", "MANUAL"]).nullish(),
-  manualNetPnl: signedDecimalString.nullish(),
-  clientMutationId: z.string().max(64).nullish(),
-});
+export const closeTradeSchema = z
+  .object({
+    exitPrice: decimalString,
+    exitTime: isoDate.nullish(), // default: now (server-side)
+    exitReason: z.enum(EXIT_REASONS).nullish(),
+    commission: signedDecimalString.nullish(),
+    swap: signedDecimalString.nullish(),
+    fees: signedDecimalString.nullish(),
+    quoteToAccountRate: optionalDecimal,
+    pnlSource: z.enum(["CALCULATED", "MANUAL"]).nullish(),
+    manualNetPnl: signedDecimalString.nullish(),
+    clientMutationId: z.string().max(64).nullish(),
+  })
+  .superRefine((v, ctx) => {
+    // An explicitly MANUAL close must carry its value. When pnlSource is
+    // omitted the server carries the stored manual value of an already
+    // MANUAL trade (see closeTrade) — that case is not visible here.
+    if (v.pnlSource === "MANUAL" && (v.manualNetPnl == null || v.manualNetPnl.trim() === "")) {
+      ctx.addIssue({
+        code: "custom",
+        message: "manualNetPnlRequired",
+        path: ["manualNetPnl"],
+      });
+    }
+  });
 
 export type CloseTradeInput = z.infer<typeof closeTradeSchema>;
 

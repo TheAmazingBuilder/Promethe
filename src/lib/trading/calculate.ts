@@ -4,18 +4,37 @@
  * All functions are pure, client-safe (no Prisma import) and use decimal.js
  * exclusively. Inputs accept string | number | Decimal.
  *
- * Conventions (documented in README):
+ * Conventions (documented in docs/financial-conventions.md):
  *  - commission / swap / fees are SIGNED COSTS in the ACCOUNT currency:
  *    positive = cost, negative = credit. netPnl = grossPnl − (costs).
  *  - P&L gross is computed in the QUOTE currency, then converted to the
  *    account currency with `quoteToAccountRate` when provided.
- *  - If quote currency ≠ account currency the result is an ESTIMATE
- *    (`isEstimate`); the user's broker P&L (pnlSource = MANUAL) overrides it.
+ *  - calcPnL `isEstimate` is true ONLY when quote ≠ account AND no
+ *    conversion rate could be resolved (manual or stored): the amounts
+ *    are then shown unconverted, i.e. estimated. A valid applied rate —
+ *    manual or stored — makes the conversion exact given that rate, so
+ *    isEstimate is false (MD §3.6, Lot 1 Phase C). NOTE: this differs
+ *    deliberately from calcPositionSize `isEstimate`, which stays true
+ *    whenever an FX conversion was applied (a sized position depends on
+ *    the rate holding until execution).
+ *  - The user's broker P&L (pnlSource = MANUAL) overrides the calculated one.
+ *  - R-MULTIPLE IS NET-BASED (MD §3.3): everywhere the term "R multiple"
+ *    (stored Trade.rMultiple, previewTrade().rMultiple, realizedRR) means
+ *    netPnl / initial risk, with the SAME netPnl that is displayed and
+ *    stored. The price-only value (gross P&L / initial risk, before
+ *    costs) is kept separately as grossRMultiple and must always be
+ *    labelled "(gross)" — never bare "R multiple".
+ *
+ * ── Manual P&L and R-multiple conventions live in
+ * docs/financial-conventions.md (§1–§2) — the draft that used to sit
+ * here was moved there verbatim in Lot 1 Phase D. ──
  */
 import { D0, D1, D100, Decimal, floorToStep, toD, type DecimalInput } from "./dec";
 import type { Direction, InstrumentSpec, ResultType } from "./types";
 import {
+  isFxRateStale,
   resolveConversionRate,
+  resolveConversionRateDetailed,
   type FxRateInput,
 } from "@/lib/tools/fx";
 
@@ -78,7 +97,11 @@ export function stopDistance(
   return d.gt(0) ? d : null;
 }
 
-/** R multiple from prices: signed diff / initial stop distance. null if no valid SL. */
+/**
+ * R multiple from prices: signed diff / initial stop distance. null if no valid SL.
+ * Price-based (gross, before costs) — used for previewTrade().grossRMultiple
+ * only. The bare "R multiple" everywhere else is net-based (MD §3.3).
+ */
 export function calcRMultiple(
   direction: Direction,
   entry: DecimalInput,
@@ -112,6 +135,51 @@ export function calcPlannedRR(
   return reward.div(risk);
 }
 
+/**
+ * Directional TP/SL placement issues — the single source of truth for
+ * "is this level on the right side of the entry" (MD §3.2). The trade
+ * zod schema and the server PATCH path both reject on this; the trade
+ * form mirrors it with the SL/TP banners. Entry == TP/SL is an issue too
+ * (zero risk / zero reward is not a valid plan).
+ */
+export type TradeLevelIssue =
+  | "TP_WRONG_SIDE"
+  | "TP_EQUALS_ENTRY"
+  | "SL_WRONG_SIDE"
+  | "SL_EQUALS_ENTRY";
+
+export function tradeLevelIssues(
+  direction: Direction,
+  entry: DecimalInput,
+  stopLoss: DecimalInput | null | undefined,
+  takeProfit: DecimalInput | null | undefined
+): TradeLevelIssue[] {
+  const issues: TradeLevelIssue[] = [];
+  const e = toD(entry);
+  if (!e.isFinite()) return issues;
+  if (stopLoss !== null && stopLoss !== undefined) {
+    const s = toD(stopLoss);
+    if (s.isFinite()) {
+      if (s.eq(e)) issues.push("SL_EQUALS_ENTRY");
+      else if (stopDistance(direction, entry, stopLoss) === null)
+        issues.push("SL_WRONG_SIDE");
+    }
+  }
+  if (takeProfit !== null && takeProfit !== undefined) {
+    const tp = toD(takeProfit);
+    if (tp.isFinite()) {
+      if (tp.eq(e)) issues.push("TP_EQUALS_ENTRY");
+      // Same reward-side logic as calcPlannedRR (not via RR itself, so a
+      // missing/invalid SL cannot mask a wrong-side TP).
+      else if (
+        (direction === "LONG" ? tp.minus(e) : e.minus(tp)).lt(0)
+      )
+        issues.push("TP_WRONG_SIDE");
+    }
+  }
+  return issues;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Pip / point value
 // ─────────────────────────────────────────────────────────────────────────────
@@ -135,6 +203,46 @@ export function calcPipValue(
   const rate = quoteToAccountRate == null ? null : toD(quoteToAccountRate);
   const account = rate ? quote.times(rate) : quote;
   return { quote, account };
+}
+
+export interface TickValueResult {
+  /** Value of 1 tick for the position, in QUOTE currency. */
+  quote: Decimal;
+  /** Value of 1 tick for the position, in ACCOUNT currency. */
+  account: Decimal;
+}
+
+/**
+ * Value of one tick move for a position of `lots` (MD §3.5).
+ *
+ * Preset semantics (see src/lib/trading/instruments.ts): `tickSize` is
+ * the minimum price increment; the tick value is then
+ * tickSize × contractSize × lots (quote currency). When a preset carries
+ * an explicit `tickValue` it is taken as the per-lot tick value in quote
+ * currency (broker tick value), so tickValue × lots. Returns null when
+ * the instrument carries neither — most presets have no tick data at
+ * all (only XAUUSD, XAGUSD and USOIL define a tickSize), and the caller
+ * must label that honestly instead of showing a zero tick value.
+ */
+export function calcTickValue(
+  instrument: InstrumentSpec,
+  lots: DecimalInput,
+  quoteToAccountRate?: DecimalInput | null
+): TickValueResult | null {
+  const lotsD = toD(lots);
+  const explicit =
+    instrument.tickValue == null ? null : toD(instrument.tickValue);
+  const tickSize =
+    instrument.tickSize == null ? null : toD(instrument.tickSize);
+  let quote: Decimal | null = null;
+  if (explicit !== null && explicit.isFinite() && explicit.gt(0)) {
+    quote = explicit.times(lotsD);
+  } else if (tickSize !== null && tickSize.isFinite() && tickSize.gt(0)) {
+    quote = tickSize.times(toD(instrument.contractSize)).times(lotsD);
+  }
+  if (quote === null) return null;
+  const rate = quoteToAccountRate == null ? null : toD(quoteToAccountRate);
+  return { quote, account: rate ? quote.times(rate) : quote };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -177,7 +285,10 @@ export interface PnlResult {
   netPnl: Decimal;
   /** True when a conversion rate ≠ 1 was applied. */
   converted: boolean;
-  /** True when quote currency ≠ account currency → ESTIMATE. */
+  /** True when quote currency ≠ account currency AND no conversion
+   *  rate could be resolved — the amounts are then shown unconverted,
+   *  i.e. estimated. False when a valid rate (manual or stored) was
+   *  applied: the conversion is exact given that rate (MD §3.6). */
   isEstimate: boolean;
 }
 
@@ -207,7 +318,11 @@ export function calcPnL(input: PnlInput): PnlResult {
 
   const quote = instrument.quoteCurrency ?? "";
   const account = input.accountCurrency ?? "";
-  const isEstimate = account !== "" && quote !== account;
+  // Estimate only when a conversion was needed but no rate exists:
+  // the amounts below are then unconverted (rate 1 applied implicitly).
+  // A valid applied rate — manual or stored — is not an estimate.
+  const isEstimate =
+    account !== "" && quote !== "" && quote !== account && rate === null;
 
   return {
     pips: toPips(instrument, diff),
@@ -254,10 +369,32 @@ export function classifyResult(
 
 export interface PositionSizeInput {
   accountBalance: DecimalInput;
+  /**
+   * What the risk % is taken on (MD §3.5). BALANCE (default) uses
+   * `accountBalance`. EQUITY uses `accountEquity` — live equity is NOT
+   * available to this calculator (AccountEquitySnapshot is EA-heartbeat
+   * only and sparse), so the caller must supply the current equity
+   * value; when it is missing the sizing is rejected
+   * (EQUITY_UNAVAILABLE) instead of silently falling back to balance.
+   * The quick-trade form keeps the static initial balance and stays on
+   * BALANCE explicitly.
+   */
+  riskBasis?: "BALANCE" | "EQUITY" | null;
+  /** Current live equity, required when riskBasis is EQUITY. */
+  accountEquity?: DecimalInput | null;
   /** Risk as % of balance - used when riskAmount is not provided. */
   riskPercent?: DecimalInput | null;
   /** Fixed risk amount in ACCOUNT currency (overrides riskPercent). */
   riskAmount?: DecimalInput | null;
+  /**
+   * Expected total trading costs for the trade, ACCOUNT currency
+   * (commission + swap + fees). When provided (> 0) the position is
+   * sized on riskAmount − costs, so the risk taken plus the costs stays
+   * within the requested budget; `costsDeducted` on the result reports
+   * what was taken off. When absent/zero the sizing is explicitly
+   * BEFORE costs (see the UI note) — costs are never silently added.
+   */
+  estimatedCosts?: DecimalInput | null;
   entry: DecimalInput;
   stopLoss: DecimalInput;
   instrument: InstrumentSpec;
@@ -271,7 +408,29 @@ export interface PositionSizeInput {
   accountCurrency?: string | null;
   /** quote → account rate, required when quote ≠ account currency. */
   quoteToAccountRate?: DecimalInput | null;
+  /**
+   * Orientation of `quoteToAccountRate` when the rate was typed as a
+   * currency pair (e.g. the user typed "149" for USDJPY). When the pair
+   * is quote→account the rate is used as-is; when it is the inverse
+   * (account→quote) the rate is corrected to 1/rate; when it names
+   * neither direction the sizing is rejected (INVALID_CONVERSION_RATE_PAIR).
+   * A bare rate with no pair keeps its documented contract: it IS the
+   * quote→account rate.
+   */
+  quoteToAccountRatePair?: { base: string; quote: string } | null;
+  /**
+   * Stored FxRate table (v2.5 Module 5), used as the conversion fallback
+   * when no manual rate is given — resolved via resolveFxRate, so a
+   * stored inverted pair is corrected, not used backwards. Entries carry
+   * their FxRate.rateDate/source for the provenance on the result.
+   */
+  fxRates?: FxRateInput[] | null;
 }
+
+/** Upper bound on risk per trade (MD §3.5): risking more than 100% of
+ * the basis (balance or equity) is rejected, in percent mode and in
+ * fixed-amount mode alike. */
+export const MAX_RISK_PERCENT = 100;
 
 /**
  * Machine-readable invalid reasons — translated client-side via
@@ -289,13 +448,21 @@ export type SizingInvalidReason =
   | "MISSING_QUOTE_CURRENCY"
   | "MISSING_CONVERSION_RATE"
   | "INVALID_CONVERSION_RATE"
-  | "INSUFFICIENT_RISK";
+  | "INVALID_CONVERSION_RATE_PAIR"
+  | "INSUFFICIENT_RISK"
+  | "EQUITY_UNAVAILABLE"
+  | "RISK_PERCENT_TOO_HIGH"
+  | "COSTS_EXCEED_RISK";
 
 export interface PositionSizeResult {
   valid: boolean;
   reason?: SizingInvalidReason;
   /** Requested risk in ACCOUNT currency. */
   riskAmount: Decimal;
+  /** The basis the risk % was taken on (BALANCE = accountBalance). */
+  riskBasis: "BALANCE" | "EQUITY";
+  /** The basis amount the risk % was applied to. */
+  basisAmount: Decimal;
   /** |entry − SL| in price units. */
   stopDist: Decimal | null;
   /** Stop distance in pips. */
@@ -308,12 +475,38 @@ export interface PositionSizeResult {
   /** Risk really taken with the rounded lots. */
   actualRiskAmount: Decimal;
   pipValue: PipValueResult;
+  /** Value of 1 tick for the sized position; null when the instrument
+   * carries no tick data (see calcTickValue). */
+  tickValue: TickValueResult | null;
+  /** True when the instrument carries neither tickSize nor tickValue. */
+  tickDataMissing: boolean;
   /** Position notional in quote currency. */
   notionalQuote: Decimal;
   /** Minimum lot size considered (for INSUFFICIENT_RISK messaging). */
   minLots: Decimal;
+  /**
+   * True when the computed size was truncated by maxLots: the result
+   * is still valid (a tradable size is returned) but it is NOT the
+   * size the risk budget asked for — the UI must show the cap.
+   */
+  capped: boolean;
+  /** Costs taken off the risk budget before sizing (0 = before-costs sizing). */
+  costsDeducted: Decimal;
   /** True when quote ≠ account without/with conversion → estimate. */
   isEstimate: boolean;
+  /** Where the conversion rate came from: NONE = no conversion needed. */
+  rateSource: "NONE" | "MANUAL" | "STORED";
+  /** ISO date (YYYY-MM-DD) of the stored rate used; null for a manual rate. */
+  rateDate: string | null;
+  /**
+   * True when a stored rate is stale (older than FX_RATE_STALE_AFTER_DAYS).
+   * A manual rate is never "stale" — it was just typed — but it is
+   * undated, which the UI labels via rateSource MANUAL + rateDate null.
+   * Stale is a flag, not a block: the rate is still applied.
+   */
+  rateStale: boolean;
+  /** The quote→account rate actually applied (null when no conversion). */
+  conversionRate: Decimal | null;
 }
 
 export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
@@ -323,13 +516,27 @@ export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
   const requestedMinLots = input.minLots == null ? lotStep : toD(input.minLots);
   const contractSize = toD(instrument.contractSize);
   const maxLots = input.maxLots == null ? null : toD(input.maxLots);
+  const riskBasis: "BALANCE" | "EQUITY" =
+    input.riskBasis === "EQUITY" ? "EQUITY" : "BALANCE";
+
+  // Risk basis (MD §3.5, 6a): EQUITY never falls back to balance — a
+  // missing/invalid equity value rejects the sizing outright, so the UI
+  // can never show a balance-sized position labelled as equity-sized.
+  const basisAmount =
+    riskBasis === "EQUITY" ? toD(input.accountEquity) : balance;
+  const basisValid =
+    riskBasis === "EQUITY"
+      ? basisAmount.isFinite() && basisAmount.gt(0)
+      : balance.isFinite() && balance.gt(0);
 
   // An explicitly supplied fixed risk is authoritative, including zero or
   // negative values (which are rejected below rather than falling back to %).
   const riskAmount =
     input.riskAmount != null
       ? toD(input.riskAmount)
-      : balance.times(toD(input.riskPercent ?? 0)).div(D100);
+      : basisAmount.times(toD(input.riskPercent ?? 0)).div(D100);
+  const riskPercentSupplied =
+    input.riskAmount == null ? toD(input.riskPercent ?? 0) : null;
 
   const accountCurrency = input.accountCurrency?.trim().toUpperCase() ?? "";
   const quoteCurrency = instrument.quoteCurrency?.trim().toUpperCase() ?? "";
@@ -341,6 +548,8 @@ export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
     valid: false,
     reason,
     riskAmount,
+    riskBasis,
+    basisAmount,
     stopDist: null,
     stopPips: null,
     exactUnits: D0,
@@ -348,18 +557,54 @@ export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
     units: D0,
     actualRiskAmount: D0,
     pipValue: { quote: D0, account: D0 },
+    tickValue: null,
+    tickDataMissing:
+      instrument.tickSize == null && instrument.tickValue == null,
     notionalQuote: D0,
     minLots: requestedMinLots,
+    capped: false,
+    costsDeducted: D0,
     isEstimate: false,
+    rateSource: "NONE",
+    rateDate: null,
+    rateStale: false,
+    conversionRate: null,
   });
 
+  if (riskBasis === "EQUITY" && !basisValid) {
+    return invalid("EQUITY_UNAVAILABLE");
+  }
+
   if (
-    !balance.isFinite() ||
+    !basisAmount.isFinite() ||
     !riskAmount.isFinite() ||
-    balance.lte(0) ||
+    basisAmount.lte(0) ||
     riskAmount.lte(0)
   ) {
     return invalid("INVALID_AMOUNT");
+  }
+
+  // Absurd-risk bound (MD §3.5, 6f): never risk more than 100% of the
+  // basis in one trade — percent mode or fixed-amount mode alike.
+  if (
+    (riskPercentSupplied !== null &&
+      riskPercentSupplied.isFinite() &&
+      riskPercentSupplied.gt(MAX_RISK_PERCENT)) ||
+    riskAmount.gt(basisAmount)
+  ) {
+    return invalid("RISK_PERCENT_TOO_HIGH");
+  }
+
+  // Costs (MD §3.5, 6b): when estimated costs are given they come off
+  // the risk budget BEFORE sizing, so risk taken + costs stays within
+  // the requested budget. Costs >= the whole budget cannot be sized.
+  const costsDeducted =
+    input.estimatedCosts == null
+      ? D0
+      : Decimal.max(D0, toD(input.estimatedCosts));
+  const sizingBudget = riskAmount.minus(costsDeducted);
+  if (sizingBudget.lte(0)) {
+    return invalid("COSTS_EXCEED_RISK");
   }
 
   const entry = toD(input.entry);
@@ -414,23 +659,60 @@ export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
 
   const needsConversion = quoteCurrency !== accountCurrency;
   let rate = D1;
+  let rateSource: PositionSizeResult["rateSource"] = "NONE";
+  let rateDate: string | null = null;
+  let rateStale = false;
   if (needsConversion) {
-    if (
-      input.quoteToAccountRate == null ||
-      String(input.quoteToAccountRate).trim() === ""
-    ) {
-      return invalid("MISSING_CONVERSION_RATE");
-    }
-    rate = toD(input.quoteToAccountRate);
-    if (!rate.isFinite() || rate.lte(0)) {
-      return invalid("INVALID_CONVERSION_RATE");
+    const manualRaw = input.quoteToAccountRate;
+    const hasManual =
+      manualRaw !== null &&
+      manualRaw !== undefined &&
+      String(manualRaw).trim() !== "";
+    if (hasManual) {
+      rate = toD(manualRaw);
+      if (!rate.isFinite() || rate.lte(0)) {
+        return invalid("INVALID_CONVERSION_RATE");
+      }
+      // A typed rate is only unambiguous when its pair orientation is
+      // known: correct an inverted pair, reject an unrelated one. A bare
+      // rate (no pair) keeps its contract: quote→account.
+      const pair = input.quoteToAccountRatePair;
+      if (pair) {
+        const base = pair.base.trim().toUpperCase();
+        const quote = pair.quote.trim().toUpperCase();
+        if (base === quoteCurrency && quote === accountCurrency) {
+          // Direct orientation: use as-is.
+        } else if (base === accountCurrency && quote === quoteCurrency) {
+          rate = D1.div(rate); // inverted pair: correct the conversion
+        } else {
+          return invalid("INVALID_CONVERSION_RATE_PAIR");
+        }
+      }
+      rateSource = "MANUAL";
+      rateDate = null; // manual rates are undated — labeled as such in the UI
+    } else {
+      // No manual rate: fall back to the stored FxRate table, resolved
+      // via the shared resolver (stored inverted pairs are corrected).
+      const resolved = resolveConversionRateDetailed(
+        quoteCurrency,
+        accountCurrency,
+        input.fxRates ?? []
+      );
+      if (!resolved) {
+        return invalid("MISSING_CONVERSION_RATE");
+      }
+      rate = resolved.rate;
+      rateSource = resolved.source;
+      rateDate = resolved.date;
+      rateStale = isFxRateStale(resolved.date);
     }
   }
 
   // Stop distance is quoted in the instrument's quote currency. Convert
   // it to the account currency before sizing the position.
   const distAccount = dist.times(rate);
-  const exactUnits = riskAmount.div(distAccount);
+  // Sized on the budget AFTER costs (== riskAmount when no costs given).
+  const exactUnits = sizingBudget.div(distAccount);
   const exactLots = exactUnits.div(contractSize);
 
   // The broker's minimum is itself a valid volume; each subsequent volume
@@ -443,11 +725,17 @@ export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
   );
 
   // Respect the broker's maximum using the same minimum-anchored increments.
+  // A truncated size is still valid, but `capped` marks it so the UI can
+  // never present it as the size the risk budget asked for (MD §3.5, 6d).
+  let capped = false;
   if (maxLots != null) {
     const maxTradableLots = requestedMinLots.plus(
       floorToStep(maxLots.minus(requestedMinLots), lotStep)
     );
-    lots = Decimal.min(lots, maxTradableLots);
+    if (lots.gt(maxTradableLots)) {
+      capped = true;
+      lots = maxTradableLots;
+    }
   }
 
   const units = lots.times(contractSize);
@@ -458,6 +746,8 @@ export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
     valid: true,
     reason: undefined,
     riskAmount,
+    riskBasis,
+    basisAmount,
     stopDist: dist,
     stopPips: toPips(instrument, dist),
     exactUnits,
@@ -465,9 +755,18 @@ export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
     units,
     actualRiskAmount,
     pipValue: calcPipValue(instrument, lots, rate),
+    tickValue: calcTickValue(instrument, lots, rate),
+    tickDataMissing:
+      instrument.tickSize == null && instrument.tickValue == null,
     notionalQuote,
     minLots: requestedMinLots,
+    capped,
+    costsDeducted,
     isEstimate: needsConversion,
+    rateSource,
+    rateDate,
+    rateStale,
+    conversionRate: needsConversion ? rate : null,
   };
 }
 
@@ -484,7 +783,19 @@ export interface TradePreviewInput extends PnlInput {
 }
 
 export interface TradePreview extends PnlResult {
+  /**
+   * Net-based R: netPnl / initial risk (MD §3.3) — the SAME convention
+   * as the stored Trade.rMultiple (see computeDerived) and as
+   * realizedRR below. Null when the account-currency risk is unknown
+   * (e.g. cross-currency without a rate) or zero.
+   */
   rMultiple: Decimal | null;
+  /**
+   * Price-based R (gross P&L / initial risk, before costs) — the value
+   * rMultiple used to carry. Kept for the simulator's "(gross)" label;
+   * never present it as a bare "R multiple".
+   */
+  grossRMultiple: Decimal | null;
   plannedRR: Decimal | null;
   /** Net-based R: netPnl / initial risk amount. */
   realizedRR: Decimal | null;
@@ -496,7 +807,9 @@ export interface TradePreview extends PnlResult {
 
 export function previewTrade(input: TradePreviewInput): TradePreview {
   const pnl = calcPnL(input);
-  const r = calcRMultiple(
+  // Gross (price-only) R, kept under its own name for the "(gross)"
+  // label. The bare "R multiple" below is net-based (MD §3.3).
+  const grossR = calcRMultiple(
     input.direction,
     input.entry,
     input.exit,
@@ -542,10 +855,16 @@ export function previewTrade(input: TradePreviewInput): TradePreview {
 
   return {
     ...pnl,
-    rMultiple: r,
+    // Net-based R (MD §3.3): identical to realizedRR, so the live
+    // preview shows the same R that gets stored (computeDerived stores
+    // netPnl / riskAmount). The result classification therefore also
+    // uses the net R, matching the server-side classification of the
+    // stored trade.
+    rMultiple: realizedRR,
+    grossRMultiple: grossR,
     plannedRR: planned,
     realizedRR,
-    resultType: classifyResult(pnl.netPnl, r, input.breakevenThresholdR ?? "0.1"),
+    resultType: classifyResult(pnl.netPnl, realizedRR, input.breakevenThresholdR ?? "0.1"),
     riskAmount,
     riskPercent,
   };

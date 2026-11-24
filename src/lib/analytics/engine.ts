@@ -101,6 +101,24 @@ export function sortChronologically<T extends StatTrade>(trades: T[]): T[] {
   );
 }
 
+/**
+ * Balance curve from CLOSED trades only (MD §3.4).
+ *
+ * This is initialBalance + cumulative trade P&L — it is NOT account
+ * equity: deposits, withdrawals, bonuses and adjustments (CashTransaction)
+ * are not inputs here, and open positions contribute nothing (their
+ * floating P&L is unknown without live prices). Callers must therefore
+ * label it "Cumulative P&L curve" / "Max P&L drawdown", never "Equity
+ * curve" / equity drawdown. A true balance/equity drawdown would need
+ * per-account initialBalance + dated cash flows merged with trade P&L
+ * in every caller (analytics, dashboard, reports, mentor, share) plus a
+ * complete equity series — AccountEquitySnapshot is EA-heartbeat-only
+ * (sparse, 15-min, 30-day retention), so no such series exists today.
+ * That wiring is deliberately NOT attempted in this lot.
+ *
+ * initialBalance = 0 is valid: the curve then starts at 0 and tracks
+ * cumulative P&L exactly (drawdown = peak-to-trough of cum P&L).
+ */
 export function computeEquityCurve(
   trades: StatTrade[],
   initialBalance: DecimalInput
@@ -172,7 +190,12 @@ export function computeTradeStats(
   }
   const currentStreak = cur;
 
-  // Max drawdown from the cumulative P&L curve.
+  // Max drawdown from the cumulative P&L curve (MD §3.4) — NOT an
+  // equity drawdown: deposits/withdrawals never enter this computation
+  // (they are not inputs), open trades are excluded (server callers
+  // pass CLOSED trades only), and maxDrawdownPercent stays null until
+  // cumulative P&L has made a positive peak — with initialBalance 0 and
+  // an all-losing series there is no meaningful percentage.
   let cum = D0;
   let peak = D0;
   let maxDd = D0;

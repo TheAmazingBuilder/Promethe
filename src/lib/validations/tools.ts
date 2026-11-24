@@ -26,11 +26,20 @@ const hhmm = z
 
 const isoWeekday = z.number().int().min(1).max(7);
 
-// ── Tool scenarios (multi-TP / margin / risk-reward) ───────────────────────
+// ── Tool scenarios (multi-TP / margin / risk-reward / position-size / P&L simulator) ──
+
+export const toolScenarioKindSchema = z.enum([
+  "MULTI_TP",
+  "MARGIN",
+  "RISK_REWARD",
+  "POSITION_SIZE",
+  "PNL_SIMULATOR",
+]);
+export type ToolScenarioKind = z.infer<typeof toolScenarioKindSchema>;
 
 export const toolScenarioInputSchema = z.object({
   name: z.string().trim().min(1, "required").max(80),
-  kind: z.enum(["MULTI_TP", "MARGIN", "RISK_REWARD"]),
+  kind: toolScenarioKindSchema,
   payload: z.record(z.string(), z.unknown()),
 });
 export type ToolScenarioInput = z.infer<typeof toolScenarioInputSchema>;

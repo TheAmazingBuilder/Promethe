@@ -356,7 +356,8 @@ export async function getMentorAnalytics(
   const kpis30d =
     last30.length > 0 ? computeTradeStats(last30, { dayOf }) : null;
 
-  // Equity curve — percent-normalized when amounts are hidden.
+  // Cumulative P&L curve (not an equity curve: cash flows and open
+  // positions excluded) — percent-normalized when amounts are hidden.
   const sorted = [...statTrades].sort(
     (a, b) => new Date(a.exitTime).getTime() - new Date(b.exitTime).getTime()
   );

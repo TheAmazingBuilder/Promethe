@@ -348,7 +348,7 @@ function MentorAnalyticsCard({ ownerId }: { ownerId: string }) {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">
-              Equity - {data.equityUnit === "PERCENT" ? "%" : data.equityUnit}
+              Cumulative P&L - {data.equityUnit === "PERCENT" ? "%" : data.equityUnit}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -356,7 +356,7 @@ function MentorAnalyticsCard({ ownerId }: { ownerId: string }) {
               viewBox={`0 0 ${width} ${height}`}
               className="h-40 w-full"
               role="img"
-              aria-label="Equity curve"
+              aria-label="Cumulative P&L curve"
             >
               <path
                 d={path}

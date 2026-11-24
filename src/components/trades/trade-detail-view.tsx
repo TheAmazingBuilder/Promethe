@@ -287,7 +287,13 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
     setFees(trade.fees);
     setRate("");
     setUseManual(trade.pnlSource === "MANUAL");
-    setManualPnl("");
+    // Prefill the stored manual value (MD §3.3): for a MANUAL trade the
+    // stored netPnl IS the manual value (no separate column). The dialog
+    // used to reset this field to "" on every open, so closing lost the
+    // manual P&L while the label stayed MANUAL.
+    setManualPnl(
+      trade.pnlSource === "MANUAL" && trade.netPnl != null ? trade.netPnl : ""
+    );
   }, [closeOpen, trade]);
 
   const mutationErrorToast = (err: unknown) => {

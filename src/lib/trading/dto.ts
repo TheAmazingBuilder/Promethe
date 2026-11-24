@@ -506,7 +506,7 @@ export interface AccountsHealthPayload {
 export interface ToolScenarioDTO {
   id: string;
   name: string;
-  /** MULTI_TP | MARGIN | RISK_REWARD */
+  /** MULTI_TP | MARGIN | RISK_REWARD | POSITION_SIZE | PNL_SIMULATOR */
   kind: string;
   payload: Record<string, unknown>;
   createdAt: string;
