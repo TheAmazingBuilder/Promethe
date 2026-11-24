@@ -1975,7 +1975,7 @@
     "marginDesc": "Used and free margin, margin level, distance to margin call and to stop-out.",
     "marginDistanceCall": "Distance to margin call",
     "marginDistanceStopOut": "Distance to stop-out",
-    "marginEquity": "Equity",
+    "marginEquity": "Current account equity",
     "marginFree": "Free margin",
     "marginLevel": "Margin level",
     "marginMissingFx": "A quote-to-account FX rate is required for: {symbols}. Add a rate in Currency Converter before calculating margin.",
@@ -2076,7 +2076,8 @@
     "exitPlanRealizedOver100": "Total realized volume exceeds 100%. Check the manual values and recorded exits.",
     "exitPlanError_trigger": "Breakeven and trailing triggers must point to an existing tier in this plan.",
     "multiTpAllocationInvalid": "Each allocation must be greater than 0%, no more than 100%, and the total must equal 100%.",
-    "multiTpTargetInvalid": "Each take-profit price must be positive and on the profit side of the entry."
+    "multiTpTargetInvalid": "Each take-profit price must be positive and on the profit side of the entry.",
+    "marginEquityHint": "Enter the broker's current equity (balance plus floating P&L). The selected account's initial balance is only a starting value."
   },
   "topLeaks": {
     "title": "Top 3 leaks",
