@@ -64,17 +64,19 @@ export function PnlSimulator() {
     needsRate &&
     manualRateValue !== null &&
     (!manualRateValue.isFinite() || manualRateValue.lte(0));
-  const resolvedRate = React.useMemo(() => {
-    if (!needsRate) return null;
-    if (manualRateValue !== null) {
-      return manualRateInvalid ? null : manualRateValue.toString();
-    }
-    return resolveConversionRate(
-      instrument.quoteCurrency ?? "",
-      accountCurrency,
-      fxRates.map((r) => ({ base: r.base, quote: r.quote, rate: r.rate }))
-    )?.toString() ?? null;
-  }, [needsRate, manualRate, manualRateInvalid, instrument.quoteCurrency, accountCurrency, fxRates]);
+  // This lookup is inexpensive; keeping it outside useMemo avoids stale
+  // FX values and React Compiler's conflicting dependency inference.
+  const resolvedRate = !needsRate
+    ? null
+    : manualRateValue !== null
+      ? manualRateInvalid
+        ? null
+        : manualRateValue.toString()
+      : resolveConversionRate(
+          instrument.quoteCurrency ?? "",
+          accountCurrency,
+          fxRates.map((r) => ({ base: r.base, quote: r.quote, rate: r.rate }))
+        )?.toString() ?? null;
   const conversionReady = !needsRate || resolvedRate !== null;
 
   const preview = React.useMemo(
