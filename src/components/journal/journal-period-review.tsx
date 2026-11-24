@@ -11,6 +11,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
+import { QueryErrorState } from "@/components/ui/query-error-state";
 import {
   useJournalPeriodReview,
   useSaveJournalPeriodReview,
@@ -55,7 +57,7 @@ export function JournalPeriodReviewPanel({
 }) {
   const [periodType, setPeriodType] = React.useState<JournalPeriodType>("WEEKLY");
   const range = React.useMemo(() => getPeriodRange(selectedDay, periodType), [selectedDay, periodType]);
-  const { data: review, isLoading } = useJournalPeriodReview(periodType, range.start);
+  const { data: review, isLoading, isError, refetch } = useJournalPeriodReview(periodType, range.start);
   const save = useSaveJournalPeriodReview();
   const [form, setForm] = React.useState<FormState>(EMPTY);
   const [status, setStatus] = React.useState("");
@@ -152,7 +154,18 @@ export function JournalPeriodReviewPanel({
       </CardHeader>
       <CardContent className="space-y-4 pt-0">
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading period review…</p>
+          <div className="grid gap-3 md:grid-cols-2" aria-label="Loading period review">
+            <Skeleton className="h-28 w-full" />
+            <Skeleton className="h-28 w-full" />
+            <Skeleton className="h-28 w-full" />
+            <Skeleton className="h-28 w-full" />
+          </div>
+        ) : isError ? (
+          <QueryErrorState
+            title="Period review could not be loaded"
+            description="Your saved reflection has not been changed. Try loading this period again."
+            onRetry={() => void refetch()}
+          />
         ) : (
           <>
             <div className="grid gap-4 md:grid-cols-2">

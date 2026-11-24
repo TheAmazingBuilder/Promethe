@@ -4,6 +4,7 @@ import * as React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { QueryErrorState } from "@/components/ui/query-error-state";
 import {
   Select,
   SelectContent,
@@ -28,7 +29,7 @@ export function JournalTemplateControls({
   values: PreparationValues;
   onApply: (template: JournalTemplateDTO) => void;
 }) {
-  const { data: templates = [], isLoading } = useJournalTemplates();
+  const { data: templates = [], isLoading, isError, refetch } = useJournalTemplates();
   const create = useCreateJournalTemplate();
   const update = useUpdateJournalTemplate();
   const remove = useDeleteJournalTemplate();
@@ -106,6 +107,13 @@ export function JournalTemplateControls({
         </div>
         <Badge variant="outline">{templates.length} saved</Badge>
       </div>
+      {isError ? (
+        <QueryErrorState
+          title="Preparation templates could not be loaded"
+          description="Your saved templates have not been changed. Try again."
+          onRetry={() => void refetch()}
+        />
+      ) : null}
       <div className="flex flex-col gap-2 sm:flex-row">
         <Select
           value={selectedId || undefined}

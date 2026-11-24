@@ -19,6 +19,12 @@ describe("Journal period-review draft protection", () => {
   });
 
 
+  it("shows a retryable state when a period review fails to load", () => {
+    expect(source).toContain("isError, refetch");
+    expect(source).toContain('title="Period review could not be loaded"');
+    expect(source).toContain("onRetry={() => void refetch()}");
+  });
+
   it("does not compare the previous period's form against a newly selected period before hydration", () => {
     expect(source).toContain("const [hydratedPeriodKey, setHydratedPeriodKey]");
     expect(source).toContain("setHydratedPeriodKey(periodKey)");
