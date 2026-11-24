@@ -635,7 +635,13 @@ export function AnalyticsView() {
                   )
                 }
                 valueClassName={kpi.maxDrawdownTone}
-                sub={t("kpiRecovery", { value: kpi.recovery })}
+                sub={
+                  <>
+                    {t("kpiRecovery", { value: kpi.recovery })}
+                    {" · "}
+                    {t("kpiDrawdownHint")}
+                  </>
+                }
               />
               <KpiCard
                 compact
