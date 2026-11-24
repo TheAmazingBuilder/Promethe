@@ -2073,7 +2073,8 @@
     "rrCurrencyScopeNote": "Risk/Reward figures are limited to trades recorded in {currency}. {closed} closed and {open} open trades in other currencies are excluded. Win rate excludes breakeven trades.",
     "exitPlanError_count": "An exit plan can contain no more than four tiers.",
     "exitPlanManualPctInvalid": "Each manual realized percentage must be a valid number between 0 and 100.",
-    "exitPlanRealizedOver100": "Total realized volume exceeds 100%. Check the manual values and recorded exits."
+    "exitPlanRealizedOver100": "Total realized volume exceeds 100%. Check the manual values and recorded exits.",
+    "exitPlanError_trigger": "Breakeven and trailing triggers must point to an existing tier in this plan."
   },
   "topLeaks": {
     "title": "Top 3 leaks",
