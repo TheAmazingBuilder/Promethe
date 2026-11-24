@@ -410,6 +410,43 @@ describe("previewTrade (live form aggregate)", () => {
     });
     expect(p.resultType).toBe("BREAKEVEN");
   });
+
+  it("uses stored FX rates for account-currency risk and realized R", () => {
+    const p = previewTrade({
+      instrument: USDJPY,
+      direction: "LONG",
+      lots: "1",
+      entry: "149.000",
+      exit: "150.000",
+      stopLoss: "148.000",
+      accountCurrency: "USD",
+      accountBalance: "10000",
+      fxRates: [{ base: "JPY", quote: "USD", rate: "0.006" }],
+    });
+
+    expect(p.grossPnl.toString()).toBe("600");
+    expect(p.riskAmount?.toString()).toBe("600");
+    expect(p.realizedRR?.toString()).toBe("1");
+    expect(p.riskPercent?.toString()).toBe("6");
+  });
+
+  it("does not invent account-currency risk when a cross-currency rate is missing", () => {
+    const p = previewTrade({
+      instrument: USDJPY,
+      direction: "LONG",
+      lots: "1",
+      entry: "149.000",
+      exit: "150.000",
+      stopLoss: "148.000",
+      accountCurrency: "USD",
+      accountBalance: "10000",
+    });
+
+    expect(p.isEstimate).toBe(true);
+    expect(p.riskAmount).toBeNull();
+    expect(p.realizedRR).toBeNull();
+    expect(p.riskPercent).toBeNull();
+  });
 });
 
 describe("instrument presets sanity", () => {
