@@ -2262,7 +2262,9 @@
       "INVALID_CONVERSION_RATE": "The conversion rate must be a valid number greater than 0.",
       "INSUFFICIENT_RISK": "Risk too small for the minimum lot size ({minLots} lot).",
       "FALLBACK": "Invalid parameters.",
-      "INVALID_LOT_CONSTRAINTS": "The instrument's minimum, maximum or lot step is invalid. Check the broker's volume rules."
+      "INVALID_LOT_CONSTRAINTS": "The instrument's minimum, maximum or lot step is invalid. Check the broker's volume rules.",
+      "INVALID_PRICE": "Entry and stop-loss prices must be valid positive numbers.",
+      "INVALID_INSTRUMENT_SPECS": "The instrument contract size must be greater than zero. Check the instrument specifications."
     }
   },
   "brokerSync": {
