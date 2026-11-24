@@ -139,8 +139,10 @@ export class ReportPdf {
     this.doc.setFontSize(10);
     this.doc.setFont("helvetica", "normal");
     const lines = this.doc.splitTextToSize(text, this.contentWidth);
-    this.ensureSpace(lines.length * 5 + 2, footerLabel);
     for (const line of lines) {
+      // A paragraph may span several pages. Check space per line so long
+      // Journal reflections cannot overflow past the page footer.
+      this.ensureSpace(7, footerLabel);
       this.doc.text(line, this.margin, this.y);
       this.y += 5;
     }
