@@ -258,7 +258,9 @@ export function validateExitPlan(
   const sum = tiers.reduce((acc, tier) => acc.plus(toD(tier.pct)), D0);
   if (!sum.eq(D100)) return "sum";
   for (const tier of tiers) {
-    const target = toD(tier.target);
+    const rawTarget = tier.target.trim();
+    if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(rawTarget)) return "target";
+    const target = toD(rawTarget);
     if (!target.isFinite() || target.lte(0)) return "target";
   }
   return null;
