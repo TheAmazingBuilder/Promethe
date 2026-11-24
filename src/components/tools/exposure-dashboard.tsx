@@ -181,6 +181,7 @@ export function ExposureDashboard() {
           <Label htmlFor="ex-balance">{t("balance")}</Label>
           <Input id="ex-balance" type="number" inputMode="decimal" min="0" step="any"
             value={balance} onChange={(e) => setBalance(e.target.value)} className="tabular-nums" />
+          <p className="text-xs text-muted-foreground">{t("exposureBalanceHint")}</p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="ex-dup">{t("exposureDupThreshold")}</Label>
