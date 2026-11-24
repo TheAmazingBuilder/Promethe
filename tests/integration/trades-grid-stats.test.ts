@@ -25,17 +25,19 @@ const BASE_QUERY: TradeListQuery = {
 };
 
 function instrumentSpec(symbol: string, base: string, quote: string) {
+  const isForex = symbol === "EURUSD" || symbol === "USDJPY";
+  const isJpyPair = quote === "JPY";
   return {
     symbol,
     name: `${base} / ${quote}`,
-    assetClass: "METAL",
+    assetClass: isForex ? "FOREX" : "METAL",
     baseCurrency: base,
     quoteCurrency: quote,
-    digits: 2,
-    pipSize: "0.10",
-    pointSize: "0.01",
-    contractSize: "100",
-    tickSize: "0.01",
+    digits: isForex ? (isJpyPair ? 3 : 5) : 2,
+    pipSize: isForex ? (isJpyPair ? "0.01" : "0.0001") : "0.10",
+    pointSize: isForex ? (isJpyPair ? "0.001" : "0.00001") : "0.01",
+    contractSize: isForex ? "100000" : "100",
+    tickSize: isForex ? (isJpyPair ? "0.001" : "0.00001") : "0.01",
     isActive: true,
   };
 }
