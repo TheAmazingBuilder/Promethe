@@ -49,8 +49,10 @@ export interface DecomposedTrade {
   /** Open risk of the whole trade in account currency (0 when no SL). */
   openRisk: Decimal;
   hasStopLoss: boolean;
-  /** Unrealised P&L estimate at the current price (quote -> account, rate 1 when unknown). */
+  /** Unrealised P&L in account currency; null when FX conversion is unavailable. */
   floatingPnl: Decimal | null;
+  /** True when quote-currency amounts had to fall back to an unconverted estimate. */
+  conversionMissing: boolean;
 }
 
 /** Split a symbol into base/quote using presets first, then the 6-letter rule. */
@@ -96,6 +98,9 @@ export function decomposeTrade(
     trade.currentPrice !== null && trade.currentPrice !== undefined && String(trade.currentPrice) !== ""
       ? toD(trade.currentPrice)
       : entry;
+  const conversionMissing =
+    quote !== accountCurrency &&
+    resolveFxRate(quote, accountCurrency, fxRates) === null;
 
   // Open risk: |entry - SL| * units, converted quote -> account.
   let openRisk = D0;
@@ -111,7 +116,9 @@ export function decomposeTrade(
   // Floating P&L estimate (quote currency, converted at rate 1 when unknown).
   const diff = sign === 1 ? current.minus(entry) : entry.minus(current);
   const floatingQuote = diff.times(units);
-  const floatingPnl = toAccount(floatingQuote, quote, accountCurrency, fxRates);
+  const floatingPnl = conversionMissing
+    ? null
+    : toAccount(floatingQuote, quote, accountCurrency, fxRates);
 
   // Legs: base leg = units of base (valued at the current price in quote,
   // then converted); quote leg = -units * price in quote, converted.
@@ -131,7 +138,7 @@ export function decomposeTrade(
     risk: openRisk.times(-sign).div(2),
   });
 
-  return { trade, legs, openRisk, hasStopLoss, floatingPnl };
+  return { trade, legs, openRisk, hasStopLoss, floatingPnl, conversionMissing };
 }
 
 export interface CurrencyExposure {
@@ -157,6 +164,8 @@ export interface ExposureSummary {
   byStrategy: { key: string; risk: Decimal; notional: Decimal; count: number }[];
   totalOpenRisk: Decimal;
   noStopLoss: DecomposedTrade[];
+  /** Symbols whose quote currency could not be converted into the account currency. */
+  missingFxSymbols: string[];
 }
 
 export function aggregateExposure(
@@ -167,10 +176,12 @@ export function aggregateExposure(
   const byStrategy = new Map<string, { risk: Decimal; notional: Decimal; count: number }>();
   let totalOpenRisk = D0;
   const noStopLoss: DecomposedTrade[] = [];
+  const missingFxSymbols = new Set<string>();
 
   for (const d of decomposed) {
     totalOpenRisk = totalOpenRisk.plus(d.openRisk);
     if (!d.hasStopLoss) noStopLoss.push(d);
+    if (d.conversionMissing) missingFxSymbols.add(d.trade.symbol);
     for (const leg of d.legs) {
       const cur = byCurrency.get(leg.currency) ?? {
         currency: leg.currency,
@@ -225,6 +236,7 @@ export function aggregateExposure(
       .sort(sortDesc),
     totalOpenRisk,
     noStopLoss,
+    missingFxSymbols: [...missingFxSymbols].sort(),
   };
 }
 
