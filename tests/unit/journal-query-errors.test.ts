@@ -14,4 +14,20 @@ describe("Journal entry query recovery", () => {
     expect(source).toContain("onRetry={() => void refetch()}");
     expect(source.indexOf("{isError ? (")).toBeGreaterThan(source.indexOf("<PageHeader"));
   });
+
+  it("shows a recoverable error when Journal history cannot load", () => {
+    expect(source).toContain("isError: recentError");
+    expect(source).toContain('title="Journal history could not be loaded"');
+    expect(source).toContain("onRetry={() => void refetchRecent()}");
+    expect(source).toContain("isFetchNextPageError");
+  });
+
+  it("uses safe URL parameters for Journal exports", () => {
+    expect(source).toContain("new URLSearchParams({ from: historyFrom, to: historyTo })");
+  });
+
+  it("does not mark a daily entry dirty before hydration or after a successful save", () => {
+    expect(source).toContain("hydratedFor === day && dirty && savedSignature !== JSON.stringify(form)");
+    expect(source).toContain("disabled={save.isPending || !dailyUnsavedChanges}");
+  });
 });

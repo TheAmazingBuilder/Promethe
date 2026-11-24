@@ -1151,7 +1151,8 @@ export function JournalView({ date }: { date?: string }) {
                   size="sm"
                   variant="outline"
                   onClick={() => {
-                    window.location.href = `/api/v1/journal/export?from=${historyFrom}&to=${historyTo}`;
+                    const params = new URLSearchParams({ from: historyFrom, to: historyTo });
+                    window.location.assign(`/api/v1/journal/export?${params.toString()}`);
                   }}
                   disabled={!historyFrom || !historyTo || historyFrom > historyTo}
                 >

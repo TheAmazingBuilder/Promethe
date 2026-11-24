@@ -105,6 +105,7 @@ export function useRecentJournal(filters: JournalHistoryQuery = {}) {
     },
     getNextPageParam: (lastPage, allPages) =>
       lastPage.hasMore ? allPages.reduce((total, page) => total + page.entries.length, 0) : undefined,
+    enabled: !filters.from || !filters.to || filters.from <= filters.to,
     staleTime: 60 * 1000,
   });
 }

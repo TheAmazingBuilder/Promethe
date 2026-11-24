@@ -24,6 +24,14 @@ describe("Journal input consistency", () => {
     expect(journal).not.toContain("<select");
   });
 
+  it("does not request a Journal history range when its dates are reversed", () => {
+    const hook = readFileSync(
+      new URL("../../src/hooks/use-journal.ts", import.meta.url),
+      "utf8"
+    );
+    expect(hook).toContain("enabled: !filters.from || !filters.to || filters.from <= filters.to");
+  });
+
   it("uses the shared Select primitives for preparation templates", () => {
     expect(templates).toContain('aria-label="Select a Journal preparation template"');
     expect(templates).toContain("<SelectItem");
