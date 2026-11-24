@@ -60,6 +60,7 @@ export function JournalPeriodReviewPanel({
   const [form, setForm] = React.useState<FormState>(EMPTY);
   const [status, setStatus] = React.useState("");
   const drafts = React.useRef<Record<string, FormState>>({});
+  const [dirtyPeriods, setDirtyPeriods] = React.useState<Record<string, boolean>>({});
   const periodKey = `${periodType}:${range.start}`;
 
   React.useEffect(() => {
@@ -73,21 +74,31 @@ export function JournalPeriodReviewPanel({
   }, [periodKey, review?.id, review?.updatedAt]);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
-    setForm((current) => {
-      const next = { ...current, [key]: value };
+    const next = { ...form, [key]: value };
+    const nextIsDirty =
+      next.whatWentWell !== (review?.whatWentWell ?? "") ||
+      next.whatToImprove !== (review?.whatToImprove ?? "") ||
+      next.keyLesson !== (review?.keyLesson ?? "") ||
+      next.nextCommitment !== (review?.nextCommitment ?? "");
+
+    setForm(next);
+    if (nextIsDirty) {
       drafts.current[periodKey] = next;
-      return next;
-    });
+    } else {
+      delete drafts.current[periodKey];
+    }
+    setDirtyPeriods((current) => ({ ...current, [periodKey]: nextIsDirty }));
   };
   const dirty = form.whatWentWell !== (review?.whatWentWell ?? "") ||
     form.whatToImprove !== (review?.whatToImprove ?? "") ||
     form.keyLesson !== (review?.keyLesson ?? "") ||
     form.nextCommitment !== (review?.nextCommitment ?? "");
 
+  const hasUnsavedDrafts = Object.values(dirtyPeriods).some(Boolean);
+
   React.useEffect(() => {
-    onDirtyChange(dirty);
-    return () => onDirtyChange(false);
-  }, [dirty, onDirtyChange]);
+    onDirtyChange(dirty || hasUnsavedDrafts);
+  }, [dirty, dirtyPeriods, hasUnsavedDrafts, onDirtyChange]);
 
   React.useEffect(() => {
     if (!dirty) return;
@@ -108,6 +119,7 @@ export function JournalPeriodReviewPanel({
         ...form,
       });
       delete drafts.current[periodKey];
+      setDirtyPeriods((current) => ({ ...current, [periodKey]: false }));
       setStatus("Review saved.");
     } catch {
       setStatus("Could not save this review. Please try again.");
