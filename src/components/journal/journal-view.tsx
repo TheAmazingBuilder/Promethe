@@ -221,16 +221,24 @@ export function JournalView({ date }: { date?: string }) {
   const [historyTo, setHistoryTo] = React.useState("");
   const [historyMood, setHistoryMood] = React.useState("");
   const [historyDiscipline, setHistoryDiscipline] = React.useState("");
-  const [historyVisibleLimit, setHistoryVisibleLimit] = React.useState(10);
-  const { data: recentEntries = [], isLoading: recentLoading } = useRecentJournal({
+  const {
+    data: recentPages,
+    isLoading: recentLoading,
+    hasNextPage: hasMoreHistory,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useRecentJournal({
     q: historyQuery || undefined,
     from: historyFrom || undefined,
     to: historyTo || undefined,
     mood: historyMood ? Number(historyMood) : undefined,
     discipline: historyDiscipline ? Number(historyDiscipline) : undefined,
-    limit: 50,
+    limit: 20,
   });
-  const visibleRecentEntries = recentEntries.slice(0, historyVisibleLimit);
+  const recentEntries = React.useMemo(
+    () => recentPages?.pages.flatMap((page) => page.entries) ?? [],
+    [recentPages],
+  );
   const dayPnl = calendarData?.days?.[day] ?? null;
   const {
     data: dayActivity,
@@ -1021,7 +1029,7 @@ export function JournalView({ date }: { date?: string }) {
                 </CardDescription>
               </div>
               <Badge variant="outline" className="rounded-full">
-                {Math.min(historyVisibleLimit, recentEntries.length)} / {recentEntries.length}
+                {recentEntries.length} loaded
               </Badge>
             </CardHeader>
             <CardContent className="pt-0">
@@ -1103,7 +1111,7 @@ export function JournalView({ date }: { date?: string }) {
                 </p>
               ) : (
                 <div className="divide-y divide-border/60">
-                  {visibleRecentEntries.map((recent) => {
+                  {recentEntries.map((recent) => {
                     const isCurrent = recent.date === day;
                     const summary =
                       recent.keyLesson?.trim() ||
@@ -1140,10 +1148,10 @@ export function JournalView({ date }: { date?: string }) {
                   })}
                 </div>
               )}
-              {recentEntries.length > visibleRecentEntries.length ? (
+              {hasMoreHistory ? (
                 <div className="mt-3 flex justify-center">
-                  <Button size="sm" variant="outline" onClick={() => setHistoryVisibleLimit((current) => Math.min(current + 10, recentEntries.length))}>
-                    Load 10 more ({recentEntries.length - visibleRecentEntries.length} remaining)
+                  <Button size="sm" variant="outline" onClick={() => void fetchNextPage()} disabled={isFetchingNextPage}>
+                    {isFetchingNextPage ? "Loading…" : "Load more entries"}
                   </Button>
                 </div>
               ) : null}

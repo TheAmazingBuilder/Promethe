@@ -6,6 +6,7 @@
  * silent about Prisma. Invalidation: ["journal"], ["calendar"], ["strategies"].
  */
 import {
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -83,18 +84,27 @@ export interface JournalHistoryQuery {
   limit?: number;
 }
 
+interface JournalHistoryPage {
+  entries: JournalEntryDTO[];
+  hasMore: boolean;
+}
+
 export function useRecentJournal(filters: JournalHistoryQuery = {}) {
-  const params = new URLSearchParams();
-  if (filters.q?.trim()) params.set("q", filters.q.trim());
-  if (filters.from) params.set("from", filters.from);
-  if (filters.to) params.set("to", filters.to);
-  if (filters.mood != null) params.set("mood", String(filters.mood));
-  if (filters.discipline != null) params.set("discipline", String(filters.discipline));
-  params.set("limit", String(filters.limit ?? 30));
-  return useQuery({
+  const limit = filters.limit ?? 20;
+  return useInfiniteQuery({
     queryKey: ["journal", "recent", filters],
-    queryFn: async () =>
-      (await apiFetch<{ entries: JournalEntryDTO[] }>(`/api/v1/journal?${params.toString()}`)).entries,
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
+      const params = new URLSearchParams({ limit: String(limit), offset: String(pageParam) });
+      if (filters.q?.trim()) params.set("q", filters.q.trim());
+      if (filters.from) params.set("from", filters.from);
+      if (filters.to) params.set("to", filters.to);
+      if (filters.mood != null) params.set("mood", String(filters.mood));
+      if (filters.discipline != null) params.set("discipline", String(filters.discipline));
+      return apiFetch<JournalHistoryPage>(`/api/v1/journal?${params.toString()}`);
+    },
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.hasMore ? allPages.reduce((total, page) => total + page.entries.length, 0) : undefined,
     staleTime: 60 * 1000,
   });
 }

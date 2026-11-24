@@ -17,7 +17,7 @@ import {
 
 /**
  * GET  /api/journal?date=YYYY-MM-DD — single day (null when absent), or the
- *       30 most recent entries when no date is given.
+ *       paginated recent entries when no date is given.
  * PUT  /api/journal — upsert on (user, local day).
  * DELETE /api/journal?date=YYYY-MM-DD
  */
@@ -44,8 +44,13 @@ export async function GET(req: Request) {
       const entry = await getJournalEntry(session.user.id, parsed.data.date);
       return NextResponse.json({ entry });
     }
-    const entries = await listRecentJournal(session.user.id, parsed.data.limit, parsed.data);
-    return NextResponse.json({ entries });
+    const page = await listRecentJournal(
+      session.user.id,
+      parsed.data.limit,
+      parsed.data.offset,
+      parsed.data,
+    );
+    return NextResponse.json(page);
   } catch (error) {
     return apiError(error, "journal");
   }

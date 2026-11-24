@@ -59,11 +59,17 @@ export interface JournalHistoryFilters {
   discipline?: number;
 }
 
+export interface JournalHistoryPage {
+  entries: JournalEntryDTO[];
+  hasMore: boolean;
+}
+
 export async function listRecentJournal(
   userId: string,
   limit = 30,
+  offset = 0,
   filters: JournalHistoryFilters = {},
-): Promise<JournalEntryDTO[]> {
+): Promise<JournalHistoryPage> {
   const terms = filters.q?.trim()
     ? foldText(filters.q).split(" ").filter(Boolean).slice(0, 8)
     : [];
@@ -85,9 +91,14 @@ export async function listRecentJournal(
         : {}),
     },
     orderBy: { date: "desc" },
-    take: Math.max(1, Math.min(limit, 100)),
+    skip: Math.max(0, offset),
+    take: Math.max(1, Math.min(limit, 100)) + 1,
   });
-  return rows.map(toJournalDTO);
+  const hasMore = rows.length > Math.max(1, Math.min(limit, 100));
+  return {
+    entries: rows.slice(0, Math.max(1, Math.min(limit, 100))).map(toJournalDTO),
+    hasMore,
+  };
 }
 
 export async function upsertJournalEntry(
