@@ -104,7 +104,8 @@ export function sizingErrorMessage(
     reason === "MISSING_QUOTE_CURRENCY" ||
     reason === "MISSING_CONVERSION_RATE" ||
     reason === "INVALID_CONVERSION_RATE" ||
-    reason === "INSUFFICIENT_RISK"
+    reason === "INSUFFICIENT_RISK" ||
+    reason === "INVALID_LOT_CONSTRAINTS"
   ) {
     return t(`errors.sizing.${reason}` as Parameters<TFunction>[0], {
       minLots: minLots ?? "0.01",
