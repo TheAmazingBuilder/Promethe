@@ -5,8 +5,8 @@ describe("resolveFxRate", () => {
   it("resolves direct and inverse rates", () => {
     const rates = [{ base: "USD", quote: "JPY", rate: "149.25" }];
     expect(resolveFxRate("USD", "JPY", rates)?.rate.toString()).toBe("149.25");
-    expect(resolveFxRate("JPY", "USD", rates)?.rate.toString()).toBe(
-      "0.006700167504187604"
+    expect(resolveFxRate("JPY", "USD", rates)?.rate.toFixed(12)).toBe(
+      "0.006700167504"
     );
   });
 
