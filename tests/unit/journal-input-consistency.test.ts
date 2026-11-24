@@ -2,18 +2,18 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const history = readFileSync(
-  new URL("../../src/components/history/history-history-section.tsx", import.meta.url),
+  new URL("../../src/components/journal/journal-history-section.tsx", import.meta.url),
   "utf8"
 );
 const templates = readFileSync(
-  new URL("../../src/components/history/history-template-controls.tsx", import.meta.url),
+  new URL("../../src/components/journal/journal-template-controls.tsx", import.meta.url),
   "utf8"
 );
 
 describe("Journal input consistency", () => {
   it("uses the shared DateField for history date filters", () => {
-    expect(history).toContain('id="history-history-from"');
-    expect(history).toContain('id="history-history-to"');
+    expect(history).toContain('id="journal-history-from"');
+    expect(history).toContain('id="journal-history-to"');
     expect(history).not.toContain('<Input type="date"');
   });
 
@@ -26,7 +26,7 @@ describe("Journal input consistency", () => {
 
   it("does not request a Journal history range when its dates are reversed", () => {
     const hook = readFileSync(
-      new URL("../../src/hooks/use-history.ts", import.meta.url),
+      new URL("../../src/hooks/use-journal.ts", import.meta.url),
       "utf8"
     );
     expect(hook).toContain("enabled: !filters.from || !filters.to || filters.from <= filters.to");
