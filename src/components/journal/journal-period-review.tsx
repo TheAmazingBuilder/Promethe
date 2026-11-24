@@ -61,6 +61,7 @@ export function JournalPeriodReviewPanel({
   const [status, setStatus] = React.useState("");
   const drafts = React.useRef<Record<string, FormState>>({});
   const [dirtyPeriods, setDirtyPeriods] = React.useState<Record<string, boolean>>({});
+  const [hydratedPeriodKey, setHydratedPeriodKey] = React.useState<string | null>(null);
   const periodKey = `${periodType}:${range.start}`;
 
   React.useEffect(() => {
@@ -70,6 +71,7 @@ export function JournalPeriodReviewPanel({
       keyLesson: review?.keyLesson ?? "",
       nextCommitment: review?.nextCommitment ?? "",
     });
+    setHydratedPeriodKey(periodKey);
     setStatus("");
   }, [periodKey, review?.id, review?.updatedAt]);
 
@@ -89,10 +91,12 @@ export function JournalPeriodReviewPanel({
     }
     setDirtyPeriods((current) => ({ ...current, [periodKey]: nextIsDirty }));
   };
-  const dirty = form.whatWentWell !== (review?.whatWentWell ?? "") ||
+  const dirty = hydratedPeriodKey === periodKey && (
+    form.whatWentWell !== (review?.whatWentWell ?? "") ||
     form.whatToImprove !== (review?.whatToImprove ?? "") ||
     form.keyLesson !== (review?.keyLesson ?? "") ||
-    form.nextCommitment !== (review?.nextCommitment ?? "");
+    form.nextCommitment !== (review?.nextCommitment ?? "")
+  );
 
   const hasUnsavedDrafts = Object.values(dirtyPeriods).some(Boolean);
 

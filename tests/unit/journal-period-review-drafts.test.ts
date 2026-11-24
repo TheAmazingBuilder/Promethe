@@ -18,6 +18,13 @@ describe("Journal period-review draft protection", () => {
     expect(source).not.toContain("return () => onDirtyChange(false)");
   });
 
+
+  it("does not compare the previous period's form against a newly selected period before hydration", () => {
+    expect(source).toContain("const [hydratedPeriodKey, setHydratedPeriodKey]");
+    expect(source).toContain("setHydratedPeriodKey(periodKey)");
+    expect(source).toContain("hydratedPeriodKey === periodKey && (");
+  });
+
   it("clears the period draft marker only after a successful save", () => {
     expect(source).toContain("delete drafts.current[periodKey]");
     expect(source).toContain("setDirtyPeriods((current) => ({ ...current, [periodKey]: false }))");
