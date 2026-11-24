@@ -100,6 +100,8 @@ export function sizingErrorMessage(
     reason === "STOP_SIDE_SHORT" ||
     reason === "STOP_EQUALS_ENTRY" ||
     reason === "INVALID_AMOUNT" ||
+    reason === "INVALID_PRICE" ||
+    reason === "INVALID_INSTRUMENT_SPECS" ||
     reason === "MISSING_ACCOUNT_CURRENCY" ||
     reason === "MISSING_QUOTE_CURRENCY" ||
     reason === "MISSING_CONVERSION_RATE" ||
