@@ -11,6 +11,7 @@ import { db } from "@/lib/db";
 import { Decimal, toD } from "@/lib/trading/dec";
 import {
   previewTrade,
+  calcPlannedRR,
   classifyResult,
   type TradePreview,
 } from "@/lib/trading/calculate";
@@ -468,36 +469,39 @@ export function computeDerived(p: ComputeParams) {
         : toD(p.stopLoss).minus(toD(p.entryPrice))
       : null;
   if (stopDist && stopDist.gt(0)) {
-    // Manual rate wins; otherwise the stored FxRate table converts the
-    // risk into account currency (1 when no rate is known).
-    const effectiveRate = p.quoteToAccountRate
-      ? toD(p.quoteToAccountRate)
-      : (resolveConversionRate(
-          p.instrument.quoteCurrency ?? "",
-          p.account.currency,
-          p.fxRates ?? [],
-          null
-        ) ?? toD(1));
-    riskAmount = stopDist
-      .times(toD(p.lots))
-      .times(toD(p.instrument.contractSize))
-      .times(effectiveRate);
-    if (p.balanceAtEntry && p.balanceAtEntry.gt(0)) {
-      // 6 dp: SQLite NUMERIC affinity truncates longer decimals to float64
-      // on storage (e.g. "0.21983288304231124") — round to keep values exact.
-      riskPercent = riskAmount
-        .div(p.balanceAtEntry)
-        .times(100)
-        .toDecimalPlaces(6);
+    // Manual rate wins; otherwise use the stored FX table. Without a valid
+    // quote→account rate, account-currency risk is unknown and must stay null.
+    const effectiveRate = resolveConversionRate(
+      p.instrument.quoteCurrency ?? "",
+      p.account.currency,
+      p.fxRates ?? [],
+      p.quoteToAccountRate ?? null
+    );
+    if (effectiveRate && effectiveRate.isFinite() && effectiveRate.gt(0)) {
+      riskAmount = stopDist
+        .times(toD(p.lots))
+        .times(toD(p.instrument.contractSize))
+        .times(effectiveRate);
+      if (p.balanceAtEntry && p.balanceAtEntry.gt(0)) {
+        // 6 dp: SQLite NUMERIC affinity truncates longer decimals to float64
+        // on storage (e.g. "0.21983288304231124") — round to keep values exact.
+        riskPercent = riskAmount
+          .div(p.balanceAtEntry)
+          .times(100)
+          .toDecimalPlaces(6);
+      }
     }
   }
 
-  // Planned RR
-  let plannedRR: Decimal | null = null;
-  if (stopDist && stopDist.gt(0) && p.takeProfit != null) {
-    const reward = toD(p.takeProfit).minus(toD(p.entryPrice)).abs();
-    if (reward.gt(0)) plannedRR = reward.div(stopDist).toDecimalPlaces(6);
-  }
+  // Keep the server-side planned ratio aligned with the direction-aware
+  // calculation used by the client and trade preview.
+  const planned = calcPlannedRR(
+    direction,
+    p.entryPrice,
+    p.stopLoss,
+    p.takeProfit
+  );
+  const plannedRR = planned?.toDecimalPlaces(6) ?? null;
 
   const netPnl =
     p.pnlSource !== "CALCULATED" && p.manualNetPnl != null
@@ -507,8 +511,8 @@ export function computeDerived(p: ComputeParams) {
         : null;
 
   const rMultiple =
-    preview && riskAmount && riskAmount.gt(0)
-      ? preview.netPnl.div(riskAmount).toDecimalPlaces(6)
+    netPnl !== null && riskAmount && riskAmount.gt(0)
+      ? netPnl.div(riskAmount).toDecimalPlaces(6)
       : null;
 
   const resultType = closed
