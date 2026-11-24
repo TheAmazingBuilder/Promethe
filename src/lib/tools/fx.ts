@@ -41,7 +41,7 @@ function findDirect(
     const b = norm(r.base);
     const q = norm(r.quote);
     const v = toD(r.rate);
-    if (v.lte(0)) continue;
+    if (!v.isFinite() || v.lte(0)) continue;
     if (b === from && q === to) return { rate: v, direct: true };
     if (b === to && q === from) return { rate: D1.div(v), direct: true };
   }
@@ -56,6 +56,7 @@ export function resolveFxRate(
 ): ResolvedFxRate | null {
   const f = norm(from);
   const t = norm(to);
+  if (!f || !t) return null;
   if (f === t) return { rate: D1, path: [], triangulated: false };
   const direct = findDirect(f, t, rates);
   if (direct) {
@@ -129,15 +130,15 @@ export function parseFxCsv(text: string): {
       errors.push(`L${idx + 1}: ${line}`);
       return;
     }
-    const n = Number(rateRaw);
-    if (!Number.isFinite(n) || n <= 0) {
+    const parsedRate = toD(rateRaw);
+    if (!parsedRate.isFinite() || parsedRate.lte(0)) {
       errors.push(`L${idx + 1}: ${line}`);
       return;
     }
     rates.push({
       base: base.toUpperCase(),
       quote: quote.toUpperCase(),
-      rate: String(n),
+      rate: parsedRate.toString(),
       source: "CSV",
       date: today,
     });

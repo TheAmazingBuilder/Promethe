@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { resolveFxRate } from "@/lib/tools/fx";
+import { toD } from "@/lib/trading/dec";
 import {
   isToolsTablesMissing,
   useDeleteFxRate,
@@ -62,15 +63,15 @@ export function CurrencyConverter() {
     () => resolveFxRate(from, to, fxInputs),
     [from, to, fxInputs]
   );
-  const converted = resolved ? Number(amount || "0") * Number(resolved.rate.toString()) : null;
+  const converted = resolved ? toD(amount || "0").times(resolved.rate) : null;
 
   const addRate = () => {
-    const n = Number(rate);
-    if (!base || !quote || base === quote || !Number.isFinite(n) || n <= 0) return;
+    const n = toD(rate);
+    if (!base || !quote || base === quote || !n.isFinite() || n.lte(0)) return;
     upsertRate.mutate({
       base: base.toUpperCase(),
       quote: quote.toUpperCase(),
-      rate: String(n),
+      rate: n.toString(),
       source: "MANUAL",
       date: new Date().toISOString().slice(0, 10),
     });
