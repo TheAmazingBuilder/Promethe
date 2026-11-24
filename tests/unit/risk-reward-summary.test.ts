@@ -4,15 +4,16 @@ import { computeRiskRewardStats, type RiskRewardTradeLike } from "@/lib/tools/ri
 function trade(
   patch: Partial<RiskRewardTradeLike> & Pick<RiskRewardTradeLike, "pnlCurrency" | "netPnl">
 ): RiskRewardTradeLike {
+  const { pnlCurrency, netPnl, ...rest } = patch;
   return {
-    pnlCurrency: patch.pnlCurrency,
-    netPnl: patch.netPnl,
+    pnlCurrency,
+    netPnl,
     rMultiple: null,
     realizedRR: null,
     plannedRR: null,
     resultType: null,
     exitTime: new Date("2026-11-24T15:00:00.000Z"),
-    ...patch,
+    ...rest,
   };
 }
 
