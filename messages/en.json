@@ -1836,7 +1836,7 @@
     "pipValueHint": "≈ {value} {quote}",
     "notional": "Notional",
     "convertedEstimate": "Result converted with the provided rate - treated as an estimate.",
-    "roundingNote": "Rounded down to the lot (0.01 step): the actual risk never exceeds the requested risk. Exact decimal engine - no floating-point math.",
+    "roundingNote": "Position size is rounded down to the configured volume step. Actual risk never exceeds the requested risk. Exact decimal calculations are used.",
     "netPnlEstimate": "Estimated net P&L",
     "grossPnl": "Gross P&L",
     "totalCosts": "Total costs",
@@ -2059,7 +2059,13 @@
     "weekdayShort_6": "Sat",
     "weekdayShort_7": "Sun",
     "yes": "Yes",
-    "xauPipSuffix": "Each user will be able to add their own instruments and override pip / point / contract to match their broker."
+    "xauPipSuffix": "Each user will be able to add their own instruments and override pip / point / contract to match their broker.",
+    "brokerVolumeRules": "Broker volume rules",
+    "brokerVolumeRulesHint": "Use the minimum, maximum and volume increment from your broker's instrument specifications. Maximum is optional.",
+    "lotStep": "Volume step",
+    "minLots": "Minimum volume",
+    "maxLots": "Maximum volume",
+    "maxLotsOptional": "No maximum"
   },
   "topLeaks": {
     "title": "Top 3 leaks",
