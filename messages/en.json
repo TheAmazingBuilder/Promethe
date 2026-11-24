@@ -1977,6 +1977,8 @@
     "marginEquity": "Equity",
     "marginFree": "Free margin",
     "marginLevel": "Margin level",
+    "marginMissingFx": "A quote-to-account FX rate is required for: {symbols}. Add a rate in Currency Converter before calculating margin.",
+    "marginInvalidInput": "Check equity, leverage, margin levels and position values. Margin cannot be calculated from the current inputs.",
     "marginLevelsHint": "Margin call then stop-out, as a % of margin level.",
     "marginLeverage": "Leverage",
     "marginNotional": "Total notional",
