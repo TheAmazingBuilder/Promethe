@@ -484,14 +484,16 @@ export function JournalView({ date }: { date?: string }) {
         }
       />
 
-      <nav aria-label="Journal sections" className="sticky top-2 z-20 -mx-1 flex gap-1 overflow-x-auto rounded-xl border border-border/70 bg-background/90 p-1.5 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/75">
+      <nav aria-label="Journal sections" className="sticky top-20 z-20 -mx-1 flex gap-1 overflow-x-auto rounded-xl border border-border/70 bg-background/90 p-1.5 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/75 sm:top-16">
         {[
           ["journal-overview", "Overview"],
           ["journal-activity", "Activity"],
           ["journal-plan", "Plan"],
-          ["journal-preparation", "Preparation"],
           ["journal-charts", "Charts"],
+          ["journal-behavior", "Behavior"],
           ["journal-state", "Mindset"],
+          ["journal-preparation", "Preparation"],
+          ["journal-reflection", "Reflection"],
           ["journal-reviews", "Reviews"],
           ["journal-history", "History"],
         ].map(([target, label]) => (
@@ -790,7 +792,7 @@ export function JournalView({ date }: { date?: string }) {
             </CardContent>
           </Card>
 
-          <Card id="journal-state" className="scroll-mt-24 border-border/70 shadow-sm">
+          <Card id="journal-behavior" className="scroll-mt-24 border-border/70 shadow-sm">
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -822,7 +824,7 @@ export function JournalView({ date }: { date?: string }) {
             </CardContent>
           </Card>
 
-          <Card className="scroll-mt-24 border-border/70 shadow-sm">
+          <Card id="journal-state" className="scroll-mt-24 border-border/70 shadow-sm">
             <CardHeader className="pb-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -918,7 +920,7 @@ export function JournalView({ date }: { date?: string }) {
             }}
           />
 
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div id="journal-reflection" className="scroll-mt-24 grid gap-4 xl:grid-cols-2">
             <Card className="border-border/70 shadow-sm">
               <CardContent className="p-4 sm:p-5">
                 <SectionHeading
@@ -1010,6 +1012,11 @@ export function JournalView({ date }: { date?: string }) {
                 <>
                   <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />
                   <span>Changes are not saved yet</span>
+                </>
+              ) : periodReviewDirty ? (
+                <>
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+                  <span>Period review has unsaved changes — save it in Reviews</span>
                 </>
               ) : (
                 <>
