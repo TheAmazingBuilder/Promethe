@@ -199,6 +199,7 @@ export function comparePlanVsReal(
   const tierCompletionTime = (tierIndex: number): number | null => {
     if (tierIndex < 0 || tierIndex >= plan.tiers.length || !lots.gt(0)) return null;
     const matches = (assigned.get(tierIndex) ?? [])
+      .filter((match) => Number.isFinite(Date.parse(match.execution.time)))
       .slice()
       .sort((a, b) => Date.parse(a.execution.time) - Date.parse(b.execution.time));
     let closedLots = D0;
@@ -230,7 +231,7 @@ export function comparePlanVsReal(
         return false;
       }
       const timestamp = Date.parse(modification.time);
-      if (!Number.isFinite(timestamp) || timestamp < breakevenTriggerTime) return false;
+      if (!Number.isFinite(timestamp) || timestamp <= breakevenTriggerTime) return false;
       const oldStop = toD(modification.oldValue);
       const newStop = toD(modification.newValue);
       if (
@@ -262,7 +263,7 @@ export function comparePlanVsReal(
         return false;
       }
       const timestamp = Date.parse(modification.time);
-      if (!Number.isFinite(timestamp) || timestamp < trailingTriggerTime) return false;
+      if (!Number.isFinite(timestamp) || timestamp <= trailingTriggerTime) return false;
       const oldStop = toD(modification.oldValue);
       const newStop = toD(modification.newValue);
       if (
