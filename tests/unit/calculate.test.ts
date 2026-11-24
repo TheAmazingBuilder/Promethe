@@ -315,6 +315,20 @@ describe("calcPositionSize", () => {
     });
     expect(r.lots.toString()).toBe("1");
   });
+  it("reports equal entry and stop-loss prices before direction-side errors", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000",
+      riskPercent: "1",
+      entry: "2345.00",
+      stopLoss: "2345.00",
+      instrument: XAUUSD,
+      accountCurrency: "USD",
+      direction: "LONG",
+    });
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("STOP_EQUALS_ENTRY");
+  });
+
   it("rejects invalid entry and stop-loss prices", () => {
     for (const [entry, stopLoss] of [["0", "2340"], ["2345", "-1"], ["not-a-price", "2340"]]) {
       const r = calcPositionSize({
