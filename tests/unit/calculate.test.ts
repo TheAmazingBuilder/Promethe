@@ -315,6 +315,36 @@ describe("calcPositionSize", () => {
     });
     expect(r.lots.toString()).toBe("1");
   });
+  it("rejects invalid entry and stop-loss prices", () => {
+    for (const [entry, stopLoss] of [["0", "2340"], ["2345", "-1"], ["not-a-price", "2340"]]) {
+      const r = calcPositionSize({
+        accountBalance: "10000",
+        riskPercent: "1",
+        entry,
+        stopLoss,
+        instrument: XAUUSD,
+        accountCurrency: "USD",
+        direction: "LONG",
+      });
+      expect(r.valid).toBe(false);
+      expect(r.reason).toBe("INVALID_PRICE");
+    }
+  });
+
+  it("rejects an instrument with a non-positive contract size", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000",
+      riskPercent: "1",
+      entry: "2345.00",
+      stopLoss: "2340.00",
+      instrument: { ...XAUUSD, contractSize: "0" },
+      accountCurrency: "USD",
+      direction: "LONG",
+    });
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("INVALID_INSTRUMENT_SPECS");
+  });
+
   it("does not increase risk to satisfy a broker minimum lot", () => {
     const r = calcPositionSize({
       accountBalance: "10000",
