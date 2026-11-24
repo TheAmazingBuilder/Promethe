@@ -384,8 +384,8 @@ describe("calcPositionSize", () => {
     expect(r.reason).toBe("INVALID_LOT_CONSTRAINTS");
   });
 
-  it("rounds a broker minimum UP to its next valid lot increment", () => {
-    const r = calcPositionSize({
+  it("uses the broker minimum as the origin for volume-step increments", () => {
+    const atMinimum = calcPositionSize({
       accountBalance: "10000",
       riskAmount: "75",
       entry: "2345.00",
@@ -396,9 +396,24 @@ describe("calcPositionSize", () => {
       lotStep: "0.1",
       minLots: "0.15",
     });
-    expect(r.valid).toBe(false);
-    expect(r.reason).toBe("INSUFFICIENT_RISK");
-    expect(r.minLots.toString()).toBe("0.2");
+    expect(atMinimum.valid).toBe(true);
+    expect(atMinimum.lots.toString()).toBe("0.15");
+    expect(atMinimum.actualRiskAmount.toString()).toBe("75");
+
+    const belowMinimum = calcPositionSize({
+      accountBalance: "10000",
+      riskAmount: "74.5",
+      entry: "2345.00",
+      stopLoss: "2340.00",
+      instrument: XAUUSD,
+      accountCurrency: "USD",
+      direction: "LONG",
+      lotStep: "0.1",
+      minLots: "0.15",
+    });
+    expect(belowMinimum.valid).toBe(false);
+    expect(belowMinimum.reason).toBe("INSUFFICIENT_RISK");
+    expect(belowMinimum.minLots.toString()).toBe("0.15");
   });
 
   it("does not fall back to percentage risk when an explicit amount is zero", () => {
