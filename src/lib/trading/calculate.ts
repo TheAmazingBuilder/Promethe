@@ -331,10 +331,8 @@ export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
   const accountCurrency = input.accountCurrency?.trim().toUpperCase() ?? "";
   const quoteCurrency = instrument.quoteCurrency?.trim().toUpperCase() ?? "";
 
-  const effectiveMinLots =
-    lotStep.isFinite() && lotStep.gt(0) && requestedMinLots.isFinite() && requestedMinLots.gt(0)
-      ? requestedMinLots.div(lotStep).ceil().times(lotStep)
-      : requestedMinLots;
+  // Broker volume increments are applied from the broker's minimum volume.
+  // This also supports valid minima that are not integer multiples of step.
 
   const invalid = (reason: SizingInvalidReason): PositionSizeResult => ({
     valid: false,
@@ -346,9 +344,9 @@ export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
     lots: D0,
     units: D0,
     actualRiskAmount: D0,
-    pipValue: calcPipValue(instrument, 0),
+    pipValue: { quote: D0, account: D0 },
     notionalQuote: D0,
-    minLots: effectiveMinLots,
+    minLots: requestedMinLots,
     isEstimate: false,
   });
 
@@ -379,13 +377,10 @@ export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
     lotStep.lte(0) ||
     !requestedMinLots.isFinite() ||
     requestedMinLots.lte(0) ||
-    !effectiveMinLots.isFinite() ||
-    effectiveMinLots.lte(0) ||
     (maxLots != null &&
       (!maxLots.isFinite() ||
         maxLots.lte(0) ||
-        maxLots.lt(effectiveMinLots) ||
-        floorToStep(maxLots, lotStep).lt(effectiveMinLots)))
+        maxLots.lt(requestedMinLots)))
   ) {
     return invalid("INVALID_LOT_CONSTRAINTS");
   }
@@ -429,17 +424,23 @@ export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
   // it to the account currency before sizing the position.
   const distAccount = dist.times(rate);
   const exactUnits = riskAmount.div(distAccount);
-  let lots = floorToStep(exactUnits.div(contractSize), lotStep);
+  const exactLots = exactUnits.div(contractSize);
 
-  // Respect the broker's maximum without rounding UP to an untradable lot.
-  if (maxLots != null) {
-    lots = Decimal.min(lots, floorToStep(maxLots, lotStep));
-  }
-
-  // Never force the broker minimum: if it exceeds the risk budget, reject
-  // the trade rather than silently increasing the requested risk.
-  if (lots.lt(effectiveMinLots)) {
+  // The broker's minimum is itself a valid volume; each subsequent volume
+  // adds one lot step. Never round the minimum UP or exceed the risk budget.
+  if (exactLots.lt(requestedMinLots)) {
     return invalid("INSUFFICIENT_RISK");
+  }
+  let lots = requestedMinLots.plus(
+    floorToStep(exactLots.minus(requestedMinLots), lotStep)
+  );
+
+  // Respect the broker's maximum using the same minimum-anchored increments.
+  if (maxLots != null) {
+    const maxTradableLots = requestedMinLots.plus(
+      floorToStep(maxLots.minus(requestedMinLots), lotStep)
+    );
+    lots = Decimal.min(lots, maxTradableLots);
   }
 
   const units = lots.times(contractSize);
@@ -458,7 +459,7 @@ export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
     actualRiskAmount,
     pipValue: calcPipValue(instrument, lots, rate),
     notionalQuote,
-    minLots: effectiveMinLots,
+    minLots: requestedMinLots,
     isEstimate: needsConversion,
   };
 }
