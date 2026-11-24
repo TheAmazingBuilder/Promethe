@@ -148,6 +148,24 @@ describe("calcPnL", () => {
     expect(r.isEstimate).toBe(true);
   });
 
+  it("uses a stored FX rate before subtracting account-currency costs", () => {
+    const r = calcPnL({
+      instrument: USDJPY,
+      direction: "LONG",
+      lots: "1",
+      entry: "149.000",
+      exit: "150.000",
+      commission: "7",
+      accountCurrency: "USD",
+      fxRates: [{ base: "JPY", quote: "USD", rate: "0.006" }],
+    });
+    expect(r.grossPnlQuote.toString()).toBe("100000");
+    expect(r.grossPnl.toString()).toBe("600");
+    expect(r.totalCosts.toString()).toBe("7");
+    expect(r.netPnl.toString()).toBe("593");
+    expect(r.converted).toBe(true);
+  });
+
   it("signed costs: net = gross − (commission + swap + fees)", () => {
     const r = calcPnL({
       instrument: XAUUSD,
