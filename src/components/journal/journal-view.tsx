@@ -482,7 +482,7 @@ export function JournalView({ date }: { date?: string }) {
                   </CardDescription>
                 </div>
                 <Badge variant="outline" className="rounded-full">
-                  {dayActivity?.tradeCount ?? dayPnl?.tradeCount ?? 0} trades
+                  {tradesLoading ? "Loading…" : tradesError ? "Unavailable" : <>{dayActivity?.tradeCount ?? dayPnl?.tradeCount ?? 0} trades</>}
                 </Badge>
               </div>
             </CardHeader>
@@ -561,24 +561,38 @@ export function JournalView({ date }: { date?: string }) {
               </div>
               <div className="space-y-3 rounded-xl border border-border/70 bg-muted/15 p-4">
                 <Badge variant="outline">Actual</Badge>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Closed trades</p>
-                    <p className="mt-1 text-lg font-semibold tabular-nums">{dayActivity?.tradeCount ?? 0}</p>
+                {tradesLoading ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
                   </div>
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Win / loss</p>
-                    <p className="mt-1 text-lg font-semibold tabular-nums">{dayActivity?.wins ?? 0} / {dayActivity?.losses ?? 0}</p>
+                ) : tradesError ? (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed p-4" role="alert">
+                    <p className="text-sm text-muted-foreground">Execution statistics could not be loaded.</p>
+                    <Button variant="outline" size="sm" onClick={() => void refetchTrades()}>Retry</Button>
                   </div>
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Net P&amp;L</p>
-                    <Money signed value={dayActivity?.netPnl ?? null} currency={dayActivity?.currency ?? "USD"} className="mt-1 block text-lg font-semibold tabular-nums" />
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Closed trades</p>
+                      <p className="mt-1 text-lg font-semibold tabular-nums">{dayActivity?.tradeCount ?? 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Win / loss</p>
+                      <p className="mt-1 text-lg font-semibold tabular-nums">{dayActivity?.wins ?? 0} / {dayActivity?.losses ?? 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Net P&amp;L</p>
+                      <Money signed value={dayActivity?.netPnl ?? null} currency={dayActivity?.currency ?? "USD"} className="mt-1 block text-lg font-semibold tabular-nums" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total R</p>
+                      <p className="mt-1 text-lg font-semibold tabular-nums">{dayActivity?.totalR ?? "—"}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total R</p>
-                    <p className="mt-1 text-lg font-semibold tabular-nums">{dayActivity?.totalR ?? "—"}</p>
-                  </div>
-                </div>
+                )}
               </div>
               <p className="text-xs leading-relaxed text-muted-foreground md:col-span-2">
                 Use the post-market reflection below to explain whether you followed the plan, what changed, and why. Trade-level adherence remains documented in Trade Review.
@@ -596,12 +610,23 @@ export function JournalView({ date }: { date?: string }) {
                   </CardDescription>
                 </div>
                 <Badge variant="outline" className="rounded-full">
-                  {dayActivity?.screenshots?.length ?? 0} charts
+                  {tradesLoading ? "Loading…" : tradesError ? "Unavailable" : <>{dayActivity?.screenshots?.length ?? 0} charts</>}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent className="pt-0">
-              {(dayActivity?.screenshots?.length ?? 0) === 0 ? (
+              {tradesLoading ? (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <Skeleton className="aspect-[16/9] w-full" />
+                  <Skeleton className="aspect-[16/9] w-full" />
+                  <Skeleton className="aspect-[16/9] w-full" />
+                </div>
+              ) : tradesError ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed p-4" role="alert">
+                  <p className="text-sm text-muted-foreground">Chart screenshots could not be loaded.</p>
+                  <Button variant="outline" size="sm" onClick={() => void refetchTrades()}>Retry</Button>
+                </div>
+              ) : (dayActivity?.screenshots?.length ?? 0) === 0 ? (
                 <p className="rounded-lg border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
                   No chart screenshots attached to this day&apos;s trades yet.
                 </p>
@@ -651,12 +676,23 @@ export function JournalView({ date }: { date?: string }) {
                   </CardDescription>
                 </div>
                 <Badge variant="outline" className="rounded-full">
-                  {(dayActivity?.behavioralMistakes ?? []).reduce((total, item) => total + item.count, 0)} tags
+                  {tradesLoading ? "Loading…" : tradesError ? "Unavailable" : <>{(dayActivity?.behavioralMistakes ?? []).reduce((total, item) => total + item.count, 0)} tags</>}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent className="pt-0">
-              {(dayActivity?.behavioralMistakes?.length ?? 0) === 0 ? (
+              {tradesLoading ? (
+                <div className="flex flex-wrap gap-2">
+                  <Skeleton className="h-9 w-28" />
+                  <Skeleton className="h-9 w-32" />
+                  <Skeleton className="h-9 w-24" />
+                </div>
+              ) : tradesError ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed p-4" role="alert">
+                  <p className="text-sm text-muted-foreground">Behavioral tags could not be loaded.</p>
+                  <Button variant="outline" size="sm" onClick={() => void refetchTrades()}>Retry</Button>
+                </div>
+              ) : (dayActivity?.behavioralMistakes?.length ?? 0) === 0 ? (
                 <p className="rounded-lg border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
                   No mistake tags recorded in Trade Review for this day.
                 </p>
