@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { calcPositionSize } from "@/lib/trading/calculate";
+import { toD } from "@/lib/trading/dec";
 import { PRESET_INSTRUMENTS } from "@/lib/trading/instruments";
 import { COMMON_CURRENCIES, type AssetClass, type Direction } from "@/lib/trading/types";
 import { fmtNum, fmtPrice } from "@/lib/format";
@@ -38,6 +39,9 @@ export function PositionSizeCalculator() {
   const [entry, setEntry] = React.useState("2345.00");
   const [stopLoss, setStopLoss] = React.useState("2340.00");
   const [rate, setRate] = React.useState("");
+  const [lotStep, setLotStep] = React.useState("0.01");
+  const [minLots, setMinLots] = React.useState("0.01");
+  const [maxLots, setMaxLots] = React.useState("");
 
   const instrument = React.useMemo(
     () => PRESET_INSTRUMENTS.find((i) => i.symbol === symbol) ?? PRESET_INSTRUMENTS[0],
@@ -57,8 +61,11 @@ export function PositionSizeCalculator() {
       direction,
       accountCurrency: currency,
       quoteToAccountRate: needsRate && rate !== "" ? rate : null,
+      lotStep,
+      minLots,
+      maxLots: maxLots.trim() === "" ? null : maxLots,
     });
-  }, [balance, riskMode, riskPercent, riskAmount, entry, stopLoss, instrument, direction, currency, needsRate, rate]);
+  }, [balance, riskMode, riskPercent, riskAmount, entry, stopLoss, instrument, direction, currency, needsRate, rate, lotStep, minLots, maxLots]);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -95,6 +102,53 @@ export function PositionSizeCalculator() {
                 })}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2 sm:col-span-2">
+            <p className="text-sm font-medium">{t("brokerVolumeRules")}</p>
+            <p className="text-xs text-muted-foreground">{t("brokerVolumeRulesHint")}</p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="ps-lot-step">{t("lotStep")}</Label>
+                <Input
+                  id="ps-lot-step"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="any"
+                  value={lotStep}
+                  onChange={(e) => setLotStep(e.target.value)}
+                  className="tabular-nums"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ps-min-lots">{t("minLots")}</Label>
+                <Input
+                  id="ps-min-lots"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="any"
+                  value={minLots}
+                  onChange={(e) => setMinLots(e.target.value)}
+                  className="tabular-nums"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ps-max-lots">{t("maxLots")}</Label>
+                <Input
+                  id="ps-max-lots"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="any"
+                  placeholder={t("maxLotsOptional")}
+                  value={maxLots}
+                  onChange={(e) => setMaxLots(e.target.value)}
+                  className="tabular-nums"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -254,6 +308,9 @@ export function PositionSizeCalculator() {
             setRiskPercent("1");
             setDirection("LONG");
             setRate("");
+            setLotStep("0.01");
+            setMinLots("0.01");
+            setMaxLots("");
             if (symbol === "XAUUSD") {
               setEntry("2345.00");
               setStopLoss("2340.00");
@@ -273,7 +330,7 @@ export function PositionSizeCalculator() {
           {result.valid ? (
             <>
               <p className="mt-2 text-5xl font-bold tabular-nums tracking-tight text-emerald-500 dark:text-emerald-400">
-                {fmtNum(result.lots, 2, 2)}
+                {fmtNum(result.lots, Math.min(6, Math.max(2, toD(lotStep).decimalPlaces())), Math.min(6, Math.max(2, toD(lotStep).decimalPlaces())))}
                 <span className="ml-2 text-xl font-semibold text-muted-foreground">
                   {instrument.assetClass === "FOREX" || instrument.assetClass === "METAL"
                     ? t("lotsUnit")
