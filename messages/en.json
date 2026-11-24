@@ -328,7 +328,7 @@
     "kpiProfitFactor": "Profit factor",
     "kpiExpectancy": "Expectancy",
     "kpiTotalR": "Total: {value}",
-    "kpiMaxDrawdown": "Max drawdown",
+    "kpiMaxDrawdown": "Max P&L drawdown",
     "kpiRecovery": "Recovery: {value}",
     "kpiSqn": "SQN",
     "sqnHint": "System quality (√N · R̄ / σ)",
@@ -821,7 +821,8 @@
       "cellTrades": "{count} trades",
       "timezoneNote": "Hours and weekdays use your local entry time. Based on {total} closed trades."
     },
-    "currencyScopeNote": "{count} trades in other currencies were excluded. Monetary statistics below use {currency} only."
+    "currencyScopeNote": "{count} trades in other currencies were excluded. Monetary statistics below use {currency} only.",
+    "kpiDrawdownHint": "Based on cumulative trade P&L, not account equity."
   },
   "calendar": {
     "title": "P&L Calendar",
