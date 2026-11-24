@@ -282,6 +282,8 @@ export type SizingInvalidReason =
   | "STOP_SIDE_SHORT"
   | "STOP_EQUALS_ENTRY"
   | "INVALID_AMOUNT"
+  | "INVALID_PRICE"
+  | "INVALID_INSTRUMENT_SPECS"
   | "MISSING_ACCOUNT_CURRENCY"
   | "MISSING_QUOTE_CURRENCY"
   | "MISSING_CONVERSION_RATE"
@@ -365,11 +367,12 @@ export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
     !entry.isFinite() ||
     !stopLoss.isFinite() ||
     entry.lte(0) ||
-    stopLoss.lte(0) ||
-    !contractSize.isFinite() ||
-    contractSize.lte(0)
+    stopLoss.lte(0)
   ) {
-    return invalid("INVALID_AMOUNT");
+    return invalid("INVALID_PRICE");
+  }
+  if (!contractSize.isFinite() || contractSize.lte(0)) {
+    return invalid("INVALID_INSTRUMENT_SPECS");
   }
 
   if (
