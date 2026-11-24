@@ -2078,7 +2078,9 @@
     "multiTpAllocationInvalid": "Each allocation must be greater than 0%, no more than 100%, and the total must equal 100%.",
     "multiTpTargetInvalid": "Each take-profit price must be positive and on the profit side of the entry.",
     "marginEquityHint": "Enter the broker's current equity (balance plus floating P&L). The selected account's initial balance is only a starting value.",
-    "exposureMissingFx": "Missing FX rates for {symbols}. These instruments are included using an unconverted 1:1 estimate; add the required rates before relying on account-currency exposure totals."
+    "exposureMissingFx": "Missing FX rates for {symbols}. These instruments are included using an unconverted 1:1 estimate; add the required rates before relying on account-currency exposure totals.",
+    "exposureAccount": "Trading account",
+    "exposureAccountPlaceholder": "Select an account"
   },
   "topLeaks": {
     "title": "Top 3 leaks",
