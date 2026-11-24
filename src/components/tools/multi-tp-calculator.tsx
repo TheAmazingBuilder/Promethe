@@ -129,7 +129,8 @@ export function MultiTpCalculator() {
     });
   }, [balance, riskMode, riskPercent, riskAmount, entry, stopLoss, instrument, direction, currency, needsRate, resolvedRate, tiers]);
 
-  const allocationOk = result.allocationSum.eq(100);
+  const allocationOk = result.allocationValid;
+  const targetsOk = result.targetsValid;
   const multiTpScenarios = scenarios.filter((s) => s.kind === "MULTI_TP");
 
   const shareState: ShareState = {
@@ -291,6 +292,12 @@ export function MultiTpCalculator() {
             <p className={allocationOk ? "text-xs text-muted-foreground" : "text-xs font-medium text-amber-600 dark:text-amber-400"}>
               {t("multiTpAllocationSum", { sum: fmtNum(result.allocationSum, 0) })}
             </p>
+            {!allocationOk ? (
+              <p className="text-xs text-amber-600 dark:text-amber-400">{t("multiTpAllocationInvalid")}</p>
+            ) : null}
+            {!targetsOk ? (
+              <p className="text-xs text-amber-600 dark:text-amber-400">{t("multiTpTargetInvalid")}</p>
+            ) : null}
           </div>
         </div>
 
@@ -353,7 +360,7 @@ export function MultiTpCalculator() {
           )}
 
           <dl className="grid grid-cols-2 gap-3">
-            <Stat label={t("multiTpTotalPnl")} value={`${fmtNum(result.totalGrossPnl, 2)} ${currency}`} />
+            <Stat label={t("multiTpTotalPnl")} value={allocationOk && targetsOk && result.sizing.valid ? `${fmtNum(result.totalGrossPnl, 2)} ${currency}` : "—"} />
             <Stat label={t("multiTpWorstCase")} value={`${fmtNum(result.worstCasePnl, 2)} ${currency}`} />
           </dl>
         </div>
