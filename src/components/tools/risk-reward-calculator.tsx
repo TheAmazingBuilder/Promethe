@@ -215,6 +215,16 @@ export function RiskRewardCalculator() {
           {t("rrLoadError")}
         </p>
       ) : null}
+      {summary &&
+      (summary.excludedTradeCount > 0 || summary.excludedOpenTradeCount > 0) ? (
+        <p className="rounded-lg border p-3 text-sm text-muted-foreground">
+          {t("rrCurrencyScopeNote", {
+            currency,
+            closed: summary.excludedTradeCount,
+            open: summary.excludedOpenTradeCount,
+          })}
+        </p>
+      ) : null}
 
       {/* ── Interactive table ─────────────────────────────────────────────── */}
       <section aria-labelledby="rr-table-title" className="space-y-3">
