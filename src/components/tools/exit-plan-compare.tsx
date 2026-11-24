@@ -41,7 +41,7 @@ export function ExitPlanCompare({ trade }: { trade: TradeDetailDTO }) {
   }, [trade.id, planId]);
   const manualInvalid = Object.values(manual).some((value) => {
     const trimmed = value.trim();
-    return trimmed !== "" && !/^(?:\\d+(?:\\.\\d*)?|\\.\\d+)$/.test(trimmed) ||
+    return trimmed !== "" && !/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(trimmed) ||
       (trimmed !== "" && Number(trimmed) > 100);
   });
   const plan = plans.find((p) => p.id === planId) ?? null;
@@ -138,7 +138,7 @@ export function ExitPlanCompare({ trade }: { trade: TradeDetailDTO }) {
                           value={manual[row.index] ?? ""}
                           aria-invalid={
                             (manual[row.index] ?? "").trim() !== "" &&
-                            (!/^(?:\\d+(?:\\.\\d*)?|\\.\\d+)$/.test((manual[row.index] ?? "").trim()) ||
+                            (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test((manual[row.index] ?? "").trim()) ||
                               Number(manual[row.index]) > 100)
                           }
                           onChange={(e) =>
