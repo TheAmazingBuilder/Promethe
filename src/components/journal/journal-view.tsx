@@ -812,7 +812,7 @@ export function JournalView({ date }: { date?: string }) {
                   icon={Sun}
                   eyebrow="Before the session"
                   title={t("preMarketPlan")}
-                  description="Define the context and the decisions you want to make before the market opens."
+                  description="Capture the broader backdrop that may influence price action. Keep directional bias, key levels and scenarios in Execution plan."
                 />
                 <Textarea
                   value={form.preMarketPlan ?? ""}
@@ -822,7 +822,7 @@ export function JournalView({ date }: { date?: string }) {
                   className="min-h-52 resize-y border-border/70 bg-muted/20 text-sm leading-relaxed focus-visible:bg-background"
                 />
                 <p className="mt-2 text-[10px] text-muted-foreground">
-                  Write your bias, important levels, scenarios and invalidation conditions.
+                  Focus on catalysts, liquidity and session conditions rather than repeating your levels or setup scenarios.
                 </p>
               </CardContent>
             </Card>
