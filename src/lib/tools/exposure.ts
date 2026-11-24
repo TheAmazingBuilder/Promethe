@@ -142,6 +142,10 @@ export interface CurrencyExposure {
   risk: Decimal;
   /** Number of open positions touching this currency. */
   positionCount: number;
+  /** Number of positions with positive exposure to this currency. */
+  longPositionCount: number;
+  /** Number of positions with negative exposure to this currency. */
+  shortPositionCount: number;
   /** Long and short notionals kept separate for the duplication check. */
   longNotional: Decimal;
   shortNotional: Decimal;
@@ -173,14 +177,21 @@ export function aggregateExposure(
         notional: D0,
         risk: D0,
         positionCount: 0,
+        longPositionCount: 0,
+        shortPositionCount: 0,
         longNotional: D0,
         shortNotional: D0,
       };
       cur.notional = cur.notional.plus(leg.notional);
       cur.risk = cur.risk.plus(leg.risk);
       cur.positionCount += 1;
-      if (leg.notional.gt(0)) cur.longNotional = cur.longNotional.plus(leg.notional);
-      else cur.shortNotional = cur.shortNotional.plus(leg.notional);
+      if (leg.notional.gt(0)) {
+        cur.longNotional = cur.longNotional.plus(leg.notional);
+        cur.longPositionCount++;
+      } else if (leg.notional.lt(0)) {
+        cur.shortNotional = cur.shortNotional.plus(leg.notional);
+        cur.shortPositionCount++;
+      }
       byCurrency.set(leg.currency, cur);
     }
     const inst = byInstrument.get(d.trade.symbol) ?? { risk: D0, notional: D0, count: 0 };
@@ -233,25 +244,37 @@ export function detectDuplication(
   settings: ExposureSettings
 ): DuplicationAlert[] {
   const balance = toD(accountBalance);
-  if (!settings.enabled || balance.lte(0)) return [];
+  if (!settings.enabled || !balance.isFinite() || balance.lte(0)) return [];
   const threshold = toD(settings.duplicationThresholdPercent);
+  if (!threshold.isFinite() || threshold.lte(0)) return [];
+
   const alerts: DuplicationAlert[] = [];
-  for (const c of summary.byCurrency) {
-    if (c.positionCount < 2) continue;
-    const longRisk = c.longNotional.abs();
-    const shortRisk = c.shortNotional.abs();
-    const dominant = longRisk.gte(shortRisk)
-      ? { dir: "LONG" as const, notional: longRisk }
-      : { dir: "SHORT" as const, notional: shortRisk };
-    const pct = dominant.notional.div(balance).times(D100);
-    if (pct.gte(threshold)) {
-      alerts.push({
-        currency: c.currency,
-        direction: dominant.dir,
-        positionCount: c.positionCount,
-        notional: dominant.notional,
-        riskPctOfBalance: pct,
-      });
+  for (const currency of summary.byCurrency) {
+    const candidates = [
+      {
+        direction: "LONG" as const,
+        positionCount: currency.longPositionCount,
+        notional: currency.longNotional.abs(),
+      },
+      {
+        direction: "SHORT" as const,
+        positionCount: currency.shortPositionCount,
+        notional: currency.shortNotional.abs(),
+      },
+    ];
+
+    for (const candidate of candidates) {
+      if (candidate.positionCount < 2) continue;
+      const pct = candidate.notional.div(balance).times(D100);
+      if (pct.gte(threshold)) {
+        alerts.push({
+          currency: currency.currency,
+          direction: candidate.direction,
+          positionCount: candidate.positionCount,
+          notional: candidate.notional,
+          riskPctOfBalance: pct,
+        });
+      }
     }
   }
   return alerts;
