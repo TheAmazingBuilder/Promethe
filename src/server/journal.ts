@@ -276,6 +276,9 @@ export async function updateJournalTemplate(
   input: JournalTemplateUpdate,
 ) {
   return db.$transaction(async (tx) => {
+    const existing = await tx.journalTemplate.findFirst({ where: { id, userId } });
+    if (!existing) return null;
+
     if (input.isDefault === true) {
       await tx.journalTemplate.updateMany({
         where: { userId, isDefault: true },
@@ -284,16 +287,13 @@ export async function updateJournalTemplate(
     }
 
     const { isDefault, ...fields } = input;
-    const updated = await tx.journalTemplate.updateMany({
-      where: { id, userId },
+    return tx.journalTemplate.update({
+      where: { id },
       data: {
         ...fields,
         ...(isDefault !== undefined ? { isDefault } : {}),
       },
     });
-    if (updated.count === 0) return null;
-
-    return tx.journalTemplate.findFirst({ where: { id, userId } });
   });
 }
 
