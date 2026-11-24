@@ -25,6 +25,8 @@ describe("ReportPdf paragraph pagination", () => {
     const pdf = new ReportPdf("USD", FakeJsPDF as unknown as typeof jsPDF);
 
     pdf.paragraph("A long journal reflection", "Journal export");
+    // The export caller writes the final page footer after all content.
+    pdf.footer("Journal export");
 
     const doc = pdf.doc as unknown as FakeJsPDF;
     expect(doc.pages).toBeGreaterThan(1);
