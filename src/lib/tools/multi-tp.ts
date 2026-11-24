@@ -39,8 +39,12 @@ export interface MultiTpTierResult {
 export interface MultiTpResult {
   sizing: ReturnType<typeof calcPositionSize>;
   tiers: MultiTpTierResult[];
-  /** Sum of the tier allocations (must be 100 to be valid). */
+  /** Sum of the tier allocations. */
   allocationSum: Decimal;
+  /** True only when every allocation is in (0, 100] and the sum is 100. */
+  allocationValid: boolean;
+  /** True only when every TP price is positive and directionally valid. */
+  targetsValid: boolean;
   /** Blended R when every TP is hit (allocation-weighted). */
   blendedR: Decimal | null;
   /** Total gross P&L when every TP is hit. */
@@ -56,49 +60,67 @@ export interface MultiTpInput extends Omit<PositionSizeInput, "riskAmount"> {
 
 export function calcMultiTp(input: MultiTpInput): MultiTpResult {
   const sizing = calcPositionSize(input);
-  const allocationSum = input.tiers.reduce(
-    (acc, t) => acc.plus(toD(t.allocationPct)),
-    D0
-  );
+  const allocations = input.tiers.map((tier) => toD(tier.allocationPct));
+  const allocationSum = allocations.reduce((acc, value) => acc.plus(value), D0);
+  const allocationValid =
+    input.tiers.length >= 1 &&
+    input.tiers.length <= 4 &&
+    allocations.every((value) => value.isFinite() && value.gt(0) && value.lte(D100)) &&
+    allocationSum.eq(D100);
 
+  const targets = input.tiers.map((tier) => toD(tier.price));
+  const targetRValues = input.tiers.map((tier) =>
+    calcPlannedRR(
+      input.direction ?? "LONG",
+      input.entry,
+      input.stopLoss,
+      tier.price
+    )
+  );
+  const targetsValid =
+    input.tiers.length >= 1 &&
+    input.tiers.length <= 4 &&
+    targets.every((price) => price.isFinite() && price.gt(0)) &&
+    targetRValues.every((value) => value !== null);
+
+  const canCalculateTiers = sizing.valid && allocationValid && targetsValid;
   const tiers: MultiTpTierResult[] = input.tiers.map((tier, index) => {
-    const allocationPct = toD(tier.allocationPct);
-    const tierLots = sizing.lots.times(allocationPct).div(D100);
-    const rMultiple = sizing.valid
-      ? calcPlannedRR(
-          input.direction ?? "LONG",
-          input.entry,
-          input.stopLoss,
-          tier.price
-        )
+    const allocationPct = allocations[index];
+    const tierLots = canCalculateTiers
+      ? sizing.lots.times(allocationPct).div(D100)
+      : D0;
+    const rMultiple = targetsValid ? targetRValues[index] : null;
+    const pnl = canCalculateTiers
+      ? calcPnL({
+          instrument: input.instrument,
+          direction: input.direction ?? "LONG",
+          lots: tierLots,
+          entry: input.entry,
+          exit: tier.price,
+          quoteToAccountRate: input.quoteToAccountRate ?? null,
+          accountCurrency: input.accountCurrency ?? null,
+        })
       : null;
-    const pnl = calcPnL({
-      instrument: input.instrument,
-      direction: input.direction ?? "LONG",
-      lots: tierLots,
-      entry: input.entry,
-      exit: tier.price,
-      quoteToAccountRate: input.quoteToAccountRate ?? null,
-      accountCurrency: input.accountCurrency ?? null,
-    });
     return {
       index,
-      price: toD(tier.price),
+      price: targets[index],
       allocationPct,
       lots: tierLots,
       rMultiple,
-      grossPnl: pnl.grossPnl,
+      grossPnl: pnl?.grossPnl ?? D0,
     };
   });
 
-  const totalGrossPnl = tiers.reduce((acc, t) => acc.plus(t.grossPnl), D0);
-  let blendedR: Decimal | null = null;
-  if (sizing.valid && allocationSum.eq(D100)) {
-    blendedR = tiers.reduce((acc, t) => {
-      if (!t.rMultiple) return acc;
-      return acc.plus(t.rMultiple.times(t.allocationPct).div(D100));
-    }, D0);
-  }
+  const totalGrossPnl = canCalculateTiers
+    ? tiers.reduce((acc, tier) => acc.plus(tier.grossPnl), D0)
+    : D0;
+  const blendedR =
+    canCalculateTiers
+      ? tiers.reduce((acc, tier) => {
+          const r = tier.rMultiple;
+          return r === null ? acc : acc.plus(r.times(tier.allocationPct).div(D100));
+        }, D0)
+      : null;
   const worstCasePnl = sizing.valid
     ? calcPnL({
         instrument: input.instrument,
@@ -111,7 +133,17 @@ export function calcMultiTp(input: MultiTpInput): MultiTpResult {
       }).grossPnl
     : D0;
 
-  return { sizing, tiers, allocationSum, blendedR, totalGrossPnl, worstCasePnl };
+  return {
+    sizing,
+    tiers,
+    allocationSum,
+    allocationValid,
+    targetsValid,
+    blendedR,
+    totalGrossPnl,
+    worstCasePnl,
+  };
+}
 }
 
 export type { InstrumentSpec };
