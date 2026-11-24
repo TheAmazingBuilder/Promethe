@@ -484,6 +484,26 @@ export function JournalView({ date }: { date?: string }) {
         }
       />
 
+      <nav aria-label="Journal sections" className="sticky top-2 z-20 -mx-1 flex gap-1 overflow-x-auto rounded-xl border border-border/70 bg-background/90 p-1.5 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/75">
+        {[
+          ["journal-overview", "Overview"],
+          ["journal-activity", "Activity"],
+          ["journal-plan", "Plan"],
+          ["journal-charts", "Charts"],
+          ["journal-state", "Mindset"],
+          ["journal-reviews", "Reviews"],
+          ["journal-history", "History"],
+        ].map(([target, label]) => (
+          <a
+            key={target}
+            href={`#${target}`}
+            className="shrink-0 rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {label}
+          </a>
+        ))}
+      </nav>
+
       {isError ? (
         <QueryErrorState
           title="Journal entry could not be loaded"
@@ -492,7 +512,7 @@ export function JournalView({ date }: { date?: string }) {
         />
       ) : (
         <>
-          <Card className="overflow-hidden border-border/70 bg-gradient-to-br from-card via-card to-muted/40 shadow-sm">
+          <Card id="journal-overview" className="scroll-mt-24 overflow-hidden border-border/70 bg-gradient-to-br from-card via-card to-muted/40 shadow-sm">
             <CardContent className="p-4 sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="min-w-0">
@@ -600,7 +620,7 @@ export function JournalView({ date }: { date?: string }) {
             </CardContent>
           </Card>
 
-          <Card className="border-border/70 shadow-sm">
+          <Card id="journal-activity" className="scroll-mt-24 border-border/70 shadow-sm">
             <CardHeader className="pb-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -664,7 +684,7 @@ export function JournalView({ date }: { date?: string }) {
             </CardContent>
           </Card>
 
-          <Card className="border-border/70 shadow-sm">
+          <Card id="journal-plan" className="scroll-mt-24 border-border/70 shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Plan vs execution</CardTitle>
               <CardDescription className="mt-1 text-xs">
@@ -714,7 +734,7 @@ export function JournalView({ date }: { date?: string }) {
             </CardContent>
           </Card>
 
-          <Card className="border-border/70 shadow-sm">
+          <Card id="journal-charts" className="scroll-mt-24 border-border/70 shadow-sm">
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -769,7 +789,7 @@ export function JournalView({ date }: { date?: string }) {
             </CardContent>
           </Card>
 
-          <Card className="border-border/70 shadow-sm">
+          <Card id="journal-state" className="scroll-mt-24 border-border/70 shadow-sm">
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -801,7 +821,7 @@ export function JournalView({ date }: { date?: string }) {
             </CardContent>
           </Card>
 
-          <Card className="border-border/70 shadow-sm">
+          <Card className="scroll-mt-24 border-border/70 shadow-sm">
             <CardHeader className="pb-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -846,7 +866,7 @@ export function JournalView({ date }: { date?: string }) {
             </CardContent>
           </Card>
 
-          <Card className="border-border/70 shadow-sm">
+          <Card id="journal-preparation" className="scroll-mt-24 border-border/70 shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Execution plan</CardTitle>
               <CardDescription className="text-xs">Turn your market view into scenarios, invalidation rules and a defined risk limit.</CardDescription>
@@ -1018,9 +1038,11 @@ export function JournalView({ date }: { date?: string }) {
             </div>
           </div>
 
-          <JournalPeriodReviewPanel selectedDay={day} onDirtyChange={onPeriodReviewDirtyChange} />
+          <div id="journal-reviews" className="scroll-mt-24">
+            <JournalPeriodReviewPanel selectedDay={day} onDirtyChange={onPeriodReviewDirtyChange} />
+          </div>
 
-          <Card className="border-border/70 shadow-sm">
+          <Card id="journal-history" className="scroll-mt-24 border-border/70 shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
               <div>
                 <CardTitle className="text-base">{t("recent.title")}</CardTitle>
