@@ -70,6 +70,9 @@ jobs:
         run: bun run test:unit
 
       - name: Integration tests (isolated PostgreSQL schema)
+        env:
+          DATABASE_URL: postgresql://test:test@127.0.0.1:5432/promethe?schema=promethe_test
+          DIRECT_URL: postgresql://test:test@127.0.0.1:5432/promethe?schema=promethe_test
         run: bun run test:integration
 
       - name: Production build (includes strict TypeScript validation)
