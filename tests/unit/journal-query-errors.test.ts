@@ -5,6 +5,10 @@ const source = readFileSync(
   new URL("../../src/components/journal/journal-view.tsx", import.meta.url),
   "utf8"
 );
+const historySource = readFileSync(
+  new URL("../../src/components/journal/journal-history-section.tsx", import.meta.url),
+  "utf8"
+);
 
 describe("Journal entry query recovery", () => {
   it("keeps the date navigation available while showing a retryable load error", () => {
@@ -16,14 +20,14 @@ describe("Journal entry query recovery", () => {
   });
 
   it("shows a recoverable error when Journal history cannot load", () => {
-    expect(source).toContain("isError: recentError");
-    expect(source).toContain('title="Journal history could not be loaded"');
-    expect(source).toContain("onRetry={() => void refetchRecent()}");
-    expect(source).toContain("isFetchNextPageError");
+    expect(historySource).toContain("isError: recentError");
+    expect(historySource).toContain('title="Journal history could not be loaded"');
+    expect(historySource).toContain("onRetry={() => void refetchRecent()}");
+    expect(historySource).toContain("isFetchNextPageError");
   });
 
   it("uses safe URL parameters for Journal exports", () => {
-    expect(source).toContain("new URLSearchParams({ from: historyFrom, to: historyTo })");
+    expect(historySource).toContain("new URLSearchParams({ from: historyFrom, to: historyTo })");
   });
 
   it("does not mark a daily entry dirty before hydration or after a successful save", () => {

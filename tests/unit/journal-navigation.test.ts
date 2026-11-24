@@ -5,6 +5,11 @@ const source = readFileSync(
   new URL("../../src/components/journal/journal-view.tsx", import.meta.url),
   "utf8"
 );
+const historySource = readFileSync(
+  new URL("../../src/components/journal/journal-history-section.tsx", import.meta.url),
+  "utf8"
+);
+const page = source + historySource;
 
 describe("Journal section navigation", () => {
   it("keeps the sticky section navigation below the global sticky header", () => {
@@ -26,7 +31,7 @@ describe("Journal section navigation", () => {
       "journal-history",
     ]) {
       expect(source).toContain(`["${id}"`);
-      expect(source).toContain(`id="${id}"`);
+      expect(page).toContain(`id="${id}"`);
     }
     expect(source.indexOf('["journal-behavior"')).toBeLessThan(source.indexOf('["journal-state"'));
     expect(source.indexOf('["journal-state"')).toBeLessThan(source.indexOf('["journal-preparation"'));
