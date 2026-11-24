@@ -236,7 +236,14 @@ export function comparePlanVsReal(
         if (!Number.isFinite(timestamp) || timestamp < triggerTime!) return false;
         const oldStop = toD(modification.oldValue);
         const newStop = toD(modification.newValue);
-        if (!oldStop.isFinite() || !newStop.isFinite()) return false;
+        if (
+          !oldStop.isFinite() ||
+          !newStop.isFinite() ||
+          oldStop.lte(0) ||
+          newStop.lte(0)
+        ) {
+          return false;
+        }
         return direction === "LONG"
           ? newStop.gt(entryPrice) && newStop.gt(oldStop)
           : newStop.lt(entryPrice) && newStop.lt(oldStop);
