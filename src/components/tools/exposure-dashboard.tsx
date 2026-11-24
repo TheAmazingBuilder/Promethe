@@ -82,6 +82,7 @@ export function ExposureDashboard() {
 
   const { data: accounts, isLoading: accountsLoading } = useAccounts();
   const account = accounts?.find((item) => item.id === accountId) ?? accounts?.[0];
+  const selectedAccountId = account?.id ?? null;
   const { data: instruments } = useInstruments();
   const openTrades = useTradesList({
     page: 1,
@@ -90,7 +91,7 @@ export function ExposureDashboard() {
     order: "desc",
     includeDrafts: false,
     status: "OPEN",
-    accountId: account?.id,
+    accountId: selectedAccountId ?? undefined,
   });
   React.useEffect(() => {
     if (!account) return;
@@ -112,7 +113,7 @@ export function ExposureDashboard() {
 
   const trades: OpenTradeLike[] = React.useMemo(() => {
     return (openTrades.data?.data ?? [])
-      .filter((item) => account !== undefined && item.accountId === account.id)
+      .filter((item) => selectedAccountId !== null && item.accountId === selectedAccountId)
       .map((item) => ({
       id: item.id,
       symbol: item.symbol,
@@ -130,7 +131,7 @@ export function ExposureDashboard() {
       accountCurrency: currency,
       riskAmount: null,
     }));
-  }, [openTrades.data, priceDrafts, currency, account?.id]);
+  }, [openTrades.data, priceDrafts, currency, selectedAccountId]);
 
   const summary = React.useMemo(() => {
     const decomposed = trades.map((trade) =>
