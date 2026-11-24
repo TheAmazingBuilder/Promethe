@@ -51,6 +51,14 @@ function sameDatabaseProject(left: URL, right: URL): boolean {
   return left.hostname === right.hostname;
 }
 
+function isLocalUrl(url: URL): boolean {
+  return (
+    url.hostname === "localhost" ||
+    url.hostname === "127.0.0.1" ||
+    url.hostname === "[::1]"
+  );
+}
+
 function validateTestDatabaseUrl(value: string, name: string): URL {
   let url: URL;
   try { url = new URL(value); } catch {
@@ -98,6 +106,11 @@ for (const [name, productionValue] of [
   try { productionUrl = new URL(productionValue); } catch {
     throw new Error(name + " must be a valid PostgreSQL URL.");
   }
+  // A local database can never be production: CI points DATABASE_URL and
+  // DIRECT_URL at the local Postgres service, which uses the same isolated
+  // test schema as the test connection. Only a remote database can hold
+  // production data, so only remote collisions refuse the run.
+  if (isLocalUrl(productionUrl)) continue;
   for (const testUrl of [testDatabaseUrl, testDirectUrl]) {
     const sameDatabase =
       productionUrl.pathname === testUrl.pathname &&
