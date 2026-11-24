@@ -9,13 +9,14 @@ import type { ExitPlanEntry } from "@/lib/tools/types";
 
 function plan(
   tiers: ExitPlanEntry["tiers"],
-  trailingAfterTier: number | null = null
+  trailingAfterTier: number | null = null,
+  breakevenAfterTier: number | null = null
 ): ExitPlanEntry {
   return {
     id: "plan-1",
     name: "Test plan",
     tiers,
-    breakevenAfterTier: null,
+    breakevenAfterTier,
     trailingAfterTier,
     notes: "",
     createdAt: "2026-01-01T00:00:00.000Z",
@@ -95,9 +96,9 @@ describe("exit plan validation and comparison", () => {
     expect(result.totalRealizedPct.toString()).toBe("50");
   });
 
-  it("does not treat a breakeven move alone as trailing", () => {
+  it("recognizes breakeven only after the configured tier is completed", () => {
     const result = comparePlanVsReal(
-      plan([{ pct: 50, targetType: "PRICE", target: "110" }], 0),
+      plan([{ pct: 50, targetType: "PRICE", target: "110" }], null, 0),
       "LONG",
       "100",
       "90",
@@ -108,6 +109,34 @@ describe("exit plan validation and comparison", () => {
 
     expect(result.breakevenMoved).toBe(true);
     expect(result.trailingStarted).toBe(false);
+  });
+
+  it("does not count a breakeven move that happened before its configured tier", () => {
+    const result = comparePlanVsReal(
+      plan([{ pct: 50, targetType: "PRICE", target: "110" }], null, 0),
+      "LONG",
+      "100",
+      "90",
+      "1",
+      [execution({ price: "110", time: "2026-11-24T10:00:00.000Z" })],
+      [modification({ time: "2026-11-24T09:55:00.000Z" })]
+    );
+
+    expect(result.breakevenMoved).toBe(false);
+  });
+
+  it("does not report breakeven when the plan is configured to never move it", () => {
+    const result = comparePlanVsReal(
+      plan([{ pct: 100, targetType: "PRICE", target: "110" }]),
+      "LONG",
+      "100",
+      "90",
+      "1",
+      [execution({ price: "110", time: "2026-11-24T10:00:00.000Z" })],
+      [modification({ time: "2026-11-24T10:05:00.000Z" })]
+    );
+
+    expect(result.breakevenMoved).toBe(false);
   });
 
   it("recognizes trailing only after the configured tier and a profitable stop advance", () => {
