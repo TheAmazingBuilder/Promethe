@@ -2255,7 +2255,8 @@
       "MISSING_CONVERSION_RATE": "A valid conversion rate is required because the quote and account currencies differ.",
       "INVALID_CONVERSION_RATE": "The conversion rate must be a valid number greater than 0.",
       "INSUFFICIENT_RISK": "Risk too small for the minimum lot size ({minLots} lot).",
-      "FALLBACK": "Invalid parameters."
+      "FALLBACK": "Invalid parameters.",
+      "INVALID_LOT_CONSTRAINTS": "The instrument's minimum, maximum or lot step is invalid. Check the broker's volume rules."
     }
   },
   "brokerSync": {
