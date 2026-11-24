@@ -174,7 +174,7 @@ function CalendarPopup({
     <div
       role="dialog"
       aria-label={t("title")}
-      className="absolute left-0 top-full z-50 mt-2 w-[19rem] rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-xl"
+      className="absolute right-0 top-full z-50 mt-2 w-[min(19rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-xl"
     >
       {/* Month header */}
       <div className="flex items-center justify-between">
