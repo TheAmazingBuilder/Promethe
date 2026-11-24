@@ -388,8 +388,11 @@ export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
     return invalid("INVALID_LOT_CONSTRAINTS");
   }
 
-  // Stop distance: strict side validation when direction is known,
-  // absolute distance otherwise (calculator without direction).
+  // Equal prices are invalid regardless of direction; otherwise enforce
+  // the strict stop side when direction is known.
+  if (entry.eq(stopLoss)) return invalid("STOP_EQUALS_ENTRY");
+
+  // Without a direction, use the absolute stop distance.
   let dist: Decimal | null;
   if (input.direction) {
     dist = stopDistance(input.direction, entry, stopLoss);
