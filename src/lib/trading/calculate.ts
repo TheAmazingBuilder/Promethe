@@ -317,15 +317,24 @@ export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
   const { instrument } = input;
   const balance = toD(input.accountBalance);
   const lotStep = input.lotStep == null ? toD("0.01") : toD(input.lotStep);
-  const minLots = input.minLots == null ? lotStep : toD(input.minLots);
+  const requestedMinLots = input.minLots == null ? lotStep : toD(input.minLots);
+  const contractSize = toD(instrument.contractSize);
+  const maxLots = input.maxLots == null ? null : toD(input.maxLots);
 
+  // An explicitly supplied fixed risk is authoritative, including zero or
+  // negative values (which are rejected below rather than falling back to %).
   const riskAmount =
-    input.riskAmount != null && toD(input.riskAmount).gt(0)
+    input.riskAmount != null
       ? toD(input.riskAmount)
       : balance.times(toD(input.riskPercent ?? 0)).div(D100);
 
   const accountCurrency = input.accountCurrency?.trim().toUpperCase() ?? "";
   const quoteCurrency = instrument.quoteCurrency?.trim().toUpperCase() ?? "";
+
+  const effectiveMinLots =
+    lotStep.isFinite() && lotStep.gt(0) && requestedMinLots.isFinite() && requestedMinLots.gt(0)
+      ? requestedMinLots.div(lotStep).ceil().times(lotStep)
+      : requestedMinLots;
 
   const invalid = (reason: SizingInvalidReason): PositionSizeResult => ({
     valid: false,
@@ -339,29 +348,63 @@ export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
     actualRiskAmount: D0,
     pipValue: calcPipValue(instrument, 0),
     notionalQuote: D0,
-    minLots,
+    minLots: effectiveMinLots,
     isEstimate: false,
   });
+
+  if (
+    !balance.isFinite() ||
+    !riskAmount.isFinite() ||
+    balance.lte(0) ||
+    riskAmount.lte(0)
+  ) {
+    return invalid("INVALID_AMOUNT");
+  }
+
+  const entry = toD(input.entry);
+  const stopLoss = toD(input.stopLoss);
+  if (
+    !entry.isFinite() ||
+    !stopLoss.isFinite() ||
+    entry.lte(0) ||
+    stopLoss.lte(0) ||
+    !contractSize.isFinite() ||
+    contractSize.lte(0)
+  ) {
+    return invalid("INVALID_AMOUNT");
+  }
+
+  if (
+    !lotStep.isFinite() ||
+    lotStep.lte(0) ||
+    !requestedMinLots.isFinite() ||
+    requestedMinLots.lte(0) ||
+    !effectiveMinLots.isFinite() ||
+    effectiveMinLots.lte(0) ||
+    (maxLots != null &&
+      (!maxLots.isFinite() ||
+        maxLots.lte(0) ||
+        maxLots.lt(effectiveMinLots) ||
+        floorToStep(maxLots, lotStep).lt(effectiveMinLots)))
+  ) {
+    return invalid("INVALID_LOT_CONSTRAINTS");
+  }
 
   // Stop distance: strict side validation when direction is known,
   // absolute distance otherwise (calculator without direction).
   let dist: Decimal | null;
   if (input.direction) {
-    dist = stopDistance(input.direction, input.entry, input.stopLoss);
+    dist = stopDistance(input.direction, entry, stopLoss);
     if (dist === null) {
       return invalid(
         input.direction === "LONG" ? "STOP_SIDE_LONG" : "STOP_SIDE_SHORT"
       );
     }
   } else {
-    dist = toD(input.entry).minus(toD(input.stopLoss)).abs();
+    dist = entry.minus(stopLoss).abs();
     if (dist.isZero()) {
       return invalid("STOP_EQUALS_ENTRY");
     }
-  }
-
-  if (balance.lte(0) || riskAmount.lte(0)) {
-    return invalid("INVALID_AMOUNT");
   }
 
   if (!accountCurrency) return invalid("MISSING_ACCOUNT_CURRENCY");
@@ -385,20 +428,27 @@ export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
   // Stop distance is quoted in the instrument's quote currency. Convert
   // it to the account currency before sizing the position.
   const distAccount = dist.times(rate);
-
   const exactUnits = riskAmount.div(distAccount);
-  let lots = floorToStep(exactUnits.div(toD(instrument.contractSize)), lotStep);
-  if (input.maxLots != null) {
-    const maxL = toD(input.maxLots);
-    if (lots.gt(maxL)) lots = maxL;
+  let lots = floorToStep(exactUnits.div(contractSize), lotStep);
+
+  // Respect the broker's maximum without rounding UP to an untradable lot.
+  if (maxLots != null) {
+    lots = Decimal.min(lots, floorToStep(maxLots, lotStep));
   }
-  const units = lots.times(toD(instrument.contractSize));
+
+  // Never force the broker minimum: if it exceeds the risk budget, reject
+  // the trade rather than silently increasing the requested risk.
+  if (lots.lt(effectiveMinLots)) {
+    return invalid("INSUFFICIENT_RISK");
+  }
+
+  const units = lots.times(contractSize);
   const actualRiskAmount = units.times(distAccount);
-  const notionalQuote = units.times(toD(input.entry));
+  const notionalQuote = units.times(entry);
 
   return {
-    valid: lots.gt(0),
-    reason: lots.gt(0) ? undefined : "INSUFFICIENT_RISK",
+    valid: true,
+    reason: undefined,
     riskAmount,
     stopDist: dist,
     stopPips: toPips(instrument, dist),
@@ -408,9 +458,7 @@ export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
     actualRiskAmount,
     pipValue: calcPipValue(instrument, lots, rate),
     notionalQuote,
-    minLots,
-    // Cross-currency sizing uses a manually supplied rate, so it remains
-    // explicitly identified as an estimate.
+    minLots: effectiveMinLots,
     isEstimate: needsConversion,
   };
 }
