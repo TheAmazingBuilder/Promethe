@@ -51,4 +51,24 @@ describe("currency exposure duplication", () => {
       ])
     );
   });
+
+  it("marks exposure as incomplete when quote-to-account FX is unavailable", () => {
+    const USDJPY = findPreset("USDJPY")!;
+    const trade: OpenTradeLike = {
+      id: "usd-jpy",
+      symbol: "USDJPY",
+      direction: "LONG",
+      lots: "1",
+      entryPrice: "149",
+      stopLoss: "148",
+      currentPrice: "150",
+      accountCurrency: "USD",
+    };
+    const decomposed = decomposeTrade(trade, "USD", USDJPY.contractSize);
+    const summary = aggregateExposure([decomposed]);
+
+    expect(decomposed.conversionMissing).toBe(true);
+    expect(decomposed.floatingPnl).toBeNull();
+    expect(summary.missingFxSymbols).toEqual(["USDJPY"]);
+  });
 });
