@@ -49,6 +49,7 @@ export function PositionSizeCalculator() {
   );
 
   const needsRate = instrument.quoteCurrency !== currency;
+  const lotPrecision = Math.min(6, Math.max(2, toD(lotStep).decimalPlaces()));
 
   const result = React.useMemo(() => {
     return calcPositionSize({
@@ -65,7 +66,22 @@ export function PositionSizeCalculator() {
       minLots,
       maxLots: maxLots.trim() === "" ? null : maxLots,
     });
-  }, [balance, riskMode, riskPercent, riskAmount, entry, stopLoss, instrument, direction, currency, needsRate, rate, lotStep, minLots, maxLots]);
+  }, [
+    balance,
+    riskMode,
+    riskPercent,
+    riskAmount,
+    entry,
+    stopLoss,
+    instrument,
+    direction,
+    currency,
+    needsRate,
+    rate,
+    lotStep,
+    minLots,
+    maxLots,
+  ]);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -330,7 +346,7 @@ export function PositionSizeCalculator() {
           {result.valid ? (
             <>
               <p className="mt-2 text-5xl font-bold tabular-nums tracking-tight text-emerald-500 dark:text-emerald-400">
-                {fmtNum(result.lots, Math.min(6, Math.max(2, toD(lotStep).decimalPlaces())), Math.min(6, Math.max(2, toD(lotStep).decimalPlaces())))}
+                {fmtNum(result.lots, lotPrecision, lotPrecision)}
                 <span className="ml-2 text-xl font-semibold text-muted-foreground">
                   {instrument.assetClass === "FOREX" || instrument.assetClass === "METAL"
                     ? t("lotsUnit")
