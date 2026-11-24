@@ -101,7 +101,7 @@ export type MarketSessionSettingPatch = z.infer<typeof marketSessionSettingPatch
 const exitPlanTierSchema = z.object({
   pct: z.number().min(0).max(100),
   targetType: z.enum(["PRICE", "R"]),
-  target: z.string().trim().min(1).max(30),
+  target: z.string().trim().regex(/^(?:\\d+(?:\\.\\d*)?|\\.\\d+)$/).max(30),
 });
 
 const exitPlanFields = {
