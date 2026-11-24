@@ -315,6 +315,107 @@ describe("calcPositionSize", () => {
     });
     expect(r.lots.toString()).toBe("1");
   });
+  it("does not increase risk to satisfy a broker minimum lot", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000",
+      riskAmount: "25",
+      entry: "2345.00",
+      stopLoss: "2340.00",
+      instrument: XAUUSD,
+      accountCurrency: "USD",
+      direction: "LONG",
+      minLots: "0.1",
+    });
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("INSUFFICIENT_RISK");
+    expect(r.lots.isZero()).toBe(true);
+    expect(r.actualRiskAmount.isZero()).toBe(true);
+    expect(r.minLots.toString()).toBe("0.1");
+  });
+
+  it("rounds a non-aligned broker maximum DOWN to the tradable lot step", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000",
+      riskAmount: "1000",
+      entry: "2345.00",
+      stopLoss: "2340.00",
+      instrument: XAUUSD,
+      accountCurrency: "USD",
+      direction: "LONG",
+      lotStep: "0.1",
+      minLots: "0.1",
+      maxLots: "0.155",
+    });
+    expect(r.valid).toBe(true);
+    expect(r.lots.toString()).toBe("0.1");
+    expect(r.actualRiskAmount.toString()).toBe("50");
+    expect(r.actualRiskAmount.lte(r.riskAmount)).toBe(true);
+  });
+
+  it("rejects incompatible minimum, maximum and lot-step constraints", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000",
+      riskAmount: "1000",
+      entry: "2345.00",
+      stopLoss: "2340.00",
+      instrument: XAUUSD,
+      accountCurrency: "USD",
+      direction: "LONG",
+      lotStep: "0.1",
+      minLots: "0.1",
+      maxLots: "0.05",
+    });
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("INVALID_LOT_CONSTRAINTS");
+  });
+
+  it("rejects a non-positive lot step", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000",
+      riskPercent: "1",
+      entry: "2345.00",
+      stopLoss: "2340.00",
+      instrument: XAUUSD,
+      accountCurrency: "USD",
+      direction: "LONG",
+      lotStep: "0",
+    });
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("INVALID_LOT_CONSTRAINTS");
+  });
+
+  it("rounds a broker minimum UP to its next valid lot increment", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000",
+      riskAmount: "75",
+      entry: "2345.00",
+      stopLoss: "2340.00",
+      instrument: XAUUSD,
+      accountCurrency: "USD",
+      direction: "LONG",
+      lotStep: "0.1",
+      minLots: "0.15",
+    });
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("INSUFFICIENT_RISK");
+    expect(r.minLots.toString()).toBe("0.2");
+  });
+
+  it("does not fall back to percentage risk when an explicit amount is zero", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000",
+      riskPercent: "1",
+      riskAmount: "0",
+      entry: "2345.00",
+      stopLoss: "2340.00",
+      instrument: XAUUSD,
+      accountCurrency: "USD",
+      direction: "LONG",
+    });
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("INVALID_AMOUNT");
+  });
+
   it("requires an account currency to establish the sizing currency", () => {
     const r = calcPositionSize({
       accountBalance: "10000", riskPercent: "1", entry: "2345.00",
