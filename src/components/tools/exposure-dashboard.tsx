@@ -145,6 +145,12 @@ export function ExposureDashboard() {
   return (
     <div className="space-y-6">
       {toolsUnavailable && <ToolsUnavailable />}
+      {summary.summary.missingFxSymbols.length > 0 && (
+        <p className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          {t("exposureMissingFx", { symbols: summary.summary.missingFxSymbols.join(", ") })}
+        </p>
+      )}
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-2">
           <Label htmlFor="ex-balance">{t("balance")}</Label>
@@ -341,7 +347,7 @@ export function ExposureDashboard() {
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">{fmtNum(d.openRisk, 2)}</td>
                       <td className="px-3 py-2 text-right tabular-nums">
-                        {d.floatingPnl ? `${d.floatingPnl.gte(0) ? "+" : ""}${fmtNum(d.floatingPnl, 2)}` : "-"}
+                        {d.floatingPnl !== null ? `${d.floatingPnl.gte(0) ? "+" : ""}${fmtNum(d.floatingPnl, 2)}` : "-"}
                       </td>
                     </tr>
                   ))}
