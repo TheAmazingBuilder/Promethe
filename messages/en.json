@@ -1913,7 +1913,7 @@
     "exitPlanError_empty": "Add at least one tier.",
     "exitPlanError_pct": "Each tier must close more than 0% of the position.",
     "exitPlanError_sum": "Tiers must total 100%.",
-    "exitPlanError_target": "Each tier needs a positive target.",
+    "exitPlanError_target": "Each tier needs a finite positive numeric target.",
     "exitPlanName": "Plan name",
     "exitPlanNamePlaceholder": "E.g. XAUUSD gradual exit",
     "exitPlanNameRequired": "Give the plan a name.",
@@ -2070,7 +2070,10 @@
     "fxRateFromSaved": "Use saved rate or enter a manual rate",
     "pnlMissingFx": "Add a valid FX rate to display monetary results in the account currency.",
     "invalidConversionRate": "The manual FX rate must be a valid number greater than zero.",
-    "rrCurrencyScopeNote": "Risk/Reward figures are limited to trades recorded in {currency}. {closed} closed and {open} open trades in other currencies are excluded. Win rate excludes breakeven trades."
+    "rrCurrencyScopeNote": "Risk/Reward figures are limited to trades recorded in {currency}. {closed} closed and {open} open trades in other currencies are excluded. Win rate excludes breakeven trades.",
+    "exitPlanError_count": "An exit plan can contain no more than four tiers.",
+    "exitPlanManualPctInvalid": "Each manual realized percentage must be a valid number between 0 and 100.",
+    "exitPlanRealizedOver100": "Total realized volume exceeds 100%. Check the manual values and recorded exits."
   },
   "topLeaks": {
     "title": "Top 3 leaks",
