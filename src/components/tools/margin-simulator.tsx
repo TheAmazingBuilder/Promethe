@@ -127,6 +127,7 @@ export function MarginSimulator() {
           <Label htmlFor="mg-equity">{t("marginEquity")}</Label>
           <Input id="mg-equity" type="number" inputMode="decimal" min="0" step="any"
             value={equity} onChange={(e) => setEquity(e.target.value)} className="tabular-nums" />
+          <p className="text-xs text-muted-foreground">{t("marginEquityHint")}</p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="mg-leverage">{t("marginLeverage")}</Label>
