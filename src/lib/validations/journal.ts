@@ -9,7 +9,7 @@ import { z } from "zod";
 
 /** Calendar day, local to the user's timezone. */
 function isRealIsoDay(value: string): boolean {
-  const date = new Date(\`${value}T00:00:00.000Z\`);
+  const date = new Date(`${value}T00:00:00.000Z`);
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
