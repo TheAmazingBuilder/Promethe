@@ -243,6 +243,10 @@ describe("journal entries", () => {
     expect(await listJournalTemplates(userB.id)).toHaveLength(0);
     expect(await deleteJournalTemplate(userB.id, template.id)).toBe(false);
 
+    const secondTemplate = await createJournalTemplate(userA.id, {
+      name: "New York reversal",
+      marketBias: "Wait for liquidity sweep",
+    });
     const updated = await updateJournalTemplate(userA.id, template.id, {
       name: "XAU London v2",
       preMarketPlan: "Wait for a retest.",
@@ -253,8 +257,14 @@ describe("journal entries", () => {
       preMarketPlan: "Wait for a retest.",
       isDefault: true,
     });
+    const secondDefault = await updateJournalTemplate(userA.id, secondTemplate.id, { isDefault: true });
+    expect(secondDefault?.isDefault).toBe(true);
+    const templatesAfterDefaultChange = await listJournalTemplates(userA.id);
+    expect(templatesAfterDefaultChange.filter((item) => item.isDefault)).toHaveLength(1);
+    expect(templatesAfterDefaultChange.find((item) => item.id === template.id)?.isDefault).toBe(false);
     expect(await updateJournalTemplate(userB.id, template.id, { name: "Hijack" })).toBeNull();
     expect(await deleteJournalTemplate(userA.id, template.id)).toBe(true);
+    expect(await deleteJournalTemplate(userA.id, secondTemplate.id)).toBe(true);
   });
 
   it("stores weekly qualitative reviews per user and period", async () => {

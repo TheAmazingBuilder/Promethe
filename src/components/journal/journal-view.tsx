@@ -489,6 +489,7 @@ export function JournalView({ date }: { date?: string }) {
           ["journal-overview", "Overview"],
           ["journal-activity", "Activity"],
           ["journal-plan", "Plan"],
+          ["journal-preparation", "Preparation"],
           ["journal-charts", "Charts"],
           ["journal-state", "Mindset"],
           ["journal-reviews", "Reviews"],

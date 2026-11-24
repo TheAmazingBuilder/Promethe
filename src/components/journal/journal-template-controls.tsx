@@ -31,6 +31,12 @@ export function JournalTemplateControls({
   const [status, setStatus] = React.useState("");
   const selected = templates.find((template) => template.id === selectedId);
 
+  React.useEffect(() => {
+    if (selectedId || isLoading) return;
+    const defaultTemplate = templates.find((template) => template.isDefault);
+    if (defaultTemplate) setSelectedId(defaultTemplate.id);
+  }, [isLoading, selectedId, templates]);
+
   const handleSave = async () => {
     if (!name.trim()) return;
     try {
@@ -54,9 +60,10 @@ export function JournalTemplateControls({
 
   const handleEdit = () => {
     if (!selected) return;
+    onApply(selected);
     setName(selected.name);
     setEditing(true);
-    setStatus("Update the daily preparation fields, then save the selected template.");
+    setStatus("Adjust the selected template's fields, then save the changes.");
   };
 
   const handleSetDefault = async () => {
