@@ -181,11 +181,15 @@ export function computeTradeStats(
     cum = cum.plus(p);
     if (cum.gt(peak)) peak = cum;
     const dd = peak.minus(cum);
-    if (dd.gt(maxDd)) {
-      maxDd = dd;
-      // % of the peak cumulative level (meaningful once the curve is net
-      // positive; null otherwise — callers with a balance use the equity curve).
-      maxDdPct = peak.gt(0) ? dd.div(peak).times(100) : null;
+    if (dd.gt(maxDd)) maxDd = dd;
+
+    // Track the largest percentage drawdown independently from the largest
+    // cash drawdown: their peaks can occur at different points in the curve.
+    // The percentage is meaningful only after cumulative P&L has made a
+    // positive peak; callers with an account balance should use equity curve.
+    if (peak.gt(0)) {
+      const ddPct = dd.div(peak).times(100);
+      if (maxDdPct == null || ddPct.gt(maxDdPct)) maxDdPct = ddPct;
     }
   }
 
