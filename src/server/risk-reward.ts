@@ -21,10 +21,8 @@ import { db } from "@/lib/db";
 import { getDisplayPreferences } from "@/server/display-preferences";
 import { getTradingDay } from "@/lib/time/trading-day";
 import { D0, D100, toD } from "@/lib/trading/dec";
-import type {
-  RiskRewardRealStats,
-  RiskRewardSummaryDTO,
-} from "@/lib/trading/dto";
+import type { RiskRewardSummaryDTO } from "@/lib/trading/dto";
+import { computeRiskRewardStats } from "@/lib/tools/risk-reward";
 
 const BUDGET_KEY = "dailyRiskBudgetPercent";
 
@@ -96,13 +94,14 @@ export async function getRiskRewardSummary(
     getDisplayPreferences(userId),
     db.account.findMany({
       where: { userId, isActive: true },
-      select: { id: true, initialBalance: true },
+      select: { id: true, initialBalance: true, currency: true },
     }),
     db.trade.findMany({
       where: { userId, isDraft: false, status: "CLOSED" },
       select: {
         accountId: true,
         netPnl: true,
+        pnlCurrency: true,
         rMultiple: true,
         realizedRR: true,
         plannedRR: true,
@@ -112,7 +111,7 @@ export async function getRiskRewardSummary(
     }),
     db.trade.findMany({
       where: { userId, isDraft: false, status: "OPEN" },
-      select: { riskAmount: true },
+      select: { accountId: true, pnlCurrency: true, riskAmount: true },
     }),
     db.cashTransaction.findMany({
       where: { userId },
@@ -125,112 +124,57 @@ export async function getRiskRewardSummary(
   const dayOf = (d: Date) => getTradingDay(d, timezone, prefs.tradingDay);
   const today = dayOf(new Date());
 
-  // ── Balance ────────────────────────────────────────────────────────────────
-  const accountIds = new Set(accounts.map((a) => a.id));
+  // Keep all money aggregates in the profile base currency, following
+  // Analytics' stored pnlCurrency convention. Never add USD and EUR values.
+  const currencyAccounts = accounts.filter((account) => account.currency === currency);
+  const accountIds = new Set(currencyAccounts.map((account) => account.id));
   let balance = D0;
-  for (const a of accounts) balance = balance.plus(toD(a.initialBalance));
-  for (const t of closed) {
-    if (accountIds.has(t.accountId)) balance = balance.plus(toD(t.netPnl));
+  for (const account of currencyAccounts) {
+    balance = balance.plus(toD(account.initialBalance));
   }
-  for (const c of cash) {
-    if (accountIds.has(c.accountId)) balance = balance.plus(toD(c.amount));
+  for (const trade of closed) {
+    if (accountIds.has(trade.accountId) && trade.pnlCurrency === currency) {
+      balance = balance.plus(toD(trade.netPnl));
+    }
   }
-
-  // ── Real stats (closed trades only) ────────────────────────────────────────
-  let wins = 0;
-  let losses = 0;
-  let breakevens = 0;
-  let sumWin = D0;
-  let sumLoss = D0; // magnitudes, positive
-  let sumR = D0;
-  let countR = 0;
-  let sumRealizedRR = D0;
-  let countRealizedRR = 0;
-  let sumPlannedRR = D0;
-  let countPlannedRR = 0;
-  let sumPnl = D0;
-  let realizedLossToday = D0;
-  let realizedPnlToday = D0;
-
-  for (const t of closed) {
-    const pnl = toD(t.netPnl);
-    sumPnl = sumPnl.plus(pnl);
-    const isWin =
-      t.resultType === "WIN" || (t.resultType == null && pnl.gt(0));
-    const isLoss =
-      t.resultType === "LOSS" || (t.resultType == null && pnl.lt(0));
-    if (isWin) {
-      wins++;
-      sumWin = sumWin.plus(pnl);
-    } else if (isLoss) {
-      losses++;
-      sumLoss = sumLoss.plus(pnl.abs());
-    } else {
-      breakevens++;
-    }
-    if (t.rMultiple != null) {
-      sumR = sumR.plus(toD(t.rMultiple));
-      countR++;
-    }
-    if (t.realizedRR != null) {
-      sumRealizedRR = sumRealizedRR.plus(toD(t.realizedRR));
-      countRealizedRR++;
-    }
-    if (t.plannedRR != null) {
-      sumPlannedRR = sumPlannedRR.plus(toD(t.plannedRR));
-      countPlannedRR++;
-    }
-    if (t.exitTime != null && dayOf(t.exitTime) === today) {
-      realizedPnlToday = realizedPnlToday.plus(pnl);
-      if (pnl.lt(0)) realizedLossToday = realizedLossToday.plus(pnl.abs());
+  for (const transaction of cash) {
+    if (accountIds.has(transaction.accountId)) {
+      balance = balance.plus(toD(transaction.amount));
     }
   }
 
-  const n = closed.length;
-  const realStats: RiskRewardRealStats = {
-    closedTrades: n,
-    wins,
-    losses,
-    breakevens,
-    winRate: n === 0 ? null : (wins / n).toString(),
-    avgRealizedRR:
-      countRealizedRR === 0
-        ? null
-        : sumRealizedRR.div(countRealizedRR).toString(),
-    avgPlannedRR:
-      countPlannedRR === 0
-        ? null
-        : sumPlannedRR.div(countPlannedRR).toString(),
-    expectancyMoney: n === 0 ? null : sumPnl.div(n).toString(),
-    expectancyR: countR === 0 ? null : sumR.div(countR).toString(),
-    avgWin: wins === 0 ? null : sumWin.div(wins).toString(),
-    avgLoss: losses === 0 ? null : sumLoss.div(losses).toString(),
-  };
+  const stats = computeRiskRewardStats(closed, currency, today, dayOf);
+  const scopedOpen = open.filter((trade) => trade.pnlCurrency === currency);
+  let openRisk = D0;
+  for (const trade of scopedOpen) {
+    openRisk = openRisk.plus(toD(trade.riskAmount));
+  }
 
-  // ── Daily risk budget ──────────────────────────────────────────────────────
+  // The daily budget is profile-wide but still currency-scoped. Trades in
+  // other P&L currencies are reported as excluded rather than mixed in.
+  const consumed = openRisk.plus(toD(stats.realizedLossToday));
   const budgetPercent = parseBudgetPercent(profile?.preferencesJson);
   const budgetAmount =
     budgetPercent === null
       ? null
       : balance.times(toD(budgetPercent)).div(D100);
-  let openRisk = D0;
-  for (const t of open) openRisk = openRisk.plus(toD(t.riskAmount));
-  const consumed = openRisk.plus(realizedLossToday);
 
   return {
     currency,
     tradingDay: today,
     balance: balance.toString(),
+    excludedTradeCount: stats.excludedTradeCount,
+    excludedOpenTradeCount: open.length - scopedOpen.length,
     budget: {
       percent: budgetPercent,
       amount: budgetAmount?.toString() ?? null,
       isSet: budgetPercent !== null,
     },
     today: {
-      openTrades: open.length,
+      openTrades: scopedOpen.length,
       openRisk: openRisk.toString(),
-      realizedLossToday: realizedLossToday.toString(),
-      realizedPnlToday: realizedPnlToday.toString(),
+      realizedLossToday: stats.realizedLossToday,
+      realizedPnlToday: stats.realizedPnlToday,
       consumed: consumed.toString(),
       remaining:
         budgetAmount === null
@@ -241,6 +185,6 @@ export async function getRiskRewardSummary(
           ? null
           : consumed.div(budgetAmount).toNumber(),
     },
-    realStats,
+    realStats: stats.realStats,
   };
 }
