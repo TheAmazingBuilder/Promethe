@@ -8,9 +8,15 @@
 import { z } from "zod";
 
 /** Calendar day, local to the user's timezone. */
+function isRealIsoDay(value: string): boolean {
+  const date = new Date(\`${value}T00:00:00.000Z\`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
 export const isoDay = z
   .string()
-  .regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, "invalidDate");
+  .regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, "invalidDate")
+  .refine(isRealIsoDay, "invalidDate");
 
 const score = z.number().int().min(1, "invalidScore").max(5, "invalidScore");
 
