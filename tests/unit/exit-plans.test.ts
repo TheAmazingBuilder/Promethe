@@ -53,6 +53,20 @@ describe("exit plan validation and comparison", () => {
         Array.from({ length: 5 }, () => ({ pct: 20, targetType: "R" as const, target: "1" }))
       )
     ).toBe("count");
+    expect(
+      validateExitPlan(
+        [{ pct: 100, targetType: "R", target: "1" }],
+        1,
+        null
+      )
+    ).toBe("trigger");
+    expect(
+      validateExitPlan(
+        [{ pct: 100, targetType: "R", target: "1" }],
+        null,
+        -1
+      )
+    ).toBe("trigger");
   });
 
   it("rejects breakeven or trailing triggers that reference a missing tier", () => {
