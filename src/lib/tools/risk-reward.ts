@@ -6,15 +6,15 @@
  * win-rate's denominator; money averages still follow actual P&L signs.
  */
 import Decimal from "decimal.js";
-import { D0, toD } from "@/lib/trading/dec";
+import { D0, toD, type DecimalInput } from "@/lib/trading/dec";
 import type { RiskRewardRealStats } from "@/lib/trading/dto";
 
 export interface RiskRewardTradeLike {
   pnlCurrency: string;
-  netPnl: string | null;
-  rMultiple: string | null;
-  realizedRR: string | null;
-  plannedRR: string | null;
+  netPnl: DecimalInput | null;
+  rMultiple: DecimalInput | null;
+  realizedRR: DecimalInput | null;
+  plannedRR: DecimalInput | null;
   resultType: string | null;
   exitTime: Date | null;
 }
