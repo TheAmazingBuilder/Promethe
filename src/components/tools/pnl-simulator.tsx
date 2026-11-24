@@ -18,9 +18,12 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Badge } from "@/components/ui/badge";
 import { Money } from "@/components/privacy/money";
 import { previewTrade } from "@/lib/trading/calculate";
+import { resolveConversionRate } from "@/lib/tools/fx";
+import { isToolsTablesMissing, useFxRates } from "@/hooks/use-tools";
+import { ToolsUnavailable } from "./shared";
 import { findPreset, PRESET_INSTRUMENTS } from "@/lib/trading/instruments";
 import { toD } from "@/lib/trading/dec";
-import type { AssetClass, Direction } from "@/lib/trading/types";
+import { COMMON_CURRENCIES, type AssetClass, type Direction } from "@/lib/trading/types";
 import { fmtNum, fmtPrice, pnlClass } from "@/lib/format";
 
 const GROUP_ORDER: AssetClass[] = ["METAL", "FOREX", "INDEX", "CRYPTO", "COMMODITY"];
@@ -45,11 +48,34 @@ export function PnlSimulator() {
   const [takeProfit, setTakeProfit] = React.useState("2358.00");
   const [commission, setCommission] = React.useState("7");
   const [swap, setSwap] = React.useState("0");
+  const [accountCurrency, setAccountCurrency] = React.useState("USD");
+  const [manualRate, setManualRate] = React.useState("");
+  const fxRatesQuery = useFxRates();
+  const fxRates = fxRatesQuery.data ?? [];
 
   const instrument = React.useMemo(
     () => findPreset(symbol) ?? PRESET_INSTRUMENTS[0],
     [symbol]
   );
+
+  const needsRate = instrument.quoteCurrency !== accountCurrency;
+  const manualRateValue = manualRate.trim() === "" ? null : toD(manualRate);
+  const manualRateInvalid =
+    needsRate &&
+    manualRateValue !== null &&
+    (!manualRateValue.isFinite() || manualRateValue.lte(0));
+  const resolvedRate = React.useMemo(() => {
+    if (!needsRate) return null;
+    if (manualRateValue !== null) {
+      return manualRateInvalid ? null : manualRateValue.toString();
+    }
+    return resolveConversionRate(
+      instrument.quoteCurrency ?? "",
+      accountCurrency,
+      fxRates.map((r) => ({ base: r.base, quote: r.quote, rate: r.rate }))
+    )?.toString() ?? null;
+  }, [needsRate, manualRate, manualRateInvalid, instrument.quoteCurrency, accountCurrency, fxRates]);
+  const conversionReady = !needsRate || resolvedRate !== null;
 
   const preview = React.useMemo(
     () =>
@@ -63,9 +89,11 @@ export function PnlSimulator() {
         takeProfit: takeProfit || null,
         commission,
         swap,
-        accountCurrency: "USD",
+        accountCurrency,
+        quoteToAccountRate: needsRate ? resolvedRate : null,
+        fxRates: fxRates.map((r) => ({ base: r.base, quote: r.quote, rate: r.rate })),
       }),
-    [instrument, direction, lots, entry, exit, stopLoss, takeProfit, commission, swap]
+    [instrument, direction, lots, entry, exit, stopLoss, takeProfit, commission, swap, accountCurrency, needsRate, resolvedRate, fxRates]
   );
 
   const levels: Level[] = [
@@ -82,11 +110,12 @@ export function PnlSimulator() {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      {isToolsTablesMissing(fxRatesQuery.error) && <ToolsUnavailable />}
       {/* ── Form ── */}
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2 sm:col-span-2">
           <Label htmlFor="sim-instrument">{t("instrument")}</Label>
-          <Select value={symbol} onValueChange={setSymbol}>
+          <Select value={symbol} onValueChange={(value) => { setSymbol(value); setManualRate(""); }}>
             <SelectTrigger id="sim-instrument" className="w-full">
               <SelectValue />
             </SelectTrigger>
@@ -110,6 +139,41 @@ export function PnlSimulator() {
           </Select>
         </div>
 
+        <div className="space-y-2">
+          <Label htmlFor="sim-account-currency">{t("accountCurrency")}</Label>
+          <Select
+            value={accountCurrency}
+            onValueChange={(value) => {
+              setAccountCurrency(value);
+              setManualRate("");
+            }}
+          >
+            <SelectTrigger id="sim-account-currency" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {COMMON_CURRENCIES.map((currency) => (
+                <SelectItem key={currency} value={currency}>{currency}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {needsRate && (
+          <div className="space-y-2">
+            <Label htmlFor="sim-fx-rate">{t("quoteToAccountRate")}</Label>
+            <Input
+              id="sim-fx-rate"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="any"
+              value={manualRate}
+              onChange={(e) => setManualRate(e.target.value)}
+              placeholder={resolvedRate ?? t("fxRateFromSaved")}
+              className="tabular-nums"
+            />
+          </div>
+        )}
         <div className="space-y-2 sm:col-span-2">
           <Label>{t("direction")}</Label>
           <ToggleGroup
@@ -221,24 +285,32 @@ export function PnlSimulator() {
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               {t("netPnlEstimate")}
             </p>
-            <Badge
-              variant={preview.resultType === "WIN" ? "default" : preview.resultType === "LOSS" ? "destructive" : "secondary"}
-              className={
-                preview.resultType === "WIN"
-                  ? "bg-emerald-600 hover:bg-emerald-600"
-                  : undefined
-              }
-            >
-              {tRoot(`trading.result.${preview.resultType}`)}
-            </Badge>
+            {conversionReady && (
+              <Badge
+                variant={preview.resultType === "WIN" ? "default" : preview.resultType === "LOSS" ? "destructive" : "secondary"}
+                className={
+                  preview.resultType === "WIN"
+                    ? "bg-emerald-600 hover:bg-emerald-600"
+                    : undefined
+                }
+              >
+                {tRoot(`trading.result.${preview.resultType}`)}
+              </Badge>
+            )}
           </div>
           <p className="mt-2 text-4xl font-bold tabular-nums tracking-tight">
-            <Money
-              signed
-              value={preview.netPnl}
-              currency="USD"
-              className={pnlClass(preview.netPnl)}
-            />
+            {conversionReady ? (
+              <Money
+                signed
+                value={preview.netPnl}
+                currency={accountCurrency}
+                className={pnlClass(preview.netPnl)}
+              />
+            ) : (
+              <span className="text-base font-medium text-muted-foreground">
+                {t("pnlMissingFx")}
+              </span>
+            )}
           </p>
           <p className={`mt-1 text-2xl font-semibold tabular-nums ${pnlClass(preview.pips)}`}>
             {preview.pips.gt(0) ? "+" : preview.pips.lt(0) ? "−" : ""}
@@ -252,11 +324,11 @@ export function PnlSimulator() {
         <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <MiniStat
             label={t("grossPnl")}
-            value={<Money signed value={preview.grossPnl} currency="USD" />}
+            value={conversionReady ? <Money signed value={preview.grossPnl} currency={accountCurrency} /> : "-"}
           />
           <MiniStat
             label={t("totalCosts")}
-            value={<Money value={preview.totalCosts} currency="USD" />}
+            value={conversionReady ? <Money value={preview.totalCosts} currency={accountCurrency} /> : "-"}
           />
           <MiniStat
             label={t("rMultiple")}
@@ -278,10 +350,14 @@ export function PnlSimulator() {
               preview.pips.isZero() ? (
                 "-"
               ) : (
-                <Money
-                  value={preview.grossPnl.div(preview.pips)}
-                  currency="USD"
-                />
+                conversionReady ? (
+                  <Money
+                    value={preview.grossPnl.div(preview.pips)}
+                    currency={accountCurrency}
+                  />
+                ) : (
+                  "-"
+                )
               )
             }
           />
@@ -321,7 +397,15 @@ export function PnlSimulator() {
           </div>
         </div>
 
-        {preview.isEstimate && (
+        {manualRateInvalid ? (
+          <p className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400">
+            {t("invalidConversionRate")}
+          </p>
+        ) : needsRate && !conversionReady ? (
+          <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
+            {t("pnlMissingFx")}
+          </p>
+        ) : preview.isEstimate && (
           <p className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             {t("quoteDiffersNote", { quote: instrument.quoteCurrency })}
