@@ -120,13 +120,14 @@ export function MultiTpCalculator() {
       stopLoss,
       instrument,
       direction,
+      accountCurrency: currency,
       quoteToAccountRate: needsRate && resolvedRate ? resolvedRate : null,
       tiers: tiers.map((tier) => ({
         price: tier.price === "" ? "0" : tier.price,
         allocationPct: tier.allocation === "" ? "0" : tier.allocation,
       })),
     });
-  }, [balance, riskMode, riskPercent, riskAmount, entry, stopLoss, instrument, direction, needsRate, resolvedRate, tiers]);
+  }, [balance, riskMode, riskPercent, riskAmount, entry, stopLoss, instrument, direction, currency, needsRate, resolvedRate, tiers]);
 
   const allocationOk = result.allocationSum.eq(100);
   const multiTpScenarios = scenarios.filter((s) => s.kind === "MULTI_TP");
@@ -150,6 +151,7 @@ export function MultiTpCalculator() {
     const p = s.payload as unknown as ShareState;
     if (p.symbol) setSymbol(p.symbol);
     if (p.balance) setBalance(p.balance);
+    setManualRate("");
     if (p.currency) setCurrency(p.currency);
     if (p.riskPercent) setRiskPercent(p.riskPercent);
     if (p.riskAmount) setRiskAmount(p.riskAmount);
@@ -182,7 +184,14 @@ export function MultiTpCalculator() {
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <InstrumentSelect id="mtp-instrument" value={symbol} onChange={setSymbol} />
+              <InstrumentSelect
+                id="mtp-instrument"
+                value={symbol}
+                onChange={(value) => {
+                  setSymbol(value);
+                  setManualRate("");
+                }}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="mtp-balance">{t("balance")}</Label>
@@ -191,7 +200,13 @@ export function MultiTpCalculator() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="mtp-currency">{t("accountCurrency")}</Label>
-              <Select value={currency} onValueChange={setCurrency}>
+              <Select
+                value={currency}
+                onValueChange={(value) => {
+                  setCurrency(value);
+                  setManualRate("");
+                }}
+              >
                 <SelectTrigger id="mtp-currency" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {COMMON_CURRENCIES.map((c) => (
@@ -292,6 +307,11 @@ export function MultiTpCalculator() {
                 <p className="mt-1 text-sm text-muted-foreground tabular-nums">
                   {t("multiTpBlendedR", { r: result.blendedR ? fmtNum(result.blendedR, 2) : "-" })}
                 </p>
+                {result.sizing.isEstimate ? (
+                  <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                    {t("multiTpRateEstimate")}
+                  </p>
+                ) : null}
               </>
             ) : (
               <div className="mt-4 flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-left">

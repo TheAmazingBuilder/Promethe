@@ -79,6 +79,7 @@ export function calcMultiTp(input: MultiTpInput): MultiTpResult {
       entry: input.entry,
       exit: tier.price,
       quoteToAccountRate: input.quoteToAccountRate ?? null,
+      accountCurrency: input.accountCurrency ?? null,
     });
     return {
       index,
@@ -106,6 +107,7 @@ export function calcMultiTp(input: MultiTpInput): MultiTpResult {
         entry: input.entry,
         exit: input.stopLoss,
         quoteToAccountRate: input.quoteToAccountRate ?? null,
+        accountCurrency: input.accountCurrency ?? null,
       }).grossPnl
     : D0;
 

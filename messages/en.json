@@ -2015,6 +2015,7 @@
     "multiTpAllocation": "Allocation",
     "multiTpAllocationSum": "Total allocated: {sum}%",
     "multiTpBlendedR": "Blended R: {r}R",
+    "multiTpRateEstimate": "Sizing and P&L are estimates based on the selected quote-to-account FX rate.",
     "multiTpColAlloc": "Allocation",
     "multiTpColLots": "Lots",
     "multiTpColPnl": "P&L",
