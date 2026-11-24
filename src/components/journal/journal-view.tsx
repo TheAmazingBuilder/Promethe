@@ -233,6 +233,9 @@ export function JournalView({ date }: { date?: string }) {
     isLoading: recentLoading,
     hasNextPage: hasMoreHistory,
     isFetchingNextPage,
+    isError: recentError,
+    isFetchNextPageError,
+    refetch: refetchRecent,
     fetchNextPage,
   } = useRecentJournal({
     q: historyQuery || undefined,
@@ -246,6 +249,7 @@ export function JournalView({ date }: { date?: string }) {
     () => recentPages?.pages.flatMap((page) => page.entries) ?? [],
     [recentPages],
   );
+  const invalidHistoryRange = Boolean(historyFrom && historyTo && historyFrom > historyTo);
   const dayPnl = calendarData?.days?.[day] ?? null;
   const {
     data: dayActivity,
@@ -355,7 +359,8 @@ export function JournalView({ date }: { date?: string }) {
     );
   }, [form, entry]);
 
-  const hasUnsavedChanges = (dirty && savedSignature !== JSON.stringify(form)) || periodReviewDirty;
+  const dailyUnsavedChanges = hydratedFor === day && dirty && savedSignature !== JSON.stringify(form);
+  const hasUnsavedChanges = dailyUnsavedChanges || periodReviewDirty;
 
   React.useEffect(() => {
     if (!hasUnsavedChanges) return;
@@ -568,7 +573,7 @@ export function JournalView({ date }: { date?: string }) {
                     />
                   </div>
                   <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                    {dirty ? (
+                    {dailyUnsavedChanges ? (
                       <>
                         <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                         Unsaved changes
@@ -1015,7 +1020,7 @@ export function JournalView({ date }: { date?: string }) {
 
           <div className="sticky bottom-3 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-background/95 p-3 shadow-lg shadow-background/30 backdrop-blur supports-[backdrop-filter]:bg-background/85">
             <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-              {dirty ? (
+              {dailyUnsavedChanges ? (
                 <>
                   <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />
                   <span>Changes are not saved yet</span>
@@ -1046,7 +1051,7 @@ export function JournalView({ date }: { date?: string }) {
                   <span className="hidden sm:inline">{t("delete")}</span>
                 </Button>
               ) : null}
-              <Button size="sm" onClick={() => void onSave()} disabled={save.isPending || !dirty}>
+              <Button size="sm" onClick={() => void onSave()} disabled={save.isPending || !dailyUnsavedChanges}>
                 <Save className="mr-1.5 h-4 w-4" aria-hidden="true" />
                 {save.isPending ? t("saving") : t("save")}
               </Button>
@@ -1153,10 +1158,15 @@ export function JournalView({ date }: { date?: string }) {
                   Export PDF
                 </Button>
               </div>
-              {historyFrom && historyTo && historyFrom > historyTo ? (
-                <p className="mb-3 text-xs text-destructive">The start date must be before the end date.</p>
-              ) : null}
-              {recentLoading ? (
+              {invalidHistoryRange ? (
+                <p className="mb-3 text-xs text-destructive" role="alert">The start date must be on or before the end date.</p>
+              ) : recentError && recentEntries.length === 0 ? (
+                <QueryErrorState
+                  title="Journal history could not be loaded"
+                  description="Your saved entries are safe. Check your connection and try again."
+                  onRetry={() => void refetchRecent()}
+                />
+              ) : recentLoading ? (
                 <div className="space-y-2">
                   <Skeleton className="h-12 w-full" />
                   <Skeleton className="h-12 w-full" />
@@ -1207,12 +1217,19 @@ export function JournalView({ date }: { date?: string }) {
                   })}
                 </div>
               )}
-              {hasMoreHistory ? (
+              {!invalidHistoryRange && isFetchNextPageError ? (
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-2" role="alert">
+                  <p className="text-xs text-destructive">More entries could not be loaded.</p>
+                  <Button size="sm" variant="outline" onClick={() => void fetchNextPage()} disabled={isFetchingNextPage}>Try again</Button>
+                </div>
+              ) : !invalidHistoryRange && hasMoreHistory ? (
                 <div className="mt-3 flex justify-center">
                   <Button size="sm" variant="outline" onClick={() => void fetchNextPage()} disabled={isFetchingNextPage}>
                     {isFetchingNextPage ? "Loading…" : "Load more entries"}
                   </Button>
                 </div>
+              ) : !invalidHistoryRange && recentEntries.length > 0 ? (
+                <p className="mt-3 text-center text-[11px] text-muted-foreground">You&apos;ve reached the end of your Journal history.</p>
               ) : null}
             </CardContent>
           </Card>
