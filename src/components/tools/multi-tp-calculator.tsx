@@ -330,7 +330,7 @@ export function MultiTpCalculator() {
             )}
           </div>
 
-          {result.sizing.valid && (
+          {result.sizing.valid && allocationOk && targetsOk && (
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full text-sm">
                 <thead>
