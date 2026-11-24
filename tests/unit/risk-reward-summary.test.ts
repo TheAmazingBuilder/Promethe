@@ -39,10 +39,10 @@ describe("computeRiskRewardStats", () => {
     expect(result.realStats.winRate).toBe("0.5");
     expect(result.realStats.avgWin).toBe("52.5");
     expect(result.realStats.avgLoss).toBe("50");
-    expect(result.realStats.expectancyMoney).toBe("18.333333333333333333");
+    expect(result.realStats.expectancyMoney).toBe("18.33333333333333333333333333");
     expect(result.realStats.expectancyR).toBe("0");
     expect(result.realStats.avgRealizedRR).toBe("1.5");
-    expect(result.realStats.avgPlannedRR).toBe("1.666666666666666667");
+    expect(result.realStats.avgPlannedRR).toBe("1.666666666666666666666666667");
     expect(result.excludedTradeCount).toBe(1);
     expect(result.realizedLossToday).toBe("50");
     expect(result.realizedPnlToday).toBe("55");
