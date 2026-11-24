@@ -308,7 +308,7 @@ export function PnlSimulator() {
               />
             ) : (
               <span className="text-base font-medium text-muted-foreground">
-                {t("pnlMissingFx")}
+                {"—"}
               </span>
             )}
           </p>
