@@ -1845,7 +1845,7 @@
     "realizedRR": "Realized R:R",
     "pnlPerPip": "P&L / pip",
     "levels": "Trade levels",
-    "quoteDiffersNote": "The quote currency ({quote}) differs from the account currency (USD): the result is shown as an estimate. In the journal, the broker's real P&L can always be entered manually and overrides the calculation.",
+    "quoteDiffersNote": "The quote currency ({quote}) differs from the account currency ({currency}): the result is converted using the selected FX rate and shown as an estimate. In the journal, the broker's real P&L can always be entered manually and overrides the calculation.",
     "search": "Search",
     "searchPlaceholder": "Symbol or name… (e.g. XAUUSD, gold, yen)",
     "assetClass": "Asset class",
@@ -2065,7 +2065,11 @@
     "lotStep": "Volume step",
     "minLots": "Minimum volume",
     "maxLots": "Maximum volume",
-    "maxLotsOptional": "No maximum"
+    "maxLotsOptional": "No maximum",
+    "manualFxRate": "Manual quote-to-account rate",
+    "fxRateFromSaved": "Use saved rate or enter a manual rate",
+    "pnlMissingFx": "Add a valid FX rate to display monetary results in the account currency.",
+    "invalidConversionRate": "The manual FX rate must be a valid number greater than zero."
   },
   "topLeaks": {
     "title": "Top 3 leaks",
