@@ -528,8 +528,12 @@ export async function listExitPlans(userId: string): Promise<ExitPlanDTO[]> {
   return rows.map(toExitPlanDTO);
 }
 
-function assertValidPlan(tiers: ExitPlanTier[]): void {
-  if (validateExitPlan(tiers) !== null) {
+function assertValidPlan(
+  tiers: ExitPlanTier[],
+  breakevenAfterTier: number | null,
+  trailingAfterTier: number | null
+): void {
+  if (validateExitPlan(tiers, breakevenAfterTier, trailingAfterTier) !== null) {
     throw new ToolsValidationError("EXIT_PLAN_INVALID");
   }
 }
@@ -538,7 +542,7 @@ export async function createExitPlan(
   userId: string,
   input: ExitPlanInput
 ): Promise<ExitPlanDTO> {
-  assertValidPlan(input.tiers);
+  assertValidPlan(input.tiers, input.breakevenAfterTier, input.trailingAfterTier);
   const row = await guardToolsTable(() =>
     db.exitPlan.create({
       data: {
@@ -563,7 +567,16 @@ export async function updateExitPlan(
     db.exitPlan.findFirst({ where: { id, userId } })
   );
   if (!existing) return null;
-  if (patch.tiers !== undefined) assertValidPlan(patch.tiers);
+  const nextTiers = patch.tiers ?? parseTiers(existing.tiersJson);
+  const nextBreakeven =
+    patch.breakevenAfterTier !== undefined
+      ? patch.breakevenAfterTier
+      : existing.breakevenAfterTier;
+  const nextTrailing =
+    patch.trailingAfterTier !== undefined
+      ? patch.trailingAfterTier
+      : existing.trailingAfterTier;
+  assertValidPlan(nextTiers, nextBreakeven, nextTrailing);
   const row = await guardToolsTable(() =>
     db.exitPlan.update({
       where: { id },
