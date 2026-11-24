@@ -2080,7 +2080,8 @@
     "marginEquityHint": "Enter the broker's current equity (balance plus floating P&L). The selected account's initial balance is only a starting value.",
     "exposureMissingFx": "Missing FX rates for {symbols}. These instruments are included using an unconverted 1:1 estimate; add the required rates before relying on account-currency exposure totals.",
     "exposureAccount": "Trading account",
-    "exposureAccountPlaceholder": "Select an account"
+    "exposureAccountPlaceholder": "Select an account",
+    "exposureBalanceHint": "Use the current account balance or equity for accurate concentration percentages. The account's initial balance is only the default starting value."
   },
   "topLeaks": {
     "title": "Top 3 leaks",
