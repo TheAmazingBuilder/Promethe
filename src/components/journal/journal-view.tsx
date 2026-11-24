@@ -221,6 +221,7 @@ export function JournalView({ date }: { date?: string }) {
   const [historyTo, setHistoryTo] = React.useState("");
   const [historyMood, setHistoryMood] = React.useState("");
   const [historyDiscipline, setHistoryDiscipline] = React.useState("");
+  const [historyVisibleLimit, setHistoryVisibleLimit] = React.useState(10);
   const { data: recentEntries = [], isLoading: recentLoading } = useRecentJournal({
     q: historyQuery || undefined,
     from: historyFrom || undefined,
@@ -229,6 +230,7 @@ export function JournalView({ date }: { date?: string }) {
     discipline: historyDiscipline ? Number(historyDiscipline) : undefined,
     limit: 50,
   });
+  const visibleRecentEntries = recentEntries.slice(0, historyVisibleLimit);
   const dayPnl = calendarData?.days?.[day] ?? null;
   const {
     data: dayActivity,
@@ -1019,7 +1021,7 @@ export function JournalView({ date }: { date?: string }) {
                 </CardDescription>
               </div>
               <Badge variant="outline" className="rounded-full">
-                {recentEntries.length}
+                {Math.min(historyVisibleLimit, recentEntries.length)} / {recentEntries.length}
               </Badge>
             </CardHeader>
             <CardContent className="pt-0">
@@ -1101,7 +1103,7 @@ export function JournalView({ date }: { date?: string }) {
                 </p>
               ) : (
                 <div className="divide-y divide-border/60">
-                  {recentEntries.slice(0, 10).map((recent) => {
+                  {visibleRecentEntries.map((recent) => {
                     const isCurrent = recent.date === day;
                     const summary =
                       recent.keyLesson?.trim() ||
@@ -1138,6 +1140,13 @@ export function JournalView({ date }: { date?: string }) {
                   })}
                 </div>
               )}
+              {recentEntries.length > visibleRecentEntries.length ? (
+                <div className="mt-3 flex justify-center">
+                  <Button size="sm" variant="outline" onClick={() => setHistoryVisibleLimit((current) => Math.min(current + 10, recentEntries.length))}>
+                    Load 10 more ({recentEntries.length - visibleRecentEntries.length} remaining)
+                  </Button>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         </>
