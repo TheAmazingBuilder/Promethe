@@ -144,6 +144,5 @@ export function calcMultiTp(input: MultiTpInput): MultiTpResult {
     worstCasePnl,
   };
 }
-}
 
 export type { InstrumentSpec };
