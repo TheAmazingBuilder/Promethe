@@ -14,6 +14,13 @@ import { useTranslations } from "next-intl";
 import { AlertTriangle, Info } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAccounts, useInstruments, useTradesList, useUpdateTrade } from "@/hooks/use-trading";
 import {
   aggregateExposure,
@@ -36,6 +43,7 @@ export function ExposureDashboard() {
   const t = useTranslations("tools");
   const [balance, setBalance] = React.useState("10000");
   const [currency, setCurrency] = React.useState("USD");
+  const [accountId, setAccountId] = React.useState("");
   const settingsQuery = useExposureSettings();
   const settings = settingsQuery.data ?? DEFAULT_EXPOSURE_SETTINGS;
   const saveSettings = useSaveExposureSettings();
@@ -72,7 +80,8 @@ export function ExposureDashboard() {
     });
   };
 
-  const { data: accounts } = useAccounts();
+  const { data: accounts, isLoading: accountsLoading } = useAccounts();
+  const account = accounts?.find((item) => item.id === accountId) ?? accounts?.[0];
   const { data: instruments } = useInstruments();
   const openTrades = useTradesList({
     page: 1,
@@ -81,9 +90,8 @@ export function ExposureDashboard() {
     order: "desc",
     includeDrafts: false,
     status: "OPEN",
+    accountId: account?.id,
   });
-
-  const account = accounts?.[0];
   React.useEffect(() => {
     if (!account) return;
     setBalance(account.initialBalance);
@@ -103,7 +111,9 @@ export function ExposureDashboard() {
   }, [instruments]);
 
   const trades: OpenTradeLike[] = React.useMemo(() => {
-    return (openTrades.data?.data ?? []).map((item) => ({
+    return (openTrades.data?.data ?? [])
+      .filter((item) => account !== undefined && item.accountId === account.id)
+      .map((item) => ({
       id: item.id,
       symbol: item.symbol,
       direction: item.direction,
@@ -120,7 +130,7 @@ export function ExposureDashboard() {
       accountCurrency: currency,
       riskAmount: null,
     }));
-  }, [openTrades.data, priceDrafts, currency]);
+  }, [openTrades.data, priceDrafts, currency, account?.id]);
 
   const summary = React.useMemo(() => {
     const decomposed = trades.map((trade) =>
@@ -139,7 +149,7 @@ export function ExposureDashboard() {
     [summary, balance, settings]
   );
 
-  const loading = openTrades.isLoading;
+  const loading = accountsLoading || (!!account && openTrades.isLoading);
   const noStopLossCount = summary.summary.noStopLoss.length;
 
   return (
@@ -151,7 +161,22 @@ export function ExposureDashboard() {
           {t("exposureMissingFx", { symbols: summary.summary.missingFxSymbols.join(", ") })}
         </p>
       )}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="space-y-2">
+          <Label htmlFor="ex-account">{t("exposureAccount")}</Label>
+          <Select value={account?.id ?? ""} onValueChange={setAccountId}>
+            <SelectTrigger id="ex-account" className="w-full">
+              <SelectValue placeholder={t("exposureAccountPlaceholder")} />
+            </SelectTrigger>
+            <SelectContent>
+              {(accounts ?? []).map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {item.name} ({item.currency})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <div className="space-y-2">
           <Label htmlFor="ex-balance">{t("balance")}</Label>
           <Input id="ex-balance" type="number" inputMode="decimal" min="0" step="any"
