@@ -141,6 +141,12 @@ export const journalTemplateSchema = z.object({
     .nullish(),
 });
 
+export const journalTemplateUpdateSchema = journalTemplateSchema.partial().extend({
+  isDefault: z.boolean().optional(),
+}).refine((value) => Object.keys(value).length > 0, {
+  message: "At least one field must be provided.",
+});
+
 
 export const journalExportQuerySchema = z.object({
   from: isoDay,

@@ -400,6 +400,20 @@ export function useCreateJournalTemplate() {
   });
 }
 
+export function useUpdateJournalTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; patch: Partial<JournalTemplateInput> & { isDefault?: boolean } }) =>
+      (await apiFetch<{ template: JournalTemplateDTO }>(
+        `/api/v1/journal/templates/${args.id}`,
+        { method: "PATCH", body: JSON.stringify(args.patch) },
+      )).template,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["journal", "templates"] });
+    },
+  });
+}
+
 export function useDeleteJournalTemplate() {
   const queryClient = useQueryClient();
   return useMutation({

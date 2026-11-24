@@ -15,6 +15,7 @@ import {
   getJournalExportData,
   createJournalTemplate,
   deleteJournalTemplate,
+  updateJournalTemplate,
   getJournalPeriodReview,
   journalDays,
   listJournalTemplates,
@@ -241,6 +242,18 @@ describe("journal entries", () => {
     expect(templates.some((item) => item.id === template.id)).toBe(true);
     expect(await listJournalTemplates(userB.id)).toHaveLength(0);
     expect(await deleteJournalTemplate(userB.id, template.id)).toBe(false);
+
+    const updated = await updateJournalTemplate(userA.id, template.id, {
+      name: "XAU London v2",
+      preMarketPlan: "Wait for a retest.",
+      isDefault: true,
+    });
+    expect(updated).toMatchObject({
+      name: "XAU London v2",
+      preMarketPlan: "Wait for a retest.",
+      isDefault: true,
+    });
+    expect(await updateJournalTemplate(userB.id, template.id, { name: "Hijack" })).toBeNull();
     expect(await deleteJournalTemplate(userA.id, template.id)).toBe(true);
   });
 

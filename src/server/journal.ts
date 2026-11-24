@@ -266,6 +266,37 @@ export async function createJournalTemplate(userId: string, input: JournalTempla
   });
 }
 
+export type JournalTemplateUpdate = Partial<JournalTemplateInput> & {
+  isDefault?: boolean;
+};
+
+export async function updateJournalTemplate(
+  userId: string,
+  id: string,
+  input: JournalTemplateUpdate,
+) {
+  return db.$transaction(async (tx) => {
+    if (input.isDefault === true) {
+      await tx.journalTemplate.updateMany({
+        where: { userId, isDefault: true },
+        data: { isDefault: false },
+      });
+    }
+
+    const { isDefault, ...fields } = input;
+    const updated = await tx.journalTemplate.updateMany({
+      where: { id, userId },
+      data: {
+        ...fields,
+        ...(isDefault !== undefined ? { isDefault } : {}),
+      },
+    });
+    if (updated.count === 0) return null;
+
+    return tx.journalTemplate.findFirst({ where: { id, userId } });
+  });
+}
+
 export async function deleteJournalTemplate(userId: string, id: string): Promise<boolean> {
   const result = await db.journalTemplate.deleteMany({ where: { id, userId } });
   return result.count > 0;
