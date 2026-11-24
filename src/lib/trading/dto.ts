@@ -539,6 +539,10 @@ export interface RiskRewardRealStats {
 
 export interface RiskRewardSummaryDTO {
   currency: string;
+  /** Closed trades excluded because their stored P&L currency differs. */
+  excludedTradeCount: number;
+  /** Open trades excluded because their stored P&L currency differs. */
+  excludedOpenTradeCount: number;
   /** Trading day (YYYY-MM-DD) the budget figures refer to. */
   tradingDay: string;
   /** Current balance = starting balances + realized P&L + cash flows. */
