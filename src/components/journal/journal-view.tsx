@@ -34,6 +34,13 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DateField } from "@/components/ui/date-field";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { QueryErrorState } from "@/components/ui/query-error-state";
 import { Textarea } from "@/components/ui/textarea";
@@ -1072,26 +1079,48 @@ export function JournalView({ date }: { date?: string }) {
                   maxLength={120}
                   aria-label="Search Journal history"
                 />
-                <Input type="date" value={historyFrom} onChange={(event) => setHistoryFrom(event.target.value)} aria-label="From date" className="h-10" />
-                <Input type="date" value={historyTo} onChange={(event) => setHistoryTo(event.target.value)} aria-label="To date" className="h-10" />
-                <select
-                  value={historyMood}
-                  onChange={(event) => setHistoryMood(event.target.value)}
-                  aria-label="Filter by mood"
-                  className="h-10 rounded-md border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                <DateField
+                  id="journal-history-from"
+                  value={historyFrom}
+                  onChange={setHistoryFrom}
+                  ariaLabel="From date"
+                  className="w-full"
+                />
+                <DateField
+                  id="journal-history-to"
+                  value={historyTo}
+                  onChange={setHistoryTo}
+                  ariaLabel="To date"
+                  className="w-full"
+                />
+                <Select
+                  value={historyMood || "any"}
+                  onValueChange={(value) => setHistoryMood(value === "any" ? "" : value)}
                 >
-                  <option value="">Any mood</option>
-                  {[1, 2, 3, 4, 5].map((score) => <option key={score} value={score}>Mood {score}/5</option>)}
-                </select>
-                <select
-                  value={historyDiscipline}
-                  onChange={(event) => setHistoryDiscipline(event.target.value)}
-                  aria-label="Filter by discipline"
-                  className="h-10 rounded-md border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  <SelectTrigger className="h-10 w-full min-w-0" aria-label="Filter by mood">
+                    <SelectValue placeholder="Any mood" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">Any mood</SelectItem>
+                    {[1, 2, 3, 4, 5].map((score) => (
+                      <SelectItem key={score} value={String(score)}>Mood {score}/5</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={historyDiscipline || "any"}
+                  onValueChange={(value) => setHistoryDiscipline(value === "any" ? "" : value)}
                 >
-                  <option value="">Any discipline</option>
-                  {[1, 2, 3, 4, 5].map((score) => <option key={score} value={score}>Discipline {score}/5</option>)}
-                </select>
+                  <SelectTrigger className="h-10 w-full min-w-0" aria-label="Filter by discipline">
+                    <SelectValue placeholder="Any discipline" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">Any discipline</SelectItem>
+                    {[1, 2, 3, 4, 5].map((score) => (
+                      <SelectItem key={score} value={String(score)}>Discipline {score}/5</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Button
                   size="sm"
                   onClick={() => setHistoryQuery(historySearchInput.trim())}

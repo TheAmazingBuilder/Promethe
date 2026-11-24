@@ -5,6 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   useCreateJournalTemplate,
   useDeleteJournalTemplate,
   useJournalTemplates,
@@ -100,25 +107,32 @@ export function JournalTemplateControls({
         <Badge variant="outline">{templates.length} saved</Badge>
       </div>
       <div className="flex flex-col gap-2 sm:flex-row">
-        <select
-          value={selectedId}
-          onChange={(event) => {
-            setSelectedId(event.target.value);
+        <Select
+          value={selectedId || undefined}
+          onValueChange={(value) => {
+            setSelectedId(value);
             setEditing(false);
             setName("");
             setStatus("");
           }}
-          aria-label="Select a Journal preparation template"
-          className="h-10 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           disabled={isLoading || templates.length === 0}
         >
-          <option value="">{isLoading ? "Loading templates…" : templates.length ? "Choose a saved template" : "No saved templates"}</option>
-          {templates.map((template) => (
-            <option key={template.id} value={template.id}>
-              {template.isDefault ? "★ " : ""}{template.name}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger
+            aria-label="Select a Journal preparation template"
+            className="h-10 min-w-0 flex-1"
+          >
+            <SelectValue
+              placeholder={isLoading ? "Loading templates…" : templates.length ? "Choose a saved template" : "No saved templates"}
+            />
+          </SelectTrigger>
+          <SelectContent>
+            {templates.map((template) => (
+              <SelectItem key={template.id} value={template.id}>
+                {template.isDefault ? "★ " : ""}{template.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Button size="sm" variant="outline" disabled={!selected} onClick={() => selected && onApply(selected)}>Apply</Button>
         <Button size="sm" variant="outline" disabled={!selected || update.isPending} onClick={handleEdit}>Edit</Button>
         <Button size="sm" variant="ghost" disabled={!selected || selected.isDefault || update.isPending} onClick={() => void handleSetDefault()}>
