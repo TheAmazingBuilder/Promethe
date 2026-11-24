@@ -55,6 +55,13 @@ describe("exit plan validation and comparison", () => {
     ).toBe("count");
   });
 
+  it("rejects breakeven or trailing triggers that reference a missing tier", () => {
+    const tiers = [{ pct: 100, targetType: "R" as const, target: "2" }];
+    expect(validateExitPlan(tiers, 1, null)).toBe("trigger");
+    expect(validateExitPlan(tiers, null, 1)).toBe("trigger");
+    expect(validateExitPlan(tiers, 0, 0)).toBeNull();
+  });
+
   it("assigns one execution to only its closest matching tier", () => {
     const result = comparePlanVsReal(
       plan([
