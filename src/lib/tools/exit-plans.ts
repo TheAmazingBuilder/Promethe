@@ -192,63 +192,91 @@ export function comparePlanVsReal(
 
   const totalRealizedPct = tiers.reduce((acc, tier) => acc.plus(tier.realizedPct), D0);
   const plannedTotalPct = plan.tiers.reduce((acc, tier) => acc.plus(toD(tier.pct)), D0);
-  const breakevenMoved = modifications.some(
-    (modification) =>
-      modification.field === "STOP_LOSS" &&
-      modification.newValue !== null &&
-      toD(modification.newValue).isFinite() &&
-      toD(modification.newValue).eq(toD(entry))
-  );
 
-  // A stop moved to breakeven is not, by itself, evidence of trailing.
-  // Trailing is considered started only after its configured tier was
-  // actually completed and a later SL modification moved further into profit.
-  let trailingStarted = false;
-  const trailingIndex = plan.trailingAfterTier;
-  if (trailingIndex != null && trailingIndex >= 0 && trailingIndex < plan.tiers.length && lots.gt(0)) {
-    const triggerMatches = (assigned.get(trailingIndex) ?? [])
+  // A configured trigger is reached only after enough volume has closed at
+  // its assigned tier. Manual percentages have no timestamp, so they cannot
+  // be used to infer when a stop modification happened.
+  const tierCompletionTime = (tierIndex: number): number | null => {
+    if (tierIndex < 0 || tierIndex >= plan.tiers.length || !lots.gt(0)) return null;
+    const matches = (assigned.get(tierIndex) ?? [])
       .slice()
       .sort((a, b) => Date.parse(a.execution.time) - Date.parse(b.execution.time));
-    let closedAtTrigger = D0;
-    let triggerTime: number | null = null;
-    for (const match of triggerMatches) {
-      closedAtTrigger = closedAtTrigger.plus(toD(match.execution.lots));
+    let closedLots = D0;
+    for (const match of matches) {
+      closedLots = closedLots.plus(toD(match.execution.lots));
       if (
-        closedAtTrigger.div(lots).times(D100).gte(toD(plan.tiers[trailingIndex].pct))
+        closedLots.div(lots).times(D100).gte(toD(plan.tiers[tierIndex].pct))
       ) {
         const timestamp = Date.parse(match.execution.time);
-        triggerTime = Number.isFinite(timestamp) ? timestamp : null;
-        break;
+        return Number.isFinite(timestamp) ? timestamp : null;
       }
     }
+    return null;
+  };
 
-    if (triggerTime !== null) {
-      const entryPrice = toD(entry);
-      trailingStarted = modifications.some((modification) => {
-        if (
-          modification.field !== "STOP_LOSS" ||
-          modification.oldValue === null ||
-          modification.newValue === null
-        ) {
-          return false;
-        }
-        const timestamp = Date.parse(modification.time);
-        if (!Number.isFinite(timestamp) || timestamp < triggerTime!) return false;
-        const oldStop = toD(modification.oldValue);
-        const newStop = toD(modification.newValue);
-        if (
-          !oldStop.isFinite() ||
-          !newStop.isFinite() ||
-          oldStop.lte(0) ||
-          newStop.lte(0)
-        ) {
-          return false;
-        }
-        return direction === "LONG"
-          ? newStop.gt(entryPrice) && newStop.gt(oldStop)
-          : newStop.lt(entryPrice) && newStop.lt(oldStop);
-      });
-    }
+  const entryPrice = toD(entry);
+  const breakevenTriggerTime =
+    plan.breakevenAfterTier == null
+      ? null
+      : tierCompletionTime(plan.breakevenAfterTier);
+  const breakevenMoved =
+    breakevenTriggerTime !== null &&
+    modifications.some((modification) => {
+      if (
+        modification.field !== "STOP_LOSS" ||
+        modification.oldValue === null ||
+        modification.newValue === null
+      ) {
+        return false;
+      }
+      const timestamp = Date.parse(modification.time);
+      if (!Number.isFinite(timestamp) || timestamp < breakevenTriggerTime) return false;
+      const oldStop = toD(modification.oldValue);
+      const newStop = toD(modification.newValue);
+      if (
+        !oldStop.isFinite() ||
+        !newStop.isFinite() ||
+        oldStop.lte(0) ||
+        newStop.lte(0) ||
+        !newStop.eq(entryPrice) ||
+        oldStop.eq(entryPrice)
+      ) {
+        return false;
+      }
+      return direction === "LONG" ? oldStop.lt(entryPrice) : oldStop.gt(entryPrice);
+    });
+
+  // Trailing is considered started only after its configured tier has
+  // completed and a later SL modification advanced further into profit.
+  let trailingStarted = false;
+  const trailingIndex = plan.trailingAfterTier;
+  const trailingTriggerTime =
+    trailingIndex == null ? null : tierCompletionTime(trailingIndex);
+  if (trailingTriggerTime !== null) {
+    trailingStarted = modifications.some((modification) => {
+      if (
+        modification.field !== "STOP_LOSS" ||
+        modification.oldValue === null ||
+        modification.newValue === null
+      ) {
+        return false;
+      }
+      const timestamp = Date.parse(modification.time);
+      if (!Number.isFinite(timestamp) || timestamp < trailingTriggerTime) return false;
+      const oldStop = toD(modification.oldValue);
+      const newStop = toD(modification.newValue);
+      if (
+        !oldStop.isFinite() ||
+        !newStop.isFinite() ||
+        oldStop.lte(0) ||
+        newStop.lte(0)
+      ) {
+        return false;
+      }
+      return direction === "LONG"
+        ? newStop.gt(entryPrice) && newStop.gt(oldStop)
+        : newStop.lt(entryPrice) && newStop.lt(oldStop);
+    });
   }
 
   return { plan, tiers, totalRealizedPct, plannedTotalPct, breakevenMoved, trailingStarted };
