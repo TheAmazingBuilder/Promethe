@@ -58,7 +58,7 @@ export function PositionSizeCalculator() {
       accountCurrency: currency,
       quoteToAccountRate: needsRate && rate !== "" ? rate : null,
     });
-  }, [balance, riskMode, riskPercent, riskAmount, entry, stopLoss, instrument, direction, needsRate, rate]);
+  }, [balance, riskMode, riskPercent, riskAmount, entry, stopLoss, instrument, direction, currency, needsRate, rate]);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -67,7 +67,13 @@ export function PositionSizeCalculator() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="ps-instrument">{t("instrument")}</Label>
-            <Select value={symbol} onValueChange={setSymbol}>
+            <Select
+              value={symbol}
+              onValueChange={(value) => {
+                setSymbol(value);
+                setRate("");
+              }}
+            >
               <SelectTrigger id="ps-instrument" className="w-full">
                 <SelectValue placeholder={t("instrumentPlaceholder")} />
               </SelectTrigger>
@@ -106,7 +112,13 @@ export function PositionSizeCalculator() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="ps-currency">{t("accountCurrency")}</Label>
-            <Select value={currency} onValueChange={setCurrency}>
+            <Select
+              value={currency}
+              onValueChange={(value) => {
+                setCurrency(value);
+                setRate("");
+              }}
+            >
               <SelectTrigger id="ps-currency" className="w-full">
                 <SelectValue />
               </SelectTrigger>
