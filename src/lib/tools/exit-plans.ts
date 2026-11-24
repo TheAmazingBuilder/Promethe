@@ -255,7 +255,9 @@ export function comparePlanVsReal(
 }
 /** Validate a plan draft: tiers sum to 100, targets are positive numbers. */
 export function validateExitPlan(
-  tiers: ExitPlanTier[]
+  tiers: ExitPlanTier[],
+  breakevenAfterTier: number | null = null,
+  trailingAfterTier: number | null = null
 ): string | null {
   if (tiers.length === 0) return "empty";
   if (tiers.length > 4) return "count";
@@ -269,6 +271,14 @@ export function validateExitPlan(
     if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(rawTarget)) return "target";
     const target = toD(rawTarget);
     if (!target.isFinite() || target.lte(0)) return "target";
+  }
+  for (const trigger of [breakevenAfterTier, trailingAfterTier]) {
+    if (
+      trigger !== null &&
+      (!Number.isInteger(trigger) || trigger < 0 || trigger >= tiers.length)
+    ) {
+      return "trigger";
+    }
   }
   return null;
 }
