@@ -2246,6 +2246,10 @@
       "STOP_SIDE_SHORT": "Invalid stop-loss: a SHORT trade requires the SL above entry.",
       "STOP_EQUALS_ENTRY": "Stop-loss equals the entry price.",
       "INVALID_AMOUNT": "Balance or risk must be greater than 0.",
+      "MISSING_ACCOUNT_CURRENCY": "Select the account currency before calculating position size.",
+      "MISSING_QUOTE_CURRENCY": "The instrument has no quote currency configured. Check its specifications.",
+      "MISSING_CONVERSION_RATE": "A valid conversion rate is required because the quote and account currencies differ.",
+      "INVALID_CONVERSION_RATE": "The conversion rate must be a valid number greater than 0.",
       "INSUFFICIENT_RISK": "Risk too small for the minimum lot size ({minLots} lot).",
       "FALLBACK": "Invalid parameters."
     }

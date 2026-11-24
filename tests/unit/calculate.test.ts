@@ -209,6 +209,7 @@ describe("calcPositionSize", () => {
       entry: "1.08000",
       stopLoss: "1.07500",
       instrument: EURUSD,
+      accountCurrency: "USD",
       direction: "LONG",
     });
     expect(r.valid).toBe(true);
@@ -224,6 +225,7 @@ describe("calcPositionSize", () => {
       entry: "2345.00",
       stopLoss: "2340.00",
       instrument: XAUUSD,
+      accountCurrency: "USD",
       direction: "LONG",
     });
     // units = 33/5 = 6.6 → lots 0.066 → floored to 0.06
@@ -239,6 +241,7 @@ describe("calcPositionSize", () => {
       entry: "2345.00",
       stopLoss: "2350.00",
       instrument: XAUUSD,
+      accountCurrency: "USD",
       direction: "LONG",
     });
     expect(r.valid).toBe(false);
@@ -252,6 +255,7 @@ describe("calcPositionSize", () => {
       entry: "2345.00",
       stopLoss: "2340.00",
       instrument: XAUUSD,
+      accountCurrency: "USD",
       direction: "SHORT",
     });
     expect(r.reason).toBe("STOP_SIDE_SHORT");
@@ -264,6 +268,7 @@ describe("calcPositionSize", () => {
       entry: "2345.00",
       stopLoss: "2345.00",
       instrument: XAUUSD,
+      accountCurrency: "USD",
     });
     expect(r.reason).toBe("STOP_EQUALS_ENTRY");
   });
@@ -275,6 +280,7 @@ describe("calcPositionSize", () => {
       entry: "2345.00",
       stopLoss: "2340.00",
       instrument: XAUUSD,
+      accountCurrency: "USD",
       direction: "LONG",
     });
     expect(r.reason).toBe("INVALID_AMOUNT");
@@ -287,6 +293,7 @@ describe("calcPositionSize", () => {
       entry: "2345.00",
       stopLoss: "2340.00",
       instrument: XAUUSD,
+      accountCurrency: "USD",
       direction: "LONG",
     });
     // units = 1/5 = 0.2 → lots 0.002 → floored to 0
@@ -302,11 +309,68 @@ describe("calcPositionSize", () => {
       entry: "2345.00",
       stopLoss: "2340.00",
       instrument: XAUUSD,
+      accountCurrency: "USD",
       direction: "LONG",
       maxLots: "1",
     });
     expect(r.lots.toString()).toBe("1");
   });
+  it("requires an account currency to establish the sizing currency", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000", riskPercent: "1", entry: "2345.00",
+      stopLoss: "2340.00", instrument: XAUUSD, direction: "LONG",
+    });
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("MISSING_ACCOUNT_CURRENCY");
+  });
+
+  it("blocks cross-currency sizing when the conversion rate is missing", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000", riskPercent: "1", entry: "149.000",
+      stopLoss: "148.000", instrument: USDJPY, direction: "LONG",
+      accountCurrency: "USD",
+    });
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("MISSING_CONVERSION_RATE");
+    expect(r.lots.isZero()).toBe(true);
+  });
+
+  it("converts quote-currency risk into account currency before sizing", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000", riskPercent: "1", entry: "149.000",
+      stopLoss: "148.000", instrument: USDJPY, direction: "LONG",
+      accountCurrency: "USD", quoteToAccountRate: "0.006",
+    });
+    expect(r.valid).toBe(true);
+    expect(r.lots.toString()).toBe("0.16");
+    expect(r.actualRiskAmount.toString()).toBe("96");
+    expect(r.pipValue.account.toString()).toBe("0.96");
+    expect(r.isEstimate).toBe(true);
+  });
+
+  it("rejects zero, negative and non-numeric conversion rates", () => {
+    for (const quoteToAccountRate of ["0", "-0.5", "not-a-rate"]) {
+      const r = calcPositionSize({
+        accountBalance: "10000", riskPercent: "1", entry: "149.000",
+        stopLoss: "148.000", instrument: USDJPY, direction: "LONG",
+        accountCurrency: "USD", quoteToAccountRate,
+      });
+      expect(r.valid).toBe(false);
+      expect(r.reason).toBe("INVALID_CONVERSION_RATE");
+    }
+  });
+
+  it("does not require FX conversion when quote and account currencies match", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000", riskPercent: "1", entry: "2345.00",
+      stopLoss: "2340.00", instrument: XAUUSD, direction: "LONG",
+      accountCurrency: "USD",
+    });
+    expect(r.valid).toBe(true);
+    expect(r.isEstimate).toBe(false);
+    expect(r.actualRiskAmount.toString()).toBe("100");
+  });
+
 });
 
 describe("previewTrade (live form aggregate)", () => {

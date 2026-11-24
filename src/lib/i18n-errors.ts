@@ -100,6 +100,10 @@ export function sizingErrorMessage(
     reason === "STOP_SIDE_SHORT" ||
     reason === "STOP_EQUALS_ENTRY" ||
     reason === "INVALID_AMOUNT" ||
+    reason === "MISSING_ACCOUNT_CURRENCY" ||
+    reason === "MISSING_QUOTE_CURRENCY" ||
+    reason === "MISSING_CONVERSION_RATE" ||
+    reason === "INVALID_CONVERSION_RATE" ||
     reason === "INSUFFICIENT_RISK"
   ) {
     return t(`errors.sizing.${reason}` as Parameters<TFunction>[0], {

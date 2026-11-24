@@ -267,6 +267,8 @@ export interface PositionSizeInput {
   lotStep?: DecimalInput;
   minLots?: DecimalInput;
   maxLots?: DecimalInput | null;
+  /** Account currency is required to determine whether FX conversion is needed. */
+  accountCurrency?: string | null;
   /** quote → account rate, required when quote ≠ account currency. */
   quoteToAccountRate?: DecimalInput | null;
 }
@@ -280,6 +282,10 @@ export type SizingInvalidReason =
   | "STOP_SIDE_SHORT"
   | "STOP_EQUALS_ENTRY"
   | "INVALID_AMOUNT"
+  | "MISSING_ACCOUNT_CURRENCY"
+  | "MISSING_QUOTE_CURRENCY"
+  | "MISSING_CONVERSION_RATE"
+  | "INVALID_CONVERSION_RATE"
   | "INSUFFICIENT_RISK";
 
 export interface PositionSizeResult {
@@ -318,8 +324,8 @@ export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
       ? toD(input.riskAmount)
       : balance.times(toD(input.riskPercent ?? 0)).div(D100);
 
-  const rate = input.quoteToAccountRate == null ? null : toD(input.quoteToAccountRate);
-  const converted = rate !== null && !rate.eq(D1);
+  const accountCurrency = input.accountCurrency?.trim().toUpperCase() ?? "";
+  const quoteCurrency = instrument.quoteCurrency?.trim().toUpperCase() ?? "";
 
   const invalid = (reason: SizingInvalidReason): PositionSizeResult => ({
     valid: false,
@@ -358,8 +364,27 @@ export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
     return invalid("INVALID_AMOUNT");
   }
 
-  // Risk per unit in ACCOUNT currency.
-  const distAccount = rate ? dist.times(rate) : dist;
+  if (!accountCurrency) return invalid("MISSING_ACCOUNT_CURRENCY");
+  if (!quoteCurrency) return invalid("MISSING_QUOTE_CURRENCY");
+
+  const needsConversion = quoteCurrency !== accountCurrency;
+  let rate = D1;
+  if (needsConversion) {
+    if (
+      input.quoteToAccountRate == null ||
+      String(input.quoteToAccountRate).trim() === ""
+    ) {
+      return invalid("MISSING_CONVERSION_RATE");
+    }
+    rate = toD(input.quoteToAccountRate);
+    if (!rate.isFinite() || rate.lte(0)) {
+      return invalid("INVALID_CONVERSION_RATE");
+    }
+  }
+
+  // Stop distance is quoted in the instrument's quote currency. Convert
+  // it to the account currency before sizing the position.
+  const distAccount = dist.times(rate);
 
   const exactUnits = riskAmount.div(distAccount);
   let lots = floorToStep(exactUnits.div(toD(instrument.contractSize)), lotStep);
@@ -381,10 +406,12 @@ export function calcPositionSize(input: PositionSizeInput): PositionSizeResult {
     lots,
     units,
     actualRiskAmount,
-    pipValue: calcPipValue(instrument, lots, input.quoteToAccountRate),
+    pipValue: calcPipValue(instrument, lots, rate),
     notionalQuote,
     minLots,
-    isEstimate: converted,
+    // Cross-currency sizing uses a manually supplied rate, so it remains
+    // explicitly identified as an estimate.
+    isEstimate: needsConversion,
   };
 }
 

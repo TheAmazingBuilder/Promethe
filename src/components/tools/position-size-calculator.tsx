@@ -55,6 +55,7 @@ export function PositionSizeCalculator() {
       stopLoss,
       instrument,
       direction,
+      accountCurrency: currency,
       quoteToAccountRate: needsRate && rate !== "" ? rate : null,
     });
   }, [balance, riskMode, riskPercent, riskAmount, entry, stopLoss, instrument, direction, needsRate, rate]);
@@ -287,7 +288,7 @@ export function PositionSizeCalculator() {
         <dl className="grid grid-cols-2 gap-3">
           <Stat
             label={t("actualRisk")}
-            value={`${fmtNum(result.actualRiskAmount, 2)} ${currency}`}
+            value={result.valid ? `${fmtNum(result.actualRiskAmount, 2)} ${currency}` : "—"}
           />
           <Stat
             label={t("stopDistance")}
@@ -300,7 +301,7 @@ export function PositionSizeCalculator() {
           />
           <Stat
             label={t("pipValue")}
-            value={`${fmtNum(result.pipValue.account, 2)} ${currency}`}
+            value={result.valid ? `${fmtNum(result.pipValue.account, 2)} ${currency}` : "—"}
             hint={
               needsRate
                 ? t("pipValueHint", {
@@ -312,7 +313,7 @@ export function PositionSizeCalculator() {
           />
           <Stat
             label={t("notional")}
-            value={`${fmtNum(result.notionalQuote, 0)} ${instrument.quoteCurrency}`}
+            value={result.valid ? `${fmtNum(result.notionalQuote, 0)} ${instrument.quoteCurrency}` : "—"}
           />
         </dl>
 
