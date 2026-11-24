@@ -2069,7 +2069,8 @@
     "manualFxRate": "Manual quote-to-account rate",
     "fxRateFromSaved": "Use saved rate or enter a manual rate",
     "pnlMissingFx": "Add a valid FX rate to display monetary results in the account currency.",
-    "invalidConversionRate": "The manual FX rate must be a valid number greater than zero."
+    "invalidConversionRate": "The manual FX rate must be a valid number greater than zero.",
+    "rrCurrencyScopeNote": "Risk/Reward figures are limited to trades recorded in {currency}. {closed} closed and {open} open trades in other currencies are excluded. Win rate excludes breakeven trades."
   },
   "topLeaks": {
     "title": "Top 3 leaks",
