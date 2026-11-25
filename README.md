@@ -83,7 +83,7 @@ Seed the reference data (37 instruments, 21 tags, plus a local demo account - id
 bun prisma/seed.ts
 ```
 
-Apply Row Level Security in Supabase (SQL Editor, `prisma/rls.sql`). It is defense-in-depth for the `anon` / `authenticated` roles; the app itself scopes every query to the signed-in user.
+Apply the Supabase access script (SQL Editor, `prisma/rls.sql`): it disables Row Level Security and revokes all table privileges from the `anon` / `authenticated` roles, so the public PostgREST API cannot read or write any table. This is defense-in-depth only - the real isolation is the app itself, which scopes every query to the signed-in user. Do not enable per-user RLS policies without a migration plan and tests.
 
 ## Environment variables
 
@@ -110,7 +110,7 @@ Notes for the free tiers: a Supabase free project pauses after ~7 days of inacti
 ## Project structure
 
 ```
-prisma/            # schema, seed, RLS policies
+prisma/            # schema, seed, Supabase access script
 src/app/           # App Router pages + API routes (/api/v1/…)
 src/lib/trading/   # pure calculation engine (no UI strings)
 src/server/        # data access, always scoped by user
