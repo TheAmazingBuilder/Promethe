@@ -48,8 +48,6 @@ export async function GET() {
       "journal",
       "legal",
       "market-sessions",
-      "mentor",
-      "mentors",
       "notifications",
       "playbook",
       "profile",

@@ -67,8 +67,6 @@ const SESSION: SessionPayload = {
     theme: "dark",
     defaultAccountId: null,
     preferences: {},
-    handle: null,
-    publicDisplayName: null,
   },
 };
 

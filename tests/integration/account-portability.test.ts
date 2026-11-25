@@ -294,7 +294,6 @@ describe("data export (portability)", () => {
       "propfirms.json",
       "sync.json",
       "sharing.json",
-      "mentoring.json",
       "comments.json",
       "notifications.json",
       "misc.json",
@@ -515,17 +514,6 @@ describe("daily maintenance (cron)", () => {
         expiresAt: new Date(Date.now() - 24 * 3600_000),
       },
     });
-    await db.mentorInvitation.create({
-      data: {
-        ownerId: aliceId,
-        inviteeEmail: "someone@test.local",
-        tokenHash: "x7".repeat(32),
-        permissionsJson: "{}",
-        status: "PENDING",
-        expiresAt: new Date(Date.now() - 24 * 3600_000),
-      },
-    });
-
     const report = await runDailyMaintenance();
 
     const purged = await db.syncEventLog.findUnique({ where: { id: syncLog.id } });
@@ -533,12 +521,7 @@ describe("daily maintenance (cron)", () => {
     expect(
       await db.tradeMergeLog.findFirst({ where: { userId: aliceId } })
     ).toBeNull();
-    const invitation = await db.mentorInvitation.findFirst({
-      where: { ownerId: aliceId },
-    });
-    expect(invitation?.status).toBe("EXPIRED");
     expect(report.syncPayloadsPurged).toBeGreaterThanOrEqual(1);
     expect(report.mergeLogsDeleted).toBeGreaterThanOrEqual(1);
-    expect(report.invitationsExpired).toBeGreaterThanOrEqual(1);
   });
 });

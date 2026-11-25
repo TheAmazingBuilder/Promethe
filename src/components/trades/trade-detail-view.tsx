@@ -1289,12 +1289,11 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
         onCreateNote={handleCreateGaiaNote}
       />
 
-      {/* ── v3 Phase 5 — comment thread (owner + scoped mentors) ── */}
+      {/* ── Comment thread (owner-only notes on this trade) ── */}
       {session && (
         <CommentThread
           tradeId={trade.id}
           viewerId={session.user.id}
-          ownerView
         />
       )}
 

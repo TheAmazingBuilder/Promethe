@@ -33,7 +33,6 @@ import {
   Coins,
   Database,
   GitMerge,
-  GraduationCap,
   LayoutDashboard,
   ListChecks,
   NotebookPen,
@@ -60,8 +59,6 @@ export interface NavItem {
   /** Roadmap phase (README) - null when the section is already live. */
   phase: number | null;
   ready: boolean;
-  /** v3 Phase 5 - only shown when the user mentors at least one trader. */
-  mentorOnly?: boolean;
 }
 
 export interface NavGroup {
@@ -247,16 +244,6 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     labelKey: "nav.groups.app",
     items: [
-      {
-        labelKey: "nav.mentorSpace",
-        descriptionKey: "nav.mentorSpaceDesc",
-        path: "/mentor",
-        view: "mentor",
-        icon: GraduationCap,
-        phase: null,
-        ready: true,
-        mentorOnly: true,
-      },
       {
         labelKey: "nav.settings",
         descriptionKey: "nav.settingsDesc",

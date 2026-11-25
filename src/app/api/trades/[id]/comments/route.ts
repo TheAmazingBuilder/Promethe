@@ -1,15 +1,12 @@
 /**
- * GET  /api/trades/[id]/comments — the thread (owner or scoped mentor),
- *        mentionable users, canComment flag, viewer's last-read marker.
- *        Marks the thread as READ for the viewer as a side effect.
- * POST /api/trades/[id]/comments — add a comment (owner, or mentor with
- *        canComment). Mentions validated server-side against CURRENT access.
+ * GET  /api/trades/[id]/comments - the owner's thread on their own trade.
+ * POST /api/trades/[id]/comments - add a comment (owner only).
  */
 import { NextResponse } from "next/server";
 import { requireUser } from "@/server/session";
 import { apiError } from "@/server/api";
-import { listComments, createComment, markTradeRead } from "@/server/comments";
-import { commentCreateSchema } from "@/lib/validations/mentor";
+import { listComments, createComment } from "@/server/comments";
+import { commentCreateSchema } from "@/lib/validations/comments";
 import { zodFieldErrors } from "@/lib/validations/shared";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -19,8 +16,6 @@ export async function GET(_req: Request, ctx: Ctx) {
     const session = await requireUser();
     const { id } = await ctx.params;
     const payload = await listComments(session.user.id, id);
-    // Viewing the thread marks it read (badge clearing).
-    await markTradeRead(session.user.id, id).catch(() => undefined);
     return NextResponse.json(payload);
   } catch (error) {
     return apiError(error, "trades/[id]/comments");

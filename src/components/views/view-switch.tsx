@@ -149,21 +149,6 @@ const ReconciliationView = dynamic(() => import("@/components/reconciliation/rec
 const SharingView = dynamic(() => import("@/components/sharing/sharing-view").then((m) => m.SharingView), {
   loading: () => <ViewLoading />,
 });
-const MentorsView = dynamic(() => import("@/components/mentors/mentors-view").then((m) => m.MentorsView), {
-  loading: () => <ViewLoading />,
-});
-const MentorView = dynamic(() => import("@/components/mentor/mentor-view").then((m) => m.MentorView), {
-  loading: () => <ViewLoading />,
-});
-const MentorOwnerView = dynamic(() => import("@/components/mentor/mentor-owner-view").then((m) => m.MentorOwnerView), {
-  loading: () => <ViewLoading />,
-});
-const MentorTradeView = dynamic(() => import("@/components/mentor/mentor-trade-view").then((m) => m.MentorTradeView), {
-  loading: () => <ViewLoading />,
-});
-const InvitationView = dynamic(() => import("@/components/mentor/invitation-view").then((m) => m.InvitationView), {
-  loading: () => <ViewLoading />,
-});
 const AccountSettingsView = dynamic(() => import("@/components/settings/account-settings-view").then((m) => m.AccountSettingsView), {
   loading: () => <ViewLoading />,
 });
@@ -223,8 +208,6 @@ export function ViewSwitch() {
     route.view,
     route.id,
     route.mode,
-    route.ownerId,
-    route.token,
     route.legalPage,
     route.journalDate,
   ]
@@ -388,23 +371,6 @@ export function ViewSwitch() {
       break;
     case "sharing":
       view = <SharingView />;
-      break;
-    case "mentors":
-      view = <MentorsView />;
-      break;
-    case "mentor":
-      view = <MentorView />;
-      break;
-    case "mentor-owner":
-      view = <MentorOwnerView ownerId={route.ownerId ?? ""} />;
-      break;
-    case "mentor-trade":
-      view = (
-        <MentorTradeView ownerId={route.ownerId ?? ""} tradeId={route.id ?? ""} />
-      );
-      break;
-    case "invitation":
-      view = <InvitationView token={route.token ?? ""} />;
       break;
     case "account-settings":
       view = <AccountSettingsView />;

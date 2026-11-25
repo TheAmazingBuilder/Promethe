@@ -6,7 +6,7 @@
  * Principles:
  *  - COMPLETE: every model with a user relation is exported (see manifest).
  *  - STRUCTURAL: secrets never leave the server — passwordHash, token hashes
- *    (broker connections, share links, mentor invitations) and live session
+ *    (broker connections, share links) and live session
  *    ids are excluded BY QUERY (select lists), not filtered afterwards.
  *  - EXACT: decimals are serialized as strings (never floats), dates as ISO.
  *  - RATE-LIMITED: one full export per 24 h (DB bucket, key = HMAC of userId).
@@ -95,14 +95,8 @@ export async function buildUserExport(userId: string): Promise<{
     reconciliationCandidates,
     tradeMergeLogs,
     shareLinks,
-    mentorInvitationsSent,
-    mentorInvitationsReceived,
-    mentorAccessesGranted,
-    mentorAccessesReceived,
-    mentorAccessLogs,
     commentsAuthored,
     commentsOnMyTrades,
-    commentReadStates,
     notifications,
     offlineSyncLogs,
     pushSubscriptions,
@@ -201,36 +195,8 @@ export async function buildUserExport(userId: string): Promise<{
         tokenPrefix: true,
       },
     }),
-    db.mentorInvitation.findMany({
-      where: { ownerId: userId },
-      select: {
-        id: true,
-        inviteeEmail: true,
-        permissionsJson: true,
-        status: true,
-        expiresAt: true,
-        createdAt: true,
-      },
-    }),
-    db.mentorInvitation.findMany({
-      where: { inviteeEmail: email },
-      select: {
-        id: true,
-        ownerId: true,
-        permissionsJson: true,
-        status: true,
-        expiresAt: true,
-        createdAt: true,
-      },
-    }),
-    db.mentorAccess.findMany({ where: { ownerId: userId } }),
-    db.mentorAccess.findMany({ where: { mentorId: userId } }),
-    db.mentorAccessLog.findMany({
-      where: { OR: [{ ownerId: userId }, { mentorId: userId }] },
-    }),
     db.tradeComment.findMany({ where: { authorId: userId } }),
     db.tradeComment.findMany({ where: { ownerId: userId } }),
-    db.commentReadState.findMany({ where: { userId } }),
     db.notificationLog.findMany({ where: { userId } }),
     db.offlineSyncLog.findMany({ where: { userId } }),
     db.pushSubscription.findMany({ where: { userId } }),
@@ -263,17 +229,6 @@ export async function buildUserExport(userId: string): Promise<{
     });
   }
 
-  // Mentions tied to the exported comments.
-  const commentIds = [
-    ...commentsAuthored.map((c) => c.id),
-    ...commentsOnMyTrades.map((c) => c.id),
-  ];
-  const commentMentions = commentIds.length
-    ? await db.commentMention.findMany({
-        where: { commentId: { in: commentIds } },
-      })
-    : [];
-
   const exportedAt = new Date();
   const counts: Record<string, number> = {
     accounts: accounts.length,
@@ -304,7 +259,7 @@ export async function buildUserExport(userId: string): Promise<{
     // Transparency: what is NOT in the archive and why (art. 12 RGPD).
     excluded: [
       "passwordHash - one-way scrypt hash, never disclosed",
-      "tokenHash (broker connections, share links, mentor invitations) - server-side HMAC digests, useless without the pepper",
+      "tokenHash (broker connections, share links) - server-side HMAC digests, useless without the pepper",
       "authSession ids - live bearer credentials",
       "raw tokens of any kind - never stored by the app",
     ],
@@ -340,12 +295,9 @@ export async function buildUserExport(userId: string): Promise<{
     "  sync.json            broker connections, sync logs, mappings,",
     "                      equity snapshots, imports, candidates, merges",
     "  sharing.json         share links (metadata)",
-    "  mentoring.json       mentor access (granted/held), invitations,",
-    "                      access log",
-    "  comments.json        comments (written + received) and mentions",
+    "  comments.json        comments (written on my trades)",
     "  notifications.json   in-app notifications",
     "  misc.json            push subscriptions, reminders, offline sync,",
-    "                      read states",
     "  consents.json        consents (Terms, privacy)",
     "  exports.json         your export history",
     "  deletion.json        pending deletion request (if any)",
@@ -407,21 +359,10 @@ export async function buildUserExport(userId: string): Promise<{
       })
     ),
     "sharing.json": jsonEntry(plain(shareLinks)),
-    "mentoring.json": jsonEntry(
-      plain({
-        accessesGranted: mentorAccessesGranted,
-        accessesReceived: mentorAccessesReceived,
-        accessLogs: mentorAccessLogs,
-        invitationsSent: mentorInvitationsSent,
-        invitationsReceived: mentorInvitationsReceived,
-      })
-    ),
     "comments.json": jsonEntry(
       plain({
         authored: commentsAuthored,
         onMyTrades: commentsOnMyTrades,
-        mentions: commentMentions,
-        readStates: commentReadStates,
       })
     ),
     "notifications.json": jsonEntry(plain(notifications)),

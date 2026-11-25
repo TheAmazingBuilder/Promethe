@@ -59,7 +59,7 @@ Promethe is a web app you can host yourself. Record your trades, keep a strategy
 **Integrations**
 
 - Discord / Telegram summaries and alerts (drawdown, prop-firm rules)
-- PDF monthly reports, PWA, guided tour, public share links, mentor mode
+- PDF monthly reports, PWA, guided tour, public share links
 
 ## Tech stack
 

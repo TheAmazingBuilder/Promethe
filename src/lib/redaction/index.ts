@@ -1,6 +1,5 @@
 /**
- * v3 — Redaction engine (PURE — shared by share links, mentor views with
- * canViewAmounts = false, and image export).
+ * v3 - Redaction engine (PURE - shared by share links and image export).
  *
  * Non-negotiable rules (v3 §4.4):
  *  - Redaction is applied on the SERVER, before data reaches the client or
@@ -28,7 +27,7 @@ export interface RedactionPolicy {
   hideStrategyName: boolean;
   /** Replaces exact timestamps with their date (YYYY-MM-DD) only. */
   hideExactTimes: boolean;
-  /** Hides psychology fields (emotions, ratings, checklist) - mentor journal scope off. */
+  /** Hides psychology fields (emotions, ratings, checklist). */
   hidePsychology: boolean;
 }
 
@@ -143,7 +142,7 @@ const PSYCH_KEYS = [
   "setupQualityRating", "executionRating", "followedPlan", "checklistResults", "review",
 ];
 
-// Keys that are ALWAYS stripped from anything going to a public/mentor view —
+// Keys that are ALWAYS stripped from anything going to a public/share view -
 // internal identifiers and server-side bookkeeping.
 const ALWAYS_STRIPPED = [
   "userId", "clientMutationId", "storagePath", "tokenHash", "tokenPrefix",

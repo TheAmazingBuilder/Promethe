@@ -6,9 +6,9 @@
  * only real Promethe data and working actions.
  *
  * What is real here, and what is honestly left out:
- * - Personal: display name, email (read-only), timezone, base currency,
- *   mentor handle and public display name. Promethe stores no phone, bio,
- *   company, job title or location, so those fields are not shown.
+ * - Personal: display name, email (read-only), timezone, base currency.
+ *   Promethe stores no phone, bio, company, job title or location, so
+ *   those fields are not shown.
  * - Account: status Active, plan Free (no subscription to manage),
  *   data export (real ZIP, 24 h cooldown), danger zone wired to the real
  *   deletion flow (password + DELETE, 7-day grace, cancellable).
@@ -158,8 +158,6 @@ function PersonalTab({
   const [name, setName] = React.useState("");
   const [timezone, setTimezone] = React.useState("UTC");
   const [currency, setCurrency] = React.useState("USD");
-  const [handle, setHandle] = React.useState("");
-  const [publicName, setPublicName] = React.useState("");
   const [saving, setSaving] = React.useState(false);
 
   React.useEffect(() => {
@@ -167,8 +165,6 @@ function PersonalTab({
     setName(session.profile.displayName);
     setTimezone(session.profile.timezone);
     setCurrency(session.profile.baseCurrency);
-    setHandle(session.profile.handle ?? "");
-    setPublicName(session.profile.publicDisplayName ?? "");
   }, [session]);
 
   if (!session) return null;
@@ -176,9 +172,7 @@ function PersonalTab({
   const dirty =
     name.trim() !== session.profile.displayName ||
     timezone !== session.profile.timezone ||
-    currency !== session.profile.baseCurrency ||
-    handle.trim() !== (session.profile.handle ?? "") ||
-    publicName.trim() !== (session.profile.publicDisplayName ?? "");
+    currency !== session.profile.baseCurrency;
 
   const tzOptions = COMMON_TIMEZONES.includes(timezone)
     ? COMMON_TIMEZONES
@@ -198,36 +192,7 @@ function PersonalTab({
           baseCurrency: currency,
         }),
       });
-      let next = result;
-      // The handle lives on its own route; only call it when it changed
-      // and is not empty (there is no way to unset a handle once set).
-      if (handle.trim() !== "" && handle.trim() !== (session.profile.handle ?? "")) {
-        next = await apiFetch<{
-          user: { id: string; email: string };
-          profile: typeof session.profile;
-        }>("/api/v1/profile/handle", {
-          method: "PUT",
-          body: JSON.stringify({
-            handle: handle.trim(),
-            publicDisplayName: publicName.trim() || null,
-          }),
-        });
-      } else if (
-        publicName.trim() !== (session.profile.publicDisplayName ?? "") &&
-        session.profile.handle
-      ) {
-        next = await apiFetch<{
-          user: { id: string; email: string };
-          profile: typeof session.profile;
-        }>("/api/v1/profile/handle", {
-          method: "PUT",
-          body: JSON.stringify({
-            handle: session.profile.handle,
-            publicDisplayName: publicName.trim() || null,
-          }),
-        });
-      }
-      setSession(next);
+      setSession(result);
       toast({ title: t("profileSaved") });
     } catch (error) {
       const err = error instanceof ApiClientError ? error : null;
@@ -301,31 +266,6 @@ function PersonalTab({
                 ))}
               </SelectContent>
             </Select>
-          </div>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="profile-handle">{t("handle")}</Label>
-            <Input
-              id="profile-handle"
-              value={handle}
-              onChange={(e) => setHandle(e.target.value)}
-              maxLength={24}
-              placeholder="@trader"
-            />
-            <p className="text-[11px] text-muted-foreground">{t("handleHint")}</p>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="profile-public-name">{t("publicDisplayName")}</Label>
-            <Input
-              id="profile-public-name"
-              value={publicName}
-              onChange={(e) => setPublicName(e.target.value)}
-              maxLength={60}
-            />
-            <p className="text-[11px] text-muted-foreground">
-              {t("publicDisplayNameHint")}
-            </p>
           </div>
         </div>
         <div className="flex justify-end">

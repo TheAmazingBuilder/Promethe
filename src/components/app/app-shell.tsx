@@ -68,9 +68,7 @@ export function AppShell({
   const activeNavView: ViewId =
     route.view === "trade" || route.view === "trade-form"
       ? "trades"
-      : route.view === "mentor-owner" || route.view === "mentor-trade"
-        ? "mentor"
-        : route.view;
+      : route.view;
   const navItem = findNavItem(activeNavView);
   const pageTitle = navItem ? tRoot(navItem.labelKey) : "Promethe";
 

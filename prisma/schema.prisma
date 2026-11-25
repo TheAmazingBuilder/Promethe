@@ -77,9 +77,6 @@ model User {
   reconciliationCandidates ReconciliationCandidate[]
   tradeMergeLogs           TradeMergeLog[]
   shareLinks               ShareLink[]
-  mentorInvitationsSent    MentorInvitation[]        @relation("InvitationOwner")
-  mentorAccessesGranted    MentorAccess[]            @relation("MentorAccessOwner")
-  mentorAccessesReceived   MentorAccess[]            @relation("MentorAccessMentor")
   tradeCommentsAuthored    TradeComment[]            @relation("CommentAuthor")
   consentRecords           ConsentRecord[]
   accountDeletionRequest   AccountDeletionRequest?
@@ -159,11 +156,6 @@ model Profile {
   /// v2 — quick-entry smart defaults (JSON): lastAccountId, lastInstrumentId,
   /// lastTimeframe, rememberedLots {symbol: lots}, favoriteInstrumentIds []
   preferencesJson   String   @default("{}") @map("preferences_json")
-  /// v3 — mentoring/mention handle: unique, lowercase, [a-z0-9_], 3-24 chars.
-  /// Required before inviting mentors or being mentioned.
-  handle            String?  @unique
-  /// v3 — name shown to mentors/share viewers (falls back to displayName)
-  publicDisplayName String?  @map("public_display_name")
   createdAt         DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [id], references: [id], onDelete: Cascade)
@@ -1795,79 +1787,7 @@ model ShareLink {
   @@map("share_links")
 }
 
-/// Single-use mentor invitation (email must match the invitee's account).
-model MentorInvitation {
-  id              String   @id @default(cuid())
-  ownerId         String   @map("owner_id")
-  inviteeEmail    String   @map("invitee_email")
-  tokenHash       String   @unique @map("token_hash")
-  /// JSON: MentorAccess scope fields (accountScope, strategyScope, flags…)
-  permissionsJson String   @map("permissions_json")
-  /// PENDING | ACCEPTED | DECLINED | EXPIRED | REVOKED
-  status          String   @default("PENDING")
-  expiresAt       DateTime @map("expires_at")
-  createdAt       DateTime @default(now()) @map("created_at")
-
-  owner User @relation("InvitationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-
-  @@index([ownerId])
-  @@index([inviteeEmail])
-  @@map("mentor_invitations")
-}
-
-/// Granted mentor access — scope editable, pausable, revocable at any time
-/// with immediate effect.
-model MentorAccess {
-  id                 String    @id @default(cuid())
-  ownerId            String    @map("owner_id")
-  mentorId           String    @map("mentor_id")
-  /// ACTIVE | PAUSED | REVOKED
-  status             String    @default("ACTIVE")
-  /// ALL | LIST
-  accountScope       String    @default("ALL") @map("account_scope")
-  /// JSON string[] — meaningful when accountScope = LIST
-  accountIdsJson     String    @default("[]") @map("account_ids_json")
-  /// ALL | LIST
-  strategyScope      String    @default("ALL") @map("strategy_scope")
-  strategyIdsJson    String    @default("[]") @map("strategy_ids_json")
-  canViewAmounts     Boolean   @default(true) @map("can_view_amounts")
-  canViewJournal     Boolean   @default(false) @map("can_view_journal")
-  canViewScreenshots Boolean   @default(false) @map("can_view_screenshots")
-  canViewAnalytics   Boolean   @default(true) @map("can_view_analytics")
-  canComment         Boolean   @default(false) @map("can_comment")
-  expiresAt          DateTime? @map("expires_at")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  revokedAt          DateTime? @map("revoked_at")
-  lastViewedAt       DateTime? @map("last_viewed_at")
-
-  owner  User @relation("MentorAccessOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  mentor User @relation("MentorAccessMentor", fields: [mentorId], references: [id], onDelete: Cascade)
-
-  @@unique([ownerId, mentorId])
-  @@index([mentorId])
-  @@index([ownerId, status])
-  @@map("mentor_accesses")
-}
-
-/// Aggregated per-day view counts — privacy transparency for the owner.
-model MentorAccessLog {
-  id           String  @id @default(cuid())
-  ownerId      String  @map("owner_id")
-  mentorId     String  @map("mentor_id")
-  /// TRADES | TRADE_DETAIL | JOURNAL | ANALYTICS | ACCOUNTS
-  resourceType String  @map("resource_type")
-  resourceId   String? @map("resource_id")
-  /// YYYY-MM-DD (UTC)
-  day          String
-  viewCount    Int     @default(0) @map("view_count")
-
-  @@unique([ownerId, mentorId, resourceType, resourceId, day])
-  @@index([ownerId])
-  @@index([mentorId])
-  @@map("mentor_access_logs")
-}
-
-/// Comment thread on a trade (owner + mentors with canComment).
+/// Comment thread on a trade - owner-only notes on their own trades.
 model TradeComment {
   id        String    @id @default(cuid())
   tradeId   String    @map("trade_id")
@@ -1889,27 +1809,6 @@ model TradeComment {
   @@index([ownerId])
   @@index([authorId])
   @@map("trade_comments")
-}
-
-/// Mention rows — only users who currently have access to that trade.
-model CommentMention {
-  commentId       String @map("comment_id")
-  mentionedUserId String @map("mentioned_user_id")
-
-  @@id([commentId, mentionedUserId])
-  @@index([mentionedUserId])
-  @@map("comment_mentions")
-}
-
-/// Unread tracking per user per trade.
-model CommentReadState {
-  userId     String   @map("user_id")
-  tradeId    String   @map("trade_id")
-  lastReadAt DateTime @map("last_read_at")
-
-  @@id([userId, tradeId])
-  @@index([userId])
-  @@map("comment_read_states")
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

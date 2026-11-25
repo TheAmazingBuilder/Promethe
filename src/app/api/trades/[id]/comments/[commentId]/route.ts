@@ -1,6 +1,6 @@
 /**
  * PATCH  /api/trades/[id]/comments/[commentId] — edit own comment (author
- *         only, shows "edited"); mentions re-validated.
+ *         only, shows "edited").
  * DELETE /api/trades/[id]/comments/[commentId] — author or journal owner;
  *         tombstone when the comment has replies, hard delete otherwise.
  */
@@ -8,7 +8,7 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/server/session";
 import { apiError } from "@/server/api";
 import { deleteComment, editComment } from "@/server/comments";
-import { commentEditSchema } from "@/lib/validations/mentor";
+import { commentEditSchema } from "@/lib/validations/comments";
 import { zodFieldErrors } from "@/lib/validations/shared";
 
 type Ctx = { params: Promise<{ id: string; commentId: string }> };

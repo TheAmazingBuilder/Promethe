@@ -1,14 +1,13 @@
 "use client";
 
 /**
- * v3 Phase 5 — Comment thread on a trade (owner view AND read-only mentor
- * view — the API resolves the viewer's context and permissions).
+ * Comment thread on a trade - the owner's personal notes on their own
+ * trades (the Mentors module was removed on 25 Nov 2026, so there is no
+ * other author and no @mention system anymore).
  *
  * Rendering is a restricted markdown subset (bold, italics, lists, links,
  * inline code, quotes) via react-markdown WITHOUT rehype-raw: raw HTML is
  * escaped by design, links get rel="nofollow noopener noreferrer".
- * Mentions (@handle) autocomplete is limited to people who currently have
- * access to the trade — the server validates anyway.
  */
 import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -19,13 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import type {
-  CommentsPayloadDTO,
-  MentionableUserDTO,
-  TradeCommentDTO,
-} from "@/lib/mentor/dto";
+import type { CommentsPayloadDTO, TradeCommentDTO } from "@/lib/comments/dto";
 import { format } from "date-fns";
 
 const MARKDOWN_ALLOWED = [
@@ -53,12 +47,9 @@ async function apiJson<T>(url: string, init?: RequestInit): Promise<T> {
 export function CommentThread({
   tradeId,
   viewerId,
-  ownerView,
 }: {
   tradeId: string;
   viewerId: string;
-  /** true on the owner's trade detail (owner may delete any comment). */
-  ownerView: boolean;
 }) {
   const t = useTranslations("comments");
   const { toast } = useToast();
@@ -85,7 +76,6 @@ export function CommentThread({
   const [body, setBody] = React.useState("");
   const [replyTo, setReplyTo] = React.useState<TradeCommentDTO | null>(null);
   const [sending, setSending] = React.useState(false);
-  const [mentionQuery, setMentionQuery] = React.useState<string | null>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
   const canComment = (data?.canComment ?? false) && online;
@@ -115,7 +105,6 @@ export function CommentThread({
       setBody("");
       setReplyTo(null);
       await queryClient.invalidateQueries({ queryKey: ["comments", tradeId] });
-      await queryClient.invalidateQueries({ queryKey: ["mentor-space"] });
     } catch (err) {
       toast({
         title: "Error",
@@ -126,40 +115,6 @@ export function CommentThread({
       setSending(false);
     }
   }
-
-  /** Detects a partial @mention at the caret to drive the autocomplete. */
-  function onComposerChange(value: string): void {
-    setBody(value);
-    const el = textareaRef.current;
-    if (!el) return;
-    const uptoCaret = value.slice(0, el.selectionStart ?? value.length);
-    const match = uptoCaret.match(/(?:^|\s)@([a-z0-9_]*)$/i);
-    setMentionQuery(match ? match[1].toLowerCase() : null);
-  }
-
-  function applyMention(user: MentionableUserDTO): void {
-    const el = textareaRef.current;
-    if (!el || !user.handle) return;
-    const caret = el.selectionStart ?? body.length;
-    const uptoCaret = body.slice(0, caret);
-    const rest = body.slice(caret);
-    const replaced = uptoCaret.replace(/@([a-z0-9_]*)$/i, `@${user.handle} `);
-    setBody(replaced + rest);
-    setMentionQuery(null);
-    requestAnimationFrame(() => el.focus());
-  }
-
-  const mentionMatches = React.useMemo(() => {
-    if (mentionQuery === null || !data) return [];
-    return data.mentionable.filter(
-      (u) =>
-        u.id !== viewerId &&
-        u.handle &&
-        (mentionQuery === "" ||
-          u.handle.startsWith(mentionQuery) ||
-          u.displayName.toLowerCase().includes(mentionQuery))
-    );
-  }, [mentionQuery, data, viewerId]);
 
   return (
     <Card id="comments">
@@ -193,9 +148,7 @@ export function CommentThread({
               <li key={comment.id}>
                 <CommentItem
                   comment={comment}
-                  lastReadAt={data?.lastReadAt ?? null}
                   viewerId={viewerId}
-                  ownerView={ownerView}
                   tradeId={tradeId}
                   onReply={
                     canComment && !comment.deletedAt
@@ -213,9 +166,7 @@ export function CommentThread({
                         <CommentItem
                           comment={reply}
                           parentAuthor={byId.get(reply.parentId ?? "")?.author ?? null}
-                          lastReadAt={data?.lastReadAt ?? null}
                           viewerId={viewerId}
-                          ownerView={ownerView}
                           tradeId={tradeId}
                           onReply={
                             canComment && !reply.deletedAt
@@ -260,44 +211,15 @@ export function CommentThread({
               <Textarea
                 ref={textareaRef}
                 value={body}
-                onChange={(e) => onComposerChange(e.target.value)}
+                onChange={(e) => setBody(e.target.value)}
                 placeholder={t("placeholder")}
                 rows={3}
                 maxLength={4000}
                 aria-label={t("placeholder")}
                 className="resize-y"
               />
-              {mentionQuery !== null && mentionMatches.length > 0 && (
-                <ul
-                  role="listbox"
-                  aria-label={t("mentionHint")}
-                  className="absolute z-20 max-h-40 w-full max-w-64 overflow-y-auto rounded-md border bg-popover p-1 text-sm shadow-md"
-                >
-                  {mentionMatches.slice(0, 6).map((user) => (
-                    <li key={user.id}>
-                      <button
-                        type="button"
-                        role="option"
-                        aria-selected={false}
-                        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-accent"
-                        onClick={() => applyMention(user)}
-                      >
-                        <span className="font-mono text-xs text-emerald-700 dark:text-emerald-400">
-                          @{user.handle}
-                        </span>
-                        <span className="truncate text-muted-foreground">
-                          {user.displayName}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </div>
-            <div className="flex items-center justify-between gap-2">
-              <p className="hidden text-[11px] text-muted-foreground sm:block">
-                {t("mentionHint")}
-              </p>
+            <div className="flex items-center justify-end gap-2">
               <Button
                 size="sm"
                 onClick={() => void submit()}
@@ -322,17 +244,13 @@ export function CommentThread({
 function CommentItem({
   comment,
   parentAuthor,
-  lastReadAt,
   viewerId,
-  ownerView,
   tradeId,
   onReply,
 }: {
   comment: TradeCommentDTO;
   parentAuthor?: { displayName: string } | null;
-  lastReadAt: string | null;
   viewerId: string;
-  ownerView: boolean;
   tradeId: string;
   /** Sets the composer into reply mode (one level of threading). */
   onReply?: () => void;
@@ -347,8 +265,6 @@ function CommentItem({
   const [confirmDelete, setConfirmDelete] = React.useState(false);
 
   const isAuthor = comment.author.id === viewerId;
-  const unread =
-    lastReadAt !== null && comment.createdAt > lastReadAt && !isAuthor;
 
   async function saveEdit(): Promise<void> {
     const text = editBody.trim();
@@ -396,21 +312,11 @@ function CommentItem({
   }
 
   return (
-    <article
-      className={cn(
-        "rounded-lg border px-3 py-2.5",
-        unread && "border-emerald-500/50 bg-emerald-500/5"
-      )}
-    >
+    <article className="rounded-lg border px-3 py-2.5">
       <header className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
         <span className="font-medium text-foreground">
           {comment.author.displayName}
         </span>
-        {comment.author.handle && (
-          <span className="font-mono text-emerald-700 dark:text-emerald-400">
-            @{comment.author.handle}
-          </span>
-        )}
         {comment.author.isOwner && (
           <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
             {t("ownerBadge")}
@@ -419,11 +325,6 @@ function CommentItem({
         <span className="text-muted-foreground">{fmtTime(comment.createdAt)}</span>
         {comment.editedAt && (
           <span className="italic text-muted-foreground">({t("edited")})</span>
-        )}
-        {unread && (
-          <Badge className="h-4 bg-emerald-600 px-1.5 text-[10px] text-white">
-            {t("new")}
-          </Badge>
         )}
       </header>
 
@@ -470,7 +371,7 @@ function CommentItem({
         </div>
       )}
 
-      {(onReply || isAuthor || ownerView) && !editing && (
+      {(onReply || isAuthor) && !editing && (
         <footer className="mt-2 flex items-center gap-1">
           {onReply && (
             <button

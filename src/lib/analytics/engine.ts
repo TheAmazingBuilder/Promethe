@@ -111,7 +111,7 @@ export function sortChronologically<T extends StatTrade>(trades: T[]): T[] {
  * label it "Cumulative P&L curve" / "Max P&L drawdown", never "Equity
  * curve" / equity drawdown. A true balance/equity drawdown would need
  * per-account initialBalance + dated cash flows merged with trade P&L
- * in every caller (analytics, dashboard, reports, mentor, share) plus a
+ * in every caller (analytics, dashboard, reports, share) plus a
  * complete equity series — AccountEquitySnapshot is EA-heartbeat-only
  * (sparse, 15-min, 30-day retention), so no such series exists today.
  * That wiring is deliberately NOT attempted in this lot.

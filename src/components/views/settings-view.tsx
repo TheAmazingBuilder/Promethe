@@ -4,7 +4,7 @@ import Link from "next/link";
 import * as React from "react";
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
-import { Accessibility, Check, ChevronRight, Clock, Compass, EyeOff, History, Keyboard, LayoutDashboard, LayoutTemplate, Link2, ListPlus, Monitor, Moon, Palette, Plug, Send, ShieldCheck, Sun, Trash2, Users } from "lucide-react";
+import { Accessibility, Check, ChevronRight, Clock, Compass, EyeOff, History, Keyboard, LayoutDashboard, LayoutTemplate, Link2, ListPlus, Monitor, Moon, Palette, Plug, Send, ShieldCheck, Sun, Trash2 } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -372,20 +372,6 @@ export function SettingsView() {
           <div>
             <p className="text-sm font-medium">{tNav("sharing")}</p>
             <p className="text-xs text-muted-foreground">{tNav("sharingDesc")}</p>
-          </div>
-        </div>
-        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </Link>
-
-      <Link
-        href="/settings/mentors"
-        className="flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-accent"
-      >
-        <div className="flex items-center gap-3">
-          <Users className="h-5 w-5 text-primary" aria-hidden="true" />
-          <div>
-            <p className="text-sm font-medium">{tNav("mentors")}</p>
-            <p className="text-xs text-muted-foreground">{tNav("mentorsDesc")}</p>
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />

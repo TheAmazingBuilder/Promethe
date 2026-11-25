@@ -153,7 +153,7 @@ describe("redactTrade — full anonymous export", () => {
   });
 });
 
-describe("redactTrade — hidePsychology (mentor journal scope off)", () => {
+describe("redactTrade - hidePsychology", () => {
   it("removes psychology fields but keeps notes", () => {
     const { trade } = redactTrade(TRADE, { ...NO_REDACTION, hidePsychology: true });
     for (const key of ["emotionBefore", "confidence", "followedPlan", "checklistResults", "setupQualityRating"]) {

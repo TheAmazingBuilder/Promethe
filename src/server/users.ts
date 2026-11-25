@@ -19,8 +19,6 @@ type ProfileRow = {
   theme: string;
   defaultAccountId: string | null;
   preferencesJson?: string | null;
-  handle?: string | null;
-  publicDisplayName?: string | null;
 };
 
 /** Safe parse of Profile.preferencesJson - never throws, defaults to {}. */
@@ -58,8 +56,6 @@ const FALLBACK_PROFILE: SessionProfile = {
   theme: "system",
   defaultAccountId: null,
   preferences: {},
-  handle: null,
-  publicDisplayName: null,
 };
 
 /** Maps DB rows to the client-safe session payload (profile optional). */
@@ -78,8 +74,6 @@ export function toSessionPayload(
           theme: profile.theme,
           defaultAccountId: profile.defaultAccountId,
           preferences: parsePreferences(profile.preferencesJson),
-          handle: profile.handle ?? null,
-          publicDisplayName: profile.publicDisplayName ?? null,
         }
       : { ...FALLBACK_PROFILE },
   };
@@ -224,95 +218,3 @@ export async function updateProfile(
   return toSessionPayload(user, user.profile);
 }
 
-// ── v3 Phase 5 — mentoring handle ────────────────────────────────────────────
-
-const HANDLE_RE = /^[a-z0-9_]{3,24}$/;
-
-/** Typed validation error mapped by apiError() into a consistent envelope. */
-export class UserValidationError extends Error {
-  code: string;
-  status = 422;
-
-  constructor(code: string, message: string) {
-    super(message);
-    this.name = "UserValidationError";
-    this.code = code;
-  }
-}
-
-function handleCandidates(seed: string): string[] {
-  const base = seed
-    .toLowerCase()
-    .replace(/[^a-z0-9_]/g, "")
-    .slice(0, 18);
-  const safe = base.length >= 3 ? base : `trader_${base}`;
-  return [safe, `${safe}_tj`];
-}
-
-/**
- * Auto-suggests an available handle from the user's email/display name.
- * Pure suggestion — nothing is persisted until setHandle succeeds.
- */
-export async function suggestHandle(userId: string): Promise<string> {
-  const profile = await db.profile.findUnique({ where: { id: userId } });
-  const seed = profile?.displayName || "trader";
-  const emailSeed = (await db.user.findUnique({ where: { id: userId } }))
-    ?.email.split("@")[0];
-
-  const candidates = [
-    ...handleCandidates(emailSeed ?? ""),
-    ...handleCandidates(seed),
-  ];
-  for (const candidate of candidates) {
-    if (!HANDLE_RE.test(candidate)) continue;
-    const taken = await db.profile.findUnique({ where: { handle: candidate } });
-    if (!taken) return candidate;
-  }
-  // Fall back to a random suffix — always valid, near-zero collision odds.
-  return `tj_${Math.random().toString(36).slice(2, 10)}`;
-}
-
-/**
- * Reserves a handle for the session user (uniqueness enforced atomically by
- * the DB). Throws UserValidationError(HANDLE_TAKEN | HANDLE_INVALID).
- */
-export async function setHandle(
-  userId: string,
-  handle: string,
-  publicDisplayName?: string | null
-): Promise<SessionPayload> {
-  if (!HANDLE_RE.test(handle)) {
-    throw new UserValidationError("HANDLE_INVALID", "Invalid handle (a-z, 0-9, _, 3–24).");
-  }
-  await ensureUserSetup(userId);
-  const taken = await db.profile.findUnique({ where: { handle } });
-  if (taken && taken.id !== userId) {
-    throw new UserValidationError("HANDLE_TAKEN", "This handle is already taken.");
-  }
-  try {
-    await db.profile.update({
-      where: { id: userId },
-      data: {
-        handle,
-        ...(publicDisplayName !== undefined
-          ? { publicDisplayName: publicDisplayName || null }
-          : {}),
-      },
-    });
-  } catch (error) {
-    // Unique race — two users claiming the same handle concurrently.
-    if (
-      error instanceof Error &&
-      "code" in error &&
-      (error as { code?: string }).code === "P2002"
-    ) {
-      throw new UserValidationError("HANDLE_TAKEN", "This handle is already taken.");
-    }
-    throw error;
-  }
-  const user = await db.user.findUniqueOrThrow({
-    where: { id: userId },
-    include: { profile: true },
-  });
-  return toSessionPayload(user, user.profile);
-}

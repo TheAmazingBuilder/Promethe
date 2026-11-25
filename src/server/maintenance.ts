@@ -10,13 +10,12 @@
  *  3. Purge sync event payloads older than 14 days (keep the audit row,
  *     drop the personal payload — schema comment "payload purgé à 14 j").
  *  4. Delete merge undo snapshots past their expiry (30-day window).
- *  5. Mark overdue PENDING mentor invitations as EXPIRED.
- *  6. Delete share links expired more than 7 days ago (read-time already
+ *  5. Delete share links expired more than 7 days ago (read-time already
  *     404s them; this frees the rows).
- *  7. Prune in-app notifications older than 90 days.
- *  8. v2.5 M4: purge trash items older than 30 days (DB rows + Storage
+ *  6. Prune in-app notifications older than 90 days.
+ *  7. v2.5 M4: purge trash items older than 30 days (DB rows + Storage
  *     objects) and prune expired ChangeLog undo snapshots.
- *  9. v2.5 M6: freeze today's trader quality score snapshot per user.
+ *  8. v2.5 M6: freeze today's trader quality score snapshot per user.
  */
 import { db } from "@/lib/db";
 import { pruneRateLimits } from "@/lib/rate-limit";
@@ -30,7 +29,6 @@ export interface MaintenanceReport {
   rateLimitBucketsPruned: number;
   syncPayloadsPurged: number;
   mergeLogsDeleted: number;
-  invitationsExpired: number;
   shareLinksDeleted: number;
   notificationsPruned: number;
   trashPurged: TrashPurgeReport;
@@ -90,16 +88,6 @@ export async function runDailyMaintenance(now: Date = new Date()): Promise<Maint
     failures
   );
 
-  const invitations = await runStep(
-    "invitation expiry",
-    () => db.mentorInvitation.updateMany({
-      where: { status: "PENDING", expiresAt: { lt: now } },
-      data: { status: "EXPIRED" },
-    }),
-    { count: 0 },
-    failures
-  );
-
   const shareLinks = await runStep(
     "share link pruning",
     () => db.shareLink.deleteMany({ where: { expiresAt: { lt: day(7) } } }),
@@ -140,7 +128,6 @@ export async function runDailyMaintenance(now: Date = new Date()): Promise<Maint
     rateLimitBucketsPruned,
     syncPayloadsPurged: syncPayloads.count,
     mergeLogsDeleted: mergeLogs.count,
-    invitationsExpired: invitations.count,
     shareLinksDeleted: shareLinks.count,
     notificationsPruned: notifications.count,
     trashPurged,

@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { ChevronDown } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { isGroupExpanded, NAV_GROUPS, type NavGroup } from "./nav";
 import {
@@ -17,35 +16,8 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { apiFetch } from "@/lib/api-client";
 import Link from "next/link";
-import type { MenteeSummaryDTO, ReceivedInvitationDTO } from "@/lib/mentor/dto";
 import type { ViewId } from "@/lib/router";
-
-interface MentorHomePayload {
-  mentees: MenteeSummaryDTO[];
-  invitations: ReceivedInvitationDTO[];
-  isMentor: boolean;
-}
-
-/** Shared query - identical key AND queryFn everywhere (cache coherent). */
-export function useMentorHome() {
-  return useQuery({
-    queryKey: ["mentor-space"],
-    queryFn: () => apiFetch<MentorHomePayload>("/api/v1/mentor"),
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-  });
-}
-
-/**
- * Whether the current user mentors at least one trader (drives the
- * "Mentor space" nav visibility). Lightweight: one small GET, cached.
- */
-export function useIsMentor(): boolean {
-  const { data } = useMentorHome();
-  return data?.isMentor === true;
-}
 
 /** localStorage key for the Data group collapse state (collapsed by default). */
 export const DATA_GROUP_COLLAPSED_KEY = "promethe.sidebar.data-collapsed";
@@ -96,11 +68,10 @@ function CollapsibleNavGroup({
   onNavigate?: () => void;
 }) {
   const t = useTranslations();
-  const isMentor = useIsMentor();
   const { state: sidebarState, setOpen } = useSidebar();
   const [storedCollapsed, toggleCollapsed] = usePersistedCollapsed();
 
-  const items = group.items.filter((item) => !item.mentorOnly || isMentor);
+  const items = group.items;
   if (!items.length) return null;
   const containsActive = items.some((item) => item.view === activeView);
   const expanded = isGroupExpanded(storedCollapsed, containsActive);
@@ -181,7 +152,6 @@ export function NavList({
   onNavigate?: () => void;
 }) {
   const t = useTranslations();
-  const isMentor = useIsMentor();
 
   return (
     <>
@@ -196,9 +166,7 @@ export function NavList({
             />
           );
         }
-        const items = group.items.filter(
-          (item) => !item.mentorOnly || isMentor
-        );
+        const items = group.items;
         if (!items.length) return null;
         return (
           <SidebarGroup key={group.labelKey}>

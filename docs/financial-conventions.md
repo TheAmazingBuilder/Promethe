@@ -156,7 +156,7 @@ wins — fix the code, not the document. (Verification report MD §3.)
 - **No true equity/balance drawdown exists yet.** One would need
   per-account `initialBalance` plus dated cash flows merged
   with trade P&L in every caller (analytics, dashboard, reports,
-  mentor, share) plus a complete equity series.
+  share) plus a complete equity series.
   `AccountEquitySnapshot` cannot supply that series: it is
   **EA-heartbeat-only and sparse** (15-minute cadence, 30-day
   retention). That wiring is deliberately out of scope for Lot 1.

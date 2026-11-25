@@ -16,14 +16,14 @@ with `channel = 'IN_APP'` and are pruned after 90 days by the daily cron.
 inside the window:
 
 - Key: `(userId, type, url, dedupeKey, channel = 'IN_APP')`.
-  `url` is usually the deep link (one comment burst per trade per 10 min);
+  `url` is usually the deep link;
   `dedupeKey` is an optional extra segment for alerts that share
   `(type, url)` but concern different entities — today the broker
   connection id for `SYNC_STALE` / `SYNC_MISMATCH`. Null matches only
   null.
 - Window: `dedupeWithinMs`, default 10 min. Per-type windows in use:
-  `SYNC_STALE` 6 h, `SYNC_MISMATCH` 24 h, `COMMENT_*` / `MENTION` 10 min,
-  `MENTOR_INVITE_RECEIVED` 1 h, `DELETION_*` 0 (never deduped).
+  `SYNC_STALE` 6 h, `SYNC_MISMATCH` 24 h,
+  `DELETION_*` 0 (never deduped).
 - **A notification that was already read never blocks a new one.**
   Only unread rows inside the window suppress.
 - Simultaneous calls for the same key are serialized with a Postgres

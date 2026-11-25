@@ -41,12 +41,6 @@ export const VIEW_IDS = [
   "import",
   "reconciliation",
   "sharing",
-  // v3 Phase 5 — mentoring
-  "mentors",
-  "mentor",
-  "mentor-owner",
-  "mentor-trade",
-  "invitation",
   // v3 Phase 6 — portability & compliance
   "account-settings",
   // Profile page (/settings/profile)
@@ -97,10 +91,6 @@ export interface AppRoute {
   id?: string;
   /** Trade form mode. */
   mode?: "create" | "edit";
-  /** Mentor space: the mentee (owner) whose journal is being viewed. */
-  ownerId?: string;
-  /** Invitation token (/invitation/{token}). */
-  token?: string;
   /** Legal page (/legal/terms, /legal/privacy, /legal/cookies). */
   legalPage?: "terms" | "privacy" | "cookies";
   /** Journal day (/journal/2025-05-02) - local calendar day. */
@@ -162,7 +152,6 @@ const SETTINGS_SUB_VIEW: Record<string, ViewId> = {
   "broker-sync": "broker-sync",
   partage: "sharing",
   sharing: "sharing",
-  mentors: "mentors",
   compte: "account-settings",
   account: "account-settings",
   profile: "profile-settings",
@@ -218,8 +207,6 @@ const KNOWN_FIRST_SEGMENTS = new Set([
   "focus",
   "trash",
   "legal",
-  "mentor",
-  "invitation",
   "broker-sync",
   "prop-firms",
 ]);
@@ -324,20 +311,6 @@ function parseSegments(
     const page = (second ? LEGAL_PAGE_BY_SEGMENT[second] : undefined) ?? "terms";
     return withQuery({ view: "legal", legalPage: page });
   }
-  // /mentor — mentor space; /mentor/{ownerId} — one mentee's journal;
-  // /mentor/{ownerId}/trades/{tradeId} — read-only trade detail
-  if (head === "mentor") {
-    if (!second) return withQuery({ view: "mentor" });
-    if (third === "trades" && fourth) {
-      return withQuery({ view: "mentor-trade", ownerId: second, id: fourth });
-    }
-    return withQuery({ view: "mentor-owner", ownerId: second });
-  }
-  // /invitation/{token} — mentor invitation accept/decline
-  if (head === "invitation" && second) {
-    return withQuery({ view: "invitation", token: second });
-  }
-
   return withQuery({ view });
 }
 
@@ -478,25 +451,6 @@ export function routeToPath(route: AppRoute): string {
       return withSearch("/reconciliation", query);
     case "sharing":
       return withSearch("/settings/sharing", query);
-    case "mentors":
-      return withSearch("/settings/mentors", query);
-    case "mentor":
-      return withSearch("/mentor", query);
-    case "mentor-owner":
-      return withSearch(
-        `/mentor/${encodeURIComponent(route.ownerId ?? "")}`,
-        query
-      );
-    case "mentor-trade":
-      return withSearch(
-        `/mentor/${encodeURIComponent(route.ownerId ?? "")}/trades/${encodeURIComponent(route.id ?? "")}`,
-        query
-      );
-    case "invitation":
-      return withSearch(
-        `/invitation/${encodeURIComponent(route.token ?? "")}`,
-        query
-      );
     case "account-settings":
       return withSearch("/settings/account", query);
     case "profile-settings":

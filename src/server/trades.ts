@@ -129,7 +129,7 @@ type TradeFullRow = Prisma.TradeGetPayload<{
 
 /**
  * Lighter row shape accepted by toTradeDetail — modifications / eventLinks
- * are OPTIONAL (mentor views omit them; the mapper defaults both to []) and
+ * are OPTIONAL (the mapper defaults both to []) and
  * only the review id is needed (hasReview flag).
  */
 type TradeDetailRow = Omit<

@@ -5,7 +5,6 @@ const mocks = vi.hoisted(() => ({
   pruneRateLimits: vi.fn(),
   syncPayloadPurge: vi.fn(),
   mergeLogPrune: vi.fn(),
-  invitationExpiry: vi.fn(),
   shareLinkPrune: vi.fn(),
   notificationPrune: vi.fn(),
   purgeExpiredTrash: vi.fn(),
@@ -16,7 +15,6 @@ vi.mock("@/lib/db", () => ({
   db: {
     syncEventLog: { updateMany: mocks.syncPayloadPurge },
     tradeMergeLog: { deleteMany: mocks.mergeLogPrune },
-    mentorInvitation: { updateMany: mocks.invitationExpiry },
     shareLink: { deleteMany: mocks.shareLinkPrune },
     notificationLog: { deleteMany: mocks.notificationPrune },
   },
@@ -49,7 +47,6 @@ describe("runDailyMaintenance failure isolation", () => {
     mocks.pruneRateLimits.mockResolvedValue(4);
     mocks.syncPayloadPurge.mockResolvedValue({ count: 5 });
     mocks.mergeLogPrune.mockResolvedValue({ count: 6 });
-    mocks.invitationExpiry.mockResolvedValue({ count: 7 });
     mocks.shareLinkPrune.mockResolvedValue({ count: 8 });
     mocks.notificationPrune.mockResolvedValue({ count: 9 });
     mocks.purgeExpiredTrash.mockResolvedValue({
@@ -72,7 +69,6 @@ describe("runDailyMaintenance failure isolation", () => {
     expect(report.rateLimitBucketsPruned).toBe(4);
     expect(report.syncPayloadsPurged).toBe(5);
     expect(report.mergeLogsDeleted).toBe(6);
-    expect(report.invitationsExpired).toBe(7);
     expect(report.shareLinksDeleted).toBe(8);
     expect(report.notificationsPruned).toBe(9);
     expect(report.trashPurged.trades).toBe(1);

@@ -9,9 +9,7 @@ import { TradeValidationError } from "@/server/trades";
 import { TemplateValidationError } from "@/server/templates";
 import { UploadValidationError } from "@/server/uploads";
 import { ShareValidationError } from "@/server/sharing";
-import { MentorValidationError } from "@/server/mentors";
 import { CommentValidationError } from "@/server/comments";
-import { UserValidationError } from "@/server/users";
 import { InstrumentValidationError } from "@/server/instruments";
 import { DashboardValidationError } from "@/server/dashboards";
 import { AccessDeniedError } from "@/lib/access";
@@ -48,26 +46,12 @@ const CODE_MESSAGES: Record<string, string> = {
   TRADE_NOT_FOUND: "Screenshot attached to a missing trade.",
   INVALID_PERIOD: "Invalid report period.",
   SHARE_TRADE_NOT_FOUND: "Trade not found – cannot share it.",
-  // v3 Phase 5 — mentoring & comments
+  // Trade comments (owner-only)
   ACCESS_DENIED: "Access denied.",
-  HANDLE_INVALID: "Invalid handle (a-z, 0-9, _, 3–24 characters).",
-  HANDLE_TAKEN: "This handle is already taken.",
-  HANDLE_REQUIRED: "Choose your handle first.",
-  SELF_INVITE: "You cannot invite yourself.",
-  INVITE_ALREADY_PENDING: "An invitation is already pending for this email.",
-  MENTOR_ALREADY_ACTIVE: "This mentor already has active access.",
-  TOO_MANY_PENDING: "Too many pending invitations.",
-  INVITE_RATE_LIMITED: "Too many invitations sent today.",
-  INVITE_NOT_FOUND: "Invitation not found.",
-  INVITE_NOT_PENDING: "This invitation has already been handled.",
-  INVITE_EXPIRED: "This invitation has expired.",
-  ACCESS_NOT_FOUND: "Mentorship access not found.",
-  ACCESS_REVOKED: "This access has been revoked.",
   COMMENT_NOT_FOUND: "Comment not found.",
   COMMENT_DELETED: "This comment has been deleted.",
   COMMENT_RATE_LIMITED: "Too many comments – please wait a moment.",
   PARENT_INVALID: "Invalid parent comment.",
-  MENTION_INVALID: "Mention not possible: this person does not have access to this trade.",
   // v1 Phase 7 — instruments personnalisés
   INSTRUMENT_DUPLICATE: "You already have an instrument with this symbol.",
   INSTRUMENT_PIP_INVALID: "Invalid pip size (e.g. 0.0001 or 0.01 for XAUUSD).",
@@ -132,9 +116,7 @@ function isCoded(error: unknown): error is CodedError {
     error instanceof TemplateValidationError ||
     error instanceof UploadValidationError ||
     error instanceof ShareValidationError ||
-    error instanceof MentorValidationError ||
     error instanceof CommentValidationError ||
-    error instanceof UserValidationError ||
     error instanceof InstrumentValidationError ||
     error instanceof DashboardValidationError ||
     error instanceof ToolsValidationError ||

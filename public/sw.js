@@ -78,7 +78,7 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // API responses (including owner, mentor and public media proxies) are
+  // API responses (including owner and public media proxies) are
   // network-only. Their Cache-Control headers additionally use no-store.
   if (url.pathname.startsWith("/api/")) return;
 
