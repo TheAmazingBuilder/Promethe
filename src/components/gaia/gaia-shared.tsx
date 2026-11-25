@@ -38,7 +38,8 @@ export type GaiaBlockType =
   | "code"
   | "table"
   | "image"
-  | "ref";
+  | "ref"
+  | "pattern";
 
 export type GaiaCalloutTone = "info" | "tip" | "warn" | "risk";
 
@@ -71,6 +72,7 @@ export interface GaiaBlock {
   caption?: string;
   rows?: string[][];
   ref?: GaiaBlockRef;
+  patternId?: string;
 }
 
 export interface GaiaLessonRef {
