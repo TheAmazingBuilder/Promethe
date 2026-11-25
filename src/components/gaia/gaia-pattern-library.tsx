@@ -164,6 +164,8 @@ function PatternCard({
       data-testid={`gaia-pattern-card-${pattern.id}`}
       aria-pressed={selected}
       onClick={onSelect}
+      draggable
+      onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-promethe-gaia-pattern", pattern.id); }}
       className={`min-w-0 rounded-lg border p-3 text-left transition-colors hover:border-emerald-500/50 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-emerald-500/60 bg-emerald-500/5" : "border-border bg-card"}`}
     >
       <div className="mb-2 flex min-h-14 items-center justify-center rounded-md bg-muted/40 px-2">
@@ -220,9 +222,11 @@ function PatternDetails({ pattern }: { pattern: CandlestickPattern }) {
 export function GaiaPatternLibrary({
   open,
   onOpenChange,
+  onInsert,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onInsert?: (patternId: string) => void;
 }) {
   const [query, setQuery] = React.useState("");
   const [category, setCategory] = React.useState<CandlestickPatternCategory | "all">("all");
@@ -326,7 +330,10 @@ export function GaiaPatternLibrary({
 
           <div className="min-w-0 p-4 sm:p-5">
             {selected ? (
-              <PatternDetails pattern={selected} />
+              <>
+                <PatternDetails pattern={selected} />
+                {onInsert ? <Button type="button" size="sm" className="mt-3" onClick={() => { onInsert(selected.id); onOpenChange(false); }}>Insérer dans la note</Button> : null}
+              </>
             ) : (
               <div className="flex min-h-64 items-center justify-center text-center text-sm text-muted-foreground">
                 Select a pattern to view its details.
