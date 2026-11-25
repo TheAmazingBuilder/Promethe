@@ -24,6 +24,7 @@ import {
   parseJsonStringArray,
   searchSnippet,
   textOfBlocks,
+  searchTextOfBlocks,
   type GaiaBlock,
   type GaiaRefKind,
 } from "@/lib/gaia/content";
@@ -553,7 +554,7 @@ export async function listNotes(
       const tagIds = parseJsonStringArray(note.tagIds);
       return (
         note.title.toLowerCase().includes(q) ||
-        textOfBlocks(blocks).toLowerCase().includes(q) ||
+        searchTextOfBlocks(blocks).toLowerCase().includes(q) ||
         tagNamesOf(tagIds, tags).some((name) =>
           name.toLowerCase().includes(q),
         ) ||
@@ -1189,7 +1190,7 @@ export async function searchNotes(
         blocks,
         title: note.title,
         tagNames: tagNamesOf(parseJsonStringArray(note.tagIds), tags),
-        bodyText: textOfBlocks(blocks),
+        bodyText: searchTextOfBlocks(blocks),
         updatedAt: note.updatedAt.toISOString(),
       };
     }),
