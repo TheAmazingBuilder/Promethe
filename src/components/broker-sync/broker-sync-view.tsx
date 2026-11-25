@@ -665,6 +665,7 @@ function ActivitySection() {
     DUPLICATE: "border-border text-muted-foreground",
     REJECTED: "border-red-500/40 text-red-700 dark:text-red-400",
     FAILED: "border-red-500/40 text-red-700 dark:text-red-400",
+    PROCESSING: "border-amber-500/40 text-amber-700 dark:text-amber-400",
   };
 
   return (

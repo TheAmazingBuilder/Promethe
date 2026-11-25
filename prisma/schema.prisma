@@ -1441,8 +1441,16 @@ model SyncEventLog {
   type         String
   receivedAt   DateTime  @default(now()) @map("received_at")
   processedAt  DateTime? @map("processed_at")
-  /// PROCESSED | DUPLICATE | REJECTED | FAILED
+  /// PROCESSING | PROCESSED | REJECTED | FAILED (see src/lib/sync/process.ts
+  /// state machine; DUPLICATE is a response, never a stored status)
   status       String
+  /// Lease: the PROCESSING reservation expires at this time. A PROCESSING row
+  /// past its lease is abandoned (crash) and may be reclaimed. Null on
+  /// terminal rows (PROCESSED / REJECTED) and on retryable FAILED rows.
+  leaseExpiresAt DateTime? @map("lease_expires_at")
+  /// Attempts to process this event (claims). Bounded by
+  /// SYNC_EVENT_MAX_ATTEMPTS; exhausted retries become REJECTED.
+  attempts       Int       @default(0)
   errorCode    String?   @map("error_code")
   payloadJson  String?   @map("payload_json")
 

@@ -2427,7 +2427,8 @@
         "processed": "Processed",
         "duplicate": "Duplicate",
         "rejected": "Rejected",
-        "failed": "Failed"
+        "failed": "Failed",
+        "processing": "Processing"
       }
     }
   },
