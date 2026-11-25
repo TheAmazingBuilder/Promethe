@@ -11,6 +11,7 @@
  */
 import * as React from "react";
 import {
+  CandlestickChart,
   Download,
   FileDown,
   History,
@@ -71,6 +72,7 @@ import {
 import { IconPicker, RefPickerDialog, VersionsDialog } from "./gaia-editor-dialogs";
 import { NotePrintDialog } from "./gaia-print";
 import { GaiaLinkedNotesSection } from "./gaia-linked-notes";
+import { GaiaPatternLibrary } from "./gaia-pattern-library";
 import {
   clearLocalGaiaDraft,
   gaiaSaveRetryDelay,
@@ -239,6 +241,7 @@ export function GaiaEditor({
   const [savedAt, setSavedAt] = React.useState<string | null>(null);
   const [versionsOpen, setVersionsOpen] = React.useState(false);
   const [printOpen, setPrintOpen] = React.useState(false);
+  const [patternLibraryOpen, setPatternLibraryOpen] = React.useState(false);
   const [refPicker, setRefPicker] = React.useState<{
     open: boolean;
     kind: GaiaRefKind | "";
@@ -1059,6 +1062,17 @@ export function GaiaEditor({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2.5 sm:px-6">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            data-testid="gaia-open-pattern-library"
+            onClick={() => setPatternLibraryOpen(true)}
+          >
+            <CandlestickChart className="size-3.5" aria-hidden="true" />
+            Pattern library
+          </Button>
           <Select
             value={draft.folderId ?? "none"}
             onValueChange={(v) =>
@@ -1250,6 +1264,7 @@ export function GaiaEditor({
         />
       ) : null}
 
+      <GaiaPatternLibrary open={patternLibraryOpen} onOpenChange={setPatternLibraryOpen} />
       <RefPickerDialog
         open={refPicker.open}
         onOpenChange={(open) => setRefPicker((prev) => ({ ...prev, open }))}
