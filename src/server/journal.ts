@@ -168,14 +168,16 @@ export async function deleteJournalEntry(
   return updated.count > 0;
 }
 
-/** Days (YYYY-MM-DD) with a journal entry - calendar markers. */
+/** Days (YYYY-MM-DD) with a journal entry - calendar markers. Soft-deleted
+ * entries are excluded explicitly (the trash extension also filters them,
+ * but the calendar must never depend on that alone). */
 export async function journalDays(
   userId: string,
   first: string,
   last: string
 ): Promise<Set<string>> {
   const rows = await db.journalEntry.findMany({
-    where: { userId, date: { gte: first, lte: last } },
+    where: { userId, deletedAt: null, date: { gte: first, lte: last } },
     select: { date: true },
   });
   return new Set(rows.map((r) => r.date));
@@ -306,7 +308,10 @@ export async function deleteJournalTemplate(userId: string, id: string): Promise
 export async function getJournalExportData(userId: string, from: string, to: string) {
   const [entries, periodReviews, account] = await Promise.all([
     db.journalEntry.findMany({
-      where: { userId, date: { gte: from, lte: to } },
+      // Soft-deleted entries never leak into the exported PDF (explicit
+      // filter - the trash extension also filters them, but the export
+      // must never depend on that alone).
+      where: { userId, deletedAt: null, date: { gte: from, lte: to } },
       orderBy: { date: "asc" },
     }),
     db.journalPeriodReview.findMany({

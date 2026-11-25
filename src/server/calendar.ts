@@ -357,6 +357,7 @@ export async function getYearDays(
     db.journalEntry.findMany({
       where: {
         userId,
+        deletedAt: null,
         date: {
           gte: `${year}-01-01`,
           lte: `${year}-12-31`,
