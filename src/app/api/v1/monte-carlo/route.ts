@@ -49,7 +49,13 @@ export async function POST(req: Request) {
           ? "The selected account must have a positive initial balance."
           : error.code === "MONTE_CARLO_OUTCOME_OUT_OF_RANGE"
             ? "A historical R-multiple is outside the supported range of -20R to +20R. Review the trade data before simulating."
-            : "At least five closed trades with a valid R-multiple are required.";
+            : error.code === "MONTE_CARLO_HYPOTHETICAL_INVALID"
+              ? "Hypothetical parameters are invalid. Check the win rate and the average win and loss."
+              : error.code === "MONTE_CARLO_RUIN_BEHAVIOR_INVALID"
+                ? "Ruin behavior is invalid."
+                : error.code === "MONTE_CARLO_INSUFFICIENT_HISTORY"
+                  ? "At least five closed trades with a valid R-multiple are required."
+                  : "Simulation parameters are invalid.";
       return NextResponse.json({ error: error.code, message }, { status: error.status });
     }
     return apiError(error, "monte-carlo");
