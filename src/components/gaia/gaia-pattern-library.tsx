@@ -235,10 +235,6 @@ export function GaiaPatternLibrary({
   );
   const selected = patterns.find((pattern) => pattern.id === selectedId) ?? patterns[0] ?? null;
 
-  React.useEffect(() => {
-    if (selected && selected.id !== selectedId) setSelectedId(selected.id);
-  }, [selected, selectedId]);
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
