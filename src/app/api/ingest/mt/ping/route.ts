@@ -40,7 +40,10 @@ export async function GET(req: Request) {
     IP_WINDOW_MS
   );
   if (!ipBucket.allowed) {
-    return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
+    return NextResponse.json(
+      { error: "RATE_LIMITED", message: "Too many requests, please wait." },
+      { status: 429 }
+    );
   }
 
   const tokenHash = hashToken(rawToken);

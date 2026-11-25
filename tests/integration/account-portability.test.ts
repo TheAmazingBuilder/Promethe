@@ -481,6 +481,14 @@ beforeAll(async () => {
 
 afterAll(async () => {
   storage.restore();
+  // Delete the fixture users (cascade removes their rows everywhere): a
+  // re-run of this file alone on a non-fresh database must not fail in
+  // beforeAll on the unique-email constraint (lot 16). The filter keeps
+  // the cleanup a no-op if beforeAll failed partway (e.g. Cara's row is
+  // already gone - the deletion flow under test deletes her).
+  await db.user.deleteMany({
+    where: { id: { in: [aliceId, bobId, caraId].filter(Boolean) } },
+  });
   await db.$disconnect();
 });
 

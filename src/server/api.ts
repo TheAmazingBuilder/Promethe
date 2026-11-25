@@ -4,6 +4,7 @@
  * consistent envelopes and raw Prisma/provider errors NEVER reach the client.
  */
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { UnauthorizedError } from "@/server/session";
 import { TradeValidationError } from "@/server/trades";
 import { TemplateValidationError } from "@/server/templates";
@@ -98,7 +99,7 @@ const CODE_MESSAGES: Record<string, string> = {
     "Invalid Telegram bot token (expected format: <id>:<token>).",
   INVALID_CHAT_ID:
     "Invalid chat ID (a number, or @channel name).",
-  INVALID_QUIET_HOURS: "Heures calmes invalides (format HH:mm).",
+  INVALID_QUIET_HOURS: "Invalid quiet hours (format HH:mm).",
   INVALID_PRIVACY_LEVEL: "Invalid privacy level.",
   INVALID_EVENT_TYPE: "Invalid event type.",
   INVALID_VALUE: "Invalid value.",
@@ -127,10 +128,22 @@ function isCoded(error: unknown): error is CodedError {
   );
 }
 
+/**
+ * Correlation id for one error response: the client can quote it in a bug
+ * report and the matching server log line carries the same id, so a failed
+ * request can be diagnosed without logging (or returning) any user data.
+ * One id per error response - there is no middleware to mint a per-request
+ * id, and apiError is the single funnel every route error passes through.
+ */
 export function apiError(error: unknown, route: string): NextResponse {
+  const requestId = randomUUID();
   if (error instanceof UnauthorizedError) {
     return NextResponse.json(
-      { error: "UNAUTHORIZED", message: "Session missing or expired." },
+      {
+        error: "UNAUTHORIZED",
+        message: "Session missing or expired.",
+        requestId,
+      },
       { status: 401 }
     );
   }
@@ -139,13 +152,18 @@ export function apiError(error: unknown, route: string): NextResponse {
       {
         error: error.code,
         message: CODE_MESSAGES[error.code] ?? "Invalid request.",
+        requestId,
       },
       { status: error.status }
     );
   }
-  console.error(`[api/${route}] failed:`, error);
+  console.error(`[api/${route}] failed [${requestId}]:`, error);
   return NextResponse.json(
-    { error: "INTERNAL", message: "An error occurred. Please try again." },
+    {
+      error: "INTERNAL",
+      message: "An error occurred. Please try again.",
+      requestId,
+    },
     { status: 500 }
   );
 }
