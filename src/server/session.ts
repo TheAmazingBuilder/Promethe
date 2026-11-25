@@ -5,6 +5,12 @@
  *
  * The cookie retains the raw bearer token; AuthSession.id stores a versioned
  * SHA-256 digest. Legacy rows are upgraded lazily on successful access.
+ *
+ * CSRF posture (no middleware, lot 15): the cookie is SameSite=Lax, so a
+ * cross-site POST never carries it, and NO authenticated GET route mutates
+ * state (the full export is POST for exactly this reason; the only
+ * state-changing GET is the Google OAuth callback, guarded by the state
+ * parameter + PKCE). Enforced by tests/unit/csrf-posture.test.ts.
  */
 import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";

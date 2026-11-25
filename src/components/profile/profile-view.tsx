@@ -299,7 +299,7 @@ function AccountTab() {
 
   const download = useMutation({
     mutationFn: async () => {
-      const res = await fetch("/api/v1/account/export");
+      const res = await fetch("/api/v1/account/export", { method: "POST" });
       if (res.ok) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);

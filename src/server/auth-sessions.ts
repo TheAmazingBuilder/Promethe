@@ -28,8 +28,11 @@ export async function listSessions(
   userId: string,
   currentToken: string | undefined
 ): Promise<SessionRow[]> {
+  // Expired rows are not active sessions: they never appear in the list
+  // (they are purged opportunistically on login and on read).
+  const now = new Date();
   const rows = await db.authSession.findMany({
-    where: { userId },
+    where: { userId, expiresAt: { gt: now } },
     orderBy: { createdAt: "desc" },
   });
   return rows.map((row) => ({

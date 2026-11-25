@@ -5,9 +5,14 @@
  *
  * Principles:
  *  - COMPLETE: every model with a user relation is exported (see manifest).
+ *    Gaïa notes, dashboards, playbook data, journal reviews, preferences,
+ *    charts, analytics, changelog, drafts and integrations are included
+ *    alongside trades and journal entries (lot 15 closed the gaps).
  *  - STRUCTURAL: secrets never leave the server — passwordHash, token hashes
  *    (broker connections, share links) and live session
  *    ids are excluded BY QUERY (select lists), not filtered afterwards.
+ *    Push subscription endpoint + keys (browser push credentials) and
+ *    integration endpoint secrets are metadata-only for the same reason.
  *  - EXACT: decimals are serialized as strings (never floats), dates as ISO.
  *  - RATE-LIMITED: one full export per 24 h (DB bucket, key = HMAC of userId).
  *  - LOGGED: DataExportLog row (kind FULL, size, schema version) for the
@@ -105,6 +110,40 @@ export async function buildUserExport(userId: string): Promise<{
     consentRecords,
     dataExportLogs,
     deletionRequest,
+    // ── Lot 15: every remaining user-owned model ──────────────────────────
+    notes,
+    noteFolders,
+    noteTags,
+    noteTemplates,
+    dashboards,
+    setups,
+    playbookRules,
+    checklistTemplates,
+    journalPeriodReviews,
+    journalTemplates,
+    customMetrics,
+    savedCharts,
+    chartAnnotations,
+    benchmarkProfiles,
+    displayPreference,
+    appearance,
+    shortcuts,
+    columnPreferences,
+    customFieldDefinitions,
+    dashboardTemplates,
+    marketSessionSettings,
+    exitPlans,
+    exposureAlertSettings,
+    lifecycleStats,
+    scoreSnapshots,
+    anomalies,
+    weeklyPlanActions,
+    fxRates,
+    changeLogs,
+    batchDrafts,
+    integrationEndpoints,
+    integrationSubscriptions,
+    outboundMessages,
   ] = await Promise.all([
     db.account.findMany({ where: { userId } }),
     db.instrument.findMany({ where: { userId } }),
@@ -199,7 +238,18 @@ export async function buildUserExport(userId: string): Promise<{
     db.tradeComment.findMany({ where: { ownerId: userId } }),
     db.notificationLog.findMany({ where: { userId } }),
     db.offlineSyncLog.findMany({ where: { userId } }),
-    db.pushSubscription.findMany({ where: { userId } }),
+    // Push endpoint + keys ARE browser push credentials (a bearer URL plus
+    // encryption keys): metadata only, never the values. The user re-enables
+    // push in the browser instead of importing credentials.
+    db.pushSubscription.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        userAgent: true,
+        createdAt: true,
+        lastSeenAt: true,
+      },
+    }),
     db.reminderSetting.findMany({ where: { userId } }),
     // Session ids ARE the bearer credentials — never exported. Metadata only.
     db.authSession.findMany({
@@ -209,6 +259,57 @@ export async function buildUserExport(userId: string): Promise<{
     db.consentRecord.findMany({ where: { userId } }),
     db.dataExportLog.findMany({ where: { userId } }),
     db.accountDeletionRequest.findUnique({ where: { userId } }),
+    // ── Lot 15 loads (one query per remaining user-owned model) ──────────
+    db.note.findMany({ where: { userId }, include: { versions: true } }),
+    db.noteFolder.findMany({ where: { userId } }),
+    db.noteTag.findMany({ where: { userId } }),
+    db.noteTemplate.findMany({ where: { userId } }),
+    db.dashboard.findMany({ where: { userId }, include: { widgets: true } }),
+    db.setup.findMany({ where: { userId } }),
+    db.playbookRule.findMany({ where: { userId } }),
+    db.checklistTemplate.findMany({ where: { userId } }),
+    db.journalPeriodReview.findMany({ where: { userId } }),
+    db.journalTemplate.findMany({ where: { userId } }),
+    db.customMetric.findMany({ where: { userId } }),
+    db.savedChart.findMany({ where: { userId } }),
+    db.chartAnnotation.findMany({ where: { userId } }),
+    db.benchmarkProfile.findMany({ where: { userId } }),
+    db.userDisplayPreference.findUnique({ where: { userId } }),
+    db.userAppearance.findUnique({ where: { userId } }),
+    db.keyboardShortcut.findMany({ where: { userId } }),
+    db.tableColumnPreference.findMany({ where: { userId } }),
+    db.customFieldDefinition.findMany({ where: { userId } }),
+    db.userDashboardTemplate.findMany({ where: { userId } }),
+    db.marketSessionSetting.findMany({ where: { userId } }),
+    db.exitPlan.findMany({ where: { userId } }),
+    db.exposureAlertSetting.findUnique({ where: { userId } }),
+    db.tradeLifecycleStats.findMany({ where: { userId } }),
+    db.traderScoreSnapshot.findMany({ where: { userId } }),
+    db.tradeAnomaly.findMany({ where: { userId } }),
+    db.weeklyPlanAction.findMany({ where: { userId } }),
+    db.fxRate.findMany({ where: { userId } }),
+    db.changeLog.findMany({ where: { userId } }),
+    db.batchEntryDraft.findMany({ where: { userId } }),
+    // Integration endpoint secret is AES-256-GCM ciphertext of the webhook
+    // URL / bot token: metadata only, never the ciphertext (the display hint
+    // is left out too - it exists to recognize the secret, not to travel).
+    db.integrationEndpoint.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        type: true,
+        label: true,
+        chatId: true,
+        isEnabled: true,
+        consecutiveFailures: true,
+        lastErrorAt: true,
+        lastSentAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    }),
+    db.integrationSubscription.findMany({ where: { userId } }),
+    db.outboundMessage.findMany({ where: { userId } }),
   ]);
 
   // Screenshot metadata lives on trades; private objects are read from Supabase Storage.
@@ -247,6 +348,16 @@ export async function buildUserExport(userId: string): Promise<{
     comments: commentsAuthored.length + commentsOnMyTrades.length,
     notifications: notifications.length,
     consentRecords: consentRecords.length,
+    gaiaNotes: notes.length,
+    gaiaNoteVersions: notes.reduce((n, note) => n + note.versions.length, 0),
+    dashboards: dashboards.length,
+    setups: setups.length,
+    playbookRules: playbookRules.length,
+    journalPeriodReviews: journalPeriodReviews.length,
+    savedCharts: savedCharts.length,
+    chartAnnotations: chartAnnotations.length,
+    changeLogs: changeLogs.length,
+    integrationEndpoints: integrationEndpoints.length,
   };
 
   const manifest = {
@@ -261,6 +372,8 @@ export async function buildUserExport(userId: string): Promise<{
       "passwordHash - one-way scrypt hash, never disclosed",
       "tokenHash (broker connections, share links) - server-side HMAC digests, useless without the pepper",
       "authSession ids - live bearer credentials",
+      "push subscription endpoint + keys - browser push credentials, re-enable push in the browser instead",
+      "secretEncrypted (integration endpoints) - AES-256-GCM webhook secrets, never disclosed",
       "raw tokens of any kind - never stored by the app",
     ],
   };
@@ -282,6 +395,10 @@ export async function buildUserExport(userId: string): Promise<{
     "                       changes, market context",
     "  screenshots/         original screenshot files (WebP)",
     "  journal.json         journal entries",
+    "  journal-reviews.json period reviews + journal templates",
+    "  gaia.json            Gaïa notes + folders + tags + templates + versions",
+    "  dashboards.json      dashboards + widgets",
+    "  playbook.json        setups + playbook rules + checklist templates",
     "  rules.json           trading rules",
     "  goals.json           goals",
     "  views.json           saved views",
@@ -297,7 +414,19 @@ export async function buildUserExport(userId: string): Promise<{
     "  sharing.json         share links (metadata)",
     "  comments.json        comments (written on my trades)",
     "  notifications.json   in-app notifications",
-    "  misc.json            push subscriptions, reminders, offline sync,",
+    "  misc.json            push subscriptions (metadata), reminders,",
+    "                      offline sync",
+    "  preferences.json     display preferences, appearance, shortcuts,",
+    "                      table columns, custom fields, dashboard templates,",
+    "                      market sessions, exit plans, exposure alerts",
+    "  charts.json          saved charts, annotations, benchmarks",
+    "  analytics.json       lifecycle stats, trader score snapshots,",
+    "                      anomalies, weekly plan actions, FX rates,",
+    "                      custom metrics",
+    "  changelog.json       change history (undo snapshots)",
+    "  drafts.json          batch entry drafts",
+    "  integrations.json    integration endpoints (metadata), subscriptions,",
+    "                      outbound messages",
     "  consents.json        consents (Terms, privacy)",
     "  exports.json         your export history",
     "  deletion.json        pending deletion request (if any)",
@@ -327,6 +456,25 @@ export async function buildUserExport(userId: string): Promise<{
     "tags.json": jsonEntry(plain(tags)),
     "trades.json": jsonEntry(plain(trades)),
     "journal.json": jsonEntry(plain(journalEntries)),
+    "journal-reviews.json": jsonEntry(
+      plain({ periodReviews: journalPeriodReviews, templates: journalTemplates })
+    ),
+    "gaia.json": jsonEntry(
+      plain({
+        notes,
+        folders: noteFolders,
+        tags: noteTags,
+        templates: noteTemplates,
+      })
+    ),
+    "dashboards.json": jsonEntry(plain(dashboards)),
+    "playbook.json": jsonEntry(
+      plain({
+        setups,
+        playbookRules,
+        checklistTemplates,
+      })
+    ),
     "rules.json": jsonEntry(plain(tradingRules)),
     "goals.json": jsonEntry(plain(goals)),
     "views.json": jsonEntry(plain(savedViews)),
@@ -368,9 +516,48 @@ export async function buildUserExport(userId: string): Promise<{
     "notifications.json": jsonEntry(plain(notifications)),
     "misc.json": jsonEntry(
       plain({
-        pushSubscriptions,
+        pushSubscriptions, // metadata only (endpoint + keys excluded by select)
         reminderSettings,
         offlineSyncLogs,
+      })
+    ),
+    "preferences.json": jsonEntry(
+      plain({
+        displayPreference,
+        appearance,
+        shortcuts,
+        columnPreferences,
+        customFieldDefinitions,
+        dashboardTemplates,
+        marketSessionSettings,
+        exitPlans,
+        exposureAlertSettings,
+      })
+    ),
+    "charts.json": jsonEntry(
+      plain({
+        savedCharts,
+        annotations: chartAnnotations,
+        benchmarks: benchmarkProfiles,
+      })
+    ),
+    "analytics.json": jsonEntry(
+      plain({
+        lifecycleStats,
+        scoreSnapshots,
+        anomalies,
+        weeklyPlanActions,
+        fxRates,
+        customMetrics,
+      })
+    ),
+    "changelog.json": jsonEntry(plain(changeLogs)),
+    "drafts.json": jsonEntry(plain(batchDrafts)),
+    "integrations.json": jsonEntry(
+      plain({
+        endpoints: integrationEndpoints, // secretEncrypted excluded by select
+        subscriptions: integrationSubscriptions,
+        outboundMessages,
       })
     ),
     "consents.json": jsonEntry(plain(consentRecords)),
