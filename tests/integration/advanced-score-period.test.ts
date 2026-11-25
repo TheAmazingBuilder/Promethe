@@ -52,6 +52,13 @@ let accountEId: string;
 /** Exit dates of user C's account-1 trades (days before now). */
 const C1_AGES_DAYS = [2, 4, 6, 8, 12, 45, 120, 400];
 
+/**
+ * Exit dates of ALL of user C's trades (both accounts). Account 2 holds
+ * one extra trade, 3 days ago, so a no-account query counts it in every
+ * period it falls in — expected counts must include it.
+ */
+const C_ALL_AGES_DAYS = [...C1_AGES_DAYS, 3];
+
 const now = new Date();
 const daysAgo = (n: number) =>
   new Date(Date.UTC(
@@ -68,11 +75,12 @@ const cutoff90 = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 const currentMonth = now.toISOString().slice(0, 7);
 
 const c1ExitDates = C1_AGES_DAYS.map(daysAgo);
+const cAllExitDates = C_ALL_AGES_DAYS.map(daysAgo);
 const expectedCount = (period: AnalyticsPeriod) => {
-  if (period === "30d") return c1ExitDates.filter((d) => d >= cutoff30).length;
-  if (period === "90d") return c1ExitDates.filter((d) => d >= cutoff90).length;
-  if (period === "ytd") return c1ExitDates.filter((d) => d >= ytdStart).length;
-  return c1ExitDates.length;
+  if (period === "30d") return cAllExitDates.filter((d) => d >= cutoff30).length;
+  if (period === "90d") return cAllExitDates.filter((d) => d >= cutoff90).length;
+  if (period === "ytd") return cAllExitDates.filter((d) => d >= ytdStart).length;
+  return cAllExitDates.length;
 };
 
 async function makeUser(email: string) {
