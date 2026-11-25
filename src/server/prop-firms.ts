@@ -18,9 +18,18 @@ import {
   type PropPayoutPatch,
   type PropPhaseResultInput,
 } from "@/lib/validations/prop-firms";
+import {
+  expenseSnapshot,
+  payoutSnapshot,
+  validatePayoutDates,
+  type PropFinanceAuditAction,
+  type PropFinanceAuditKind,
+  type PropFinanceMovementSnapshot,
+} from "@/lib/prop/finance-audit";
 import type {
   PropChallengeDTO,
   PropExpenseDTO,
+  PropFinanceAuditDTO,
   PropFirmRuleSetDTO,
   PropFirmWorkspacePayload,
   PropPayoutDTO,
@@ -30,13 +39,71 @@ import type {
 const CHALLENGE_INCLUDE = {
   account: true,
   phaseResults: { orderBy: { startDate: "asc" as const } },
-  payouts: { orderBy: { requestedAt: "desc" as const } },
-  expenses: { orderBy: { date: "desc" as const } },
+  // §13: soft-deleted movements never appear in lists or totals. Their
+  // data survives only in the finance audit trail.
+  payouts: { where: { deletedAt: null }, orderBy: { requestedAt: "desc" as const } },
+  expenses: { where: { deletedAt: null }, orderBy: { date: "desc" as const } },
 } as const;
+
+/**
+ * §13 - a payout date rule was broken (requested before the challenge
+ * started, or received before requested). Mapped to a 422 by apiError via
+ * CODE_MESSAGES; never a raw stack trace to the client.
+ */
+export class PropFinanceValidationError extends Error {
+  readonly code: "PAYOUT_BEFORE_CHALLENGE_START" | "RECEIVED_BEFORE_REQUESTED";
+  readonly status = 422;
+
+  constructor(code: PropFinanceValidationError["code"]) {
+    super(code);
+    this.name = "PropFinanceValidationError";
+    this.code = code;
+  }
+}
+
+async function writeFinanceAudit(
+  tx: Prisma.TransactionClient,
+  input: {
+    userId: string;
+    challengeId: string | null;
+    kind: PropFinanceAuditKind;
+    movementId: string;
+    action: PropFinanceAuditAction;
+    before: PropFinanceMovementSnapshot | null;
+    after: PropFinanceMovementSnapshot | null;
+  },
+): Promise<void> {
+  await tx.propFinanceAudit.create({
+    data: {
+      userId: input.userId,
+      challengeId: input.challengeId,
+      kind: input.kind,
+      movementId: input.movementId,
+      action: input.action,
+      beforeJson: input.before == null ? null : JSON.stringify(input.before),
+      afterJson: input.after == null ? null : JSON.stringify(input.after),
+    },
+  });
+}
+
+function parseAuditSnapshot(raw: string | null): PropFinanceMovementSnapshot | null {
+  if (raw == null) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const kind = (parsed as { kind?: unknown }).kind;
+    if (kind !== "PAYOUT" && kind !== "EXPENSE") return null;
+    return parsed as PropFinanceMovementSnapshot;
+  } catch {
+    return null;
+  }
+}
 
 type ChallengeRow = Prisma.PropChallengeGetPayload<{ include: typeof CHALLENGE_INCLUDE }>;
 type RuleSetRow = Prisma.PropFirmRuleSetGetPayload<Record<string, never>>;
 
+function day(date: Date): string;
+function day(date: Date | null): string | null;
 function day(date: Date | null): string | null {
   return date == null ? null : date.toISOString().slice(0, 10);
 }
@@ -332,41 +399,49 @@ export async function createPropPayout(
 ): Promise<PropPayoutDTO | null> {
   const challenge = await db.propChallenge.findFirst({
     where: { id: challengeId, userId },
-    select: { id: true },
+    select: { id: true, startDate: true },
   });
   if (!challenge) return null;
+  // §13 date rules: a payout cannot predate the challenge, and it cannot
+  // be received before it was requested. Violations are 422s, not 404s.
+  const requestedDay = input.requestedAt ?? day(new Date());
+  const dateError = validatePayoutDates({
+    startDate: day(challenge.startDate),
+    requestedAt: requestedDay,
+    receivedAt: input.receivedAt ?? null,
+  });
+  if (dateError != null) throw new PropFinanceValidationError(dateError);
   const netAmount = toD(input.grossAmount).times(input.profitSplitPercent).div(100).toString();
-  const row = await db.propPayout.create({
-    data: {
+  const row = await db.$transaction(async (tx) => {
+    const created = await tx.propPayout.create({
+      data: {
+        userId,
+        challengeId,
+        requestedAt: new Date(`${requestedDay}T00:00:00.000Z`),
+        receivedAt: input.receivedAt
+          ? new Date(`${input.receivedAt}T00:00:00.000Z`)
+          : null,
+        grossAmount: input.grossAmount,
+        profitSplitPercent: String(input.profitSplitPercent),
+        netAmount,
+        currency: input.currency,
+        method: input.method ?? null,
+        status: input.status,
+        note: input.note ?? null,
+      },
+    });
+    await writeFinanceAudit(tx, {
       userId,
       challengeId,
-      requestedAt: input.requestedAt
-        ? new Date(`${input.requestedAt}T00:00:00.000Z`)
-        : new Date(),
-      receivedAt: input.receivedAt
-        ? new Date(`${input.receivedAt}T00:00:00.000Z`)
-        : null,
-      grossAmount: input.grossAmount,
-      profitSplitPercent: String(input.profitSplitPercent),
-      netAmount,
-      currency: input.currency,
-      method: input.method ?? null,
-      status: input.status,
-      note: input.note ?? null,
-    },
+      kind: "PAYOUT",
+      movementId: created.id,
+      action: "CREATED",
+      before: null,
+      after: payoutSnapshot(created),
+    });
+    return created;
   });
-  return {
-    id: row.id,
-    requestedAt: row.requestedAt.toISOString(),
-    receivedAt: row.receivedAt?.toISOString() ?? null,
-    grossAmount: row.grossAmount.toString(),
-    profitSplitPercent: row.profitSplitPercent.toString(),
-    netAmount: row.netAmount.toString(),
-    currency: row.currency,
-    method: row.method,
-    status: row.status,
-    note: row.note,
-  };
+  return toPayoutDTO(row);
 }
 
 export async function createPropExpense(
@@ -380,100 +455,175 @@ export async function createPropExpense(
     });
     if (!challenge) return null;
   }
-  const row = await db.propExpense.create({
-    data: {
+  const row = await db.$transaction(async (tx) => {
+    const created = await tx.propExpense.create({
+      data: {
+        userId,
+        challengeId: input.challengeId ?? null,
+        type: input.type,
+        amount: input.amount,
+        currency: input.currency,
+        date: new Date(`${input.date}T00:00:00.000Z`),
+        note: input.note ?? null,
+      },
+    });
+    await writeFinanceAudit(tx, {
       userId,
       challengeId: input.challengeId ?? null,
-      type: input.type,
-      amount: input.amount,
-      currency: input.currency,
-      date: new Date(`${input.date}T00:00:00.000Z`),
-      note: input.note ?? null,
-    },
+      kind: "EXPENSE",
+      movementId: created.id,
+      action: "CREATED",
+      before: null,
+      after: expenseSnapshot(created),
+    });
+    return created;
   });
-  return {
-    id: row.id,
-    challengeId: row.challengeId,
-    type: row.type,
-    amount: row.amount.toString(),
-    currency: row.currency,
-    date: row.date.toISOString().slice(0, 10),
-    note: row.note,
-  };
+  return toExpenseDTO(row);
 }
 
-// ── Lot 5 — payouts and expenses: correct or remove a recorded movement ──
-// The patch schemas already existed; only create was wired. A payout or an
-// expense recorded with a wrong amount, split or status could previously
-// only be fixed by deleting the whole challenge. Neither payouts nor
-// expenses feed any report total (they are only listed on the challenge),
-// so a hard delete removes no reported figure.
+// ── §13 - payouts and expenses: correct, remove or restore a movement ──
+// Every change writes a permanent audit entry (before/after snapshots).
+// Deletes are logical: the row stays with deletedAt set, totals and lists
+// read live rows only, and the movement can be restored from the history.
+// The old hard delete silently changed the evaluation fee totals, which
+// are displayed on the challenge - that is the defect this section fixes.
 export async function updatePropPayout(
   userId: string,
   challengeId: string,
   payoutId: string,
   patch: PropPayoutPatch,
 ): Promise<PropPayoutDTO | null> {
-  const existing = await db.propPayout.findFirst({
-    where: { id: payoutId, challengeId, userId },
+  const [challenge, existing] = await Promise.all([
+    db.propChallenge.findFirst({
+      where: { id: challengeId, userId },
+      select: { startDate: true },
+    }),
+    db.propPayout.findFirst({
+      where: { id: payoutId, challengeId, userId, deletedAt: null },
+    }),
+  ]);
+  if (!challenge || !existing) return null;
+  // §13 date rules on the merged dates (a patch may move either date).
+  const requestedDay =
+    patch.requestedAt !== undefined ? patch.requestedAt : day(existing.requestedAt);
+  const receivedDay =
+    patch.receivedAt !== undefined
+      ? patch.receivedAt
+      : existing.receivedAt == null
+        ? null
+        : day(existing.receivedAt);
+  const dateError = validatePayoutDates({
+    startDate: day(challenge.startDate),
+    requestedAt: requestedDay,
+    receivedAt: receivedDay,
   });
-  if (!existing) return null;
+  if (dateError != null) throw new PropFinanceValidationError(dateError);
   const grossAmount =
     patch.grossAmount !== undefined ? patch.grossAmount : existing.grossAmount.toString();
   const profitSplitPercent =
     patch.profitSplitPercent !== undefined
       ? patch.profitSplitPercent
       : Number(existing.profitSplitPercent);
-  const row = await db.propPayout.update({
-    where: { id: payoutId },
-    data: {
-      ...(patch.grossAmount !== undefined ? { grossAmount: patch.grossAmount } : {}),
-      ...(patch.profitSplitPercent !== undefined
-        ? { profitSplitPercent: String(patch.profitSplitPercent) }
-        : {}),
-      netAmount: toD(grossAmount).times(profitSplitPercent).div(100).toString(),
-      ...(patch.currency !== undefined ? { currency: patch.currency } : {}),
-      ...(patch.requestedAt !== undefined
-        ? { requestedAt: new Date(`${patch.requestedAt}T00:00:00.000Z`) }
-        : {}),
-      ...(patch.receivedAt !== undefined
-        ? {
-            receivedAt: patch.receivedAt
-              ? new Date(`${patch.receivedAt}T00:00:00.000Z`)
-              : null,
-          }
-        : {}),
-      ...(patch.method !== undefined ? { method: patch.method ?? null } : {}),
-      ...(patch.status !== undefined ? { status: patch.status } : {}),
-      ...(patch.note !== undefined ? { note: patch.note ?? null } : {}),
-    },
+  const before = payoutSnapshot(existing);
+  const row = await db.$transaction(async (tx) => {
+    const updated = await tx.propPayout.update({
+      where: { id: payoutId },
+      data: {
+        ...(patch.grossAmount !== undefined ? { grossAmount: patch.grossAmount } : {}),
+        ...(patch.profitSplitPercent !== undefined
+          ? { profitSplitPercent: String(patch.profitSplitPercent) }
+          : {}),
+        netAmount: toD(grossAmount).times(profitSplitPercent).div(100).toString(),
+        ...(patch.currency !== undefined ? { currency: patch.currency } : {}),
+        ...(patch.requestedAt !== undefined
+          ? { requestedAt: new Date(`${patch.requestedAt}T00:00:00.000Z`) }
+          : {}),
+        ...(patch.receivedAt !== undefined
+          ? {
+              receivedAt: patch.receivedAt
+                ? new Date(`${patch.receivedAt}T00:00:00.000Z`)
+                : null,
+            }
+          : {}),
+        ...(patch.method !== undefined ? { method: patch.method ?? null } : {}),
+        ...(patch.status !== undefined ? { status: patch.status } : {}),
+        ...(patch.note !== undefined ? { note: patch.note ?? null } : {}),
+      },
+    });
+    await writeFinanceAudit(tx, {
+      userId,
+      challengeId,
+      kind: "PAYOUT",
+      movementId: payoutId,
+      action: "UPDATED",
+      before,
+      after: payoutSnapshot(updated),
+    });
+    return updated;
   });
-  return {
-    id: row.id,
-    requestedAt: row.requestedAt.toISOString(),
-    receivedAt: row.receivedAt?.toISOString() ?? null,
-    grossAmount: row.grossAmount.toString(),
-    profitSplitPercent: row.profitSplitPercent.toString(),
-    netAmount: row.netAmount.toString(),
-    currency: row.currency,
-    method: row.method,
-    status: row.status,
-    note: row.note,
-  };
+  return toPayoutDTO(row);
 }
 
+/**
+ * §13 - delete is logical: the row keeps its data with deletedAt set, so
+ * the audit trail can still show it and the movement can be restored.
+ * Totals and lists already exclude deleted rows (see CHALLENGE_INCLUDE and
+ * the evaluation), so deleting never rewrites a reported figure silently.
+ */
 export async function deletePropPayout(
   userId: string,
   challengeId: string,
   payoutId: string,
 ): Promise<boolean> {
   const existing = await db.propPayout.findFirst({
-    where: { id: payoutId, challengeId, userId },
-    select: { id: true },
+    where: { id: payoutId, challengeId, userId, deletedAt: null },
   });
   if (!existing) return false;
-  await db.propPayout.delete({ where: { id: payoutId } });
+  await db.$transaction(async (tx) => {
+    await tx.propPayout.update({
+      where: { id: payoutId },
+      data: { deletedAt: new Date() },
+    });
+    await writeFinanceAudit(tx, {
+      userId,
+      challengeId,
+      kind: "PAYOUT",
+      movementId: payoutId,
+      action: "DELETED",
+      before: payoutSnapshot(existing),
+      after: null,
+    });
+  });
   return true;
+}
+
+/** §13 - restore a logically deleted payout back into lists and totals. */
+export async function restorePropPayout(
+  userId: string,
+  challengeId: string,
+  payoutId: string,
+): Promise<PropPayoutDTO | null> {
+  const existing = await db.propPayout.findFirst({
+    where: { id: payoutId, challengeId, userId, deletedAt: { not: null } },
+  });
+  if (!existing) return null;
+  const row = await db.$transaction(async (tx) => {
+    const restored = await tx.propPayout.update({
+      where: { id: payoutId },
+      data: { deletedAt: null },
+    });
+    await writeFinanceAudit(tx, {
+      userId,
+      challengeId,
+      kind: "PAYOUT",
+      movementId: payoutId,
+      action: "RESTORED",
+      before: null,
+      after: payoutSnapshot(restored),
+    });
+    return restored;
+  });
+  return toPayoutDTO(row);
 }
 
 export async function updatePropExpense(
@@ -483,8 +633,7 @@ export async function updatePropExpense(
   patch: PropExpensePatch,
 ): Promise<PropExpenseDTO | null> {
   const existing = await db.propExpense.findFirst({
-    where: { id: expenseId, userId, challengeId },
-    select: { id: true, challengeId: true },
+    where: { id: expenseId, userId, challengeId, deletedAt: null },
   });
   if (!existing) return null;
   if (patch.challengeId !== undefined && patch.challengeId !== null) {
@@ -494,30 +643,35 @@ export async function updatePropExpense(
     });
     if (!challenge) return null;
   }
-  const row = await db.propExpense.update({
-    where: { id: expenseId },
-    data: {
-      ...(patch.challengeId !== undefined
-        ? { challengeId: patch.challengeId }
-        : {}),
-      ...(patch.type !== undefined ? { type: patch.type } : {}),
-      ...(patch.amount !== undefined ? { amount: patch.amount } : {}),
-      ...(patch.currency !== undefined ? { currency: patch.currency } : {}),
-      ...(patch.date !== undefined
-        ? { date: new Date(`${patch.date}T00:00:00.000Z`) }
-        : {}),
-      ...(patch.note !== undefined ? { note: patch.note ?? null } : {}),
-    },
+  const before = expenseSnapshot(existing);
+  const row = await db.$transaction(async (tx) => {
+    const updated = await tx.propExpense.update({
+      where: { id: expenseId },
+      data: {
+        ...(patch.challengeId !== undefined
+          ? { challengeId: patch.challengeId }
+          : {}),
+        ...(patch.type !== undefined ? { type: patch.type } : {}),
+        ...(patch.amount !== undefined ? { amount: patch.amount } : {}),
+        ...(patch.currency !== undefined ? { currency: patch.currency } : {}),
+        ...(patch.date !== undefined
+          ? { date: new Date(`${patch.date}T00:00:00.000Z`) }
+          : {}),
+        ...(patch.note !== undefined ? { note: patch.note ?? null } : {}),
+      },
+    });
+    await writeFinanceAudit(tx, {
+      userId,
+      challengeId: updated.challengeId,
+      kind: "EXPENSE",
+      movementId: expenseId,
+      action: "UPDATED",
+      before,
+      after: expenseSnapshot(updated),
+    });
+    return updated;
   });
-  return {
-    id: row.id,
-    challengeId: row.challengeId,
-    type: row.type,
-    amount: row.amount.toString(),
-    currency: row.currency,
-    date: row.date.toISOString().slice(0, 10),
-    note: row.note,
-  };
+  return toExpenseDTO(row);
 }
 
 export async function deletePropExpense(
@@ -526,10 +680,98 @@ export async function deletePropExpense(
   expenseId: string,
 ): Promise<boolean> {
   const existing = await db.propExpense.findFirst({
-    where: { id: expenseId, userId, challengeId },
-    select: { id: true },
+    where: { id: expenseId, userId, challengeId, deletedAt: null },
   });
   if (!existing) return false;
-  await db.propExpense.delete({ where: { id: expenseId } });
+  await db.$transaction(async (tx) => {
+    await tx.propExpense.update({
+      where: { id: expenseId },
+      data: { deletedAt: new Date() },
+    });
+    await writeFinanceAudit(tx, {
+      userId,
+      challengeId,
+      kind: "EXPENSE",
+      movementId: expenseId,
+      action: "DELETED",
+      before: expenseSnapshot(existing),
+      after: null,
+    });
+  });
   return true;
+}
+
+/** §13 - restore a logically deleted expense back into lists and totals. */
+export async function restorePropExpense(
+  userId: string,
+  challengeId: string,
+  expenseId: string,
+): Promise<PropExpenseDTO | null> {
+  const existing = await db.propExpense.findFirst({
+    where: { id: expenseId, userId, challengeId, deletedAt: { not: null } },
+  });
+  if (!existing) return null;
+  const row = await db.$transaction(async (tx) => {
+    const restored = await tx.propExpense.update({
+      where: { id: expenseId },
+      data: { deletedAt: null },
+    });
+    await writeFinanceAudit(tx, {
+      userId,
+      challengeId,
+      kind: "EXPENSE",
+      movementId: expenseId,
+      action: "RESTORED",
+      before: null,
+      after: expenseSnapshot(restored),
+    });
+    return restored;
+  });
+  return toExpenseDTO(row);
+}
+
+/**
+ * §13 - the finance audit trail of one challenge, newest first. Only the
+ * owner can read it. Each entry carries whether its movement can be
+ * restored right now (true only for the latest action being a delete of a
+ * row that is still soft-deleted).
+ */
+export async function listPropFinanceAudit(
+  userId: string,
+  challengeId: string,
+): Promise<PropFinanceAuditDTO[] | null> {
+  const challenge = await db.propChallenge.findFirst({
+    where: { id: challengeId, userId },
+    select: { id: true },
+  });
+  if (!challenge) return null;
+  const [entries, deletedPayouts, deletedExpenses] = await Promise.all([
+    db.propFinanceAudit.findMany({
+      where: { userId, challengeId },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
+    db.propPayout.findMany({
+      where: { challengeId, deletedAt: { not: null } },
+      select: { id: true },
+    }),
+    db.propExpense.findMany({
+      where: { challengeId, deletedAt: { not: null } },
+      select: { id: true },
+    }),
+  ]);
+  const deletedIds = new Set([
+    ...deletedPayouts.map((p) => p.id),
+    ...deletedExpenses.map((e) => e.id),
+  ]);
+  return entries.map((entry) => ({
+    id: entry.id,
+    kind: entry.kind,
+    movementId: entry.movementId,
+    action: entry.action,
+    before: parseAuditSnapshot(entry.beforeJson),
+    after: parseAuditSnapshot(entry.afterJson),
+    restorable: entry.action === "DELETED" && deletedIds.has(entry.movementId),
+    createdAt: entry.createdAt.toISOString(),
+  }));
 }

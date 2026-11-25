@@ -5,6 +5,7 @@ import { apiFetch } from "@/lib/api-client";
 import type {
   PropChallengeDTO,
   PropChallengeEvaluationDTO,
+  PropFinanceAuditDTO,
   PropFirmRuleSetDTO,
   PropFirmWorkspacePayload,
   PropPayoutDTO,
@@ -192,6 +193,41 @@ export function useDeletePropExpense() {
   return useMutation({
     mutationFn: async ({ challengeId, expenseId }: { challengeId: string; expenseId: string }) =>
       apiFetch(`/api/v1/prop-firms/challenges/${challengeId}/expenses/${expenseId}`, { method: "DELETE" }),
+    onSuccess: invalidate,
+  });
+}
+
+/** §13 - audit trail of one challenge's payouts and expenses. */
+export function usePropFinanceAudit(challengeId: string | null) {
+  return useQuery({
+    queryKey: ["prop-firms", "finance-audit", challengeId],
+    queryFn: () =>
+      apiFetch<{ audit: PropFinanceAuditDTO[] }>(
+        `/api/v1/prop-firms/challenges/${challengeId}/finance-audit`,
+      ),
+    enabled: challengeId != null,
+    staleTime: 30_000,
+  });
+}
+
+export function useRestorePropPayout() {
+  const invalidate = useInvalidatePropFirms();
+  return useMutation({
+    mutationFn: async ({ challengeId, payoutId }: { challengeId: string; payoutId: string }) =>
+      (await apiFetch<{ payout: PropPayoutDTO }>(`/api/v1/prop-firms/challenges/${challengeId}/payouts/${payoutId}/restore`, {
+        method: "POST",
+      })).payout,
+    onSuccess: invalidate,
+  });
+}
+
+export function useRestorePropExpense() {
+  const invalidate = useInvalidatePropFirms();
+  return useMutation({
+    mutationFn: async ({ challengeId, expenseId }: { challengeId: string; expenseId: string }) =>
+      (await apiFetch<{ expense: PropExpenseDTO }>(`/api/v1/prop-firms/challenges/${challengeId}/expenses/${expenseId}/restore`, {
+        method: "POST",
+      })).expense,
     onSuccess: invalidate,
   });
 }

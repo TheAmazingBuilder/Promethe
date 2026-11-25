@@ -2,6 +2,9 @@ import type {
   PropPhaseRuleInput,
 } from "@/lib/validations/prop-firms";
 import type {
+  PropFinanceMovementSnapshot,
+} from "@/lib/prop/finance-audit";
+import type {
   PropEvaluationDay,
   PropPhaseOutcome,
   PropRuleEvaluation,
@@ -54,6 +57,23 @@ export interface PropExpenseDTO {
   currency: string;
   date: string;
   note: string | null;
+}
+
+/** One entry of a challenge's finance audit trail (§13). */
+export interface PropFinanceAuditDTO {
+  id: string;
+  /** PAYOUT | EXPENSE */
+  kind: string;
+  movementId: string;
+  /** CREATED | UPDATED | DELETED | RESTORED */
+  action: string;
+  /** Snapshot of the movement before the change (null for CREATE). */
+  before: PropFinanceMovementSnapshot | null;
+  /** Snapshot of the movement after the change (null for DELETE). */
+  after: PropFinanceMovementSnapshot | null;
+  /** True only when the movement is currently soft-deleted and can be restored. */
+  restorable: boolean;
+  createdAt: string;
 }
 
 export interface PropChallengeDTO {

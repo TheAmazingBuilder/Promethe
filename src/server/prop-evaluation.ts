@@ -90,8 +90,9 @@ export async function getPropChallengeEvaluation(
       account: true,
       ruleSet: true,
       phaseResults: { orderBy: { startDate: "asc" } },
-      payouts: true,
-      expenses: true,
+      // §13: soft-deleted movements never feed the totals.
+      payouts: { where: { deletedAt: null } },
+      expenses: { where: { deletedAt: null } },
     },
   });
   if (!challenge) return null;
@@ -253,11 +254,18 @@ export async function getPropChallengeEvaluation(
       totalExpenses: sumInFeeCurrency(
         challenge.expenses.map((e) => ({ currency: e.currency, amount: e.amount })),
       ).toString(),
+      // §13: only payouts actually received count as payouts. A REQUESTED
+      // payout is money not yet in hand and a REJECTED payout never
+      // arrives - counting either inflates the payout totals.
       totalPayoutsGross: sumInFeeCurrency(
-        challenge.payouts.map((p) => ({ currency: p.currency, amount: p.grossAmount })),
+        challenge.payouts
+          .filter((p) => p.status === "RECEIVED")
+          .map((p) => ({ currency: p.currency, amount: p.grossAmount })),
       ).toString(),
       totalPayoutsNet: sumInFeeCurrency(
-        challenge.payouts.map((p) => ({ currency: p.currency, amount: p.netAmount })),
+        challenge.payouts
+          .filter((p) => p.status === "RECEIVED")
+          .map((p) => ({ currency: p.currency, amount: p.netAmount })),
       ).toString(),
       mixedCurrencies,
     },

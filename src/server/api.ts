@@ -100,6 +100,11 @@ const CODE_MESSAGES: Record<string, string> = {
   INVALID_CHAT_ID:
     "Invalid chat ID (a number, or @channel name).",
   INVALID_QUIET_HOURS: "Invalid quiet hours (format HH:mm).",
+  // §13 - prop-firm finance date rules (422).
+  PAYOUT_BEFORE_CHALLENGE_START:
+    "A payout cannot be dated before the challenge starts.",
+  RECEIVED_BEFORE_REQUESTED:
+    "The received date cannot precede the requested date.",
   INVALID_PRIVACY_LEVEL: "Invalid privacy level.",
   INVALID_EVENT_TYPE: "Invalid event type.",
   INVALID_VALUE: "Invalid value.",

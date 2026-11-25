@@ -65,6 +65,7 @@ model User {
   propChallenges          PropChallenge[]
   propPayouts             PropPayout[]
   propExpenses            PropExpense[]
+  propFinanceAudits       PropFinanceAudit[]
 
   // ── v3 ──
   brokerConnections        BrokerConnection[]
@@ -1331,6 +1332,7 @@ model PropChallenge {
   phaseResults PropChallengePhaseResult[]
   payouts      PropPayout[]
   expenses     PropExpense[]
+  financeAudits PropFinanceAudit[]
   alertStates  PropAlertState[]
 
   @@index([userId])
@@ -1375,6 +1377,12 @@ model PropPayout {
   /// REQUESTED | RECEIVED | REJECTED
   status             String    @default("REQUESTED")
   note               String?
+  /// §13: audit trail. createdAt/updatedAt track the record itself;
+  /// deletedAt marks a logical delete - the row stays for the audit trail
+  /// and totals always read live (non-deleted) rows only.
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
 
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   challenge PropChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
@@ -1395,6 +1403,10 @@ model PropExpense {
   currency    String   @default("USD")
   date        DateTime @default(now())
   note        String?
+  /// §13: audit trail (see PropPayout).
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
 
   user      User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
   challenge PropChallenge? @relation(fields: [challengeId], references: [id], onDelete: SetNull)
@@ -1402,6 +1414,34 @@ model PropExpense {
   @@index([userId])
   @@index([challengeId])
   @@map("prop_expenses")
+}
+
+/// Audit trail of prop-firm financial movements (§13). Permanent: unlike
+/// ChangeLog (pruned after 30 days), a money movement must stay traceable
+/// for as long as its challenge exists. Rows cascade with the challenge;
+/// snapshots are plain JSON of the movement at the time of the change.
+model PropFinanceAudit {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  /// Null for expenses recorded without a challenge (legacy rows).
+  challengeId String?  @map("challenge_id")
+  /// PAYOUT | EXPENSE
+  kind        String
+  movementId  String   @map("movement_id")
+  /// CREATED | UPDATED | DELETED | RESTORED
+  action      String
+  /// JSON snapshot of the movement before the change (null for CREATE).
+  beforeJson  String?  @map("before_json")
+  /// JSON snapshot of the movement after the change (null for DELETE).
+  afterJson   String?  @map("after_json")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge PropChallenge? @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@index([userId, challengeId, createdAt])
+  @@index([challengeId, createdAt])
+  @@map("prop_finance_audits")
 }
 
 /// Alert dedupe state — the same alert is never sent twice per day/type (v2 §4.12).

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { Pencil, Plus, RotateCcw, ShieldCheck, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -46,7 +46,10 @@ import {
   useDeletePropFirmRuleSet,
   useDeletePropPayout,
   usePropChallengeEvaluation,
+  usePropFinanceAudit,
   usePropFirmWorkspace,
+  useRestorePropExpense,
+  useRestorePropPayout,
   useUpdatePropChallenge,
   useUpdatePropExpense,
   useUpdatePropPayout,
@@ -57,6 +60,7 @@ import type { AccountDTO } from "@/lib/trading/dto";
 import type {
   PropChallengeDTO,
   PropExpenseDTO,
+  PropFinanceAuditDTO,
   PropFirmRuleSetDTO,
   PropPayoutDTO,
 } from "@/lib/prop-firms/types";
@@ -216,6 +220,9 @@ function ChallengeEvaluation({ challengeId, currency }: { challengeId: string; c
         {" · "}
         {t("payoutHistory")}: {evaluation.fees.totalPayoutsNet} {evaluation.fees.feeCurrency}
       </p>
+      {evaluation.fees.mixedCurrencies ? (
+        <p className="text-xs text-amber-700 dark:text-amber-400">{t("mixedCurrenciesWarning")}</p>
+      ) : null}
     </div>
   );
 }
@@ -844,6 +851,76 @@ function ExpenseEditor({
   );
 }
 
+function FinanceAuditHistory({ challengeId }: { challengeId: string }) {
+  const t = useTranslations("propFirmsView");
+  const tRoot = useTranslations();
+  const { toast } = useToast();
+  const { data, isLoading } = usePropFinanceAudit(challengeId);
+  const restorePayout = useRestorePropPayout();
+  const restoreExpense = useRestorePropExpense();
+
+  const restore = async (entry: PropFinanceAuditDTO) => {
+    try {
+      if (entry.kind === "PAYOUT") {
+        await restorePayout.mutateAsync({ challengeId, payoutId: entry.movementId });
+      } else {
+        await restoreExpense.mutateAsync({ challengeId, expenseId: entry.movementId });
+      }
+      toast({ title: t("restored") });
+    } catch (error) {
+      errorToast(error, tRoot, t("error"), toast);
+    }
+  };
+
+  const actionLabel = (action: string) => {
+    if (action === "CREATED") return t("financeCreated");
+    if (action === "UPDATED") return t("financeUpdated");
+    if (action === "DELETED") return t("financeDeleted");
+    return t("financeRestored");
+  };
+
+  const amountLabel = (entry: PropFinanceAuditDTO) => {
+    const snap = entry.after ?? entry.before;
+    if (!snap) return null;
+    if (snap.kind === "PAYOUT") return `${snap.netAmount} ${snap.currency}`;
+    return `${snap.amount} ${snap.currency}`;
+  };
+
+  if (isLoading) return <Skeleton className="h-10 w-full" />;
+  const entries = data?.audit ?? [];
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-semibold">{t("financeHistory")}</p>
+      {entries.length === 0 ? (
+        <p className="text-xs text-muted-foreground">{t("noFinanceHistory")}</p>
+      ) : (
+        entries.slice(0, 20).map((entry) => (
+          <div key={entry.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2 text-xs">
+            <span>
+              <span className="font-medium">{actionLabel(entry.action)}</span>
+              {" · "}
+              {entry.kind === "PAYOUT" ? t("financePayout") : t("financeExpense")}
+              {amountLabel(entry) ? (
+                <>
+                  {" · "}
+                  <span className="tabular-nums">{amountLabel(entry)}</span>
+                </>
+              ) : null}
+              {" · "}
+              <span className="text-muted-foreground">{entry.createdAt.slice(0, 10)}</span>
+            </span>
+            {entry.restorable ? (
+              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => void restore(entry)}>
+                <RotateCcw className="mr-1 h-3 w-3" />{t("restore")}
+              </Button>
+            ) : null}
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
 function ChallengeCard({
   challenge,
   onPhase,
@@ -993,6 +1070,8 @@ function ChallengeCard({
             ))}
           </div>
         </div>
+
+        <FinanceAuditHistory challengeId={challenge.id} />
 
         <div className="flex flex-wrap gap-2 border-t pt-3">
           <Button size="sm" variant="outline" onClick={() => onPhase(challenge)}>{t("recordPhase")}</Button>

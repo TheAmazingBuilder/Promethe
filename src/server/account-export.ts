@@ -91,6 +91,7 @@ export async function buildUserExport(userId: string): Promise<{
     propChallenges,
     propPayouts,
     propExpenses,
+    propFinanceAudits,
     brokerConnections,
     syncEventLogs,
     symbolMappings,
@@ -181,10 +182,18 @@ export async function buildUserExport(userId: string): Promise<{
     db.propFirmRuleSet.findMany({ where: { userId } }),
     db.propChallenge.findMany({
       where: { userId },
-      include: { phaseResults: true, payouts: true, expenses: true, alertStates: true },
+      // §13: soft-deleted movements are not live rows; their data survives
+      // in the finance audit trail (propFinanceAudits below).
+      include: {
+        phaseResults: true,
+        payouts: { where: { deletedAt: null } },
+        expenses: { where: { deletedAt: null } },
+        alertStates: true,
+      },
     }),
-    db.propPayout.findMany({ where: { userId } }),
-    db.propExpense.findMany({ where: { userId } }),
+    db.propPayout.findMany({ where: { userId, deletedAt: null } }),
+    db.propExpense.findMany({ where: { userId, deletedAt: null } }),
+    db.propFinanceAudit.findMany({ where: { userId } }),
     // tokenHash excluded BY SELECT — a DB/backup leak of the export must not
     // help forging EA connection tokens.
     db.brokerConnection.findMany({
@@ -358,6 +367,7 @@ export async function buildUserExport(userId: string): Promise<{
     chartAnnotations: chartAnnotations.length,
     changeLogs: changeLogs.length,
     integrationEndpoints: integrationEndpoints.length,
+    propFinanceAudits: propFinanceAudits.length,
   };
 
   const manifest = {
@@ -408,7 +418,7 @@ export async function buildUserExport(userId: string): Promise<{
     "  reports.json         reports + report settings",
     "  scenarios.json       scenarios + Monte Carlo simulations",
     "  calendar.json        economic events + watchlist",
-    "  propfirms.json       prop firms, challenges, phases, payouts, expenses",
+    "  propfirms.json       prop firms, challenges, phases, payouts, expenses, finance audit",
     "  sync.json            broker connections, sync logs, mappings,",
     "                      equity snapshots, imports, candidates, merges",
     "  sharing.json         share links (metadata)",
@@ -492,6 +502,7 @@ export async function buildUserExport(userId: string): Promise<{
         challenges: propChallenges,
         payouts: propPayouts,
         expenses: propExpenses,
+        financeAudits: propFinanceAudits,
       })
     ),
     "sync.json": jsonEntry(
