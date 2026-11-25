@@ -23,11 +23,15 @@ import {
   gaiaRefLabel,
   gaiaRelativeTime,
   useGaiaRefs,
+  useGaiaVersion,
   useGaiaVersions,
+  type GaiaBlock,
   type GaiaRefHit,
   type GaiaRefKind,
   type GaiaT,
 } from "./gaia-shared";
+import { textOfBlocks } from "@/lib/gaia/content";
+import { diffGaiaText } from "@/lib/gaia/version-diff";
 
 // ── Ref picker ───────────────────────────────────────────────────────────────
 
@@ -193,6 +197,7 @@ export function VersionsDialog({
   open,
   onOpenChange,
   noteId,
+  currentBlocks,
   onRestore,
   restoringId,
   t,
@@ -200,15 +205,34 @@ export function VersionsDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   noteId: string;
+  /** Current note content, to diff the selected version against. */
+  currentBlocks: GaiaBlock[];
   onRestore: (versionId: string) => void;
   restoringId?: string | null;
   t: GaiaT;
 }) {
   const versionsQuery = useGaiaVersions(noteId, open);
   const versions = versionsQuery.data?.versions ?? [];
+  // Lot 11 (roadmap §15): clicking a version previews it and diffs it
+  // against the current note. Restore only happens from the preview,
+  // after the user has seen what changes.
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const selected = versions.find((v) => v.id === selectedId) ?? null;
+  const detailQuery = useGaiaVersion(noteId, open ? selectedId : null);
+  const detail = detailQuery.data?.version ?? null;
+  const diff = React.useMemo(() => {
+    if (!detail) return null;
+    return diffGaiaText(textOfBlocks(detail.blocks), textOfBlocks(currentBlocks));
+  }, [detail, currentBlocks]);
+  const previewLines = detail ? textOfBlocks(detail.blocks).split("\n").filter((l) => l.trim() !== "") : [];
+
+  React.useEffect(() => {
+    if (!open) setSelectedId(null);
+  }, [open]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md" data-testid="gaia-versions-dialog">
+      <DialogContent className="max-w-lg" data-testid="gaia-versions-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <History className="size-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
@@ -227,36 +251,106 @@ export function VersionsDialog({
             {t("gaia.dialogs.versionsEmpty")}
           </p>
         ) : (
-          <ul data-testid="gaia-versions-list" className="max-h-80 space-y-2 overflow-y-auto">
-            {versions.map((v) => (
-              <li
-                key={v.id}
-                data-testid="gaia-version-row"
-                className="flex items-center gap-2 rounded-lg border px-3 py-2"
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">
-                    {v.title === "" ? t("gaia.shared.untitledNote") : v.title}
-                  </span>
-                  <span className="block text-xs text-muted-foreground">
-                    {gaiaRelativeTime(v.savedAt, t)} · {v.wordCount}{" "}
-                    {v.wordCount === 1 ? t("gaia.shared.wordOne") : t("gaia.shared.wordMany")}
-                  </span>
-                </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 shrink-0"
-                  disabled={restoringId === v.id}
-                  onClick={() => onRestore(v.id)}
+          <div className="flex flex-col gap-3">
+            <ul data-testid="gaia-versions-list" className="max-h-64 space-y-2 overflow-y-auto">
+              {versions.map((v) => (
+                <li
+                  key={v.id}
+                  data-testid="gaia-version-row"
+                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${selectedId === v.id ? "border-emerald-500/50 bg-emerald-500/5" : ""}`}
                 >
-                  <RotateCcw className="size-3.5" aria-hidden="true" />
-                  {t("gaia.shared.restore")}
-                </Button>
-              </li>
-            ))}
-          </ul>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(selectedId === v.id ? null : v.id)}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <span className="block truncate text-sm font-medium">
+                      {v.title === "" ? t("gaia.shared.untitledNote") : v.title}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {gaiaRelativeTime(v.savedAt, t)} · {v.wordCount}{" "}
+                      {v.wordCount === 1 ? t("gaia.shared.wordOne") : t("gaia.shared.wordMany")}
+                    </span>
+                  </button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 shrink-0"
+                    disabled={restoringId === v.id}
+                    onClick={() => setSelectedId(v.id)}
+                  >
+                    {t("gaia.dialogs.versionPreview")}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            {selected ? (
+              <div data-testid="gaia-version-preview" className="rounded-lg border p-3">
+                <p className="text-sm font-semibold">
+                  {selected.title === "" ? t("gaia.shared.untitledNote") : selected.title}
+                </p>
+                {detailQuery.isLoading ? (
+                  <div className="mt-2 space-y-2">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-2/3" />
+                  </div>
+                ) : detail == null ? (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {t("gaia.dialogs.versionLoadError")}
+                  </p>
+                ) : (
+                  <>
+                    <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap text-sm text-muted-foreground">
+                      {previewLines.length === 0
+                        ? t("gaia.dialogs.versionEmpty")
+                        : previewLines.slice(0, 8).join("\n")}
+                    </p>
+                    {diff ? (
+                      <div className="mt-2 text-xs">
+                        <p className="font-medium">
+                          {t("gaia.dialogs.versionDiffTitle")}{" "}
+                          <span className="text-gain">+{diff.added.length}</span>
+                          {" / "}
+                          <span className="text-loss">−{diff.removed.length}</span>
+                        </p>
+                        {diff.added.length > 0 ? (
+                          <ul className="mt-1 space-y-0.5">
+                            {diff.added.slice(0, 5).map((line) => (
+                              <li key={line} className="truncate text-gain">+ {line}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        {diff.removed.length > 0 ? (
+                          <ul className="mt-1 space-y-0.5">
+                            {diff.removed.slice(0, 5).map((line) => (
+                              <li key={line} className="truncate text-loss">− {line}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        {diff.added.length === 0 && diff.removed.length === 0 ? (
+                          <p className="mt-1 text-muted-foreground">
+                            {t("gaia.dialogs.versionDiffNone")}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    <div className="mt-3 flex justify-end">
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={restoringId === selected.id}
+                        onClick={() => onRestore(selected.id)}
+                      >
+                        <RotateCcw className="size-3.5" aria-hidden="true" />
+                        {t("gaia.shared.restore")}
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : null}
+          </div>
         )}
       </DialogContent>
     </Dialog>

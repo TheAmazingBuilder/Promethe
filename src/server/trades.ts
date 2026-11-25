@@ -47,6 +47,11 @@ import {
   type GridStats,
 } from "@/lib/trades/grid-stats";
 import { evaluateTradeViolations } from "@/server/rules";
+import {
+  evaluateChecklist,
+  resolveFrozenChecklistItems,
+} from "@/lib/playbook/checklist";
+import { getFrozenChecklistItems } from "@/server/strategy-versions";
 import { autoLinkEventsForTrade } from "@/server/economic-calendar";
 import { checkDrawdownAlerts } from "@/server/integrations/delivery";
 import { refreshTradeSearchText } from "@/server/search-index";
@@ -111,7 +116,7 @@ type TradeFullRow = Prisma.TradeGetPayload<{
   include: {
     instrument: true;
     account: true;
-    strategy: true;
+    strategy: { include: { checklistItems: { orderBy: { order: "asc" } } } };
     tags: { include: { tag: true } };
     screenshots: true;
     executions: { orderBy: { time: "asc" } };
@@ -140,7 +145,7 @@ type TradeDetailRow = Omit<
 const DETAIL_INCLUDE = {
   instrument: true,
   account: true,
-  strategy: true,
+  strategy: { include: { checklistItems: { orderBy: { order: "asc" } } } },
   tags: { include: { tag: true } },
   screenshots: { orderBy: { createdAt: "asc" } },
   executions: { orderBy: { time: "asc" } },
@@ -263,6 +268,20 @@ export function toTradeDetail(t: TradeDetailRow): TradeDetailDTO {
     notes: t.notes,
     tradingViewUrl: t.tradingViewUrl,
     checklistResults: checklist,
+    // Mandatory-checklist verdict (Lot 11, roadmap §14): evaluated here
+    // against the LIVE checklist; getTradeDetail re-evaluates it against
+    // the frozen snapshot when one matches the trade's frozen version.
+    checklistStatus:
+      t.strategy?.deletedAt == null && t.strategyId != null
+        ? evaluateChecklist(
+            (t.strategy?.checklistItems ?? []).map((item) => ({
+              id: item.id,
+              label: item.label,
+              isRequired: item.isRequired,
+            })),
+            checklist,
+          )
+        : null,
     accountCurrency: t.account.currency,
     accountInitialBalance: t.account.initialBalance.toString(),
     exitPlanId: t.exitPlanId,
@@ -822,7 +841,38 @@ export async function getTradeDetail(
     where: { id, userId },
     include: DETAIL_INCLUDE,
   });
-  return trade ? toTradeDetail(trade) : null;
+  if (!trade) return null;
+  const detail = toTradeDetail(trade);
+  // Frozen-checklist verdict (Lot 11, roadmap §14): when the trade froze
+  // a strategy version and a snapshot carries it, the checklist is the
+  // one the trade executed under - not the live list, which may have
+  // changed since. No matching snapshot → keep the live evaluation.
+  if (trade.strategyId && trade.strategyVersion != null) {
+    const frozen = await getFrozenChecklistItems(
+      userId,
+      trade.strategyId,
+      trade.strategyVersion,
+    );
+    if (frozen) {
+      const liveItems = (trade.strategy?.checklistItems ?? []).map((item) => ({
+        id: item.id,
+        label: item.label,
+      }));
+      let checklist: Record<string, boolean> | null = null;
+      if (trade.checklistResults) {
+        try {
+          checklist = JSON.parse(trade.checklistResults) as Record<string, boolean>;
+        } catch {
+          checklist = null;
+        }
+      }
+      detail.checklistStatus = evaluateChecklist(
+        resolveFrozenChecklistItems(frozen, liveItems),
+        checklist,
+      );
+    }
+  }
+  return detail;
 }
 
 // ── Create (idempotent by clientMutationId — v2 §4.2) ──────────────────────
@@ -862,7 +912,11 @@ export async function createTrade(
       where: { userId, clientMutationId: input.clientMutationId },
       include: DETAIL_INCLUDE,
     });
-    if (existing) return { trade: toTradeDetail(existing), deduplicated: true };
+    if (existing) {
+      const detail = await getTradeDetail(userId, existing.id);
+      if (detail) return { trade: detail, deduplicated: true };
+      return { trade: toTradeDetail(existing), deduplicated: true };
+    }
   }
 
   const [account, instrument, strategy] = await Promise.all([

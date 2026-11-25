@@ -1090,7 +1090,10 @@
       "saving": "Saving…",
       "cancel": "Cancel",
       "created": "Strategy created",
-      "updated": "Strategy updated"
+      "updated": "Strategy updated",
+      "changeNote": "Reason for this change",
+      "changeNotePlaceholder": "e.g. Widened the stop after three stop-outs in range",
+      "changeNoteHint": "Saved on the automatic version snapshot, so the history shows why the strategy changed."
     },
     "stats": {
       "title": "Statistics",
@@ -1587,7 +1590,10 @@
       "confluenceAdd": "Add",
       "confluenceCreateFailed": "Could not add this confluence.",
       "grade": "Setup grade",
-      "gradeHint": "A+ is your best setup. Leave it blank to keep the trade ungraded."
+      "gradeHint": "A+ is your best setup. Leave it blank to keep the trade ungraded.",
+      "warningsTitle": "Check before saving",
+      "warningsSaveAnyway": "Save anyway",
+      "warningsReview": "Review the trade"
     },
     "detail": {
       "notFound": "Trade not found.",
@@ -1715,7 +1721,9 @@
       "annotationLoading": "Loading annotations…",
       "annotationError": "Could not load or save screenshot annotations.",
       "annotationCanvas": "Screenshot annotation canvas",
-      "annotationLimit": "A screenshot can contain up to 100 annotations."
+      "annotationLimit": "A screenshot can contain up to 100 annotations.",
+      "checklistStatus": "{checked} of {required} required items checked",
+      "checklistMissing": "Missing"
     }
   },
   "settings": {
@@ -3336,7 +3344,9 @@
       "measured": "Measured:",
       "limit": "Limit:",
       "viewTrade": "View trade"
-    }
+    },
+    "playbookHint": "These are numeric limits checked automatically on every trade. Written operating rules live in the Playbook.",
+    "playbookLink": "Open Playbook rules"
   },
   "accountsView": {
     "title": "Accounts",
@@ -5017,7 +5027,8 @@
       "noOtherTags": "No other tags yet.",
       "addBlockLabel": "Add a block",
       "addBlockHint": "Click to add a block, press / for commands",
-      "slashMenuLabel": "Block commands"
+      "slashMenuLabel": "Block commands",
+      "draftRecovered": "Recovered unsaved changes from this device"
     },
     "slash": {
       "groups": {
@@ -5135,7 +5146,12 @@
       "versionsEmpty": "No versions yet: keep editing and snapshots will appear here.",
       "changeIconAria": "Change note icon",
       "changeIconTitle": "Change icon",
-      "removeIcon": "Remove icon"
+      "removeIcon": "Remove icon",
+      "versionPreview": "Preview",
+      "versionLoadError": "This version could not be loaded.",
+      "versionEmpty": "This version has no text.",
+      "versionDiffTitle": "Compared with the current note:",
+      "versionDiffNone": "Identical to the current note."
     },
     "print": {
       "title": "Export PDF",
@@ -5328,7 +5344,14 @@
       "underperformingBadge": "Underperforming",
       "expectancy20": "Expectancy (last 20)",
       "sparklineLabel": "Cumulative R for {name}",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "compareVersion": "Compare version {version}",
+      "versionPerformance": "{trades} trades · {totalR} R · {winRate} win rate",
+      "versionPerformanceBefore": "Before versioning: {trades} trades · {totalR} R",
+      "compareTitle": "Compare versions",
+      "compareClear": "Clear selection",
+      "compareNoChanges": "These two versions are identical.",
+      "compareHint": "Tick two versions to compare what changed between them."
     },
     "setups": {
       "title": "Setups",
@@ -5400,7 +5423,9 @@
       "addExamples": "Add the 6 example rules",
       "examplesAdded": "{count} example rules added",
       "examplesNone": "The example rules are already in your playbook.",
-      "inactive": "Inactive"
+      "inactive": "Inactive",
+      "tradingRulesHint": "These are written operating rules. Numeric limits that are checked automatically live under Trading Rules.",
+      "tradingRulesLink": "Open Trading Rules"
     },
     "checklists": {
       "title": "Checklists",

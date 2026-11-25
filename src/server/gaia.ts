@@ -28,6 +28,11 @@ import {
   type GaiaRefKind,
 } from "@/lib/gaia/content";
 import { builtInTemplates, findBuiltInTemplate, type GaiaBuiltInTemplate } from "@/lib/gaia/templates";
+import {
+  foldSearchText,
+  rankSearchNotes,
+  searchTokens,
+} from "@/lib/gaia/search";
 import { listRefs as listRefsRaw, resolveNoteRefs, type GaiaRefHit } from "@/lib/gaia/refs";
 import {
   shouldSnapshot,
@@ -407,7 +412,14 @@ async function versionsOf(userId: string, noteId: string): Promise<NoteVersion[]
   return sortVersionsNewestFirst(versions);
 }
 
-async function maybeSnapshotVersion(userId: string, note: Note): Promise<void> {
+async function maybeSnapshotVersion(
+  userId: string,
+  note: Note,
+  contentChanged = true,
+): Promise<void> {
+  // Lot 11 (roadmap §15): metadata-only changes (favorite, folder, icon,
+  // tags) never burn a version slot with an identical copy of the note.
+  if (!contentChanged) return;
   const versions = await versionsOf(userId, note.id);
   const newest = versions[0] ?? null;
   if (!shouldSnapshot(newest ? newest.savedAt : null, new Date())) return;
@@ -697,7 +709,15 @@ export async function updateNote(
     return noteResponse(userId, note, folders, tags);
   }
 
-  await maybeSnapshotVersion(userId, note);
+  // Lot 11 (roadmap §15): a version snapshots CONTENT, not metadata.
+  // Toggling a favorite, moving a folder or changing an icon used to
+  // burn one of the 12 version slots with an identical copy of the note.
+  const contentChanged =
+    (parsed.title !== undefined && parsed.title.trim() !== note.title) ||
+    (parsed.blocks !== undefined &&
+      JSON.stringify(normalizeBlocks(parsed.blocks)) !== note.blocks);
+
+  await maybeSnapshotVersion(userId, note, contentChanged);
 
   const data: {
     title?: string;
@@ -763,7 +783,7 @@ export async function duplicateNote(
   if (!source) throw NOTE_NOT_FOUND();
   const title =
     parsed.title?.trim() ??
-    (source.title === "" ? "Untitled note (copy)" : `${source.title} (copie)`);
+    (source.title === "" ? "Untitled note (copy)" : `${source.title} (copy)`);
   const now = new Date();
   const copy = await db.note.create({
     data: {
@@ -1153,33 +1173,41 @@ export async function searchNotes(
   userId: string,
   q: string,
 ): Promise<{ results: (GaiaNoteRow & { snippet: string })[]; total: number }> {
-  const query = q.trim().toLowerCase();
-  if (query === "") return { results: [], total: 0 };
   const [folders, tags, notes] = await Promise.all([
     loadFolders(userId),
     loadTags(userId),
     db.note.findMany({ where: { userId, deletedAt: null } }),
   ]);
-  const results: (GaiaNoteRow & { snippet: string })[] = [];
-  for (const note of notes) {
-    const blocks = parseJsonBlocks(note.blocks);
-    const tagIds = parseJsonStringArray(note.tagIds);
-    const titleHit = note.title.toLowerCase().includes(query);
-    const fullText = textOfBlocks(blocks);
-    const textHit = fullText.toLowerCase().includes(query);
-    const tagHit = tagNamesOf(tagIds, tags).some((name) =>
-      name.toLowerCase().includes(query),
-    );
-    if (!titleHit && !textHit && !tagHit) continue;
+  // Lot 11 (roadmap §15): ranked search - a title hit outranks a tag
+  // hit, which outranks a body hit; every query token must match (AND).
+  // `total` is the real match count, not the page size.
+  const ranked = rankSearchNotes(
+    notes.map((note) => {
+      const blocks = parseJsonBlocks(note.blocks);
+      return {
+        note,
+        blocks,
+        title: note.title,
+        tagNames: tagNamesOf(parseJsonStringArray(note.tagIds), tags),
+        bodyText: textOfBlocks(blocks),
+        updatedAt: note.updatedAt.toISOString(),
+      };
+    }),
+    q,
+  );
+  const total = ranked.length;
+  const tokens = searchTokens(q);
+  const results = ranked.slice(0, 30).map(({ note, blocks }) => {
     const row = toRow(note, folders, tags);
-    results.push({
+    const bodyHit = tokens.some((token) =>
+      foldSearchText(textOfBlocks(blocks)).includes(token),
+    );
+    return {
       ...row,
-      snippet: textHit ? searchSnippet(blocks, query) : excerptOf(blocks),
-    });
-  }
-  results.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  const sliced = results.slice(0, 30);
-  return { results: sliced, total: sliced.length };
+      snippet: bodyHit ? searchSnippet(blocks, q) : excerptOf(blocks),
+    };
+  });
+  return { results, total };
 }
 
 /* ── Refs ────────────────────────────────────────────────────────────── */

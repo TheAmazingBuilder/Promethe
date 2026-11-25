@@ -453,12 +453,36 @@ export function useGaiaTemplates() {
   });
 }
 
+export interface GaiaVersionDetail {
+  id: string;
+  title: string;
+  savedAt: string;
+  blocks: GaiaBlock[];
+}
+
 export function useGaiaVersions(noteId: string | null, enabled: boolean) {
   return useQuery({
     queryKey: ["gaia", "versions", noteId],
     queryFn: () =>
       apiFetch<{ versions: GaiaVersion[] }>(`${GAIA_BASE}/notes/${noteId}/versions`),
     enabled: enabled && noteId !== null && noteId !== "",
+  });
+}
+
+// Lot 11 (roadmap §15): fetch one version in full (blocks) so the
+// VersionsDialog can preview it and diff it against the current note
+// before the user restores it.
+export function useGaiaVersion(
+  noteId: string | null,
+  versionId: string | null,
+) {
+  return useQuery({
+    queryKey: ["gaia", "version", noteId, versionId],
+    queryFn: () =>
+      apiFetch<{ version: GaiaVersionDetail }>(
+        `${GAIA_BASE}/notes/${noteId}/versions/${versionId}`,
+      ),
+    enabled: noteId != null && noteId !== "" && versionId != null && versionId !== "",
   });
 }
 

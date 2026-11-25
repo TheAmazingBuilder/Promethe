@@ -18,7 +18,9 @@ import type {
   JournalEntryDTO,
   StrategyDTO,
   StrategyStatsDTO,
+  StrategyVersionCompareDTO,
   StrategyVersionDTO,
+  StrategyVersionPerformanceDTO,
   PropStatusPayload,
 } from "@/lib/trading/dto";
 import type { JournalEntryInput } from "@/lib/validations/journal";
@@ -208,6 +210,39 @@ export function useDeleteStrategyVersion() {
   });
 }
 
+// ── Strategy version comparison + per-version performance (Lot 11) ───────
+
+export function useStrategyVersionCompare(
+  strategyId: string | null,
+  idA: string | null,
+  idB: string | null,
+) {
+  return useQuery({
+    queryKey: ["strategy-version-compare", strategyId, idA, idB],
+    queryFn: async () =>
+      await apiFetch<StrategyVersionCompareDTO>(
+        `/api/v1/strategies/${strategyId}/versions/compare?a=${encodeURIComponent(idA ?? "")}&b=${encodeURIComponent(idB ?? "")}`,
+      ),
+    enabled:
+      strategyId != null && strategyId !== "" && idA != null && idB != null && idA !== idB,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useStrategyVersionPerformance(strategyId: string | null) {
+  return useQuery({
+    queryKey: ["strategy-version-performance", strategyId],
+    queryFn: async () =>
+      (
+        await apiFetch<{ versions: StrategyVersionPerformanceDTO[] }>(
+          `/api/v1/strategies/${strategyId}/version-performance`,
+        )
+      ).versions,
+    enabled: strategyId != null && strategyId !== "",
+    staleTime: 30 * 1000,
+  });
+}
+
 // ── Strategy CRUD (with checklist, phase 5) ─────────────────────────────────
 
 /** Per-strategy stats (phase 5 view) - separate query key from the selector list. */
@@ -235,6 +270,8 @@ export interface StrategyInputBody {
   entryRules?: string | null;
   exitRules?: string | null;
   riskRules?: string | null;
+  /** Reason for the change (Lot 11): stored on the AUTO version snapshot. */
+  changeNote?: string;
   /** Replace-all semantics - the FULL list is sent on every write. */
   checklistItems?: Array<{
     label: string;

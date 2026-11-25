@@ -1226,6 +1226,20 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
               <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {t("checklistTitle")}
               </h4>
+              {/* Lot 11 (roadmap §14): evaluated against the checklist
+                  frozen at entry when a snapshot exists, the live list
+                  otherwise. */}
+              {trade.checklistStatus ? (
+                <p className="text-xs tabular-nums text-muted-foreground">
+                  {t("checklistStatus", {
+                    checked: trade.checklistStatus.requiredChecked,
+                    required: trade.checklistStatus.requiredTotal,
+                  })}
+                  {trade.checklistStatus.missing.length > 0
+                    ? ` - ${t("checklistMissing")}: ${trade.checklistStatus.missing.join(", ")}`
+                    : ""}
+                </p>
+              ) : null}
               {checklistEntries.some(([, checked]) => checked) ? (
                 <ul className="max-h-48 space-y-1 overflow-y-auto">
                   {checklistEntries.map(([id, checked]) => (

@@ -355,6 +355,13 @@ export const strategyInputSchema = z.object({
    * PATCH → checklist untouched.
    */
   checklistItems: z.array(checklistItemSchema).max(60).optional(),
+  /**
+   * Reason for the change (Lot 11, roadmap §14): stored on the AUTO
+   * snapshot frozen before a definition edit, so the version history
+   * says WHY the strategy changed. Never a strategy column, never a
+   * definition field - it does not bump the version by itself.
+   */
+  changeNote: z.string().trim().max(280).optional(),
 });
 
 /** POST /api/v1/strategies/[id]/versions - snapshot the current definition. */

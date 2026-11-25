@@ -432,6 +432,21 @@ function StrategyEditor({
               {t("checklist.add")}
             </Button>
           </div>
+          {editing ? (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground" htmlFor="strategy-change-note">
+                {t("changeNote")}
+              </label>
+              <Input
+                id="strategy-change-note"
+                value={form.changeNote ?? ""}
+                onChange={(e) => set("changeNote", e.target.value || undefined)}
+                placeholder={t("changeNotePlaceholder")}
+                maxLength={280}
+              />
+              <p className="text-[11px] text-muted-foreground">{t("changeNoteHint")}</p>
+            </div>
+          ) : null}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

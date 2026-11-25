@@ -15,6 +15,7 @@ import { apiFetch } from "@/lib/api-client";
 import { invalidateTradeDerivedQueries } from "@/lib/query/invalidation";
 import type {
   AccountDTO,
+  PreTradeWarningDTO,
   SavedViewDTO,
   StrategyDTO,
   TagDTO,
@@ -245,6 +246,30 @@ export function useCreateTrade() {
         body: JSON.stringify(input),
       }),
     onSuccess: invalidate,
+  });
+}
+
+// ── Pre-trade warnings (Lot 11, roadmap §14) ──────────────────────────────
+
+/**
+ * Advisory warnings for a trade draft (unchecked required checklist
+ * items, risk above the per-trade limit, planned R:R below the minimum,
+ * day-trade count above the daily limit). Warnings never block the save;
+ * the form shows them and the user confirms explicitly.
+ */
+export function usePreTradeWarnings() {
+  return useMutation({
+    mutationFn: async (input: {
+      strategyId?: string | null;
+      riskAmount?: string | null;
+      plannedRR?: string | null;
+      entryTime?: string | null;
+      checklistResults?: Record<string, boolean> | null;
+    }) =>
+      apiFetch<{ warnings: PreTradeWarningDTO[] }>(
+        "/api/v1/trades/pre-trade-warnings",
+        { method: "POST", body: JSON.stringify(input) },
+      ),
   });
 }
 

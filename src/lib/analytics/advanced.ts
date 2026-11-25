@@ -1403,6 +1403,18 @@ export interface TradeReviewAnalytics {
   };
   wouldTakeAgain: { yes: number; no: number; maybe: number; unanswered: number };
   playbookMatch: { matched: number; partial: number; offPlaybook: number; unclassified: number };
+  /**
+   * Average R per playbook-match category (Lot 11, roadmap §14): does
+   * following the playbook actually pay? Null when a category has no
+   * trade with a known R. Counts and money stay separate - a category
+   * with one lucky trade does not become "the edge".
+   */
+  playbookMatchR: {
+    matched: number | null;
+    partial: number | null;
+    offPlaybook: number | null;
+    unclassified: number | null;
+  };
   topMistakes: Array<{ label: string; count: number }>;
   customQuestions: CustomQuestionReviewMetric[];
 }
@@ -1425,6 +1437,8 @@ export function computeTradeReviewAnalytics(trades: AdvancedTrade[]): TradeRevie
   const planAnswered = followed + notFollowed;
   const would = { yes: 0, no: 0, maybe: 0, unanswered: 0 };
   const playbook = { matched: 0, partial: 0, offPlaybook: 0, unclassified: 0 };
+  const playbookRSum = { matched: 0, partial: 0, offPlaybook: 0, unclassified: 0 };
+  const playbookRCount = { matched: 0, partial: 0, offPlaybook: 0, unclassified: 0 };
   const mistakes = new Map<string, number>();
   const customGroups = new Map<string, {
     questionId: string; question: string; type: CustomReviewAnswer["type"];
@@ -1445,6 +1459,23 @@ export function computeTradeReviewAnalytics(trades: AdvancedTrade[]): TradeRevie
     else if (match === "PARTIAL") playbook.partial += 1;
     else if (match === "OFF_PLAYBOOK") playbook.offPlaybook += 1;
     else playbook.unclassified += 1;
+    // Average R per match category (Lot 11): only trades with a known R.
+    const r =
+      trade.rMultiple != null && Number.isFinite(Number(trade.rMultiple))
+        ? Number(trade.rMultiple)
+        : null;
+    if (r !== null) {
+      const key =
+        match === "MATCHED"
+          ? "matched"
+          : match === "PARTIAL"
+            ? "partial"
+            : match === "OFF_PLAYBOOK"
+              ? "offPlaybook"
+              : "unclassified";
+      playbookRSum[key] += r;
+      playbookRCount[key] += 1;
+    }
 
     for (const label of new Set(trade.review?.mistakeTags ?? [])) {
       mistakes.set(label, (mistakes.get(label) ?? 0) + 1);
@@ -1493,6 +1524,24 @@ export function computeTradeReviewAnalytics(trades: AdvancedTrade[]): TradeRevie
     },
     wouldTakeAgain: would,
     playbookMatch: playbook,
+    playbookMatchR: {
+      matched:
+        playbookRCount.matched === 0
+          ? null
+          : round(playbookRSum.matched / playbookRCount.matched, 2),
+      partial:
+        playbookRCount.partial === 0
+          ? null
+          : round(playbookRSum.partial / playbookRCount.partial, 2),
+      offPlaybook:
+        playbookRCount.offPlaybook === 0
+          ? null
+          : round(playbookRSum.offPlaybook / playbookRCount.offPlaybook, 2),
+      unclassified:
+        playbookRCount.unclassified === 0
+          ? null
+          : round(playbookRSum.unclassified / playbookRCount.unclassified, 2),
+    },
     topMistakes: [...mistakes.entries()]
       .map(([label, count]) => ({ label, count }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))

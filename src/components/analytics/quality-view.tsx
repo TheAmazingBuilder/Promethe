@@ -269,11 +269,27 @@ export function QualityView() {
                         ["MATCHED", reviews.playbookMatch.matched],
                         ["PARTIAL", reviews.playbookMatch.partial],
                         ["OFF_PLAYBOOK", reviews.playbookMatch.offPlaybook],
-                      ] as const).map(([key, count]) => (
-                        <div key={key} className="flex justify-between text-sm">
-                          <span>{t(`playbook.${key}`)}</span><span className="tabular-nums text-muted-foreground">{count}</span>
-                        </div>
-                      ))}
+                      ] as const).map(([key, count]) => {
+                        // Lot 11 (roadmap §14): average R per match category,
+                        // so compliance-vs-result is visible next to the count.
+                        const avgR =
+                          key === "MATCHED"
+                            ? reviews.playbookMatchR?.matched
+                            : key === "PARTIAL"
+                              ? reviews.playbookMatchR?.partial
+                              : reviews.playbookMatchR?.offPlaybook;
+                        return (
+                          <div key={key} className="flex justify-between text-sm">
+                            <span>{t(`playbook.${key}`)}</span>
+                            <span className="tabular-nums text-muted-foreground">
+                              {count}
+                              {avgR == null
+                                ? ""
+                                : ` · ${avgR >= 0 ? "+" : ""}${avgR.toFixed(2)} R`}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </Card>

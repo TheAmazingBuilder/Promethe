@@ -174,7 +174,7 @@ export async function getMentorTradeDetail(
     include: {
       instrument: true,
       account: true,
-      strategy: true,
+      strategy: { include: { checklistItems: { orderBy: { order: "asc" } } } },
       tags: { include: { tag: true } },
       screenshots: { orderBy: { createdAt: "asc" } },
       executions: { orderBy: { time: "asc" } },

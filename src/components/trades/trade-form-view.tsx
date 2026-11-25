@@ -63,6 +63,7 @@ import {
   useCreateTag,
   useCreateTrade,
   useInstruments,
+  usePreTradeWarnings,
   useRecordTemplateUse,
   useStrategies,
   useTags,
@@ -71,6 +72,7 @@ import {
   useUpdateTrade,
   type MutationResult,
 } from "@/hooks/use-trading";
+import type { PreTradeWarningDTO } from "@/lib/trading/dto";
 import {
   CONFLUENCE_CUSTOM_COLOR,
   CONFLUENCE_PRESETS,
@@ -382,6 +384,10 @@ export function TradeFormView({
   const createTrade = useCreateTrade();
   const updateTrade = useUpdateTrade();
   const recordTemplateUse = useRecordTemplateUse();
+  // Lot 11 (roadmap §14): advisory pre-trade warnings, shown inline and
+  // never blocking - the user confirms explicitly with "Save anyway".
+  const checkWarnings = usePreTradeWarnings();
+  const [pendingWarnings, setPendingWarnings] = React.useState<PreTradeWarningDTO[] | null>(null);
 
   // ── Edit prefill (once per loaded trade) ──
   React.useEffect(() => {
@@ -718,7 +724,7 @@ export function TradeFormView({
     };
   }
 
-  async function onSubmit(draft: boolean) {
+  async function onSubmit(draft: boolean, confirmed = false) {
     let payload: TradeInput;
     if (draft) {
       // Drafts: only the core identifying fields are required.
@@ -742,6 +748,28 @@ export function TradeFormView({
       }
       setFieldErrors(null);
       payload = parsed.data as TradeInput;
+      // Lot 11 (roadmap §14): advisory warnings for a non-draft save.
+      // Drafts skip them; a confirmed save skips the re-check.
+      if (!confirmed) {
+        try {
+          const { warnings } = await checkWarnings.mutateAsync({
+            strategyId: form.strategyId || null,
+            riskAmount: form.riskAmount.trim() || null,
+            plannedRR: preview?.plannedRR?.toString() ?? null,
+            entryTime: form.entryTime || null,
+            checklistResults: form.checklistResults,
+          });
+          if (warnings.length > 0) {
+            setPendingWarnings(warnings);
+            scrollToTop();
+            return;
+          }
+        } catch {
+          // Warnings are advisory only: a failed check never blocks the save.
+          setPendingWarnings(null);
+        }
+      }
+      setPendingWarnings(null);
     }
 
     setSubmitting(draft ? "draft" : "full");
@@ -899,6 +927,44 @@ export function TradeFormView({
               </AlertDescription>
             </Alert>
           )}
+
+          {/* Lot 11 (roadmap §14): advisory pre-trade warnings. Never
+              blocking - the user reviews them and saves anyway, or goes
+              back to fix the trade. */}
+          {pendingWarnings != null && pendingWarnings.length > 0 ? (
+            <Alert>
+              <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+              <AlertTitle>{t("warningsTitle")}</AlertTitle>
+              <AlertDescription>
+                <ul className="list-disc space-y-1 pl-4">
+                  {pendingWarnings.map((w) => (
+                    <li key={w.code}>
+                      {w.message}
+                      {w.detail ? ` (${w.detail})` : null}
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => void onSubmit(false, true)}
+                  >
+                    {t("warningsSaveAnyway")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPendingWarnings(null)}
+                  >
+                    {t("warningsReview")}
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
+          ) : null}
 
           {/* Context */}
           <Card>
