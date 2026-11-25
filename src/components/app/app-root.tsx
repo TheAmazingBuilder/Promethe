@@ -13,7 +13,6 @@ import { AppShell } from "./app-shell";
 import { RouterSync } from "./router-sync";
 import { ViewSwitch } from "@/components/views/view-switch";
 import { QueryProvider } from "./query-provider";
-import { PwaRoot } from "@/components/pwa/pwa-root";
 import { QuickFab } from "@/components/quick/quick-fab";
 import { useRoute } from "@/lib/router";
 
@@ -28,8 +27,10 @@ const LegalView = dynamic(
 /**
  * SPA root: the server passes the initial session (no auth flash), then the
  * client takes over — auth screen when logged out, app shell otherwise.
- * v2: React Query provider + PWA root (SW registration, install prompt,
- * offline indicator) + floating quick-trade action.
+ * v2: React Query provider + floating quick-trade action. PWA (service
+ * worker registration, install prompt, offline indicator) lives in the
+ * root layout only - a second PwaRoot mount here would duplicate the
+ * registration, the window listeners and the offline/install UI.
  * v2.5 M1: AppearanceProvider (palette / density / chart palette on <html>).
  * v2.5 M8: PrivacyProvider (HIDE/BLUR display modes, auto-triggers, sync).
  */
@@ -79,7 +80,6 @@ function AppRootInner({
       <AppShell defaultSidebarOpen={defaultSidebarOpen}>
         <ViewSwitch />
       </AppShell>
-      <PwaRoot />
       <QuickFab />
     </>
   );
