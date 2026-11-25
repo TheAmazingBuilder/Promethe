@@ -357,3 +357,69 @@ describe("tradeLeakProbes — sondes numériques strictes", () => {
     expect(findLeaks({ secret: "610.750" }, probes)).toHaveLength(1);
   });
 });
+
+describe("redactTrade - Lot 14 Sharing: unbounded user content", () => {
+  const RICH_TRADE = {
+    ...TRADE,
+    // Arbitrary user-defined custom fields (JSONB) - unbounded content.
+    customFields: {
+      brokerLogin: "trader-007-secret",
+      accountNumber: "ACC-998877",
+      session: "London",
+    },
+    tradingViewUrl: "https://www.tradingview.com/chart/xyz/user-secret-name/",
+    checklistStatus: {
+      requiredTotal: 3,
+      requiredChecked: 1,
+      missing: ["Wait for London sweep", "Confirm HTF bias"],
+      complete: false,
+    },
+    review: {
+      ...(TRADE.review as Record<string, unknown>),
+      customAnswers: [
+        { questionId: "q1", question: "What did you feel?", type: "TEXT", answer: "Felt rushed after the news - note secrete-99" },
+        { questionId: "q2", question: "Score it", type: "SCALE", answer: 4 },
+      ],
+    },
+  };
+
+  it("strips custom fields as soon as ANY hiding is requested", () => {
+    const { trade } = redactTrade(RICH_TRADE, PIPS_R_ONLY_PRESET);
+    expect(trade).not.toHaveProperty("customFields");
+    const serialized = JSON.stringify(trade);
+    expect(serialized).not.toContain("trader-007-secret");
+    expect(serialized).not.toContain("ACC-998877");
+  });
+
+  it("keeps custom fields only on an explicit full share (no redaction)", () => {
+    const { trade } = redactTrade(RICH_TRADE, NO_REDACTION);
+    expect(trade.customFields).toEqual(RICH_TRADE.customFields);
+  });
+
+  it("strips free-text review answers when notes are hidden", () => {
+    const { trade } = redactTrade(RICH_TRADE, { ...NO_REDACTION, hideNotes: true });
+    const review = trade.review as Record<string, unknown>;
+    expect(review).not.toHaveProperty("customAnswers");
+    expect(JSON.stringify(trade)).not.toContain("note secrete-99");
+    // Scores survive (not free text).
+    expect(review.planAdherenceScore).toBe(4);
+  });
+
+  it("strips the checklist verdict when psychology is hidden", () => {
+    const { trade } = redactTrade(RICH_TRADE, { ...NO_REDACTION, hidePsychology: true });
+    expect(trade).not.toHaveProperty("checklistStatus");
+    expect(JSON.stringify(trade)).not.toContain("Wait for London sweep");
+  });
+
+  it("strips the checklist verdict when the strategy name is hidden", () => {
+    const { trade } = redactTrade(RICH_TRADE, { ...NO_REDACTION, hideStrategyName: true });
+    expect(trade).not.toHaveProperty("checklistStatus");
+    expect(trade).not.toHaveProperty("strategyName");
+  });
+
+  it("strips the TradingView URL when account info is hidden", () => {
+    const { trade } = redactTrade(RICH_TRADE, { ...NO_REDACTION, hideAccountInfo: true });
+    expect(trade).not.toHaveProperty("tradingViewUrl");
+    expect(JSON.stringify(trade)).not.toContain("user-secret-name");
+  });
+});

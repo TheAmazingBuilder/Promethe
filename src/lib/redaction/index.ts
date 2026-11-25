@@ -134,12 +134,20 @@ const AMOUNT_KEYS = [
 const ACCOUNT_KEYS = [
   "accountId", "accountName", "accountCurrency", "accountInitialBalance",
   "broker", "brokerServer", "brokerLogin", "accountType",
+  // Pasted TradingView URL - it can carry the owner's TradingView identity.
+  "tradingViewUrl",
 ];
 const NOTE_KEYS = ["notes", "preTradeAnalysis", "postTradeReview", "lessonLearned"];
-const STRATEGY_KEYS = ["strategyId", "strategyName"];
+const STRATEGY_KEYS = [
+  "strategyId", "strategyName",
+  // Frozen-checklist verdict - its "missing" labels are strategy rule text.
+  "checklistStatus",
+];
 const PSYCH_KEYS = [
   "emotionBefore", "emotionDuring", "emotionAfter", "confidence",
   "setupQualityRating", "executionRating", "followedPlan", "checklistResults", "review",
+  // Frozen-checklist verdict - a review-time verdict, like the review itself.
+  "checklistStatus",
 ];
 
 // Keys that are ALWAYS stripped from anything going to a public/share view -
@@ -172,11 +180,20 @@ export function redactTrade(
   if (policy.hideNotes) {
     out = omit(out, NOTE_KEYS);
     if (isPlainObject(out.review)) {
-      out.review = omit(out.review, ["mainLesson", "whatWentWell", "whatToImprove"]);
+      // Free-text review answers are notes too - the question text comes
+      // from the owner's custom review questions, the answers are free text.
+      out.review = omit(out.review, ["mainLesson", "whatWentWell", "whatToImprove", "customAnswers"]);
     }
   }
   if (policy.hideStrategyName) out = omit(out, STRATEGY_KEYS);
   if (policy.hidePsychology) out = omit(out, PSYCH_KEYS);
+
+  // Custom fields are user-defined key/values with unbounded content - they
+  // cannot be redacted by key, so they leave the payload as soon as ANY
+  // hiding is requested. With no redaction they are shared as-is (explicit
+  // full share). The snapshot allowlist drops them from public payloads
+  // regardless (they are never rendered there).
+  if (hasAnyRedaction(policy)) out = omit(out, ["customFields"]);
 
   // Executions: drop per-execution money when amounts are hidden.
   if (Array.isArray(out.executions)) {

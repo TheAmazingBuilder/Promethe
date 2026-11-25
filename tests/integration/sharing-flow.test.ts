@@ -32,6 +32,7 @@ import {
   readPublicScreenshot,
 } from "@/server/sharing";
 import { findLeaks, PIPS_R_ONLY_PRESET, NO_REDACTION } from "@/lib/redaction";
+import { generateToken, hashToken } from "@/lib/tokens";
 import { mockSupabaseStorage } from "../helpers/supabase-storage";
 
 const storage = mockSupabaseStorage();
@@ -560,4 +561,210 @@ describe("readPublicScreenshot — politique", () => {
     // Cleanup.
     await db.tradeScreenshot.deleteMany({ where: { id: shotId } });
   }, 30000);
+});
+
+// ── Lot 14 Sharing: redaction gaps + atomic counting ─────────────────────────
+
+describe("share links - Lot 14 redaction gaps", () => {
+  it("ne sert jamais la légende libre d'une capture quand les notes sont masquées", async () => {
+    const shotId = "shotcaption01";
+    await db.tradeScreenshot.create({
+      data: {
+        id: shotId,
+        tradeId: tradeAId,
+        userId: userA.id,
+        storagePath: `${userA.id}/${tradeAId}/${shotId}.png`,
+        label: "ENTRY",
+        caption: "Légende confidentielle caption-77 unique",
+      },
+    });
+    try {
+      const created = await createShareLink(userA.id, {
+        type: "TRADE",
+        tradeId: tradeAId,
+        title: "Sans légende",
+        mode: "SNAPSHOT",
+        policy: { ...NO_REDACTION, hideNotes: true },
+        expiresInDays: 30,
+        maxViews: null,
+      });
+      const result = await resolveShareLink(tokenFromUrl(created.urlPath), { countView: false });
+      expect(result.ok).toBe(true);
+      if (!result.ok || result.payload.kind !== "TRADE") throw new Error("unexpected payload");
+      expect(result.payload.screenshots).toHaveLength(1);
+      // Le label (enum) reste, la légende (texte libre) est nulle.
+      expect(result.payload.screenshots[0].label).toBe("ENTRY");
+      expect(result.payload.screenshots[0].caption).toBeNull();
+      expect(JSON.stringify(result.payload)).not.toContain("caption-77");
+    } finally {
+      await db.tradeScreenshot.deleteMany({ where: { id: shotId } });
+    }
+  });
+
+  it("ne sert jamais les champs personnalisés non bornés dans un payload partagé", async () => {
+    const customTrade = await db.trade.create({
+      data: {
+        userId: userA.id,
+        accountId: accountAId,
+        instrumentId,
+        direction: "LONG",
+        entryTime: new Date("2025-03-14T08:00:00Z"),
+        entryPrice: "2650.00",
+        status: "CLOSED",
+        exitTime: new Date("2025-03-14T09:00:00Z"),
+        exitPrice: "2655.00",
+        lots: "0.10",
+        netPnl: "25.00",
+        rMultiple: "1.0",
+        resultType: "WIN",
+        preTradeAnalysis: "",
+        postTradeReview: "",
+        source: "MANUAL",
+        customFields: JSON.stringify({
+          brokerLogin: "login-secret-cf-123",
+          accountNumber: "ACC-998877-cf",
+        }),
+      },
+    });
+    const created = await createShareLink(userA.id, {
+      type: "TRADE",
+      tradeId: customTrade.id,
+      title: "Sans champs perso",
+      mode: "SNAPSHOT",
+      policy: PIPS_POLICY,
+      expiresInDays: 30,
+      maxViews: null,
+    });
+    const result = await resolveShareLink(tokenFromUrl(created.urlPath), { countView: false });
+    expect(result.ok).toBe(true);
+    if (!result.ok || result.payload.kind !== "TRADE") throw new Error("unexpected payload");
+    expect(result.payload.trade).not.toHaveProperty("customFields");
+    const serialized = JSON.stringify(result.payload);
+    expect(serialized).not.toContain("login-secret-cf-123");
+    expect(serialized).not.toContain("ACC-998877-cf");
+  });
+
+  it("anonymise les noms de stratégies du rapport quand hideStrategyName", async () => {
+    const strategy = await db.strategy.create({
+      data: { userId: userA.id, name: "Stratégie Secrète-88" },
+    });
+    for (const day of [20, 21]) {
+      await db.trade.create({
+        data: {
+          userId: userA.id,
+          accountId: accountAId,
+          instrumentId,
+          strategyId: strategy.id,
+          direction: "LONG",
+          entryTime: new Date(`2025-04-${day}T08:00:00Z`),
+          entryPrice: "2650.00",
+          status: "CLOSED",
+          exitTime: new Date(`2025-04-${day}T09:00:00Z`),
+          exitPrice: "2655.00",
+          lots: "0.10",
+          netPnl: "50.00",
+          rMultiple: "1.0",
+          resultType: "WIN",
+          preTradeAnalysis: "",
+          postTradeReview: "",
+          source: "MANUAL",
+        },
+      });
+    }
+    const created = await createShareLink(userA.id, {
+      type: "REPORT",
+      reportPeriod: { start: "2025-04-01", end: "2025-04-30", accountId: null },
+      title: "Rapport anonyme",
+      mode: "SNAPSHOT",
+      policy: { ...NO_REDACTION, hideStrategyName: true },
+      expiresInDays: 30,
+      maxViews: null,
+    });
+    const result = await resolveShareLink(tokenFromUrl(created.urlPath), { countView: false });
+    expect(result.ok).toBe(true);
+    if (!result.ok || result.payload.kind !== "REPORT") throw new Error("unexpected payload");
+    expect(result.payload.byStrategy).toHaveLength(1);
+    expect(result.payload.byStrategy[0].name).toBe("Strategy 1");
+    expect(result.payload.byStrategy[0].key).toBe("strategy-1");
+    const serialized = JSON.stringify(result.payload);
+    expect(serialized).not.toContain("Stratégie Secrète-88");
+    expect(serialized).not.toContain(strategy.id);
+  });
+
+  it("désinfecte un snapshot stocké avant le lot 14 au moment de servir", async () => {
+    const raw = generateToken(32);
+    const oldSnapshot = {
+      kind: "TRADE",
+      title: "Vieux lien",
+      mode: "SNAPSHOT",
+      capturedAt: "2025-06-01T12:00:00.000Z",
+      policy: { ...NO_REDACTION, hideNotes: true },
+      trade: {
+        symbol: "XAUUSD",
+        direction: "LONG",
+        notes: "vieille note old-note-42",
+        futureSecretField: "TOPSECRET-9",
+        customFields: { login: "old-login-9" },
+        review: {
+          id: "r1",
+          planAdherenceScore: 4,
+          customAnswers: [
+            { questionId: "q1", question: "Q?", type: "TEXT", answer: "vieille réponse old-answer-55" },
+          ],
+        },
+      },
+      screenshotRefs: [{ id: "s1", label: "ENTRY", caption: "vieille légende old-caption-66" }],
+    };
+    const row = await db.shareLink.create({
+      data: {
+        userId: userA.id,
+        type: "TRADE",
+        targetId: tradeAId,
+        tokenHash: hashToken(raw),
+        tokenPrefix: raw.slice(0, 6),
+        title: "Vieux lien",
+        mode: "SNAPSHOT",
+        snapshotJson: JSON.stringify(oldSnapshot),
+        redactionJson: JSON.stringify({ ...NO_REDACTION, hideNotes: true }),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        maxViews: null,
+      },
+    });
+    try {
+      const result = await resolveShareLink(raw, { countView: false });
+      expect(result.ok).toBe(true);
+      if (!result.ok || result.payload.kind !== "TRADE") throw new Error("unexpected payload");
+      expect(result.payload.trade).not.toHaveProperty("futureSecretField");
+      expect(result.payload.trade).not.toHaveProperty("customFields");
+      expect(result.payload.trade).not.toHaveProperty("notes");
+      expect(result.payload.screenshots[0].caption).toBeNull();
+      const serialized = JSON.stringify(result.payload);
+      expect(serialized).not.toContain("TOPSECRET-9");
+      expect(serialized).not.toContain("old-note-42");
+      expect(serialized).not.toContain("old-answer-55");
+      expect(serialized).not.toContain("old-caption-66");
+      expect(serialized).not.toContain("old-login-9");
+    } finally {
+      await db.shareLink.delete({ where: { id: row.id } });
+    }
+  });
+
+  it("ne dépasse jamais maxViews même avec des ouvertures concurrentes", async () => {
+    const created = await createShareLink(userA.id, {
+      type: "TRADE",
+      tradeId: tradeAId,
+      title: "Limité concurrent",
+      mode: "SNAPSHOT",
+      policy: FULL_POLICY,
+      expiresInDays: 30,
+      maxViews: 2,
+    });
+    const raw = tokenFromUrl(created.urlPath);
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => resolveShareLink(raw, { countView: true }))
+    );
+    expect(results.filter((r) => r.ok).length).toBe(2);
+    const row = await db.shareLink.findUnique({ where: { id: created.link.id } });
+    expect(row?.viewCount).toBe(2);
+  });
 });

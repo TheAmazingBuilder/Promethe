@@ -3,10 +3,14 @@
  *
  * Respects the link's redaction policy: amounts never appear when hidden —
  * the card shows pips / R / win rate instead. A gone/invalid token renders
- * a neutral branded card (no existence signal).
+ * a neutral branded card (no existence signal). Rate limited like the
+ * public page and the media proxy (same abuse surface, same limits).
  */
 import { ImageResponse } from "next/og";
+import { headers } from "next/headers";
 import { peekShareForOg } from "@/server/sharing";
+import { consumeRateLimit } from "@/lib/rate-limit";
+import { clientIpFrom, hashIp, hashToken } from "@/lib/tokens";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -18,7 +22,18 @@ export default async function OgImage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  const payload = await peekShareForOg(token);
+
+  // Rate limits (hashed keys only) - 120 images / hour / IP, 240 / hour / link.
+  const reqHeaders = await headers();
+  const ipLimit = await consumeRateLimit(
+    `share:og:ip:${hashIp(clientIpFrom(reqHeaders))}`,
+    120,
+    60 * 60 * 1000
+  );
+  const tokenLimit = ipLimit.allowed
+    ? await consumeRateLimit(`share:og:token:${hashToken(token)}`, 240, 60 * 60 * 1000)
+    : { allowed: false };
+  const payload = tokenLimit.allowed ? await peekShareForOg(token) : null;
 
   const accent = "#10b981";
   const bg = "#0a0f0d";
