@@ -50,7 +50,14 @@ const DEFAULT_DEDUPE_MS = 10 * 60 * 1000;
  * check-then-insert transaction, so two identical events cannot both slip
  * through the check.
  */
-export async function notifyInApp(input: NotifyInput): Promise<void> {
+/**
+ * In-app notification (notification center only). Returns true when a
+ * row was actually created, false when the notification was deduped
+ * away (an unread twin inside the window) or the write failed. Callers
+ * that count sent notifications must use this return value: a deduped
+ * call is not a sent notification (lot 10 economic-calendar alerts).
+ */
+export async function notifyInApp(input: NotifyInput): Promise<boolean> {
   try {
     // v2.5 Module 8 — when hideAmountsInNotifications is on, amounts never
     // reach the persisted body (R/pips policy). Composers should already
@@ -78,14 +85,14 @@ export async function notifyInApp(input: NotifyInput): Promise<void> {
     };
     if (dedupeMs <= 0) {
       await db.notificationLog.create({ data });
-      return;
+      return true;
     }
 
     // Serialize concurrent notifies for the same dedupe key: the lock is
     // held until the transaction commits, so a second caller always sees
     // the first caller's row (or its absence after the window expired).
     const lockKey = [input.userId, input.type, url ?? "", dedupeKey ?? "", "IN_APP"].join("|");
-    await db.$transaction(async (tx) => {
+    const created = await db.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0::bigint))`;
       const since = new Date(Date.now() - dedupeMs);
       const existing = await tx.notificationLog.findFirst({
@@ -100,11 +107,14 @@ export async function notifyInApp(input: NotifyInput): Promise<void> {
         },
         select: { id: true },
       });
-      if (existing) return;
+      if (existing) return false;
       await tx.notificationLog.create({ data });
+      return true;
     });
+    return created;
   } catch (error) {
     console.error("[notifications] failed:", error);
+    return false;
   }
 }
 

@@ -38,6 +38,9 @@ const SettingsView = dynamic(() => import("./settings-view").then((m) => m.Setti
 const CalendarView = dynamic(() => import("@/components/calendar/calendar-view").then((m) => m.CalendarView), {
   loading: () => <ViewLoading />,
 });
+const EconomicCalendarView = dynamic(() => import("@/components/economic-calendar/economic-calendar-view").then((m) => m.EconomicCalendarView), {
+  loading: () => <ViewLoading />,
+});
 const JournalView = dynamic(() => import("@/components/journal/journal-view").then((m) => m.JournalView), {
   loading: () => <ViewLoading />,
 });
@@ -322,6 +325,9 @@ export function ViewSwitch() {
       break;
     case "calendar":
       view = <CalendarView />;
+      break;
+    case "economic-calendar":
+      view = <EconomicCalendarView />;
       break;
     case "journal":
       view = <JournalView date={route.journalDate} />;

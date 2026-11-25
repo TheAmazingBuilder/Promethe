@@ -27,6 +27,7 @@ import {
   BarChart3,
   BookOpen,
   Calculator,
+  CalendarClock,
   CalendarDays,
   CandlestickChart,
   Coins,
@@ -290,6 +291,18 @@ export const EXTRA_NAV_ITEMS: NavItem[] = [
     path: "/strategies",
     view: "strategies",
     icon: Target,
+    phase: null,
+    ready: true,
+  },
+  {
+    // Lot 10 - the economic calendar is a real route, reachable from the
+    // command palette, search and the calendar page, but it stays out of
+    // the 10-entry sidebar on purpose (same rule as Strategies).
+    labelKey: "nav.economicCalendar",
+    descriptionKey: "nav.economicCalendarDesc",
+    path: "/economic-calendar",
+    view: "economic-calendar",
+    icon: CalendarClock,
     phase: null,
     ready: true,
   },

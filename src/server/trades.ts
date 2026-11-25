@@ -47,6 +47,7 @@ import {
   type GridStats,
 } from "@/lib/trades/grid-stats";
 import { evaluateTradeViolations } from "@/server/rules";
+import { autoLinkEventsForTrade } from "@/server/economic-calendar";
 import { checkDrawdownAlerts } from "@/server/integrations/delivery";
 import { refreshTradeSearchText } from "@/server/search-index";
 import { foldText } from "@/lib/search/text";
@@ -317,7 +318,8 @@ export function toTradeDetail(t: TradeDetailRow): TradeDetailDTO {
       id: l.event.id,
       title: l.event.title,
       time: l.event.scheduledAt.toISOString(),
-      importance: l.event.impact,
+      // Impact is nullable since lot 10 (FRED rates nothing).
+      importance: l.event.impact ?? "UNKNOWN",
     })),
   };
 }
@@ -1044,6 +1046,8 @@ export async function createTrade(
   await refreshTradeSearchText(created.id);
   // Phase 6 — rule violation detection (best-effort, never fails the write).
   await evaluateTradeViolations(userId, created.id);
+  // Lot 10 — link nearby economic events (best-effort, never fails the write).
+  await autoLinkEventsForTrade(userId, created.id);
   return { trade: detail, deduplicated: false };
 }
 
@@ -1326,6 +1330,8 @@ export async function updateTrade(
   await refreshTradeSearchText(current.id);
   // Phase 6 — re-run rule detection (risk / P&L / day may have changed).
   await evaluateTradeViolations(userId, current.id);
+  // Lot 10 — re-link nearby economic events (entry may have moved).
+  await autoLinkEventsForTrade(userId, current.id);
   return { trade, conflict };
 }
 
@@ -1442,6 +1448,8 @@ export async function closeTrade(
   // v2.5 Module 9 — drawdown / prop alerts (best effort: a failure here
   // must never fail the close; checkDrawdownAlerts never throws).
   await checkDrawdownAlerts(userId, current.accountId);
+  // Lot 10 — link nearby economic events (exit may have moved the window).
+  await autoLinkEventsForTrade(userId, current.id);
   return trade;
 }
 

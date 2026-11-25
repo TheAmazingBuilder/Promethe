@@ -1133,14 +1133,15 @@ model MonteCarloRun {
 model EconomicEvent {
   id          String   @id @default(cuid())
   userId      String?  @map("user_id")
-  /// MANUAL | CSV | PROVIDER
+  /// FRED | FOREXFACTORY | MANUAL
   source      String   @default("MANUAL")
   externalId  String?  @map("external_id")
   title       String
   currency    String // USD | EUR | GBP | …
   country     String?
-  /// LOW | MEDIUM | HIGH
-  impact      String
+  /// LOW | MEDIUM | HIGH — null when the source rates nothing (FRED has no
+  /// impact rating, and an unknown ForexFactory value maps to null).
+  impact      String?
   /// NFP | CPI | FOMC | PPI | GDP | PMI | RETAIL_SALES | RATE_DECISION | SPEECH | OTHER
   category    String
   scheduledAt DateTime @map("scheduled_at") // UTC
@@ -1148,7 +1149,15 @@ model EconomicEvent {
   forecast    String?
   previous    String?
   unit        String?
+  /// Cross-source merge key (lot 10): slug(title) | UTC date | currency.
+  /// One row per real-world event; manual rows are never touched by sync.
+  dedupeKey   String?  @unique @map("dedupe_key")
+  /// Per-source last update, JSON: { FRED: { updatedAt, externalId }, ... }.
+  sourceMeta  String?  @map("source_meta")
+  /// Last sync that touched this row (any source).
+  sourceUpdatedAt DateTime? @map("source_updated_at")
   createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   user  User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
   links TradeEventLink[]
@@ -1189,12 +1198,32 @@ model EventWatchlist {
   categories String   @default("[]")
   /// LOW | MEDIUM | HIGH — minimum impact shown
   minImpact  String   @default("MEDIUM") @map("min_impact")
+  /// Pre-event in-app alerts (lot 10): on/off + how many minutes before.
+  alertsEnabled     Boolean @default(true) @map("alerts_enabled")
+  alertMinutesBefore Int    @default(60) @map("alert_minutes_before")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("event_watchlists")
+}
+
+/// Per-source sync health for the economic calendar (lot 10, roadmap §12).
+/// One row per provider source (FRED, FOREXFACTORY). MANUAL needs no sync
+/// row: a manual event is local data, always available. Status is written
+/// by the sync itself: OK (last run succeeded), STALE (no success for over
+/// 24 h), DOWN (last run failed), NOT_CONFIGURED (FRED without a key).
+model EconomicCalendarSyncState {
+  id         String    @id @default(cuid())
+  source     String    @unique // FRED | FOREXFACTORY
+  status     String // OK | STALE | DOWN | NOT_CONFIGURED
+  lastSyncAt DateTime? @map("last_sync_at")
+  lastError  String?   @map("last_error")
+  eventCount Int       @default(0) @map("event_count")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  @@map("economic_calendar_sync_states")
 }
 
 // ── 4.11 Volatility & market regime context ─────────────────────────────────

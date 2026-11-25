@@ -24,6 +24,7 @@ export const VIEW_IDS = [
   "quick-trade",
   "analytics",
   "calendar",
+  "economic-calendar",
   "journal",
   "strategies",
   "playbook",
@@ -115,6 +116,7 @@ const PATH_TO_VIEW: Record<string, ViewId> = {
   analytics: "analytics",
   calendar: "calendar",
   calendrier: "calendar",
+  "economic-calendar": "economic-calendar",
   journal: "journal",
   strategies: "strategies",
   playbook: "playbook",
@@ -437,6 +439,8 @@ export function routeToPath(route: AppRoute): string {
       return withSearch("/analytics/performance-report", query);
     case "calendar":
       return withSearch("/calendar", query);
+    case "economic-calendar":
+      return withSearch("/economic-calendar", query);
     case "journal":
       return route.journalDate
         ? withSearch(`/journal/${route.journalDate}`, query)

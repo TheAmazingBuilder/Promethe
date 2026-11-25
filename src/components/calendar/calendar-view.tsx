@@ -37,6 +37,7 @@ import { useTimePrefs } from "@/components/time/time-provider";
 import { pnlClass } from "@/lib/format";
 import { useFormat } from "@/lib/format/use-format";
 import { toD } from "@/lib/trading/dec";
+import { navigate } from "@/lib/router";
 
 const EMERALD_BG = "bg-gain-subtle";
 const ROSE_BG = "bg-loss-subtle";
@@ -153,6 +154,9 @@ export function CalendarView() {
           ) : null}
           <Button variant="outline" size="sm" onClick={goToday}>
             {t("today")}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate("/economic-calendar")}>
+            {t("economicCalendar")}
           </Button>
           </>
         }

@@ -744,7 +744,9 @@ async function computeWidgetData(
         id: e.id,
         title: e.title,
         currency: e.currency,
-        impact: e.impact,
+        // Impact is nullable since lot 10 (FRED rates nothing): the widget
+        // only badges HIGH, and an unrated event never claims to be HIGH.
+        impact: e.impact ?? "UNKNOWN",
         category: e.category,
         scheduledAt: e.scheduledAt.toISOString(),
       }));

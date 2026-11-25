@@ -97,6 +97,7 @@ const LazyReplayPlayer = dynamic(
   { ssr: false, loading: () => <Skeleton className="h-[640px] w-full" /> }
 );
 import { TradeViolationsSection } from "@/components/rules/trade-violations-section";
+import { TradeEventContextCard } from "@/components/economic-calendar/trade-event-context-card";
 import { GaiaLinkedNotesSection } from "@/components/gaia/gaia-linked-notes";
 import {
   gaiaErrorMessage,
@@ -899,6 +900,9 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
           </dl>
         </CardContent>
       </Card>
+
+      {/* ── Economic events around this trade (lot 10) ── */}
+      <TradeEventContextCard tradeId={tradeId} />
 
       {/* ── Executions ── */}
       <Card>
