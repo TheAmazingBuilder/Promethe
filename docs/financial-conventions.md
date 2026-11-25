@@ -231,3 +231,60 @@ wins — fix the code, not the document. (Verification report MD §3.)
   migration. The P&L simulator scenario save stores the same
   fields its loader restores, so a saved scenario replays
   exactly.
+
+## 8. Prop Firm challenge engine (Lot 5)
+
+- Source of truth: the challenge's frozen `rulesSnapshot` (one
+  phase rule at a time) plus the timezone and reset time frozen
+  on the challenge (`ruleTimezone`, `ruleResetTimeLocal`).
+  Later edits of a reusable rule set never rewrite a challenge
+  already in progress. Legacy challenges without frozen values
+  fall back to the linked rule set, then UTC / "00:00".
+- A firm day ends at `resetTimeLocal` in the challenge
+  timezone (DST-safe through Intl). A trade belongs to the firm
+  day its exit instant falls in. A trading day is a firm day
+  with trade activity (an entry or an exit on or after the
+  phase start).
+- Cash flows are never P&L: deposits and withdrawals change
+  the real balance, but daily loss, profit target and drawdown
+  all run on the cash-flow-adjusted equity (phase starting
+  balance + closed P&L only). A deposit cannot hide a drawdown
+  and a withdrawal cannot cause one.
+- Drawdown mapping: `STATIC` and `BALANCE_BASED` measure from
+  the phase starting balance on the adjusted series; `TRAILING`
+  and `EQUITY_BASED` measure from the running peak of the
+  adjusted series. Limits are a percent of the phase starting
+  balance. A breach is recorded the moment it happens, even if
+  the account recovers afterwards.
+- Daily loss is the worst firm day, measured on the adjusted
+  series (day-start equity minus the lowest point inside the
+  day). With equity snapshots the intraday dip counts; without
+  any snapshot in the phase, equity equals the closed-trade
+  balance and the evaluation says so (`CLOSED_ONLY`) instead of
+  inventing intraday values. Open positions are invisible
+  without snapshots.
+- Severity: WARNING at 75% of a limit, IMMINENT at 95%,
+  BREACH at 100% (same thresholds as the legacy PROP status).
+- Profit target is a percent of the phase starting balance,
+  gained from closed P&L only. A phase passes only when the
+  target is reached AND the minimum trading days are met with
+  no rule breached. Maximum trading days breached without
+  passing fails the phase (`TIME_LIMIT`).
+- Consistency: the best day's profit over the total profit.
+  Weekend holding is checked from entry/exit times against UTC
+  weekends. News trading and leverage cannot be checked from
+  the stored data and are reported `UNKNOWN` with the reason,
+  never guessed.
+- The engine is pure (`src/lib/prop/engine.ts`); the server
+  (`src/server/prop-evaluation.ts`) only loads the rows of that
+  one challenge and account. Evaluation is computed on demand
+  and deterministic — the history is the day-by-day breakdown
+  plus the recorded phase results, so no evaluation table is
+  needed. The dashboard PROP widget (`src/server/prop-status.ts`)
+  uses the engine when the account has a challenge in progress
+  and keeps the legacy Account PROP fields for historical
+  accounts without one.
+- Fees and payouts are reported in the evaluation summary
+  (challenge fee, expenses, payouts) but never change the
+  challenge balance: a payout does not count as profit and a
+  fee does not count as a loss.

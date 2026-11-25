@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 import type {
   PropChallengeDTO,
+  PropChallengeEvaluationDTO,
   PropFirmRuleSetDTO,
   PropFirmWorkspacePayload,
   PropPayoutDTO,
@@ -14,9 +15,11 @@ import type {
   PropChallengeInput,
   PropChallengePatch,
   PropExpenseInput,
+  PropExpensePatch,
   PropFirmRuleSetInput,
   PropFirmRuleSetPatch,
   PropPayoutInput,
+  PropPayoutPatch,
   PropPhaseResultInput,
 } from "@/lib/validations/prop-firms";
 
@@ -134,6 +137,61 @@ export function useCreatePropExpense() {
         method: "POST",
         body: JSON.stringify(input),
       })).expense,
+    onSuccess: invalidate,
+  });
+}
+
+/** Lot 5 engine evaluation of one challenge (computed on demand). */
+export function usePropChallengeEvaluation(challengeId: string | null) {
+  return useQuery({
+    queryKey: ["prop-firms", "evaluation", challengeId],
+    queryFn: () =>
+      apiFetch<{ evaluation: PropChallengeEvaluationDTO }>(
+        `/api/v1/prop-firms/challenges/${challengeId}/evaluation`,
+      ),
+    enabled: challengeId != null,
+    staleTime: 30_000,
+  });
+}
+
+export function useUpdatePropPayout() {
+  const invalidate = useInvalidatePropFirms();
+  return useMutation({
+    mutationFn: async ({ challengeId, payoutId, patch }: { challengeId: string; payoutId: string; patch: PropPayoutPatch }) =>
+      (await apiFetch<{ payout: PropPayoutDTO }>(`/api/v1/prop-firms/challenges/${challengeId}/payouts/${payoutId}`, {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      })).payout,
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeletePropPayout() {
+  const invalidate = useInvalidatePropFirms();
+  return useMutation({
+    mutationFn: async ({ challengeId, payoutId }: { challengeId: string; payoutId: string }) =>
+      apiFetch(`/api/v1/prop-firms/challenges/${challengeId}/payouts/${payoutId}`, { method: "DELETE" }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdatePropExpense() {
+  const invalidate = useInvalidatePropFirms();
+  return useMutation({
+    mutationFn: async ({ challengeId, expenseId, patch }: { challengeId: string; expenseId: string; patch: PropExpensePatch }) =>
+      (await apiFetch<{ expense: PropExpenseDTO }>(`/api/v1/prop-firms/challenges/${challengeId}/expenses/${expenseId}`, {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      })).expense,
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeletePropExpense() {
+  const invalidate = useInvalidatePropFirms();
+  return useMutation({
+    mutationFn: async ({ challengeId, expenseId }: { challengeId: string; expenseId: string }) =>
+      apiFetch(`/api/v1/prop-firms/challenges/${challengeId}/expenses/${expenseId}`, { method: "DELETE" }),
     onSuccess: invalidate,
   });
 }

@@ -1,6 +1,11 @@
 import type {
   PropPhaseRuleInput,
 } from "@/lib/validations/prop-firms";
+import type {
+  PropEvaluationDay,
+  PropPhaseOutcome,
+  PropRuleEvaluation,
+} from "@/lib/prop/engine";
 
 export type PropPhaseRuleDTO = PropPhaseRuleInput;
 
@@ -68,6 +73,9 @@ export interface PropChallengeDTO {
   endDate: string | null;
   status: string;
   notes: string | null;
+  /** Frozen timezone / reset time (null on legacy rows: see evaluation fallback). */
+  ruleTimezone: string | null;
+  ruleResetTimeLocal: string | null;
   rulesSnapshot: PropPhaseRuleDTO[];
   phaseResults: PropPhaseResultDTO[];
   payouts: PropPayoutDTO[];
@@ -79,4 +87,47 @@ export interface PropChallengeDTO {
 export interface PropFirmWorkspacePayload {
   ruleSets: PropFirmRuleSetDTO[];
   challenges: PropChallengeDTO[];
+}
+
+/** One phase of one challenge, evaluated by the Lot 5 engine. */
+export interface PropChallengeEvaluationDTO {
+  challengeId: string;
+  /** The phase actually evaluated (currentPhase, or the last recorded phase when the challenge is closed). */
+  phase: string;
+  /** ISO date (YYYY-MM-DD) of the phase start. */
+  phaseStart: string;
+  phaseStartingBalance: string;
+  currency: string;
+  /** Frozen challenge timezone (falls back to the rule set, then UTC). */
+  timezone: string;
+  /** Frozen daily reset time "HH:MM" (falls back to the rule set, then "00:00"). */
+  resetTimeLocal: string;
+  accountSize: string;
+  currentBalance: string;
+  currentEquity: string;
+  peakEquity: string;
+  todayPnl: string;
+  todayDayKey: string;
+  tradingDays: number;
+  /** SNAPSHOTS when at least one equity snapshot exists in the phase. */
+  equityData: "SNAPSHOTS" | "CLOSED_ONLY";
+  equityDataNote: string | null;
+  timezoneFallback: boolean;
+  /** The frozen phase rule this evaluation ran against. */
+  rule: PropPhaseRuleInput;
+  rules: PropRuleEvaluation[];
+  phaseOutcome: PropPhaseOutcome;
+  /** Day-by-day history of the phase (firm days). */
+  days: PropEvaluationDay[];
+  phaseHistory: PropPhaseResultDTO[];
+  fees: {
+    challengeFee: string;
+    feeCurrency: string;
+    totalExpenses: string;
+    totalPayoutsGross: string;
+    totalPayoutsNet: string;
+    /** True when some payout or expense uses another currency than the fee currency. */
+    mixedCurrencies: boolean;
+  };
+  evaluatedAt: string;
 }

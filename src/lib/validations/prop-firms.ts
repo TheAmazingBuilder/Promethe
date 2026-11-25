@@ -85,6 +85,10 @@ export const propChallengeInputSchema = z.object({
   status: z.enum(PROP_CHALLENGE_STATUSES).default("IN_PROGRESS"),
   notes: z.string().trim().max(3000).nullable().optional(),
   phases: propFirmPhasesSchema.optional(),
+  /// Frozen at purchase for custom (rule-set-less) challenges; when a rule
+  /// set is chosen, its timezone and reset time win (Lot 5).
+  timezone: timezone.nullable().optional(),
+  resetTimeLocal: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),
 }).superRefine((value, ctx) => {
   if (value.ruleSetId == null && value.phases == null) {
     ctx.addIssue({

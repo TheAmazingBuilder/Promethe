@@ -124,6 +124,8 @@ function toChallengeDTO(row: ChallengeRow): PropChallengeDTO {
     endDate: day(row.endDate),
     status: row.status,
     notes: row.notes,
+    ruleTimezone: row.ruleTimezone,
+    ruleResetTimeLocal: row.ruleResetTimeLocal,
     rulesSnapshot: parseRuleSnapshot(row.rulesSnapshot),
     phaseResults: row.phaseResults.map(toPhaseResultDTO),
     payouts: row.payouts.map(toPayoutDTO),
@@ -236,6 +238,11 @@ export async function createPropChallenge(
       endDate: input.endDate ? new Date(`${input.endDate}T00:00:00.000Z`) : null,
       status: input.status,
       notes: input.notes ?? null,
+      // Lot 5: freeze the day boundary at purchase. The rule set wins when
+      // one is chosen; custom challenges use the provided values (UTC /
+      // "00:00" when omitted, resolved at evaluation time).
+      ruleTimezone: ruleSet?.timezone ?? input.timezone ?? null,
+      ruleResetTimeLocal: ruleSet?.resetTimeLocal ?? input.resetTimeLocal ?? null,
       rulesSnapshot: JSON.stringify(phases),
       phaseResults: {
         create: {
@@ -393,4 +400,136 @@ export async function createPropExpense(
     date: row.date.toISOString().slice(0, 10),
     note: row.note,
   };
+}
+
+// ── Lot 5 — payouts and expenses: correct or remove a recorded movement ──
+// The patch schemas already existed; only create was wired. A payout or an
+// expense recorded with a wrong amount, split or status could previously
+// only be fixed by deleting the whole challenge. Neither payouts nor
+// expenses feed any report total (they are only listed on the challenge),
+// so a hard delete removes no reported figure.
+export async function updatePropPayout(
+  userId: string,
+  challengeId: string,
+  payoutId: string,
+  patch: PropPayoutPatch,
+): Promise<PropPayoutDTO | null> {
+  const existing = await db.propPayout.findFirst({
+    where: { id: payoutId, challengeId, userId },
+  });
+  if (!existing) return null;
+  const grossAmount =
+    patch.grossAmount !== undefined ? patch.grossAmount : existing.grossAmount.toString();
+  const profitSplitPercent =
+    patch.profitSplitPercent !== undefined
+      ? patch.profitSplitPercent
+      : Number(existing.profitSplitPercent);
+  const row = await db.propPayout.update({
+    where: { id: payoutId },
+    data: {
+      ...(patch.grossAmount !== undefined ? { grossAmount: patch.grossAmount } : {}),
+      ...(patch.profitSplitPercent !== undefined
+        ? { profitSplitPercent: String(patch.profitSplitPercent) }
+        : {}),
+      netAmount: toD(grossAmount).times(profitSplitPercent).div(100).toString(),
+      ...(patch.currency !== undefined ? { currency: patch.currency } : {}),
+      ...(patch.requestedAt !== undefined
+        ? { requestedAt: new Date(`${patch.requestedAt}T00:00:00.000Z`) }
+        : {}),
+      ...(patch.receivedAt !== undefined
+        ? {
+            receivedAt: patch.receivedAt
+              ? new Date(`${patch.receivedAt}T00:00:00.000Z`)
+              : null,
+          }
+        : {}),
+      ...(patch.method !== undefined ? { method: patch.method ?? null } : {}),
+      ...(patch.status !== undefined ? { status: patch.status } : {}),
+      ...(patch.note !== undefined ? { note: patch.note ?? null } : {}),
+    },
+  });
+  return {
+    id: row.id,
+    requestedAt: row.requestedAt.toISOString(),
+    receivedAt: row.receivedAt?.toISOString() ?? null,
+    grossAmount: row.grossAmount.toString(),
+    profitSplitPercent: row.profitSplitPercent.toString(),
+    netAmount: row.netAmount.toString(),
+    currency: row.currency,
+    method: row.method,
+    status: row.status,
+    note: row.note,
+  };
+}
+
+export async function deletePropPayout(
+  userId: string,
+  challengeId: string,
+  payoutId: string,
+): Promise<boolean> {
+  const existing = await db.propPayout.findFirst({
+    where: { id: payoutId, challengeId, userId },
+    select: { id: true },
+  });
+  if (!existing) return false;
+  await db.propPayout.delete({ where: { id: payoutId } });
+  return true;
+}
+
+export async function updatePropExpense(
+  userId: string,
+  challengeId: string,
+  expenseId: string,
+  patch: PropExpensePatch,
+): Promise<PropExpenseDTO | null> {
+  const existing = await db.propExpense.findFirst({
+    where: { id: expenseId, userId, challengeId },
+    select: { id: true, challengeId: true },
+  });
+  if (!existing) return null;
+  if (patch.challengeId !== undefined && patch.challengeId !== null) {
+    const challenge = await db.propChallenge.findFirst({
+      where: { id: patch.challengeId, userId },
+      select: { id: true },
+    });
+    if (!challenge) return null;
+  }
+  const row = await db.propExpense.update({
+    where: { id: expenseId },
+    data: {
+      ...(patch.challengeId !== undefined
+        ? { challengeId: patch.challengeId }
+        : {}),
+      ...(patch.type !== undefined ? { type: patch.type } : {}),
+      ...(patch.amount !== undefined ? { amount: patch.amount } : {}),
+      ...(patch.currency !== undefined ? { currency: patch.currency } : {}),
+      ...(patch.date !== undefined
+        ? { date: new Date(`${patch.date}T00:00:00.000Z`) }
+        : {}),
+      ...(patch.note !== undefined ? { note: patch.note ?? null } : {}),
+    },
+  });
+  return {
+    id: row.id,
+    challengeId: row.challengeId,
+    type: row.type,
+    amount: row.amount.toString(),
+    currency: row.currency,
+    date: row.date.toISOString().slice(0, 10),
+    note: row.note,
+  };
+}
+
+export async function deletePropExpense(
+  userId: string,
+  challengeId: string,
+  expenseId: string,
+): Promise<boolean> {
+  const existing = await db.propExpense.findFirst({
+    where: { id: expenseId, userId, challengeId },
+    select: { id: true },
+  });
+  if (!existing) return false;
+  await db.propExpense.delete({ where: { id: expenseId } });
+  return true;
 }

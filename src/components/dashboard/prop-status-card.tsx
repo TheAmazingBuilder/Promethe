@@ -30,6 +30,9 @@ function toneOf(status: PropLimit["status"]): string {
   switch (status) {
     case "BREACHED":
       return "text-loss";
+    case "IMMINENT":
+      // Breach is close: same urgency as breached, the label says why.
+      return "text-loss";
     case "WARNING":
       // a11y (M8 Phase 5): amber-700 on white passes AA (5.0:1); amber-600 was 3.2:1.
       return "text-amber-700 dark:text-amber-400";
@@ -41,6 +44,8 @@ function toneOf(status: PropLimit["status"]): string {
 function barToneOf(status: PropLimit["status"]): string {
   switch (status) {
     case "BREACHED":
+      return "bg-loss";
+    case "IMMINENT":
       return "bg-loss";
     case "WARNING":
       return "bg-amber-500";
@@ -130,7 +135,7 @@ export function PropStatusCard() {
     <Card
       data-overall={status.overall}
       className={
-        status.overall === "BREACHED"
+        status.overall === "BREACHED" || status.overall === "IMMINENT"
           ? "border-loss-subtle"
           : status.overall === "WARNING"
             ? "border-amber-500/50"
@@ -139,7 +144,7 @@ export function PropStatusCard() {
     >
       <CardHeader className="pb-3">
         <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-          {status.overall === "BREACHED" ? (
+          {status.overall === "BREACHED" || status.overall === "IMMINENT" ? (
             <ShieldAlert className="h-4 w-4 text-loss" aria-hidden="true" />
           ) : status.overall === "WARNING" ? (
             <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" aria-hidden="true" />
@@ -153,9 +158,11 @@ export function PropStatusCard() {
           >
             {status.overall === "BREACHED"
               ? t("statusBreached")
-              : status.overall === "WARNING"
-                ? t("statusWarning")
-                : t("statusOk")}
+              : status.overall === "IMMINENT"
+                ? t("statusImminent")
+                : status.overall === "WARNING"
+                  ? t("statusWarning")
+                  : t("statusOk")}
           </Badge>
         </CardTitle>
         <CardDescription className="flex flex-wrap items-baseline gap-x-4 gap-y-1 tabular-nums">

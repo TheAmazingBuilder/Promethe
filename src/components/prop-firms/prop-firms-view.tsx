@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,22 +42,32 @@ import {
   useCreatePropPayout,
   useCreatePropPhaseResult,
   useDeletePropChallenge,
+  useDeletePropExpense,
   useDeletePropFirmRuleSet,
+  useDeletePropPayout,
+  usePropChallengeEvaluation,
   usePropFirmWorkspace,
   useUpdatePropChallenge,
+  useUpdatePropExpense,
+  useUpdatePropPayout,
 } from "@/hooks/use-prop-firms";
 import { ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import type { AccountDTO } from "@/lib/trading/dto";
 import type {
   PropChallengeDTO,
+  PropExpenseDTO,
   PropFirmRuleSetDTO,
+  PropPayoutDTO,
 } from "@/lib/prop-firms/types";
+import type { PropRuleEvaluation } from "@/lib/prop/engine";
 import type {
   PropChallengeInput,
   PropExpenseInput,
+  PropExpensePatch,
   PropFirmRuleSetInput,
   PropPayoutInput,
+  PropPayoutPatch,
   PropPhaseResultInput,
   PropPhaseRuleInput,
 } from "@/lib/validations/prop-firms";
@@ -112,6 +122,102 @@ function errorToast(
     ),
     variant: "destructive",
   });
+}
+
+// ── Lot 5 — live rule evaluation of one challenge ───────────────────────────
+
+function evaluationRuleLabel(rule: string, t: ReturnType<typeof useTranslations>): string {
+  switch (rule) {
+    case "DAILY_LOSS": return t("ruleDailyLoss");
+    case "TOTAL_DRAWDOWN": return t("ruleTotalDrawdown");
+    case "PROFIT_TARGET": return t("ruleProfitTarget");
+    case "MIN_TRADING_DAYS": return t("ruleMinTradingDays");
+    case "MAX_TRADING_DAYS": return t("ruleMaxTradingDays");
+    case "CONSISTENCY": return t("ruleConsistency");
+    case "WEEKEND_HOLDING": return t("ruleWeekendHolding");
+    case "NEWS_TRADING": return t("ruleNewsTrading");
+    case "LEVERAGE": return t("ruleLeverage");
+    default: return rule;
+  }
+}
+
+function evaluationRuleStatusLabel(status: string, t: ReturnType<typeof useTranslations>): string {
+  switch (status) {
+    case "PASS": return t("rulePass");
+    case "WARNING": return t("ruleWarning");
+    case "IMMINENT": return t("ruleImminent");
+    case "BREACH": return t("ruleBreach");
+    case "PENDING": return t("rulePending");
+    case "SKIPPED": return t("ruleSkipped");
+    case "UNKNOWN": return t("ruleUnknown");
+    default: return status;
+  }
+}
+
+function evaluationRuleTone(status: string): string {
+  switch (status) {
+    case "BREACH": return "text-loss";
+    case "IMMINENT": return "text-loss";
+    case "WARNING": return "text-amber-700 dark:text-amber-400";
+    case "PASS": return "text-gain";
+    default: return "text-muted-foreground";
+  }
+}
+
+function ChallengeEvaluation({ challengeId, currency }: { challengeId: string; currency: string }) {
+  const t = useTranslations("propFirmsView");
+  const { data, isLoading, isError } = usePropChallengeEvaluation(challengeId);
+
+  if (isLoading) return <Skeleton className="h-24 w-full" />;
+  if (isError || !data?.evaluation) {
+    return <p className="text-xs text-muted-foreground">{t("evaluationError")}</p>;
+  }
+  const evaluation = data.evaluation;
+  const outcome = evaluation.phaseOutcome.outcome;
+  return (
+    <div className="space-y-2 rounded-md border p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold">{t("evaluation")} · {phaseLabel(evaluation.phase, t)}</p>
+        <Badge variant={outcome === "PASSED" ? "default" : outcome === "FAILED" ? "destructive" : "secondary"}>
+          {outcome === "PASSED" ? t("phasePassedEval") : outcome === "FAILED" ? t("phaseFailedEval") : t("phaseInProgressEval")}
+        </Badge>
+      </div>
+      <p className="text-xs tabular-nums text-muted-foreground">
+        {t("currentEquityLabel")}: <Money value={evaluation.currentEquity} currency={currency} /> · {t("tradingDaysCount")}: {evaluation.tradingDays}
+      </p>
+      {evaluation.phaseOutcome.recommendedAction !== "NONE" ? (
+        <p className="text-xs font-medium">
+          {evaluation.phaseOutcome.recommendedAction === "MARK_PHASE_PASSED" ? t("recommendedMarkPassed") : t("recommendedMarkFailed")}
+          {" — "}
+          <span className="font-normal text-muted-foreground">{evaluation.phaseOutcome.reasons[0] ?? ""}</span>
+        </p>
+      ) : null}
+      {evaluation.equityData === "CLOSED_ONLY" ? (
+        <p className="text-xs text-muted-foreground">{t("equityClosedOnly")}</p>
+      ) : null}
+      <div className="space-y-2">
+        {evaluation.rules.map((rule: PropRuleEvaluation) => (
+          <div key={rule.rule} className="rounded-md border p-2 text-xs">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <span className="font-medium">{evaluationRuleLabel(rule.rule, t)}</span>
+              <span className={evaluationRuleTone(rule.status)}>{evaluationRuleStatusLabel(rule.status, t)}</span>
+            </div>
+            <p className="mt-1 text-muted-foreground">{rule.detail}</p>
+            {rule.used != null && rule.limit != null ? (
+              <p className="mt-1 tabular-nums text-muted-foreground">{rule.used} / {rule.limit}</p>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      <p className="text-xs tabular-nums text-muted-foreground">
+        {t("feeLabel")}: {evaluation.fees.challengeFee} {evaluation.fees.feeCurrency}
+        {" · "}
+        {t("expenseHistory")}: {evaluation.fees.totalExpenses} {evaluation.fees.feeCurrency}
+        {" · "}
+        {t("payoutHistory")}: {evaluation.fees.totalPayoutsNet} {evaluation.fees.feeCurrency}
+      </p>
+    </div>
+  );
 }
 
 type ChallengeDraft = {
@@ -551,15 +657,18 @@ function PayoutEditor({
   challenge,
   open,
   onOpenChange,
+  editing,
 }: {
   challenge: PropChallengeDTO | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  editing?: PropPayoutDTO | null;
 }) {
   const t = useTranslations("propFirmsView");
   const tRoot = useTranslations();
   const { toast } = useToast();
   const create = useCreatePropPayout();
+  const update = useUpdatePropPayout();
   const [grossAmount, setGrossAmount] = React.useState("");
   const [profitSplitPercent, setProfitSplitPercent] = React.useState("80");
   const [currency, setCurrency] = React.useState("USD");
@@ -571,6 +680,16 @@ function PayoutEditor({
 
   React.useEffect(() => {
     if (!open) return;
+    if (editing) {
+      setGrossAmount(editing.grossAmount);
+      setProfitSplitPercent(editing.profitSplitPercent);
+      setCurrency(editing.currency);
+      setRequestedAt(editing.requestedAt.slice(0, 10));
+      setReceivedAt(editing.receivedAt?.slice(0, 10) ?? "");
+      setMethod(editing.method ?? "");
+      setStatus(editing.status === "RECEIVED" || editing.status === "REJECTED" ? editing.status : "REQUESTED");
+      return;
+    }
     setGrossAmount("");
     setProfitSplitPercent("80");
     setCurrency(challenge?.accountCurrency ?? "USD");
@@ -578,24 +697,38 @@ function PayoutEditor({
     setReceivedAt("");
     setMethod("");
     setStatus("REQUESTED");
-  }, [open, challenge]);
+  }, [open, challenge, editing]);
 
   const onSave = async () => {
     if (!challenge || !grossAmount.trim()) return;
     setSaving(true);
     try {
-      const payload: PropPayoutInput = {
-        grossAmount: grossAmount.trim(),
-        profitSplitPercent: Number(profitSplitPercent),
-        currency,
-        requestedAt,
-        receivedAt: receivedAt || null,
-        method: method.trim() || null,
-        status,
-        note: null,
-      };
-      await create.mutateAsync({ challengeId: challenge.id, input: payload });
-      toast({ title: t("created") });
+      if (editing) {
+        const patch: PropPayoutPatch = {
+          grossAmount: grossAmount.trim(),
+          profitSplitPercent: Number(profitSplitPercent),
+          currency,
+          requestedAt,
+          receivedAt: receivedAt || null,
+          method: method.trim() || null,
+          status,
+        };
+        await update.mutateAsync({ challengeId: challenge.id, payoutId: editing.id, patch });
+        toast({ title: t("updated") });
+      } else {
+        const payload: PropPayoutInput = {
+          grossAmount: grossAmount.trim(),
+          profitSplitPercent: Number(profitSplitPercent),
+          currency,
+          requestedAt,
+          receivedAt: receivedAt || null,
+          method: method.trim() || null,
+          status,
+          note: null,
+        };
+        await create.mutateAsync({ challengeId: challenge.id, input: payload });
+        toast({ title: t("created") });
+      }
       onOpenChange(false);
     } catch (error) {
       errorToast(error, tRoot, t("error"), toast);
@@ -608,7 +741,7 @@ function PayoutEditor({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
-        <DialogHeader><DialogTitle>{t("payoutTitle")}</DialogTitle><DialogDescription>{t("payoutSplitHint")}</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>{editing ? t("editPayout") : t("payoutTitle")}</DialogTitle><DialogDescription>{t("payoutSplitHint")}</DialogDescription></DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1"><Label>{t("grossAmount")}</Label><Input inputMode="decimal" value={grossAmount} onChange={(event) => setGrossAmount(event.target.value)} /></div>
           <div className="space-y-1"><Label>{t("profitSplit")}</Label><Input type="number" min="0" max="100" value={profitSplitPercent} onChange={(event) => setProfitSplitPercent(event.target.value)} /></div>
@@ -629,15 +762,18 @@ function ExpenseEditor({
   challenge,
   open,
   onOpenChange,
+  editing,
 }: {
   challenge: PropChallengeDTO | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  editing?: PropExpenseDTO | null;
 }) {
   const t = useTranslations("propFirmsView");
   const tRoot = useTranslations();
   const { toast } = useToast();
   const create = useCreatePropExpense();
+  const update = useUpdatePropExpense();
   const [type, setType] = React.useState<PropExpenseInput["type"]>("FEE");
   const [amount, setAmount] = React.useState("");
   const [currency, setCurrency] = React.useState("USD");
@@ -647,22 +783,42 @@ function ExpenseEditor({
 
   React.useEffect(() => {
     if (!open) return;
+    if (editing) {
+      setType(editing.type === "RESET" || editing.type === "ADDON" || editing.type === "OTHER" ? editing.type : "FEE");
+      setAmount(editing.amount);
+      setCurrency(editing.currency);
+      setDate(editing.date);
+      setNote(editing.note ?? "");
+      return;
+    }
     setType("FEE");
     setAmount("");
     setCurrency(challenge?.feeCurrency ?? "USD");
     setDate(todayLocalDay());
     setNote("");
-  }, [open, challenge]);
+  }, [open, challenge, editing]);
 
   const onSave = async () => {
     if (!challenge || !amount.trim()) return;
     setSaving(true);
     try {
-      await create.mutateAsync({
-        challengeId: challenge.id,
-        input: { type, amount: amount.trim(), currency, date, note: note.trim() || null },
-      });
-      toast({ title: t("created") });
+      if (editing) {
+        const patch: PropExpensePatch = {
+          type,
+          amount: amount.trim(),
+          currency,
+          date,
+          note: note.trim() || null,
+        };
+        await update.mutateAsync({ challengeId: challenge.id, expenseId: editing.id, patch });
+        toast({ title: t("updated") });
+      } else {
+        await create.mutateAsync({
+          challengeId: challenge.id,
+          input: { type, amount: amount.trim(), currency, date, note: note.trim() || null },
+        });
+        toast({ title: t("created") });
+      }
       onOpenChange(false);
     } catch (error) {
       errorToast(error, tRoot, t("error"), toast);
@@ -674,7 +830,7 @@ function ExpenseEditor({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>{t("expenseTitle")}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{editing ? t("editExpense") : t("expenseTitle")}</DialogTitle></DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1"><Label>{t("expenseType")}</Label><Select value={type} onValueChange={(value) => { if (value === "FEE" || value === "RESET" || value === "ADDON" || value === "OTHER") setType(value); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="FEE">{t("fee")}</SelectItem><SelectItem value="RESET">{t("reset")}</SelectItem><SelectItem value="ADDON">{t("addon")}</SelectItem><SelectItem value="OTHER">{t("other")}</SelectItem></SelectContent></Select></div>
           <div className="space-y-1"><Label>{t("amount")}</Label><Input inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} /></div>
@@ -693,18 +849,44 @@ function ChallengeCard({
   onPhase,
   onPayout,
   onExpense,
+  onEditPayout,
+  onEditExpense,
 }: {
   challenge: PropChallengeDTO;
   onPhase: (challenge: PropChallengeDTO) => void;
   onPayout: (challenge: PropChallengeDTO) => void;
   onExpense: (challenge: PropChallengeDTO) => void;
+  onEditPayout: (payout: PropPayoutDTO, challenge: PropChallengeDTO) => void;
+  onEditExpense: (expense: PropExpenseDTO, challenge: PropChallengeDTO) => void;
 }) {
   const t = useTranslations("propFirmsView");
   const tRoot = useTranslations();
   const { toast } = useToast();
   const update = useUpdatePropChallenge();
   const remove = useDeletePropChallenge();
+  const removePayout = useDeletePropPayout();
+  const removeExpense = useDeletePropExpense();
   const [saving, setSaving] = React.useState(false);
+
+  const deletePayout = async (payoutId: string) => {
+    if (!window.confirm(t("deletePayoutConfirm"))) return;
+    try {
+      await removePayout.mutateAsync({ challengeId: challenge.id, payoutId });
+      toast({ title: t("deleted") });
+    } catch (error) {
+      errorToast(error, tRoot, t("error"), toast);
+    }
+  };
+
+  const deleteExpense = async (expenseId: string) => {
+    if (!window.confirm(t("deleteExpenseConfirm"))) return;
+    try {
+      await removeExpense.mutateAsync({ challengeId: challenge.id, expenseId });
+      toast({ title: t("deleted") });
+    } catch (error) {
+      errorToast(error, tRoot, t("error"), toast);
+    }
+  };
 
   const changeStatus = async (value: string) => {
     if (!isStatus(value)) return;
@@ -757,6 +939,8 @@ function ChallengeCard({
           <div><p className="text-xs text-muted-foreground">{t("startDate")}</p><p className="text-sm font-semibold tabular-nums">{challenge.startDate}</p></div>
         </div>
 
+        <ChallengeEvaluation challengeId={challenge.id} currency={challenge.accountCurrency} />
+
         <div className="flex flex-wrap items-center gap-2">
           <Label className="text-xs text-muted-foreground">{t("updateStatus")}</Label>
           <Select value={challenge.status} onValueChange={(value) => void changeStatus(value)}>
@@ -788,15 +972,23 @@ function ChallengeCard({
                 <div className="flex justify-between gap-2"><span className="font-medium">{payout.status}</span><span className="text-muted-foreground">{payout.requestedAt.slice(0, 10)}</span></div>
                 <p className="mt-1 tabular-nums">{t("grossAmount")}: {payout.grossAmount} {payout.currency}</p>
                 <p className="tabular-nums">{t("netAmount")}: <strong>{payout.netAmount} {payout.currency}</strong></p>
+                <div className="mt-1 flex gap-1">
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => onEditPayout(payout, challenge)}><Pencil className="mr-1 h-3 w-3" />{t("edit")}</Button>
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-destructive" onClick={() => void deletePayout(payout.id)}><Trash2 className="mr-1 h-3 w-3" />{t("delete")}</Button>
+                </div>
               </div>
             ))}
           </div>
           <div className="space-y-2">
             <p className="text-sm font-semibold">{t("expenseHistory")}</p>
             {challenge.expenses.length === 0 ? <p className="text-xs text-muted-foreground">{t("noExpenses")}</p> : challenge.expenses.map((expense) => (
-              <div key={expense.id} className="flex justify-between gap-2 rounded-md border p-2 text-xs">
+              <div key={expense.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2 text-xs">
                 <span>{expense.type} · {expense.date}</span>
-                <strong className="tabular-nums">{expense.amount} {expense.currency}</strong>
+                <span className="flex items-center gap-1">
+                  <strong className="tabular-nums">{expense.amount} {expense.currency}</strong>
+                  <Button size="sm" variant="ghost" className="h-6 px-1.5 text-xs" onClick={() => onEditExpense(expense, challenge)} aria-label={t("editExpense")}><Pencil className="h-3 w-3" /></Button>
+                  <Button size="sm" variant="ghost" className="h-6 px-1.5 text-xs text-destructive" onClick={() => void deleteExpense(expense.id)} aria-label={t("deleteExpense")}><Trash2 className="h-3 w-3" /></Button>
+                </span>
               </div>
             ))}
           </div>
@@ -868,6 +1060,8 @@ export function PropFirmsView() {
   const [phaseOpen, setPhaseOpen] = React.useState(false);
   const [payoutOpen, setPayoutOpen] = React.useState(false);
   const [expenseOpen, setExpenseOpen] = React.useState(false);
+  const [editingPayout, setEditingPayout] = React.useState<PropPayoutDTO | null>(null);
+  const [editingExpense, setEditingExpense] = React.useState<PropExpenseDTO | null>(null);
 
   const propAccounts = accounts.filter((account) => account.type === "PROP");
   const ruleSets = data?.ruleSets ?? [];
@@ -876,9 +1070,23 @@ export function PropFirmsView() {
 
   const openDialog = (kind: "phase" | "payout" | "expense", challenge: PropChallengeDTO) => {
     setActiveChallenge(challenge);
+    setEditingPayout(null);
+    setEditingExpense(null);
     setPhaseOpen(kind === "phase");
     setPayoutOpen(kind === "payout");
     setExpenseOpen(kind === "expense");
+  };
+
+  const openEditPayout = (payout: PropPayoutDTO, challenge: PropChallengeDTO) => {
+    setActiveChallenge(challenge);
+    setEditingPayout(payout);
+    setPayoutOpen(true);
+  };
+
+  const openEditExpense = (expense: PropExpenseDTO, challenge: PropChallengeDTO) => {
+    setActiveChallenge(challenge);
+    setEditingExpense(expense);
+    setExpenseOpen(true);
   };
 
   return (
@@ -916,6 +1124,8 @@ export function PropFirmsView() {
               onPhase={(item) => openDialog("phase", item)}
               onPayout={(item) => openDialog("payout", item)}
               onExpense={(item) => openDialog("expense", item)}
+              onEditPayout={openEditPayout}
+              onEditExpense={openEditExpense}
             />
           ))}
         </div>
@@ -932,8 +1142,18 @@ export function PropFirmsView() {
       <ChallengeEditor open={challengeOpen} onOpenChange={setChallengeOpen} accounts={propAccounts} ruleSets={ruleSets} />
       <RuleSetEditor open={ruleSetOpen} onOpenChange={setRuleSetOpen} timezone={timezone} />
       <PhaseResultEditor challenge={activeChallenge} open={phaseOpen} onOpenChange={setPhaseOpen} />
-      <PayoutEditor challenge={activeChallenge} open={payoutOpen} onOpenChange={setPayoutOpen} />
-      <ExpenseEditor challenge={activeChallenge} open={expenseOpen} onOpenChange={setExpenseOpen} />
+      <PayoutEditor
+        challenge={activeChallenge}
+        open={payoutOpen}
+        onOpenChange={(open) => { if (!open) setEditingPayout(null); setPayoutOpen(open); }}
+        editing={editingPayout}
+      />
+      <ExpenseEditor
+        challenge={activeChallenge}
+        open={expenseOpen}
+        onOpenChange={(open) => { if (!open) setEditingExpense(null); setExpenseOpen(open); }}
+        editing={editingExpense}
+      />
     </div>
   );
 }

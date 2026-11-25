@@ -1291,6 +1291,12 @@ model PropChallenge {
   notes         String?
   /// JSON copy of the rule set at purchase — later edits never rewrite history
   rulesSnapshot String    @map("rules_snapshot")
+  /// Frozen timezone and daily reset time at purchase (Lot 5) — the firm
+  /// day boundary of a challenge in progress must never move when the
+  /// reusable rule set is edited later. Null on legacy rows: the server
+  /// falls back to the linked rule set, then UTC / "00:00".
+  ruleTimezone      String? @map("rule_timezone")
+  ruleResetTimeLocal String? @map("rule_reset_time_local")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
