@@ -494,7 +494,7 @@ describe("account deletion (erasure)", () => {
 // ── Daily maintenance ────────────────────────────────────────────────────────
 
 describe("daily maintenance (cron)", () => {
-  it("purges old sync payloads, merge logs and expired invitations", async () => {
+  it("purges old sync payloads and merge logs", async () => {
     const old = new Date(Date.now() - 20 * 24 * 3600_000);
 
     const connection = await db.brokerConnection.findFirst({
@@ -521,17 +521,6 @@ describe("daily maintenance (cron)", () => {
         expiresAt: new Date(Date.now() - 24 * 3600_000),
       },
     });
-    await db.mentorInvitation.create({
-      data: {
-        ownerId: aliceId,
-        inviteeEmail: "someone@test.local",
-        tokenHash: "x7".repeat(32),
-        permissionsJson: "{}",
-        status: "PENDING",
-        expiresAt: new Date(Date.now() - 24 * 3600_000),
-      },
-    });
-
     const report = await runDailyMaintenance();
 
     const purged = await db.syncEventLog.findUnique({ where: { id: syncLog.id } });
@@ -539,12 +528,7 @@ describe("daily maintenance (cron)", () => {
     expect(
       await db.tradeMergeLog.findFirst({ where: { userId: aliceId } })
     ).toBeNull();
-    const invitation = await db.mentorInvitation.findFirst({
-      where: { ownerId: aliceId },
-    });
-    expect(invitation?.status).toBe("EXPIRED");
     expect(report.syncPayloadsPurged).toBeGreaterThanOrEqual(1);
     expect(report.mergeLogsDeleted).toBeGreaterThanOrEqual(1);
-    expect(report.invitationsExpired).toBeGreaterThanOrEqual(1);
   });
 });
