@@ -12,8 +12,9 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryClient,
 } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, ApiClientError } from "@/lib/api-client";
 import type {
   DashboardDTO,
   DashboardWidgetDTO,
@@ -26,6 +27,7 @@ import type {
   CustomMetricInput,
   DashboardCreate,
   DashboardPatch,
+  WidgetPatchBody,
   WidgetPatchInput,
 } from "@/lib/validations/dashboard";
 import { useToast } from "@/hooks/use-toast";
@@ -225,7 +227,7 @@ export function useAddWidget() {
 }
 
 /** Strips undefined values - the strict server schema rejects unknown/empty keys. */
-function cleanPatch(patch: WidgetPatchInput): Record<string, unknown> {
+function cleanPatch(patch: WidgetPatchBody): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(patch)) {
     if (value !== undefined) out[key] = value;
@@ -234,12 +236,45 @@ function cleanPatch(patch: WidgetPatchInput): Record<string, unknown> {
 }
 
 /**
+ * Lot 12 (roadmap §16): resolve the widget version the server expects,
+ * from the freshest ["dashboards"] cache, at the moment the mutation
+ * actually runs - not when the user clicked. A queued layout save must
+ * use the version left by the save before it, so the version is resolved
+ * here instead of trusting any value a call site captured earlier.
+ * Refetches once when the widget is not in the cache; returns undefined
+ * when the widget cannot be found at all (the server then rejects the
+ * PATCH with 422 - the widget is gone or the cache is unusable).
+ */
+async function resolveWidgetVersion(
+  qc: QueryClient,
+  dashboardId: string,
+  widgetId: string
+): Promise<number | undefined> {
+  const find = (payload: DashboardsPayload | undefined) =>
+    payload?.dashboards
+      .find((d) => d.id === dashboardId)
+      ?.widgets.find((w) => w.id === widgetId)?.version;
+  const cached = find(qc.getQueryData<DashboardsPayload>(["dashboards"]));
+  if (cached != null) return cached;
+  await qc.refetchQueries({ queryKey: ["dashboards"] });
+  return find(qc.getQueryData<DashboardsPayload>(["dashboards"]));
+}
+
+/**
  * PATCH one widget.
  *
  * `optimistic` mode (layout autosave): the ["dashboards"] cache is patched in
  * place on mutate, rolled back + toasted on error, and NOT invalidated on
  * success — drag/resize saves must not re-render the whole grid on every drop.
+ * The returned widget (with its bumped version) is written back into the
+ * cache instead, so the next save sends the fresh version.
  * Default mode invalidates ["dashboards"] (config / period / title changes).
+ *
+ * Lot 12: `expectedVersion` is injected from the cache at execution time
+ * (see resolveWidgetVersion). A 409 STALE_LAYOUT means the server already
+ * holds a newer layout (another tab, or a save that landed first) - the
+ * cache is refetched silently instead of toasting an error for an
+ * expected race outcome.
  */
 export function usePatchWidget(options?: { optimistic?: boolean }) {
   const qc = useQueryClient();
@@ -250,14 +285,26 @@ export function usePatchWidget(options?: { optimistic?: boolean }) {
     mutationFn: async (args: {
       dashboardId: string;
       widgetId: string;
-      patch: WidgetPatchInput;
-    }) =>
-      (
+      patch: WidgetPatchBody;
+    }) => {
+      const expectedVersion = await resolveWidgetVersion(
+        qc,
+        args.dashboardId,
+        args.widgetId
+      );
+      // A missing version (widget gone from the cache) is omitted - the
+      // server then rejects the PATCH with 422 instead of saving blind.
+      const body: Record<string, unknown> = {
+        ...cleanPatch(args.patch),
+        ...(expectedVersion != null ? { expectedVersion } : {}),
+      };
+      return (
         await apiFetch<{ widget: DashboardWidgetDTO }>(
           `/api/v1/dashboards/${args.dashboardId}/widgets/${args.widgetId}`,
-          { method: "PATCH", body: JSON.stringify(cleanPatch(args.patch)) }
+          { method: "PATCH", body: JSON.stringify(body) }
         )
-      ).widget,
+      ).widget;
+    },
 
     onMutate: async ({ dashboardId, widgetId, patch }) => {
       if (!optimistic) return;
@@ -282,6 +329,10 @@ export function usePatchWidget(options?: { optimistic?: boolean }) {
     },
 
     onError: (error, _args, context) => {
+      if (error instanceof ApiClientError && error.code === "STALE_LAYOUT") {
+        void qc.invalidateQueries({ queryKey: ["dashboards"] });
+        return;
+      }
       if (context?.previous) {
         qc.setQueryData(["dashboards"], context.previous);
       }
@@ -293,8 +344,25 @@ export function usePatchWidget(options?: { optimistic?: boolean }) {
       });
     },
 
-    onSuccess: () => {
-      if (!optimistic) {
+    onSuccess: (widget, { dashboardId, widgetId }) => {
+      if (optimistic) {
+        const previous = qc.getQueryData<DashboardsPayload>(["dashboards"]);
+        if (previous) {
+          qc.setQueryData<DashboardsPayload>(["dashboards"], {
+            ...previous,
+            dashboards: previous.dashboards.map((d) =>
+              d.id !== dashboardId
+                ? d
+                : {
+                    ...d,
+                    widgets: d.widgets.map((w) =>
+                      w.id !== widgetId ? w : widget
+                    ),
+                  }
+            ),
+          });
+        }
+      } else {
         void qc.invalidateQueries({ queryKey: ["dashboards"] });
       }
       void qc.invalidateQueries({ queryKey: ["dashboard-data"] });

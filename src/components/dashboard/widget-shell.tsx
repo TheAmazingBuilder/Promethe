@@ -56,7 +56,7 @@ import type {
   WidgetLayout,
   WidgetLayouts,
 } from "@/lib/dashboard/types";
-import type { WidgetPatchInput } from "@/lib/validations/dashboard";
+import type { WidgetPatchBody } from "@/lib/validations/dashboard";
 import { cn } from "@/lib/utils";
 
 // ── Error boundary ───────────────────────────────────────────────────────────
@@ -280,7 +280,7 @@ export interface WidgetShellProps
       }
     | undefined;
   loading: boolean;
-  onPatch: (patch: WidgetPatchInput) => void;
+  onPatch: (patch: WidgetPatchBody) => void;
   onDuplicate: () => void;
   onRemove: () => void;
   onRetry: () => void;

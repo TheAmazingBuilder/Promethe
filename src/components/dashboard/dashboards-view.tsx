@@ -10,6 +10,20 @@
  * Desktop/tablet: react-grid-layout (12 cols, drag + resize in edit mode,
  * 600 ms debounced autosave, optimistic cache). Mobile: single-column stack
  * ordered by the lg layout with up/down reorder buttons in edit mode.
+ *
+ * Lot 12 (roadmap §16) - layout persistence rules:
+ * - Every widget PATCH carries the version the client last saw; the server
+ *   rejects a stale version with 409, so an old save can never overwrite a
+ *   newer layout. Layout saves run through one serialized chain, so a
+ *   drag, an undo and a reset can never overtake each other.
+ * - Undo reverts the last layout edit session (drag, resize, reset or
+ *   mobile move) to the layout as it was when that session started, even
+ *   if the change was already saved. Single-level; unavailable after use
+ *   or after switching dashboards.
+ * - A debounced save pending when the dashboard is switched, the tab is
+ *   hidden or the page is left is flushed immediately instead of dropped.
+ * - The edit toolbar shows the save state (Saving / Saved / Save failed);
+ *   failures also toast, a stale-version conflict refetches silently.
  */
 import * as React from "react";
 import {
@@ -139,8 +153,12 @@ import { BUILT_IN_TEMPLATES } from "@/lib/dashboard/templates";
 import "@/lib/dashboard/register-chart-widgets";
 import "@/lib/dashboard/register-risk-reward-widgets";
 import "@/lib/dashboard/register-mrt-wave2-widgets";
-import type { WidgetPatchInput } from "@/lib/validations/dashboard";
+import type { WidgetPatchBody } from "@/lib/validations/dashboard";
 import { WidgetShell } from "@/components/dashboard/widget-shell";
+import {
+  LayoutSaveStatus,
+  type LayoutSaveStatusValue,
+} from "@/components/dashboard/layout-save-status";
 import { WidgetCatalog } from "@/components/dashboard/widget-catalog";
 import { WidgetRenderer } from "@/components/dashboard/widgets";
 import { asKpiData } from "@/components/dashboard/widgets/types";
@@ -465,12 +483,41 @@ export function DashboardsView() {
   const savedLayoutsRef = React.useRef<LayoutMap>({});
   const undoSnapshotRef = React.useRef<LayoutMap | null>(null);
   const [canUndo, setCanUndo] = React.useState(false);
+  /** "Saved" flash for the toolbar save status (lot 12). */
+  const [saveFlash, setSaveFlash] = React.useState(false);
+  const saveFlashTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Latest saveLayouts closure (lot 12) - flush effects read it at fire time. */
+  const latestSaveRef = React.useRef<() => void>(() => {});
+  /** Serialized layout-save chain (lot 12) - layout saves never overtake each other. */
+  const layoutSaveChainRef = React.useRef(Promise.resolve());
   const editModeRef = React.useRef(editMode);
 
   React.useEffect(() => {
     editModeRef.current = editMode;
   }, [editMode]);
+
+  // Lot 12: visible save state for the edit toolbar. "Saved" flashes for
+  // 3 s after a layout save lands; a new save or a failure clears it.
+  React.useEffect(() => {
+    if (!patchWidgetOptimistic.isSuccess) return;
+    setSaveFlash(true);
+    if (saveFlashTimerRef.current) clearTimeout(saveFlashTimerRef.current);
+    saveFlashTimerRef.current = setTimeout(() => setSaveFlash(false), 3000);
+  }, [patchWidgetOptimistic.isSuccess]);
+  React.useEffect(() => {
+    if (patchWidgetOptimistic.isPending || patchWidgetOptimistic.isError) {
+      setSaveFlash(false);
+    }
+  }, [patchWidgetOptimistic.isPending, patchWidgetOptimistic.isError]);
+
+  const saveStatus: LayoutSaveStatusValue = patchWidgetOptimistic.isPending
+    ? "saving"
+    : patchWidgetOptimistic.isError
+      ? "error"
+      : saveFlash
+        ? "saved"
+        : "idle";
 
   const layoutsSignature = React.useMemo(
     () =>
@@ -478,6 +525,23 @@ export function DashboardsView() {
       "",
     [active]
   );
+
+  // Lot 12: flush a debounced save pending when the dashboard is switched.
+  // This effect runs before the rebuild below (declaration order), so the
+  // grid refs still hold the previous dashboard and the flush saves it.
+  // latestSaveRef still holds the previous render's saveLayouts here, which
+  // is exactly the closure for the dashboard being left.
+  const prevActiveIdRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    const prevId = prevActiveIdRef.current;
+    prevActiveIdRef.current = active?.id ?? null;
+    if (prevId == null || prevId === active?.id) return;
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+      latestSaveRef.current();
+    }
+  }, [active?.id]);
 
   // Rebuild the grid from the server whenever the widget set / layouts change
   // (add, remove, config refresh, optimistic autosave landing in the cache).
@@ -490,6 +554,38 @@ export function DashboardsView() {
     () => gridState ?? buildRglLayouts(active?.widgets ?? []),
     [gridState, active, layoutsSignature]
   );
+
+  /**
+   * Lot 12: run one layout PATCH through the serialized chain, so a drag,
+   * an undo and a reset can never overtake each other. A failed save is
+   * swallowed here (the hook already toasts / refetches) so the chain
+   * never breaks for the next save.
+   */
+  const enqueueLayoutPatch = React.useCallback(
+    (args: {
+      dashboardId: string;
+      widgetId: string;
+      patch: WidgetPatchBody;
+    }) => {
+      layoutSaveChainRef.current = layoutSaveChainRef.current
+        .then(async () => {
+          await patchWidgetOptimistic.mutateAsync(args);
+        })
+        .catch(() => undefined);
+    },
+    [patchWidgetOptimistic]
+  );
+
+  /** Lot 12: drop a pending debounced save - undo / reset / move save immediately. */
+  const cancelPendingSave = React.useCallback(() => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    // A stale grid must never resurrect a reverted layout (lot 12): the
+    // grid rebuilds from the server on the next cache change.
+    gridsRef.current = null;
+  }, []);
 
   /** Debounced layout save - patches only the widgets that actually moved. */
   const saveLayouts = React.useCallback(() => {
@@ -510,7 +606,7 @@ export function DashboardsView() {
       if (layoutsEqual(savedLayoutsRef.current[w.id], next)) continue;
       savedLayoutsRef.current[w.id] = next;
       saved += 1;
-      patchWidgetOptimistic.mutate({
+      enqueueLayoutPatch({
         dashboardId: active.id,
         widgetId: w.id,
         patch: { layouts: next },
@@ -519,18 +615,38 @@ export function DashboardsView() {
     if (saved > 0) {
       setAnnouncement(t("edit.layoutSaved"));
     }
-  }, [active, patchWidgetOptimistic, t]);
+  }, [active, enqueueLayoutPatch, t]);
 
   const scheduleSave = React.useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
       saveLayouts();
     }, SAVE_DEBOUNCE_MS);
   }, [saveLayouts]);
 
   React.useEffect(() => {
+    latestSaveRef.current = saveLayouts;
+  });
+
+  // Lot 12: never drop a pending debounced save. The unmount flush covers
+  // in-app navigation; the visibility flush covers tab switch / background.
+  React.useEffect(() => {
+    const onVisibility = () => {
+      if (document.hidden && saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+        latestSaveRef.current();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      document.removeEventListener("visibilitychange", onVisibility);
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+        latestSaveRef.current();
+      }
     };
   }, []);
 
@@ -564,12 +680,15 @@ export function DashboardsView() {
   const undoLayouts = () => {
     const snap = undoSnapshotRef.current;
     if (!snap || !active) return;
+    // Lot 12: cancel any debounced save first - its stale grid would
+    // otherwise re-save the pre-undo layout over the undo itself.
+    cancelPendingSave();
     for (const w of active.widgets) {
       const restored = snap[w.id];
       if (!restored) continue;
       if (layoutsEqual(savedLayoutsRef.current[w.id], restored)) continue;
       savedLayoutsRef.current[w.id] = restored;
-      patchWidgetOptimistic.mutate({
+      enqueueLayoutPatch({
         dashboardId: active.id,
         widgetId: w.id,
         patch: { layouts: restored },
@@ -584,6 +703,7 @@ export function DashboardsView() {
   const resetLayout = () => {
     if (!active || active.widgets.length === 0) return;
     snapshotForUndo();
+    cancelPendingSave();
     const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
     for (const w of active.widgets) {
       const def = getWidgetDefinition(w.type);
@@ -595,7 +715,7 @@ export function DashboardsView() {
         lg: { x: slot.x, y: slot.y, w: dw, h: dh },
       };
       savedLayoutsRef.current[w.id] = layoutsReset;
-      patchWidgetOptimistic.mutate({
+      enqueueLayoutPatch({
         dashboardId: active.id,
         widgetId: w.id,
         patch: { layouts: layoutsReset },
@@ -629,11 +749,12 @@ export function DashboardsView() {
     const yb = b.layouts.lg?.y ?? 0;
     if (ya === yb) return;
     snapshotForUndo();
+    cancelPendingSave();
     const patch = (w: DashboardWidgetDTO, y: number) => {
       const lg = { ...(w.layouts.lg ?? base), y };
       const next: WidgetLayouts = { lg };
       savedLayoutsRef.current[w.id] = next;
-      patchWidgetOptimistic.mutate({
+      enqueueLayoutPatch({
         dashboardId: active.id,
         widgetId: w.id,
         patch: { layouts: next },
@@ -752,7 +873,7 @@ export function DashboardsView() {
   // ── Widget rendering ──
   const patchWidgetFor =
     (dashboardId: string) =>
-    (widgetId: string, patch: WidgetPatchInput) =>
+    (widgetId: string, patch: WidgetPatchBody) =>
       patchWidgetNormal.mutate({ dashboardId, widgetId, patch });
 
   const renderShell = (w: DashboardWidgetDTO, index = 0) => {
@@ -1143,6 +1264,7 @@ export function DashboardsView() {
           </Button>
         ) : (
           <>
+            <LayoutSaveStatus status={saveStatus} />
             <Button
               variant="outline"
               size="sm"
@@ -1156,6 +1278,7 @@ export function DashboardsView() {
               size="sm"
               onClick={undoLayouts}
               disabled={!canUndo}
+              title={t("edit.undoHint")}
             >
               <Undo2 className="h-4 w-4" aria-hidden="true" />
               {t("edit.undo")}

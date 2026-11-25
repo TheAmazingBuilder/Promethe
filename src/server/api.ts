@@ -77,6 +77,8 @@ const CODE_MESSAGES: Record<string, string> = {
   TOO_MANY_CUSTOM_FIELDS: "Limit of 30 custom fields reached.",
   DASHBOARD_NOT_FOUND: "Dashboard not found.",
   WIDGET_NOT_FOUND: "Widget not found.",
+  STALE_LAYOUT: "This layout changed elsewhere. Reload to get the latest version, then try again.",
+  DEFAULT_REQUIRED: "A default dashboard is required.",
   TOO_MANY_DASHBOARDS: "Dashboard limit reached (max 8).",
   LAST_DASHBOARD: "The last dashboard cannot be deleted.",
   TOO_MANY_WIDGETS: "Widget limit reached for this dashboard (max 24).",

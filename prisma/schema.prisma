@@ -2031,6 +2031,11 @@ model DashboardWidget {
   periodOverride  String?  @map("period_override")
   /// Account id filter override; null = inherit the global filter.
   accountOverride String?  @map("account_override")
+  /// Optimistic-concurrency version (lot 12, roadmap §16): every widget
+  /// PATCH must send the version it last saw; a stale version is rejected
+  /// with 409 STALE_LAYOUT so an old save can never overwrite a newer
+  /// layout. Starts at 0, incremented on every successful PATCH.
+  version         Int      @default(0)
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 

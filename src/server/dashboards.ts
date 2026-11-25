@@ -110,6 +110,7 @@ function toWidgetDTO(widget: WidgetRow): DashboardWidgetDTO {
     layouts: normalized[widget.id] ?? {},
     periodOverride: parseJson<PeriodOverride | null>(widget.periodOverride, null),
     accountOverride: widget.accountOverride,
+    version: widget.version,
   };
 }
 
@@ -142,6 +143,7 @@ export function toDashboardDTO(row: DashboardRow): DashboardDTO {
       layouts: normalized[w.id] ?? {},
       periodOverride: parseJson<PeriodOverride | null>(w.periodOverride, null),
       accountOverride: w.accountOverride,
+      version: w.version,
     })),
   };
 }
@@ -463,6 +465,24 @@ export async function patchDashboard(
       });
     }
 
+    if (patch.isDefault === false && existing.isDefault) {
+      // Unsetting the default must never leave zero defaults (lot 12,
+      // roadmap §16): promote the first remaining dashboard in the same
+      // transaction, mirroring deleteDashboard. On the only dashboard
+      // there is nothing to promote, so the request is refused.
+      const other = await tx.dashboard.findFirst({
+        where: { userId, NOT: { id: existing.id } },
+        orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+      });
+      if (!other) {
+        throw new DashboardValidationError("DEFAULT_REQUIRED", 409);
+      }
+      await tx.dashboard.update({
+        where: { id: other.id },
+        data: { isDefault: true },
+      });
+    }
+
     const updated = await tx.dashboard.update({
       where: { id: existing.id },
       data: {
@@ -661,8 +681,13 @@ export async function patchWidget(
     config = JSON.stringify(configResult.config);
   }
 
-  const updated = await db.dashboardWidget.update({
-    where: { id: widget.id },
+  // Lot 12 (roadmap §16): optimistic concurrency. The update only applies
+  // when the row still carries the version the client last saw; a stale
+  // save (overlapping autosaves, another tab) is rejected with 409 instead
+  // of silently overwriting the newer layout. updateMany is atomic, so two
+  // simultaneous saves with the same version resolve to exactly one winner.
+  const applied = await db.dashboardWidget.updateMany({
+    where: { id: widget.id, version: input.expectedVersion },
     data: {
       ...(input.title !== undefined ? { title: input.title ?? null } : {}),
       ...(config !== undefined ? { config } : {}),
@@ -678,7 +703,14 @@ export async function patchWidget(
           }
         : {}),
       ...(accountOverride !== undefined ? { accountOverride } : {}),
+      version: { increment: 1 },
     },
+  });
+  if (applied.count === 0) {
+    throw new DashboardValidationError("STALE_LAYOUT", 409);
+  }
+  const updated = await db.dashboardWidget.findUniqueOrThrow({
+    where: { id: widget.id },
   });
   return toWidgetDTO(updated);
 }
