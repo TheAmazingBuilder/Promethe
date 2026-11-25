@@ -80,6 +80,10 @@ const CATEGORY_LABELS: Record<CandlestickPatternCategory, string> = {
   continuation: "Continuation",
 };
 
+export function getCandlestickPatternCandleCount(patternId: string): number {
+  return CANDLE_SHAPES[patternId]?.length ?? 0;
+}
+
 function PatternGlyph({
   patternId,
   compact = false,
