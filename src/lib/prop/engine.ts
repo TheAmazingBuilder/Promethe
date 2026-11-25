@@ -243,7 +243,6 @@ export function evaluatePropPhase(input: PropEngineInput): PropEngineResult {
   const exitsSorted = [...closedTrades].sort(
     (a, b) => a.exitTime!.getTime() - b.exitTime!.getTime(),
   );
-  const points: Point[] = [{ time: input.phaseStart.getTime(), equity: start }];
   let running = start;
   for (const trade of exitsSorted) {
     const pnl = dec(trade.netPnl);
