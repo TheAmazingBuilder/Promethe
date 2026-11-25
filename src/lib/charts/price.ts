@@ -434,14 +434,63 @@ export function parseCandleRow(
   const c = num(close);
   if (o == null || h == null || l == null || c == null) return null;
 
+  // OHLC sanity: prices must be positive and internally consistent
+  // (high is the highest, low the lowest). A row that breaks this is
+  // corrupt data, not a candle - reject it instead of storing it.
+  const oN = Number(o);
+  const hN = Number(h);
+  const lN = Number(l);
+  const cN = Number(c);
+  if (oN <= 0 || hN <= 0 || lN <= 0 || cN <= 0) return null;
+  if (hN < lN || hN < oN || hN < cN || lN > oN || lN > cN) return null;
+  const volume = volumeRaw != null && volumeRaw !== "" ? num(volumeRaw) : null;
+  if (volume != null && Number(volume) < 0) return null;
+
   return {
     timeSec,
     open: o,
     high: h,
     low: l,
     close: c,
-    volume: volumeRaw != null && volumeRaw !== "" ? num(volumeRaw) : null,
+    volume,
   };
+}
+
+/**
+ * Parse one CSV row with a DECLARED IANA timezone, DST-safe.
+ *
+ * A wall-clock time near a DST transition is ambiguous when its offset is
+ * read at the wrong instant (the probe treats the wall time as UTC, which
+ * can land on the other side of the transition). So the offset is resolved
+ * twice: once at the probe instant, once at the converted instant - if the
+ * two disagree, the row is re-parsed with the second offset. One
+ * refinement pass is enough: the offset at the converted instant is the
+ * offset that actually applies to that wall time. Rows with an explicit
+ * ISO offset (Z or ±HH:MM) ignore the declared timezone entirely.
+ */
+export function parseCandleRowInTimezone(
+  row: Record<string, string | undefined>,
+  timezone: string
+): ParsedCsvCandle | null {
+  const rawTime =
+    row.time ?? row.Time ?? row.datetime ?? row.DateTime ?? row.date ??
+    row.Date ?? row.timestamp ?? row.Timestamp ?? row["Date time"] ?? row["Gmt time"];
+  if (rawTime == null) return null;
+  const probeMs = Date.parse(rawTime.trim().replace(" ", "T") + "Z");
+  const offset1 = tzOffsetMinutes(timezone, Number.isFinite(probeMs) ? probeMs : Date.now());
+  if (offset1 == null) return null;
+  const first = parseCandleRow(row, offset1);
+  if (first == null) return null;
+  const offset2 = tzOffsetMinutes(timezone, first.timeSec * 1000);
+  if (offset2 == null || offset2 === offset1) return first;
+  const second = parseCandleRow(row, offset2);
+  if (second == null) return first;
+  // Accept the refined pass only if it is self-consistent (the offset at
+  // the refined instant is the offset that was used). On the nonexistent
+  // hour of a spring-forward day the two passes oscillate - keep the
+  // first pass, which shifts the wall time forward past the gap.
+  const offsetAtSecond = tzOffsetMinutes(timezone, second.timeSec * 1000);
+  return offsetAtSecond === offset2 ? second : first;
 }
 
 /**

@@ -352,6 +352,23 @@ export function BenchmarkView() {
                   </LineChart>
                 </ResponsiveContainer>
               </div>
+              {/* The comparison only covers the overlap of the two curves:
+                  a benchmark that runs past the last trade (or an equity
+                  curve that runs past the imported series) is cut off
+                  instead of being compared against flat, extrapolated
+                  values. */}
+              {comparison.firstDate != null && comparison.lastDate != null && (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {t("comparedWindow", {
+                    from: new Intl.DateTimeFormat(undefined, {
+                      dateStyle: "medium",
+                    }).format(new Date(comparison.firstDate)),
+                    to: new Intl.DateTimeFormat(undefined, {
+                      dateStyle: "medium",
+                    }).format(new Date(comparison.lastDate)),
+                  })}
+                </p>
+              )}
               {/* Stats */}
               <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <StatCell

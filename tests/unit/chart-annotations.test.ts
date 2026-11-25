@@ -1,11 +1,12 @@
 /**
- * v2.5 Module 2 — annotations engine unit tests (spec §4.7, §7).
+ * v2.5 Module 2 - annotations engine unit tests (spec §4.7, §7).
  * Scoping (GLOBAL/ACCOUNT/STRATEGY) and before/after stats (point + range,
  * local exit dates, sample-size warning).
  */
 import { describe, expect, it } from "vitest";
 import {
   annotationApplies,
+  annotationScopeTarget,
   beforeAfterStats,
   type Annotation,
 } from "@/lib/charts/annotations";
@@ -72,7 +73,7 @@ const ann = (patch: Partial<Annotation> = {}): Annotation => ({
   ...patch,
 });
 
-describe("annotations — scoping", () => {
+describe("annotations - scoping", () => {
   it("GLOBAL applies everywhere", () => {
     expect(annotationApplies(ann(), { accountId: "a1", strategyId: "s1" })).toBe(true);
     expect(annotationApplies(ann(), { accountId: null, strategyId: null })).toBe(true);
@@ -93,7 +94,7 @@ describe("annotations — scoping", () => {
   });
 });
 
-describe("annotations — before/after stats", () => {
+describe("annotations - before/after stats", () => {
   it("point annotation splits on the date (after = from the date on)", () => {
     const trades = [
       trade("2025-01-10", "1", "100"),
@@ -147,5 +148,52 @@ describe("annotations — before/after stats", () => {
     expect(r.after.n).toBe(0);
     expect(r.before.winRate).toBeNull();
     expect(r.notSignificant).toBe(true);
+  });
+});
+
+describe("annotations - scope target resolution (lot 13)", () => {
+  const accounts = [
+    { id: "a1", name: "Main" },
+    { id: "a2", name: "Funded" },
+  ];
+  const strategies = [{ id: "s1", name: "London open" }];
+
+  it("GLOBAL has no target and is never missing", () => {
+    expect(annotationScopeTarget(ann(), accounts, strategies)).toEqual({
+      name: null,
+      missing: false,
+    });
+  });
+  it("ACCOUNT resolves the live account name", () => {
+    expect(
+      annotationScopeTarget(ann({ scope: "ACCOUNT", accountId: "a2" }), accounts, strategies)
+    ).toEqual({ name: "Funded", missing: false });
+  });
+  it("ACCOUNT scoped to a deleted account reports missing", () => {
+    expect(
+      annotationScopeTarget(
+        ann({ scope: "ACCOUNT", accountId: "gone" }),
+        accounts,
+        strategies
+      )
+    ).toEqual({ name: null, missing: true });
+  });
+  it("STRATEGY scoped to a deleted strategy reports missing", () => {
+    expect(
+      annotationScopeTarget(
+        ann({ scope: "STRATEGY", strategyId: "gone" }),
+        accounts,
+        strategies
+      )
+    ).toEqual({ name: null, missing: true });
+  });
+  it("STRATEGY resolves the live strategy name", () => {
+    expect(
+      annotationScopeTarget(
+        ann({ scope: "STRATEGY", strategyId: "s1" }),
+        accounts,
+        strategies
+      )
+    ).toEqual({ name: "London open", missing: false });
   });
 });

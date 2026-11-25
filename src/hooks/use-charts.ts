@@ -19,6 +19,9 @@ export interface BuilderDataPayload {
   timezone: string;
   trades: BuilderTrade[];
   truncated: boolean;
+  /** True when the requested account filter no longer exists (the
+   * payload covers all accounts - see /src/server/charts.ts). */
+  accountMissing: boolean;
 }
 
 export interface SavedChartDTO {

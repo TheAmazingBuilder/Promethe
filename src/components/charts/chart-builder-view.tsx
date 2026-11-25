@@ -637,6 +637,14 @@ export function ChartBuilderView() {
               </SelectContent>
             </Select>
           </div>
+          {data.data?.accountMissing && (
+            <p
+              className="w-full rounded-md border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs text-muted-foreground"
+              role="alert"
+            >
+              {t("filters.accountMissing")}
+            </p>
+          )}
           <p className="ml-auto text-xs text-muted-foreground">
             {data.isLoading
               ? t("filters.loading")

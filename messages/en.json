@@ -4144,7 +4144,8 @@
       "account": "Account",
       "allAccounts": "All accounts",
       "tradeCount": "{count} trades loaded",
-      "loading": "Loading trades…"
+      "loading": "Loading trades…",
+      "accountMissing": "The saved account filter no longer exists - showing all accounts instead. Pick an account to filter again."
     },
     "presets": {
       "title": "Presets",
@@ -4393,6 +4394,8 @@
       "chartAria": "Candlestick chart of {symbol} with the trade overlay",
       "coverageBanner": "Candles only cover {from} → {to} - the trade is not fully covered (import candles or widen the period).",
       "resampledFrom": "Resampled from stored {tf} candles.",
+      "sourceLabel": "Imported CSV candles · {from} → {to} · {count} bars",
+      "truncatedBanner": "Showing only the most recent 6,000 bars - narrow the window or pick a coarser timeframe to see earlier candles.",
       "noCandles": "No candles for this window",
       "noCandlesDesc": "Import a CSV of candles for this instrument to see the trade on a candlestick chart (and replay it bar by bar).",
       "noCandlesAtTf": "No candles at or below {tf} are stored in this window. Pick a coarser timeframe.",
@@ -4406,7 +4409,7 @@
       "importPreview": "Preview (first 500 chars)",
       "importAction": "Import",
       "importDone": "Candles imported",
-      "importStats": "{imported} imported · {skipped} duplicates skipped · {pruned} pruned",
+      "importStats": "{imported} imported · {skipped} duplicates skipped · {invalid} invalid · {pruned} pruned",
       "fallbackAria": "Entry, stop loss and take profit levels",
       "attribution": "Charting by"
     },
@@ -4475,6 +4478,7 @@
       "gapAtEnd": "Gap at end (pts)",
       "beatRate": "Periods beaten",
       "periodsCompared": "Periods compared",
+      "comparedWindow": "Compared {from} → {to} - only the overlap of both curves.",
       "currentEquity": "Current equity",
       "noData": "No closed trades yet - close a trade to build the equity curve.",
       "goalTitle": "Goal calculator",
@@ -4572,6 +4576,8 @@
       "notSignificant": "Small sample (< 30 trades on a side) - differences are NOT statistically significant.",
       "noData": "No closed trades yet.",
       "scopeGlobal": "Global",
+      "targetDeletedAccount": "Deleted account",
+      "targetDeletedStrategy": "Deleted strategy",
       "createdToast": "Annotation created.",
       "updatedToast": "Annotation updated.",
       "deletedToast": "Annotation deleted."

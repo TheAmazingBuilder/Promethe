@@ -21,8 +21,7 @@ import {
 } from "@/lib/validations/charts";
 import {
   isValidTimezone,
-  parseCandleRow,
-  tzOffsetMinutes,
+  parseCandleRowInTimezone,
 } from "@/lib/charts/price";
 import Papa from "papaparse";
 import type { Prisma, Trade as TradeRow } from "@prisma/client";
@@ -116,6 +115,10 @@ export interface BuilderDataPayload {
   timezone: string;
   trades: BuilderTrade[];
   truncated: boolean;
+  /** True when the requested account filter no longer exists - the
+   * payload then covers all accounts (same fallback as before, now
+   * reported instead of silent). */
+  accountMissing: boolean;
 }
 
 function periodCutoff(period: BuilderDataQuery["period"]): Date | null {
@@ -210,6 +213,7 @@ export async function getBuilderTrades(
     query.account != null
       ? (accounts.find((a) => a.id === query.account) ?? null)
       : null;
+  const accountMissing = query.account != null && accountFilter == null;
 
   const where: Prisma.TradeWhereInput = {
     userId,
@@ -237,6 +241,7 @@ export async function getBuilderTrades(
     timezone,
     trades: kept.map((t) => toBuilderTrade(t, timezone)),
     truncated,
+    accountMissing,
   };
 }
 
@@ -356,6 +361,10 @@ export interface CandleWindowPayload {
   from: string;
   to: string;
   candles: CandleDTO[];
+  /** True when the window held more than CANDLE_MAX_WINDOW_BARS rows and
+   * only the most recent ones were returned - the chart shows a shorter
+   * range than requested, never silently. */
+  truncated: boolean;
 }
 
 /** Hard caps (free tier / 500 MB budget - documented in README). */
@@ -411,8 +420,11 @@ export async function getCandleWindow(
   const chosen = candidates[0] ?? null;
 
   let candles: CandleDTO[] = [];
+  let truncated = false;
   if (chosen) {
     // Cap the payload: keep the LAST CANDLE_MAX_WINDOW_BARS of the window.
+    // Fetch one extra row so the client can tell a full window from a cut
+    // one (truncated = true means the chart starts later than requested).
     const rows = await db.priceCandle.findMany({
       where: {
         instrumentId: instrument.id,
@@ -420,9 +432,11 @@ export async function getCandleWindow(
         openTime: { gte: from, lte: to },
       },
       orderBy: { openTime: "desc" },
-      take: CANDLE_MAX_WINDOW_BARS,
+      take: CANDLE_MAX_WINDOW_BARS + 1,
     });
+    truncated = rows.length > CANDLE_MAX_WINDOW_BARS;
     candles = rows
+      .slice(0, CANDLE_MAX_WINDOW_BARS)
       .map((r) => ({
         time: Math.floor(r.openTime.getTime() / 1000),
         open: r.open.toString(),
@@ -446,6 +460,7 @@ export async function getCandleWindow(
     from: from.toISOString(),
     to: to.toISOString(),
     candles,
+    truncated,
   };
 }
 
@@ -550,7 +565,10 @@ export async function getCandleBatch(
 
 export interface CandleImportResult {
   imported: number;
+  /** Duplicates skipped: same timestamp twice in the file, or already stored. */
   skipped: number;
+  /** Rows rejected as unparseable or OHLC-inconsistent (never stored). */
+  invalid: number;
   pruned: number;
   timeframe: CandleTimeframe;
   firstTime: string | null;
@@ -588,9 +606,12 @@ export async function importCandles(
     throw new Error("TOO_MANY_ROWS");
   }
 
-  // Timezone offset can shift across DST — compute per row using the row's
-  // own timestamp (wall time interpreted at that instant).
+  // Timezone conversion is DST-safe per row (see parseCandleRowInTimezone).
+  // Accounting is exact: every input row lands in exactly one bucket -
+  // imported + skipped + invalid = rows.length.
   const seen = new Set<number>();
+  let invalid = 0;
+  let duplicateInFile = 0;
   const toInsert: Array<{
     instrumentId: string;
     timeframe: string;
@@ -603,14 +624,15 @@ export async function importCandles(
   }> = [];
 
   for (const row of rows) {
-    const probeMs = Date.parse(
-      `${row.time ?? row.datetime ?? row.date ?? row.timestamp ?? ""}`.replace(" ", "T") + "Z"
-    );
-    // Offset for the declared tz at this instant (fallback: now).
-    const offsetMin = tzOffsetMinutes(input.timezone, Number.isFinite(probeMs) ? probeMs : Date.now()) ?? 0;
-    const c = parseCandleRow(row, offsetMin);
-    if (c == null) continue;
-    if (seen.has(c.timeSec)) continue; // dedupe within the file
+    const c = parseCandleRowInTimezone(row, input.timezone);
+    if (c == null) {
+      invalid += 1;
+      continue;
+    }
+    if (seen.has(c.timeSec)) {
+      duplicateInFile += 1; // dedupe within the file
+      continue;
+    }
     seen.add(c.timeSec);
     toInsert.push({
       instrumentId: instrument.id,
@@ -639,7 +661,7 @@ export async function importCandles(
   });
   const existingSet = new Set(existing.map((e) => e.openTime.getTime()));
   const fresh = toInsert.filter((c) => !existingSet.has(c.openTime.getTime()));
-  const skipped = toInsert.length - fresh.length;
+  const skipped = duplicateInFile + (toInsert.length - fresh.length);
 
   // Chunked createMany (SQLite variable limits). Duplicates are already
   // filtered manually above — `skipDuplicates` is unsupported on SQLite.
@@ -706,6 +728,7 @@ export async function importCandles(
   return {
     imported: fresh.length,
     skipped,
+    invalid,
     pruned,
     timeframe: input.timeframe,
     firstTime: times.length > 0 ? new Date(times[0]).toISOString() : null,

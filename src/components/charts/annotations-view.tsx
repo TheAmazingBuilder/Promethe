@@ -73,6 +73,7 @@ import {
 } from "@/lib/validations/charts";
 import {
   annotationApplies,
+  annotationScopeTarget,
   beforeAfterStats,
   type Annotation,
 } from "@/lib/charts/annotations";
@@ -86,6 +87,36 @@ const KIND_COLORS: Record<string, string> = {
   RULE_CHANGE: "var(--chart-3)",
   OTHER: "var(--muted-foreground)",
 };
+
+/** Scope label for one annotation row. A scoped account/strategy that
+ * was deleted since is shown as deleted, never as "?". */
+function AnnotationScopeLabel({
+  annotation,
+  accounts,
+  strategies,
+}: {
+  annotation: Annotation;
+  accounts: Array<{ id: string; name: string }>;
+  strategies: Array<{ id: string; name: string }>;
+}) {
+  const t = useTranslations("chartsBuilder.annotations");
+  if (annotation.scope === "GLOBAL") return <>{t("scopeGlobal")}</>;
+  const target = annotationScopeTarget(annotation, accounts, strategies);
+  if (target.missing) {
+    return (
+      <>
+        {annotation.scope === "ACCOUNT"
+          ? t("targetDeletedAccount")
+          : t("targetDeletedStrategy")}
+      </>
+    );
+  }
+  return annotation.scope === "ACCOUNT" ? (
+    <Sensitive kind="account">{target.name}</Sensitive>
+  ) : (
+    <>{target.name}</>
+  );
+}
 
 export function AnnotationsView() {
   const t = useTranslations("chartsBuilder.annotations");
@@ -451,16 +482,17 @@ export function AnnotationsView() {
                       {fmtDay(a.date)}
                       {a.endDate ? ` → ${fmtDay(a.endDate)}` : ""} ·{" "}
                       {t(`kinds.${a.kind}` as never)} ·{" "}
-                      {a.scope === "GLOBAL"
-                        ? t("scopeGlobal")
-                        : a.scope === "ACCOUNT"
-                          ? (
-                              <Sensitive kind="account">
-                                {accounts.data?.find((x) => x.id === a.accountId)
-                                  ?.name ?? "?"}
-                              </Sensitive>
-                            )
-                          : strategies.data?.find((x) => x.id === a.strategyId)?.name ?? "?"}
+                      <AnnotationScopeLabel
+                        annotation={a}
+                        accounts={(accounts.data ?? []).map((x) => ({
+                          id: x.id,
+                          name: x.name,
+                        }))}
+                        strategies={(strategies.data ?? []).map((x) => ({
+                          id: x.id,
+                          name: x.name,
+                        }))}
+                      />
                     </p>
                   </div>
                   <Button

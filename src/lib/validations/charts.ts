@@ -342,31 +342,26 @@ export type BenchmarkType = (typeof BENCHMARK_TYPES)[number];
 export const BENCHMARK_PERIODS = ["MONTH", "WEEK", "YEAR"] as const;
 export type BenchmarkPeriodUnit = (typeof BENCHMARK_PERIODS)[number];
 
-const benchmarkParamsSchema = z
-  .object({
-    /** Percent per period, e.g. 1 = 1 %/month (FIXED_PERCENT_PER_PERIOD). */
-    percent: z.number().min(0).max(100).optional(),
-    /** R added per period (FIXED_R_PER_PERIOD). */
-    rPerPeriod: z.number().min(0).max(1000).optional(),
-    period: z.enum(BENCHMARK_PERIODS),
-    compounding: z.boolean().default(true),
-    /** ISO date - benchmark start (defaults to first trade). */
-    startDate: isoTs.optional(),
-    /** Base balance for FIXED_PERCENT (defaults to equity initial). */
-    startBalance: z.string().regex(/^\d+(\.\d+)?$/).optional(),
-  })
-  .superRefine((p, ctx) => {
-    if (p.percent == null && p.rPerPeriod == null) {
-      ctx.addIssue({ code: "custom", message: "requiresRate" });
-    }
-  });
+const benchmarkParamsSchema = z.object({
+  /** Percent per period, e.g. 1 = 1 %/month (FIXED_PERCENT_PER_PERIOD). */
+  percent: z.number().min(0).max(100).optional(),
+  /** R added per period (FIXED_R_PER_PERIOD). */
+  rPerPeriod: z.number().min(0).max(1000).optional(),
+  period: z.enum(BENCHMARK_PERIODS),
+  compounding: z.boolean().default(true),
+  /** ISO date - benchmark start (defaults to first trade). */
+  startDate: isoTs.optional(),
+  /** Base balance for FIXED_PERCENT (defaults to equity initial). */
+  startBalance: z.string().regex(/^\d+(\.\d+)?$/).optional(),
+});
 
 export const benchmarkInputSchema = z
   .object({
     name: z.string().trim().min(1, "required").max(80),
     type: z.enum(BENCHMARK_TYPES),
     params: benchmarkParamsSchema,
-    /** CUSTOM_SERIES only: [{ date, value }] sorted ascending, ≤ 2000 points. */
+    /** CUSTOM_SERIES only: [{ date, value }] sorted ascending, unique
+     * dates, positive values, ≤ 2000 points. */
     series: z
       .array(
         z.object({
@@ -383,6 +378,34 @@ export const benchmarkInputSchema = z
     }
     if (b.type !== "CUSTOM_SERIES" && b.series != null) {
       ctx.addIssue({ code: "custom", message: "seriesOnlyForCustom" });
+    }
+    // A fixed benchmark needs a rate - but a custom series carries its
+    // own data and no rate at all. The check used to live on the params
+    // object, where the benchmark type is invisible, so every custom
+    // series was rejected with "requiresRate" (the create dialog could
+    // never succeed for CUSTOM_SERIES).
+    if (
+      b.type !== "CUSTOM_SERIES" &&
+      b.params.percent == null &&
+      b.params.rPerPeriod == null
+    ) {
+      ctx.addIssue({ code: "custom", message: "requiresRate" });
+    }
+    if (b.type === "CUSTOM_SERIES" && b.series != null) {
+      // The comparison engine walks the series in order (valueAt) and
+      // normalizes on the first value - an unsorted series, a repeated
+      // date or a zero/negative level would silently produce wrong
+      // indices, so the contract is enforced here, not just documented.
+      for (let i = 0; i < b.series.length; i += 1) {
+        if (b.series[i].value <= 0) {
+          ctx.addIssue({ code: "custom", message: "seriesValuesMustBePositive" });
+          break;
+        }
+        if (i > 0 && b.series[i].date <= b.series[i - 1].date) {
+          ctx.addIssue({ code: "custom", message: "seriesDatesMustIncrease" });
+          break;
+        }
+      }
     }
   });
 export type BenchmarkInput = z.infer<typeof benchmarkInputSchema>;

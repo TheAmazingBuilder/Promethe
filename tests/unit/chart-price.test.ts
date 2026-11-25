@@ -1,5 +1,5 @@
 /**
- * v2.5 Module 2 — price chart helpers unit tests (spec §4.2, §7).
+ * v2.5 Module 2 - price chart helpers unit tests (spec §4.2, §7).
  *
  * Covers: resample (UTC bucketing, OHLCV merge, gaps/weekends, DST-safe by
  * construction), coverage boundaries, trade overlay building (markers, price
@@ -13,6 +13,7 @@ import {
   coverage,
   finestFor,
   parseCandleRow,
+  parseCandleRowInTimezone,
   resample,
   slAt,
   tzOffsetMinutes,
@@ -29,7 +30,7 @@ const c = (time: number, o: number, h: number, l: number, cl: number, v?: number
   volume: v != null ? String(v) : null,
 });
 
-describe("price — resample", () => {
+describe("price - resample", () => {
   it("M1 → M5 merges OHLCV over absolute UTC buckets", () => {
     // 4 M1 bars in the same M5 bucket starting at 12:00, 1 in the next (12:05).
     const base = Math.floor(Date.UTC(2025, 0, 15, 12) / 1000); // 12:00:00
@@ -53,7 +54,7 @@ describe("price — resample", () => {
   });
 
   it("M5 → H1 with a gap (weekend): missing buckets stay missing", () => {
-    // Friday 20:55 and Monday 09:05 — no merging across the weekend.
+    // Friday 20:55 and Monday 09:05 - no merging across the weekend.
     const fri = Math.floor(Date.UTC(2025, 0, 10, 20, 55) / 1000);
     const mon = Math.floor(Date.UTC(2025, 0, 13, 9, 5) / 1000);
     const h1 = resample([c(fri, 1, 2, 0.5, 1.5), c(mon, 3, 4, 2.5, 3.5)], "H1");
@@ -92,7 +93,7 @@ describe("price — resample", () => {
   });
 });
 
-describe("price — coverage", () => {
+describe("price - coverage", () => {
   const base = Math.floor(Date.UTC(2025, 0, 15, 12) / 1000);
 
   it("empty candle list has no coverage", () => {
@@ -129,7 +130,7 @@ describe("price — coverage", () => {
   });
 });
 
-describe("price — trade overlay", () => {
+describe("price - trade overlay", () => {
   const entryIso = "2025-01-15T12:00:00.000Z";
   const exitIso = "2025-01-15T14:30:00.000Z";
 
@@ -264,7 +265,7 @@ describe("price — trade overlay", () => {
   });
 });
 
-describe("price — CSV row parsing", () => {
+describe("price - CSV row parsing", () => {
   it("unix seconds and milliseconds", () => {
     const sec = parseCandleRow(
       { time: "1736942400", open: "1", high: "2", low: "0.5", close: "1.5" },
@@ -316,7 +317,7 @@ describe("price — CSV row parsing", () => {
   });
 });
 
-describe("price — timezone offsets", () => {
+describe("price - timezone offsets", () => {
   it("America/Toronto offset flips across DST (EST −300 → EDT −240)", () => {
     const jan = tzOffsetMinutes("America/Toronto", Date.UTC(2025, 0, 15));
     const jul = tzOffsetMinutes("America/Toronto", Date.UTC(2025, 6, 15));
@@ -333,5 +334,86 @@ describe("price — timezone offsets", () => {
     expect(isValidTimezone("America/Toronto")).toBe(true);
     expect(isValidTimezone("+02:00")).toBe(true);
     expect(isValidTimezone("Not/AZone")).toBe(false);
+  });
+});
+
+describe("price - CSV row OHLC validation (lot 13)", () => {
+  const base = { time: "1736942400" };
+  it("rejects high below low", () => {
+    expect(
+      parseCandleRow({ ...base, open: "1", high: "0.5", low: "1", close: "1" }, 0)
+    ).toBeNull();
+  });
+  it("rejects high below open or close", () => {
+    expect(
+      parseCandleRow({ ...base, open: "2", high: "1.5", low: "1", close: "1" }, 0)
+    ).toBeNull();
+    expect(
+      parseCandleRow({ ...base, open: "1", high: "1.5", low: "1", close: "2" }, 0)
+    ).toBeNull();
+  });
+  it("rejects low above open or close", () => {
+    expect(
+      parseCandleRow({ ...base, open: "1", high: "2", low: "1.5", close: "1" }, 0)
+    ).toBeNull();
+    expect(
+      parseCandleRow({ ...base, open: "1", high: "2", low: "1", close: "0.5" }, 0)
+    ).toBeNull();
+  });
+  it("rejects zero or negative prices and negative volume", () => {
+    expect(
+      parseCandleRow({ ...base, open: "0", high: "2", low: "0.5", close: "1" }, 0)
+    ).toBeNull();
+    expect(
+      parseCandleRow({ ...base, open: "-1", high: "2", low: "0.5", close: "1" }, 0)
+    ).toBeNull();
+    expect(
+      parseCandleRow(
+        { ...base, open: "1", high: "2", low: "0.5", close: "1", volume: "-5" },
+        0
+      )
+    ).toBeNull();
+  });
+  it("accepts a flat candle (high == low == open == close)", () => {
+    const row = parseCandleRow(
+      { ...base, open: "1", high: "1", low: "1", close: "1" },
+      0
+    );
+    expect(row?.close).toBe("1");
+  });
+});
+
+describe("price - declared-timezone parsing across DST (lot 13)", () => {
+  const row = (time: string) => ({
+    time,
+    open: "1",
+    high: "2",
+    low: "0.5",
+    close: "1.5",
+  });
+  it("spring forward: 03:30 wall time just after the jump is 07:30 UTC", () => {
+    // 2026-03-08: clocks jump 02:00 EST -> 03:00 EDT. A single-pass
+    // conversion (offset read at the wall time as UTC) lands an hour late.
+    const parsed = parseCandleRowInTimezone(row("2026-03-08 03:30"), "America/Toronto");
+    expect(parsed?.timeSec).toBe(Math.floor(Date.UTC(2026, 2, 8, 7, 30) / 1000));
+  });
+  it("fall back: 01:30 wall time takes the first occurrence (EDT)", () => {
+    // 2026-11-01: 01:30 happens twice; the first is EDT (05:30 UTC).
+    const parsed = parseCandleRowInTimezone(row("2026-11-01 01:30"), "America/Toronto");
+    expect(parsed?.timeSec).toBe(Math.floor(Date.UTC(2026, 10, 1, 5, 30) / 1000));
+  });
+  it("nonexistent hour shifts forward past the gap", () => {
+    // 02:30 on 2026-03-08 never happens in Toronto - it reads as 03:30 EDT.
+    const parsed = parseCandleRowInTimezone(row("2026-03-08 02:30"), "America/Toronto");
+    expect(parsed?.timeSec).toBe(Math.floor(Date.UTC(2026, 2, 8, 7, 30) / 1000));
+  });
+  it("ordinary winter wall time and explicit ISO offset", () => {
+    const winter = parseCandleRowInTimezone(row("2026-01-15 10:00"), "America/Toronto");
+    expect(winter?.timeSec).toBe(Math.floor(Date.UTC(2026, 0, 15, 15, 0) / 1000));
+    const iso = parseCandleRowInTimezone(
+      row("2026-03-08T03:30:00Z"),
+      "America/Toronto"
+    );
+    expect(iso?.timeSec).toBe(Math.floor(Date.UTC(2026, 2, 8, 3, 30) / 1000));
   });
 });
