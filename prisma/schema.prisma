@@ -960,6 +960,10 @@ model NotificationLog {
   title     String
   body      String
   url       String?
+  /// Optional dedupe key segment (lot 9): distinguishes alerts that share
+  /// (type, url), e.g. one broker connection per SYNC_STALE alert. Null
+  /// means "no extra segment" and matches only other null keys.
+  dedupeKey String?   @map("dedupe_key")
   sentAt    DateTime  @default(now()) @map("sent_at")
   readAt    DateTime? @map("read_at")
   /// SENT | FAILED | SKIPPED

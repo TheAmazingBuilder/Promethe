@@ -1126,6 +1126,7 @@ export async function processIngestPayload(
       title: "MT connection conflict",
       body: `The terminal “${connection.label}” is sending data from another account (${payload.server} / ${payload.login}). Events are rejected – check the token.`,
       url: "/broker-sync",
+      dedupeKey: connection.id,
       dedupeWithinMs: 24 * 60 * 60 * 1000,
     });
     throw new IngestError("LOGIN_MISMATCH", 403);
@@ -1231,6 +1232,7 @@ export async function sweepStaleConnections(now: Date = new Date()): Promise<Sta
           title: "Synchronisation interrompue",
           body: `No heartbeat from “${connection.label}” for over 30 minutes – is MetaTrader open?`,
           url: "/broker-sync",
+          dedupeKey: connection.id,
           dedupeWithinMs: 6 * 60 * 60 * 1000,
         });
       }
