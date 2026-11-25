@@ -167,6 +167,15 @@ function dec(value: DecimalInput | null | undefined): Decimal {
   return toD(value ?? 0);
 }
 
+function isValidTimezone(timezone: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: timezone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Firm-day key (YYYY-MM-DD) of an instant in the challenge timezone, the
  * day ending at resetTimeLocal. Falls back to the UTC calendar date when
@@ -177,6 +186,12 @@ export function firmDayKey(
   timezone: string,
   resetTimeLocal: string,
 ): { day: string; fallback: boolean } {
+  // getTradingDay never throws (it falls back silently), so validate here:
+  // an unknown IANA zone or a reset time outside HH:MM means the firm day
+  // cannot be trusted - use the UTC date and say so.
+  if (!isValidTimezone(timezone) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(resetTimeLocal)) {
+    return { day: instant.toISOString().slice(0, 10), fallback: true };
+  }
   try {
     const day = getTradingDay(instant, timezone, {
       mode: "CUSTOM",

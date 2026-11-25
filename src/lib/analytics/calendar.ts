@@ -317,6 +317,8 @@ export function computePropStatus(input: PropStatusInput): PropStatus {
   const overall: PropLimitStatus =
     dailyLoss.status === "BREACHED" || totalDrawdown.status === "BREACHED"
       ? "BREACHED"
+      : dailyLoss.status === "IMMINENT" || totalDrawdown.status === "IMMINENT"
+        ? "IMMINENT"
       : dailyLoss.status === "WARNING" || totalDrawdown.status === "WARNING"
         ? "WARNING"
         : "OK";

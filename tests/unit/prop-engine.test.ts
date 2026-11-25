@@ -138,8 +138,9 @@ describe("global loss and drawdown", () => {
     const result = evaluatePropPhase(
       input({
         trades: [
-          trade(day("2025-01-02"), "-6000"),
+          trade(day("2025-01-02"), "-4000"),
           trade(day("2025-01-03"), "-4000"),
+          trade(day("2025-01-04"), "-2000"),
         ],
       }),
     );
