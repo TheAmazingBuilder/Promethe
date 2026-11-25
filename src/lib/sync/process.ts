@@ -1056,7 +1056,8 @@ async function settleEvent(
     // reclaimer's outcome is preserved.
     await db.syncEventLog.updateMany({
       where: {
-        userId_eventId: { userId, eventId },
+        userId,
+        eventId,
         status: "PROCESSING",
         leaseExpiresAt,
       },
