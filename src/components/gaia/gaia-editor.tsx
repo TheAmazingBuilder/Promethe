@@ -73,6 +73,7 @@ import { IconPicker, RefPickerDialog, VersionsDialog } from "./gaia-editor-dialo
 import { NotePrintDialog } from "./gaia-print";
 import { GaiaLinkedNotesSection } from "./gaia-linked-notes";
 import { GaiaPatternLibrary } from "./gaia-pattern-library";
+import { getCandlestickPattern, isCandlestickPatternId } from "@/lib/gaia/patterns/catalog";
 import {
   clearLocalGaiaDraft,
   gaiaSaveRetryDelay,
@@ -171,6 +172,7 @@ export function blocksToMarkdown(
         }
         break;
       }
+      case "pattern": { const pattern = block.patternId ? getCandlestickPattern(block.patternId) : null; if (pattern) lines.push(`![${pattern.name}](${pattern.illustration})`, `*${pattern.description}*`, ""); break; }
       case "ref": {
         if (block.ref) {
           const kindLabel = refLabel(block.ref.kind);
@@ -263,6 +265,8 @@ export function GaiaEditor({
 
   const draftRef = React.useRef<DraftState | null>(null);
   const dirtyRef = React.useRef(false);
+  const saveInFlightRef = React.useRef(false);
+  const draftRevisionRef = React.useRef(0);
   const saveTimerRef = React.useRef<number | null>(null);
   // Lot 11 (roadmap §15): consecutive failed autosaves; drives the
   // backoff retry effect below (first failure toasts, later ones stay
@@ -287,7 +291,10 @@ export function GaiaEditor({
       saveTimerRef.current = null;
     }
     const current = draftRef.current;
-    if (!current || !dirtyRef.current) return;
+    if (!current || !dirtyRef.current || saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
+    const savingRevision = draftRevisionRef.current;
+    let needsImmediateFlush = false;
     setStatus("saving");
     try {
       const res = await updateNote.mutateAsync({
@@ -301,13 +308,19 @@ export function GaiaEditor({
           blocks: current.blocks,
         },
       });
-      dirtyRef.current = false;
       retryCountRef.current = 0;
       setRetryPending(0);
-      clearLocalGaiaDraft(noteId);
       lastAdoptedUpdatedAtRef.current = res.note.updatedAt;
       setSavedAt(res.note.updatedAt);
-      setStatus("saved");
+      if (draftRevisionRef.current === savingRevision) {
+        dirtyRef.current = false;
+        clearLocalGaiaDraft(noteId);
+        setStatus("saved");
+      } else {
+        dirtyRef.current = true;
+        setStatus("dirty");
+        needsImmediateFlush = true;
+      }
     } catch (err) {
       dirtyRef.current = true;
       setStatus("error");
@@ -320,11 +333,17 @@ export function GaiaEditor({
       }
       retryCountRef.current += 1;
       setRetryPending(retryCountRef.current);
+    } finally {
+      saveInFlightRef.current = false;
+      if (needsImmediateFlush && dirtyRef.current && saveTimerRef.current === null) {
+        saveTimerRef.current = window.setTimeout(() => void flushSaveRef.current(), 0);
+      }
     }
   }, [noteId, toast, updateNote]);
 
   const flushSaveRef = React.useRef(flushSave);
   React.useEffect(() => {
+    // Keep scheduled autosaves pointed at the latest note mutation callback.
     flushSaveRef.current = flushSave;
   });
 
@@ -338,6 +357,7 @@ export function GaiaEditor({
       const current = draftRef.current;
       if (!current) return;
       const next = updater(current);
+      draftRevisionRef.current += 1;
       setDraftState(next);
       dirtyRef.current = true;
       // Lot 11 (roadmap §15): keep a local backup of the unsaved edits so
@@ -1220,8 +1240,17 @@ export function GaiaEditor({
                 );
               }}
               onDragEnd={() => setDragState({ dragId: null, overId: null, position: null })}
-              onDrop={(id) => {
-                if (dragState.dragId) {
+              onDrop={(id, patternId, position) => {
+                if (patternId && isCandlestickPatternId(patternId)) {
+                  applyDraft((current) => {
+                    const index = current.blocks.findIndex((block) => block.id === id);
+                    const insertionIndex = Math.max(0, index + (position === "below" ? 1 : 0));
+                    const blocks = [...current.blocks];
+                    blocks.splice(insertionIndex, 0, { id: newBlockId(), type: "pattern", text: "", patternId });
+                    return { ...current, blocks };
+                  });
+                }
+                else if (dragState.dragId) {
                   ops.reorder(dragState.dragId, id, dragState.position ?? "below");
                 }
                 setDragState({ dragId: null, overId: null, position: null });
@@ -1232,6 +1261,15 @@ export function GaiaEditor({
           <button
             type="button"
             onClick={addBlock}
+            onDragOver={(event) => {
+              if (event.dataTransfer.types.includes("application/x-promethe-gaia-pattern")) event.preventDefault();
+            }}
+            onDrop={(event) => {
+              const patternId = event.dataTransfer.getData("application/x-promethe-gaia-pattern");
+              if (!isCandlestickPatternId(patternId)) return;
+              event.preventDefault();
+              applyDraft((current) => ({ ...current, blocks: [...current.blocks, { id: newBlockId(), type: "pattern", text: "", patternId }] }));
+            }}
             aria-label={t("gaia.editor.addBlockLabel")}
             className="h-10 w-full rounded-md pl-7 text-left text-sm text-muted-foreground hover:bg-muted/50"
           >
@@ -1264,7 +1302,7 @@ export function GaiaEditor({
         />
       ) : null}
 
-      <GaiaPatternLibrary open={patternLibraryOpen} onOpenChange={setPatternLibraryOpen} />
+      <GaiaPatternLibrary open={patternLibraryOpen} onOpenChange={setPatternLibraryOpen} onInsert={(patternId) => { if (isCandlestickPatternId(patternId)) applyDraft((current) => ({ ...current, blocks: [...current.blocks, { id: newBlockId(), type: "pattern", text: "", patternId }] })); }} />
       <RefPickerDialog
         open={refPicker.open}
         onOpenChange={(open) => setRefPicker((prev) => ({ ...prev, open }))}
