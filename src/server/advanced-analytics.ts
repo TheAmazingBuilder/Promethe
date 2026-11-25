@@ -8,9 +8,13 @@
  *
  * Trader score (Phase 2 perf): the headline score is served from
  * today's TraderScoreSnapshot when present (frozen daily value, one
- * indexed read) and recomputed only when it is missing; the history is
- * built from the snapshots (last one of each month) instead of the
- * O(months x N) monthly replay.
+ * indexed read) — but ONLY when the request asks for exactly the
+ * snapshot's scope (all-time, all accounts). Any other period or an
+ * account filter is always recomputed from the trades in scope, so a
+ * 30-day / 90-day / YTD score can never be a global value in disguise;
+ * the history follows the same rule (snapshots for the global scope,
+ * month-end replay over the scoped trades otherwise). The daily cron
+ * freezes the global snapshot for every user instead.
  *
  * Persistence (idempotent, user-scoped, Phase 2 perf): the GET handler
  * only writes when the stored rows actually differ — a read-only visit
@@ -600,21 +604,18 @@ export async function getAdvancedAnalytics(
     modules
   );
   const now = new Date();
-  // Phase 2 perf — trader score from the daily snapshot: the headline
-  // score is the frozen value of the day (one indexed read), recomputed
-  // only when today's snapshot is missing. The details below the score
-  // still describe the currently loaded trades. History comes from the
-  // snapshots (last one of each month) instead of the O(months x N)
-  // monthly replay; when today's snapshot is missing, the current
-  // month's point is the freshly computed score (same >= 3 trades bar
-  // as the replay).
+  // Phase 2 perf — trader score from the daily snapshot, global scope
+  // only: the snapshot is the frozen all-time, all-accounts value, so it
+  // may stand in for the score only when the request asks for exactly
+  // that scope (period "all", no account filter). Any other period or an
+  // account filter keeps the freshly computed score from the trades in
+  // scope, and the history is the month-end replay over those same
+  // trades — a global value is never presented as a period score.
+  // The score's `source` field records which one was served, and the
+  // quality tab displays the real period of the score.
+  const isGlobalScope = query.account == null && query.period === "all";
   if (modules.includes("score") && computed.score != null) {
-    // Snapshots are intentionally user-global (the daily cron computes all
-    // accounts together). Never apply a global snapshot to a filtered account,
-    // and never let an account-scoped request overwrite that global row.
-    if (query.account != null) {
-      computed.scoreHistory = computeScoreHistory(trades);
-    } else {
+    if (isGlobalScope) {
       const [history, today] = await Promise.all([
         loadScoreHistoryFromSnapshots(userId),
         db.traderScoreSnapshot.findUnique({
@@ -633,6 +634,7 @@ export async function getAdvancedAnalytics(
             risk: today.risk,
           },
           trades: today.tradeCount,
+          source: "snapshot",
         };
       }
       const currentMonth = now.toISOString().slice(0, 7);
@@ -648,11 +650,16 @@ export async function getAdvancedAnalytics(
         });
         history.sort((a, b) => a.month.localeCompare(b.month));
       }
-        computed.scoreHistory = history;
+      computed.scoreHistory = history;
+    } else {
+      computed.scoreHistory = computeScoreHistory(trades);
     }
   }
   try {
-    await persistAdvanced(userId, trades, computed, now, query.account == null);
+    // Only a global-scope score may (re)write today's global snapshot:
+    // persisting a period- or account-scoped score here would freeze a
+    // partial value as the all-time snapshot for every later reader.
+    await persistAdvanced(userId, trades, computed, now, isGlobalScope);
   } catch (error) {
     // Persistence must never break the read path.
     console.error("[advanced-analytics] persist failed", error);

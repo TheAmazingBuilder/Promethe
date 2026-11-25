@@ -449,6 +449,13 @@ export interface TraderScore {
   };
   /** Trades the score is based on. */
   trades: number;
+  /**
+   * Where the served score came from: the frozen daily snapshot (all-time,
+   * all accounts) or a fresh recompute from the trades in scope. The server
+   * only serves the snapshot when the request asks for exactly that scope
+   * (see src/server/advanced-analytics.ts); every other scope is recomputed.
+   */
+  source: "snapshot" | "computed";
 }
 
 export interface ScoreHistoryPoint {
@@ -570,6 +577,7 @@ export function computeTraderScore(
       grossWin: stats.grossWin,
     },
     trades: n,
+    source: "computed",
   };
 }
 

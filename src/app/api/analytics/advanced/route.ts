@@ -12,8 +12,10 @@ import { rateLimit, sweepRateLimits } from "@/lib/rate-limit";
  * module (optional: one of the advanced modules — only that module is
  * computed, the rest is returned as zero-trade shells).
  * Scoped by session user. The handler persists, idempotently and only
- * when the stored rows differ, the lifecycle stats, today's score
- * snapshot and the anomaly rows for the trades in scope (see
+ * when the stored rows differ, the lifecycle stats and the anomaly rows
+ * for the trades in scope, and today's score snapshot only for an
+ * all-time, all-accounts request (a period- or account-scoped score is
+ * never frozen as the global snapshot; see
  * src/server/advanced-analytics.ts). The closed-trade load is cached
  * server-side for 45 s (keyed by user + account + period).
  */

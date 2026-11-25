@@ -60,6 +60,19 @@ export function QualityView() {
   const reviews = data?.advanced.reviews ?? null;
   const history = data?.advanced.scoreHistory ?? [];
   const currency = data?.currency ?? "USD";
+  // The score's real period: the validated period the server actually
+  // used (never the requested label alone) plus its source — the frozen
+  // daily snapshot for all-time, a fresh recompute otherwise.
+  const scorePeriodKey = {
+    "30d": "scorePeriod30d",
+    "90d": "scorePeriod90d",
+    ytd: "scorePeriodYtd",
+    all: "scorePeriodAll",
+  } as const;
+  const scorePeriodNote =
+    score?.source === "snapshot"
+      ? t("scoreSnapshotNote")
+      : t(scorePeriodKey[data?.period ?? period]);
 
   const components = score
     ? ([
@@ -116,6 +129,9 @@ export function QualityView() {
                 <Badge variant={GRADE_VARIANT[score.grade]}>
                   {t(`grade${capitalize(score.grade)}`)}
                 </Badge>
+                <p className="text-xs text-muted-foreground">
+                  {scorePeriodNote}
+                </p>
                 <p className="text-xs text-muted-foreground">
                   {t("scoreNote")}
                 </p>
