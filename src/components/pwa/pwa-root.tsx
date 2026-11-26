@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Download, WifiOff } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { useOfflineQueue } from "@/lib/offline/use-offline-queue";
+import { OfflineQueuePanel } from "@/components/offline/offline-queue-panel";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -10,24 +13,23 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 export function PwaRoot() {
-  const [isOnline, setIsOnline] = useState(true);
+  const t = useTranslations("offlineQueue");
   const [installPrompt, setInstallPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalling, setIsInstalling] = useState(false);
+  const [queueOpen, setQueueOpen] = useState(false);
+  // Single mount point (root layout): this hook owns the online/offline
+  // listeners, the replay triggers and the Background Sync registration.
+  const queue = useOfflineQueue();
+  const { isOnline, actionableCount, conflictCount } = queue;
 
   useEffect(() => {
-    setIsOnline(navigator.onLine);
-
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       setInstallPrompt(event as BeforeInstallPromptEvent);
     };
     const handleAppInstalled = () => setInstallPrompt(null);
 
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     window.addEventListener("appinstalled", handleAppInstalled);
 
@@ -38,12 +40,7 @@ export function PwaRoot() {
     }
 
     return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-      window.removeEventListener(
-        "beforeinstallprompt",
-        handleBeforeInstallPrompt
-      );
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
       window.removeEventListener("appinstalled", handleAppInstalled);
     };
   }, []);
@@ -66,9 +63,41 @@ export function PwaRoot() {
     }
   };
 
+  // Offline banner: while offline it shows the queued work; while online
+  // it only appears when something still needs attention (a failed or
+  // conflicted item never hides behind a green state).
+  const showQueueBanner =
+    (!isOnline && actionableCount > 0) ||
+    (isOnline && (conflictCount > 0 || queue.failedCount > 0));
+
   return (
     <>
-      {!isOnline ? (
+      {showQueueBanner ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-4 left-4 z-[100] flex max-w-[calc(100vw-2rem)] flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-card-foreground shadow-lg"
+        >
+          <WifiOff className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span>
+            {isOnline
+              ? t("onlineBanner", { count: actionableCount })
+              : t("offlineBanner", { count: actionableCount })}
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={queue.isReplaying}
+            onClick={() => void queue.replayNow()}
+          >
+            {queue.isReplaying ? t("syncing") : t("retryNow")}
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setQueueOpen(true)}>
+            {t("viewQueue")}
+          </Button>
+        </div>
+      ) : !isOnline ? (
         <div
           role="status"
           aria-live="polite"
@@ -78,6 +107,8 @@ export function PwaRoot() {
           <span>You are offline. Live data is unavailable.</span>
         </div>
       ) : null}
+
+      <OfflineQueuePanel open={queueOpen} onOpenChange={setQueueOpen} />
 
       {installPrompt ? (
         <div className="fixed bottom-4 right-4 z-[100]">

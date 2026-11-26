@@ -170,3 +170,19 @@ self.addEventListener("notificationclick", (event) => {
       })
   );
 });
+
+// Background Sync (§25.5): the offline queue lives in IndexedDB and the
+// replay runs in-page (session auth lives in the page, not in the worker).
+// The sync event only wakes the open clients, which replay the queue.
+// When no client is open, the queue replays on the next app open instead.
+self.addEventListener("sync", (event) => {
+  if (event.tag === "promethe-offline-replay") {
+    event.waitUntil(
+      self.clients.matchAll({ includeUncontrolled: true }).then((clients) => {
+        clients.forEach((client) =>
+          client.postMessage({ type: "promethe-offline-replay" }),
+        );
+      }),
+    );
+  }
+});

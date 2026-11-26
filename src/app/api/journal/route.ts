@@ -11,6 +11,7 @@ import { zodFieldErrors } from "@/lib/validations/shared";
 import {
   deleteJournalEntry,
   getJournalEntry,
+  JournalConflictError,
   listRecentJournal,
   upsertJournalEntry,
 } from "@/server/journal";
@@ -77,6 +78,18 @@ export async function PUT(req: Request) {
     const entry = await upsertJournalEntry(session.user.id, parsed.data);
     return NextResponse.json({ entry });
   } catch (error) {
+    if (error instanceof JournalConflictError) {
+      return NextResponse.json(
+        {
+          error: "CONFLICT",
+          message: "Journal entry edited elsewhere.",
+          entry: error.serverEntry,
+          baseUpdatedAt: error.baseUpdatedAt,
+          serverUpdatedAt: error.serverUpdatedAt,
+        },
+        { status: 409 }
+      );
+    }
     return apiError(error, "journal");
   }
 }

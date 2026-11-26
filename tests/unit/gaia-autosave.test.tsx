@@ -62,8 +62,10 @@ vi.mock("@/components/gaia/gaia-shared", async (importOriginal) => {
       isError: false,
       refetch: vi.fn(),
     }),
-    useGaiaFolders: () => ({ data: { folders: [] } }),
-    useGaiaTags: () => ({ data: { tags: [] } }),
+    // §25.5: useGaiaFolders/useGaiaTags now return the unwrapped arrays
+    // (fetchReferenceWithFallback), not the { folders } / { tags } wrapper.
+    useGaiaFolders: () => ({ data: [] }),
+    useGaiaTags: () => ({ data: [] }),
     useGaiaTemplates: () => ({ data: { templates: [] } }),
     useGaiaLinkedNotes: () => ({ data: { notes: [], total: 0 } }),
     useGaiaVersions: () => ({ data: { versions: [] } }),

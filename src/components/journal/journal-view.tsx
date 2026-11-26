@@ -216,9 +216,15 @@ export function JournalView({ date }: { date?: string }) {
 
   const onSave = async () => {
     try {
-      await save.mutateAsync(form);
+      const result = await save.mutateAsync(form);
       setSavedSignature(JSON.stringify(form));
-      toast({ title: t("saved") });
+      // Offline (§25.5): the entry is queued, not saved yet. The form
+      // keeps its local state and the queue replays it on reconnect.
+      if (result && typeof result === "object" && "queued" in result) {
+        toast({ title: t("savedOffline") });
+      } else {
+        toast({ title: t("saved") });
+      }
     } catch (error) {
       const err = error instanceof ApiClientError ? error : null;
       toast({

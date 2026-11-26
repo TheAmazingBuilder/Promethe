@@ -749,8 +749,10 @@ export function TradeFormView({
       setFieldErrors(null);
       payload = parsed.data as TradeInput;
       // Lot 11 (roadmap §14): advisory warnings for a non-draft save.
-      // Drafts skip them; a confirmed save skips the re-check.
-      if (!confirmed) {
+      // Drafts skip them; a confirmed save skips the re-check. Offline
+      // the check is skipped too (§25.5): it needs the network, and the
+      // server still validates on replay.
+      if (!confirmed && navigator.onLine) {
         try {
           const { warnings } = await checkWarnings.mutateAsync({
             strategyId: form.strategyId || null,
@@ -800,14 +802,21 @@ export function TradeFormView({
           clientMutationId: mutationIdRef.current,
         });
         mutationIdRef.current = `tf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        if (result.deduplicated) {
+        // Offline (§25.5): the trade is queued, not created yet. The
+        // queue panel shows it until the replay lands it server-side.
+        if (result.queued) {
+          toast({ title: t("queuedToast") });
+          navigate("/trades");
+        } else if (result.deduplicated) {
           toast({ title: t("deduplicatedToast") });
+          navigate(`/trades/${result.trade.id}`);
         } else if (draft) {
           toast({ title: t("draftSavedToast") });
+          navigate(`/trades/${result.trade.id}`);
         } else {
           toast({ title: t("createdToast") });
+          navigate(`/trades/${result.trade.id}`);
         }
-        navigate(`/trades/${result.trade.id}`);
       }
     } catch (error) {
       const err = error instanceof ApiClientError ? error : null;

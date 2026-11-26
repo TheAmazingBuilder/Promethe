@@ -10,7 +10,9 @@
  * These are static source tests (same pattern as pwa-cache.test.ts and
  * the Lot 4 rls-coverage test): they lock the render tree shape, the
  * single registration site and the offline page identity without
- * booting the whole app shell.
+ * booting the whole app shell. Since §25.5 the connectivity listeners
+ * live in the offline-queue hook, owned by the single PwaRoot mount;
+ * the install listeners stay in PwaRoot itself.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -70,14 +72,42 @@ describe("PWA single mount", () => {
   });
 
   it("listens to each PWA window event exactly once per mount", () => {
+    // Since §25.5 the connectivity listeners live in the offline-queue
+    // hook (owned by the single PwaRoot mount); the install listeners
+    // stay in PwaRoot itself.
     const pwaRoot = readText(join(SRC_DIR, "components/pwa/pwa-root.tsx"));
-    for (const event of ["online", "offline", "beforeinstallprompt", "appinstalled"]) {
-      // Whitespace-tolerant: one removeEventListener call spans two lines.
-      const added = pwaRoot.match(new RegExp(`addEventListener\\(\\s*"${event}"`, "g")) ?? [];
-      const removed = pwaRoot.match(new RegExp(`removeEventListener\\(\\s*"${event}"`, "g")) ?? [];
-      expect(added).toHaveLength(1);
-      expect(removed).toHaveLength(1);
+    const queueHook = readText(join(SRC_DIR, "lib/offline/use-offline-queue.ts"));
+    const owners: Array<[string, string[]]> = [
+      [queueHook, ["online", "offline"]],
+      [pwaRoot, ["beforeinstallprompt", "appinstalled"]],
+    ];
+    for (const [text, events] of owners) {
+      for (const event of events) {
+        // Whitespace-tolerant: one removeEventListener call spans two lines.
+        const added = text.match(new RegExp(`addEventListener\\(\\s*"${event}"`, "g")) ?? [];
+        const removed = text.match(new RegExp(`removeEventListener\\(\\s*"${event}"`, "g")) ?? [];
+        expect(added).toHaveLength(1);
+        expect(removed).toHaveLength(1);
+      }
     }
+  });
+
+  it("registers the listener-owning queue hook exactly once, in PwaRoot", () => {
+    // useOfflineQueueState (no listeners) may be used by the queue panel;
+    // useOfflineQueue (the listeners) must have a single call site.
+    // The hook file itself holds the definition, not a call site.
+    const files = walkTs(SRC_DIR).filter(
+      (file) => !file.endsWith("/lib/offline/use-offline-queue.ts"),
+    );
+    const sites = files
+      .map((file) => ({
+        file,
+        count: countOccurrences(readText(file), "useOfflineQueue()"),
+      }))
+      .filter(({ count }) => count > 0);
+    expect(sites).toHaveLength(1);
+    expect(sites[0].file).toContain("/src/components/pwa/pwa-root.tsx");
+    expect(sites[0].count).toBe(1);
   });
 });
 

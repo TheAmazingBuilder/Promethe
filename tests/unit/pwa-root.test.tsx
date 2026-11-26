@@ -1,12 +1,24 @@
 /** @vitest-environment jsdom */
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PwaRoot } from "@/components/pwa/pwa-root";
+import messages from "../../messages/en.json";
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
+
+// PwaRoot reads the offlineQueue namespace (§25.5 banner + queue panel),
+// so it renders inside the same provider the app uses.
+function renderPwaRoot() {
+  return render(
+    <NextIntlClientProvider locale="en" messages={messages}>
+      <PwaRoot />
+    </NextIntlClientProvider>,
+  );
+}
 
 describe("PwaRoot", () => {
   it("registers the service worker when the browser supports it", async () => {
@@ -16,7 +28,7 @@ describe("PwaRoot", () => {
       value: { register },
     });
 
-    render(<PwaRoot />);
+    renderPwaRoot();
 
     await waitFor(() => {
       expect(register).toHaveBeenCalledWith("/sw.js", { scope: "/" });
@@ -24,7 +36,7 @@ describe("PwaRoot", () => {
   });
 
   it("announces offline and online transitions", () => {
-    render(<PwaRoot />);
+    renderPwaRoot();
 
     fireEvent(window, new Event("offline"));
     expect(screen.getByRole("status").textContent).toContain("You are offline");
@@ -51,7 +63,7 @@ describe("PwaRoot", () => {
     installEvent.prompt = prompt;
     installEvent.userChoice = userChoice;
 
-    render(<PwaRoot />);
+    renderPwaRoot();
     expect(screen.queryByRole("button", { name: "Install Promethe" })).toBeNull();
 
     window.dispatchEvent(installEvent);
@@ -76,7 +88,7 @@ describe("PwaRoot", () => {
     installEvent.prompt = prompt;
     installEvent.userChoice = Promise.resolve({ outcome: "dismissed", platform: "web" });
 
-    render(<PwaRoot />);
+    renderPwaRoot();
     window.dispatchEvent(installEvent);
     expect(await screen.findByRole("button", { name: "Install Promethe" })).toBeTruthy();
 
@@ -94,7 +106,7 @@ describe("PwaRoot", () => {
     installEvent.prompt = prompt;
     installEvent.userChoice = Promise.resolve({ outcome: "dismissed", platform: "web" });
 
-    render(<PwaRoot />);
+    renderPwaRoot();
     window.dispatchEvent(installEvent);
     const installButton = await screen.findByRole("button", { name: "Install Promethe" });
 

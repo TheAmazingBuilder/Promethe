@@ -47,12 +47,15 @@ export class GaiaError extends Error {
   readonly code: string;
   readonly status: number;
   readonly issues?: { path: string; message: string }[];
+  /** Extra payload for the response body (conflict snapshots). */
+  readonly details?: unknown;
   constructor(
     error: string,
     code: string,
     status: number,
     message: string,
     issues?: { path: string; message: string }[],
+    details?: unknown,
   ) {
     super(message);
     this.name = "GaiaError";
@@ -60,6 +63,7 @@ export class GaiaError extends Error {
     this.code = code;
     this.status = status;
     this.issues = issues;
+    this.details = details;
   }
 }
 
@@ -74,8 +78,8 @@ function validationError(
   return new GaiaError("ValidationError", "VALIDATION", 422, message, issues);
 }
 
-function conflictError(code: string, message: string): GaiaError {
-  return new GaiaError("Conflict", code, 409, message);
+function conflictError(code: string, message: string, details?: unknown): GaiaError {
+  return new GaiaError("Conflict", code, 409, message, undefined, details);
 }
 
 const NOTE_NOT_FOUND = () => notFound("NOTE_NOT_FOUND", "Note not found.");
@@ -84,8 +88,9 @@ const TEMPLATE_NOT_FOUND = () => notFound("TEMPLATE_NOT_FOUND", "Template not fo
 const VERSION_NOT_FOUND = () => notFound("VERSION_NOT_FOUND", "Version not found.");
 
 /**
- * Convertit une GaiaError en réponse HTTP ({ error, code?, message?, issues? }).
- * Retourne null pour les autres erreurs (à passer à apiError).
+ * Convertit une GaiaError en réponse HTTP ({ error, code?, message?,
+ * issues?, details? }). Retourne null pour les autres erreurs (à passer
+ * à apiError).
  */
 export function gaiaErrorResponse(error: unknown): NextResponse | null {
   if (!(error instanceof GaiaError)) return null;
@@ -95,6 +100,7 @@ export function gaiaErrorResponse(error: unknown): NextResponse | null {
       code: error.code,
       message: error.message,
       ...(error.issues ? { issues: error.issues } : {}),
+      ...(error.details !== undefined ? { details: error.details } : {}),
     },
     { status: error.status },
   );
@@ -107,6 +113,8 @@ const noteCreateInputSchema = z.object({
   folderId: z.string().nullable().optional(),
   templateId: z.string().optional(),
   blocks: gaiaBlocksInputSchema.optional(),
+  /** Offline idempotency (§25.5): replaying the same key returns the stored note. */
+  clientMutationId: z.string().max(64).optional(),
 });
 
 const noteUpdateInputSchema = z.object({
@@ -117,6 +125,10 @@ const noteUpdateInputSchema = z.object({
   favorite: z.boolean().optional(),
   blocks: gaiaBlocksInputSchema.optional(),
   touchViewed: z.boolean().optional(),
+  /** Offline conflict check (§25.5): updatedAt the client last saw. */
+  expectedUpdatedAt: z.string().optional(),
+  /** Replay a conflicted edit, overwriting the server row on purpose. */
+  force: z.boolean().optional(),
 });
 
 const noteDuplicateInputSchema = z.object({
@@ -616,11 +628,27 @@ export async function getNote(
 
 /* ── Notes : écriture ────────────────────────────────────────────────── */
 
+export type CreateNoteResult = GaiaNoteResponse & { deduplicated: boolean };
+
 export async function createNote(
   userId: string,
   input: unknown,
-): Promise<GaiaNoteResponse> {
+): Promise<CreateNoteResult> {
   const parsed = parseOrThrow(noteCreateInputSchema, input);
+
+  // Offline idempotency (§25.5): replaying the same mutation returns the
+  // stored note instead of creating a duplicate (same contract as
+  // Trade.clientMutationId, v2 §4.2).
+  if (parsed.clientMutationId) {
+    const existing = await db.note.findFirst({
+      where: { userId, clientMutationId: parsed.clientMutationId },
+    });
+    if (existing) {
+      const [folders, tags] = await Promise.all([loadFolders(userId), loadTags(userId)]);
+      const response = await noteResponse(userId, existing, folders, tags);
+      return { ...response, deduplicated: true };
+    }
+  }
 
   let folderId: string | null = parsed.folderId ?? null;
   if (folderId !== null) {
@@ -656,6 +684,7 @@ export async function createNote(
       favorite: false,
       templateId: template?.id ?? null,
       blocks: JSON.stringify(blocks),
+      clientMutationId: parsed.clientMutationId ?? null,
       createdAt: now,
       updatedAt: now,
       lastViewedAt: now,
@@ -663,7 +692,8 @@ export async function createNote(
     },
   });
   const [folders, tags] = await Promise.all([loadFolders(userId), loadTags(userId)]);
-  return noteResponse(userId, note, folders, tags);
+  const response = await noteResponse(userId, note, folders, tags);
+  return { ...response, deduplicated: false };
 }
 
 export async function updateNote(
@@ -684,6 +714,30 @@ export async function updateNote(
       select: { id: true },
     });
     if (!folder) throw FOLDER_NOT_FOUND();
+  }
+
+  // Offline conflict check (§25.5): a content edit (title or blocks) made
+  // from a stale base never silently overwrites the server row. The caller
+  // gets a 409 with the server note and chooses (keep mine with force, or
+  // keep the server version). Metadata-only patches (favorite, folder,
+  // icon, tags) touch no content field and apply without a base check.
+  const touchesContent =
+    parsed.title !== undefined || parsed.blocks !== undefined;
+  if (
+    touchesContent &&
+    parsed.expectedUpdatedAt !== undefined &&
+    parsed.force !== true
+  ) {
+    const base = new Date(parsed.expectedUpdatedAt).getTime();
+    if (Number.isFinite(base) && base !== note.updatedAt.getTime()) {
+      const [folders, tags] = await Promise.all([loadFolders(userId), loadTags(userId)]);
+      const server = await noteResponse(userId, note, folders, tags);
+      throw conflictError("NOTE_CONFLICT", "Note edited elsewhere.", {
+        note: server.note,
+        baseUpdatedAt: parsed.expectedUpdatedAt,
+        serverUpdatedAt: note.updatedAt.toISOString(),
+      });
+    }
   }
 
   const hasMeaningfulChange =

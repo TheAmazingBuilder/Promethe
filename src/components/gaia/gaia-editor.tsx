@@ -81,8 +81,11 @@ import {
   loadLocalGaiaDraft,
   saveLocalGaiaDraft,
 } from "@/lib/gaia/draft-recovery";
+import { isNetworkError } from "@/lib/offline/replay";
+import { isProvisionalNoteId } from "@/lib/offline/types";
+import { queueGaiaNoteUpdateOffline } from "./gaia-shared";
 
-export type SaveStatus = "saved" | "dirty" | "saving" | "error";
+export type SaveStatus = "saved" | "dirty" | "saving" | "error" | "queued";
 
 interface DraftState {
   title: string;
@@ -306,6 +309,10 @@ export function GaiaEditor({
           tagIds: current.tagIds,
           favorite: current.favorite,
           blocks: current.blocks,
+          // Offline conflict base (§25.5): the server row the user last
+          // saved from. A stale base becomes a 409 on replay, never a
+          // silent overwrite.
+          expectedUpdatedAt: lastAdoptedUpdatedAtRef.current ?? undefined,
         },
       });
       retryCountRef.current = 0;
@@ -315,13 +322,39 @@ export function GaiaEditor({
       if (draftRevisionRef.current === savingRevision) {
         dirtyRef.current = false;
         clearLocalGaiaDraft(noteId);
-        setStatus("saved");
+        // A provisional note has no server row yet: the edit is queued,
+        // not saved. The queue panel shows it until the create replays.
+        setStatus(isProvisionalNoteId(noteId) ? "queued" : "saved");
       } else {
         dirtyRef.current = true;
         setStatus("dirty");
         needsImmediateFlush = true;
       }
     } catch (err) {
+      // Offline (§25.5): a network failure mid-save queues the draft
+      // instead of retrying forever. The queue owns the retry from here;
+      // the local draft backup stays until the replay succeeds.
+      if (isNetworkError(err)) {
+        const queued = await queueGaiaNoteUpdateOffline(
+          noteId,
+          {
+            title: current.title,
+            icon: current.icon,
+            folderId: current.folderId,
+            tagIds: current.tagIds,
+            favorite: current.favorite,
+            blocks: current.blocks,
+          },
+          lastAdoptedUpdatedAtRef.current,
+        );
+        if (queued) {
+          retryCountRef.current = 0;
+          setRetryPending(0);
+          dirtyRef.current = false;
+          setStatus("queued");
+          return;
+        }
+      }
       dirtyRef.current = true;
       setStatus("error");
       // Lot 11 (roadmap §15): a failed autosave retries on its own with
@@ -759,8 +792,8 @@ export function GaiaEditor({
     );
   }, [slash, tr]);
 
-  const folders = foldersQuery.data?.folders ?? [];
-  const allTags = tagsQuery.data?.tags ?? [];
+  const folders = foldersQuery.data ?? [];
+  const allTags = tagsQuery.data ?? [];
   const wordCount = draft ? countWords(draft.blocks) : 0;
 
   // Lot 11 (roadmap §15): create a note that links back to this one, so
@@ -880,7 +913,9 @@ export function GaiaEditor({
         ? "bg-amber-400"
         : status === "saving"
           ? "animate-pulse bg-emerald-500"
-          : "bg-loss";
+          : status === "queued"
+            ? "bg-sky-400"
+            : "bg-loss";
   const statusLabel =
     status === "saved"
       ? `${t("gaia.time.savedPrefix")} ${savedAt ? gaiaRelativeTime(savedAt, tr) : ""}`.trim()
@@ -888,7 +923,9 @@ export function GaiaEditor({
         ? t("gaia.editor.statusDirty")
         : status === "saving"
           ? t("gaia.editor.statusSaving")
-          : t("gaia.editor.statusError");
+          : status === "queued"
+            ? t("gaia.editor.statusQueued")
+            : t("gaia.editor.statusError");
 
   const addBlock = () => {
     const block: GaiaBlock = { id: newBlockId(), type: "paragraph", text: "" };

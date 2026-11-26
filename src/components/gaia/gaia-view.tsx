@@ -42,6 +42,7 @@ import {
 import { NotesBrowser } from "./gaia-notes";
 import { FoldersPanel, OverviewPanel, TemplatesPanel, TrashPanel } from "./gaia-panels";
 import { GaiaEditor } from "./gaia-editor";
+import { onNoteSynced } from "@/lib/offline/replay";
 
 const TABS: Array<{ id: GaiaTab; icon: typeof LayoutDashboard }> = [
   { id: "overview", icon: LayoutDashboard },
@@ -100,6 +101,14 @@ export function GaiaView() {
     [setParams],
   );
   const closeNote = React.useCallback(() => setParams({ note: null }), [setParams]);
+
+  // Offline (§25.5): when a provisional note's create replays, the editor
+  // follows the note to its server id instead of staying on a dead id.
+  React.useEffect(() => {
+    return onNoteSynced(({ provisionalId, serverId }) => {
+      if (noteId === provisionalId) openNote(serverId);
+    });
+  }, [noteId, openNote]);
 
   const handleCreateNote = React.useCallback(
     (folderId?: string | null) => {

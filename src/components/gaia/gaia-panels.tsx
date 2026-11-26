@@ -354,7 +354,7 @@ export function FoldersPanel({
   const [renameName, setRenameName] = React.useState("");
   const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; name: string; noteCount: number } | null>(null);
 
-  const folders = foldersQuery.data?.folders ?? [];
+  const folders = foldersQuery.data ?? [];
 
   const create = () => {
     const trimmed = name.trim();

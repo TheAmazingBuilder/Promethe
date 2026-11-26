@@ -24,6 +24,9 @@ import type {
   PropStatusPayload,
 } from "@/lib/trading/dto";
 import type { JournalEntryInput } from "@/lib/validations/journal";
+import { getBrowserStore, isOfflineQueueSupported } from "@/lib/offline/store";
+import { getOfflineUserId } from "@/lib/offline/session";
+import { enqueueOperation } from "@/lib/offline/queue";
 
 // ── Calendar ─────────────────────────────────────────────────────────────────
 
@@ -115,18 +118,48 @@ export function useRecentJournal(filters: JournalHistoryQuery = {}) {
 export function useSaveJournalEntry() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: JournalEntryInput) =>
-      (
+    mutationFn: async (
+      input: JournalEntryInput,
+    ): Promise<JournalEntryDTO | { queued: true; date: string }> => {
+      // Offline (§25.5): queue the upsert instead of failing. The base
+      // comes from the cached entry, so a replay that finds a newer
+      // server row becomes a conflict instead of a silent overwrite.
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        const userId = getOfflineUserId();
+        if (userId && isOfflineQueueSupported()) {
+          const cached = qc.getQueryData<{ entry: JournalEntryDTO | null }>([
+            "journal",
+            input.date,
+          ]);
+          const baseUpdatedAt = cached?.entry?.updatedAt ?? null;
+          const payload = {
+            ...input,
+            expectedUpdatedAt: baseUpdatedAt ?? undefined,
+          } as unknown as Record<string, unknown>;
+          await enqueueOperation(getBrowserStore(), {
+            userId,
+            kind: "JOURNAL_UPSERT",
+            entityKey: input.date,
+            idempotencyKey: `journal-${input.date}`,
+            payload,
+            baseUpdatedAt,
+          });
+          return { queued: true, date: input.date };
+        }
+      }
+      return (
         await apiFetch<{ entry: JournalEntryDTO }>("/api/v1/journal", {
           method: "PUT",
           body: JSON.stringify(input),
         })
-      ).entry,
-    onSuccess: (entry) => {
+      ).entry;
+    },
+    onSuccess: (result) => {
+      if ("queued" in result) return result;
       void qc.invalidateQueries({ queryKey: ["journal"] });
       void qc.invalidateQueries({ queryKey: ["calendar"] });
       void qc.invalidateQueries({ queryKey: ["dashboard"] });
-      return entry;
+      return result;
     },
   });
 }

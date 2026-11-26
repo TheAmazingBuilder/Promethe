@@ -1039,7 +1039,8 @@
       "title": "Recent entries",
       "empty": "No entry yet - start with today."
     },
-    "untitled": "Untitled"
+    "untitled": "Untitled",
+    "savedOffline": "Journal saved offline - will sync when you are back online"
   },
   "strategiesView": {
     "title": "Strategies",
@@ -1602,7 +1603,8 @@
       "gradeHint": "A+ is your best setup. Leave it blank to keep the trade ungraded.",
       "warningsTitle": "Check before saving",
       "warningsSaveAnyway": "Save anyway",
-      "warningsReview": "Review the trade"
+      "warningsReview": "Review the trade",
+      "queuedToast": "Trade queued - will sync when you are back online"
     },
     "detail": {
       "notFound": "Trade not found.",
@@ -4931,7 +4933,8 @@
       "addBlockLabel": "Add a block",
       "addBlockHint": "Click to add a block, press / for commands",
       "slashMenuLabel": "Block commands",
-      "draftRecovered": "Recovered unsaved changes from this device"
+      "draftRecovered": "Recovered unsaved changes from this device",
+      "statusQueued": "Queued - will sync when online"
     },
     "slash": {
       "groups": {
@@ -5481,5 +5484,42 @@
     "nextWeekEmpty": "No action in this week's plan yet. Log more trades and the plan will fill in.",
     "openWeeklyPlan": "Open the weekly plan",
     "methodNote": "Rule-based report, no AI: the verdict, recommendations and costs come from the weekly plan engine, run on the selected period's closed trades. Every figure shows its sample size."
+  },
+  "offlineQueue": {
+    "title": "Offline queue",
+    "description": "Changes made while offline, waiting to sync.",
+    "empty": "Nothing waiting to sync.",
+    "pendingCount": "{count} change{count, plural, one {} other {s}} waiting to sync",
+    "offlineBanner": "You are offline. {count} change{count, plural, one {} other {s}} waiting to sync.",
+    "onlineBanner": "{count} change{count, plural, one {} other {s}} waiting to sync.",
+    "viewQueue": "View queue",
+    "retryNow": "Retry now",
+    "retryAll": "Retry all",
+    "retry": "Retry",
+    "discard": "Discard",
+    "clearSent": "Clear sent",
+    "close": "Close",
+    "statusPending": "Waiting",
+    "statusSending": "Sending",
+    "statusSent": "Sent",
+    "statusConflict": "Conflict",
+    "statusFailed": "Failed",
+    "statusExpired": "Expired",
+    "kindTradeCreate": "New trade",
+    "kindJournalUpsert": "Journal entry",
+    "kindNoteCreate": "New note",
+    "kindNoteUpdate": "Note edit",
+    "conflictTitle": "Edited elsewhere",
+    "conflictDesc": "This was edited on another device while you were offline. Both versions are kept.",
+    "keepMine": "Keep mine",
+    "keepServer": "Keep server version",
+    "expiredDesc": "Expired after 7 days offline. It was never sent.",
+    "failedDesc": "The server refused this change.",
+    "createdAt": "Queued {date}",
+    "attempts": "{count} attempt{count, plural, one {} other {s}}",
+    "syncing": "Syncing…",
+    "synced": "All changes synced.",
+    "syncFailed": "Some changes could not sync.",
+    "notSupported": "Offline queue is unavailable in this browser."
   }
 }

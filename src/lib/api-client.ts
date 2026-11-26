@@ -11,6 +11,8 @@ export class ApiClientError extends Error {
   readonly status: number;
   readonly code: string;
   readonly fieldErrors?: Record<string, string[]>;
+  /** Raw error body (conflict snapshots, ...). */
+  readonly body?: unknown;
 
   constructor(body: ApiErrorBody, status: number) {
     super(body.message);
@@ -18,6 +20,7 @@ export class ApiClientError extends Error {
     this.status = status;
     this.code = body.error;
     this.fieldErrors = body.fieldErrors;
+    this.body = body;
   }
 }
 

@@ -2374,6 +2374,11 @@ model Note {
   blocks       String    @default("[]")
   lastViewedAt DateTime? @map("last_viewed_at")
   deletedAt    DateTime? @map("deleted_at")
+  /// v2 - offline idempotency (§25.5): dedupe key for offline note creates,
+  /// mirroring Trade.clientMutationId. Replay of the same key returns the
+  /// stored note instead of creating a duplicate. The key is scoped per
+  /// user (composite unique): the same key may exist for another user.
+  clientMutationId String? @map("client_mutation_id")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
@@ -2383,6 +2388,7 @@ model Note {
 
   @@index([userId])
   @@index([userId, folderId])
+  @@unique([userId, clientMutationId])
   @@map("gaia_notes")
 }
 

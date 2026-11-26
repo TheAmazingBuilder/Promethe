@@ -16,6 +16,24 @@ import { refreshJournalSearchText } from "@/server/search-index";
 import type { JournalEntryDTO } from "@/lib/trading/dto";
 import type { JournalEntryInput } from "@/lib/validations/journal";
 
+/** Offline conflict (§25.5): the server row changed since the client's base. */
+export class JournalConflictError extends Error {
+  readonly serverEntry: JournalEntryDTO;
+  readonly baseUpdatedAt: string;
+  readonly serverUpdatedAt: string;
+  constructor(
+    serverEntry: JournalEntryDTO,
+    baseUpdatedAt: string,
+    serverUpdatedAt: string,
+  ) {
+    super("Journal entry edited elsewhere.");
+    this.name = "JournalConflictError";
+    this.serverEntry = serverEntry;
+    this.baseUpdatedAt = baseUpdatedAt;
+    this.serverUpdatedAt = serverUpdatedAt;
+  }
+}
+
 type JournalRow = Prisma.JournalEntryGetPayload<Record<string, never>>;
 
 export function toJournalDTO(e: JournalRow): JournalEntryDTO {
@@ -105,6 +123,26 @@ export async function upsertJournalEntry(
   userId: string,
   input: JournalEntryInput
 ): Promise<JournalEntryDTO> {
+  // Offline conflict check (§25.5): an upsert made from a stale base never
+  // silently overwrites the server row. The caller gets a 409 with the
+  // server entry and chooses (keep mine with force, or keep the server
+  // version). A missing entry, a trashed entry (restored by the write),
+  // or no base at all applies without a check.
+  if (input.expectedUpdatedAt !== undefined && input.force !== true) {
+    const existing = await withDeleted(() =>
+      db.journalEntry.findFirst({ where: { userId, date: input.date } }),
+    );
+    if (existing && !existing.deletedAt) {
+      const base = new Date(input.expectedUpdatedAt).getTime();
+      if (Number.isFinite(base) && base !== existing.updatedAt.getTime()) {
+        throw new JournalConflictError(
+          toJournalDTO(existing),
+          input.expectedUpdatedAt,
+          existing.updatedAt.toISOString(),
+        );
+      }
+    }
+  }
   const row = await withDeleted(() =>
     db.journalEntry.upsert({
       where: { userId_date: { userId, date: input.date } },

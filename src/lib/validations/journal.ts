@@ -38,6 +38,10 @@ export const journalEntrySchema = z.object({
   keyLesson: z.string().max(2000, "tooLong").nullish(),
   marketBias: z.string().max(500, "tooLong").nullish(),
   nextSessionCommitment: z.string().max(2000, "tooLong").nullish(),
+  /** Offline conflict check (§25.5): updatedAt the client last saw. */
+  expectedUpdatedAt: z.string().optional(),
+  /** Replay a conflicted entry, overwriting the server row on purpose. */
+  force: z.boolean().optional(),
 });
 
 export type JournalEntryInput = z.infer<typeof journalEntrySchema>;

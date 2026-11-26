@@ -21,6 +21,19 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
 import { parseHash, routeToPath } from "@/lib/routes";
+import { getBrowserStore, isOfflineQueueSupported } from "@/lib/offline/store";
+import { getOfflineUserId } from "@/lib/offline/session";
+import { enqueueOperation } from "@/lib/offline/queue";
+import { fetchReferenceWithFallback } from "@/lib/offline/reference-data";
+import {
+  foldPatchIntoCreatePayload,
+  provisionalNoteFromItem,
+  readProvisionalNote,
+} from "@/lib/offline/notes";
+import {
+  isProvisionalNoteId,
+  newProvisionalNoteId,
+} from "@/lib/offline/types";
 
 // ── Block model (mirrors the backend contract) ─────────────────────────────
 
@@ -426,10 +439,29 @@ export function useGaiaNotes(params: GaiaNotesParams) {
 export function useGaiaNote(noteId: string | null) {
   return useQuery({
     queryKey: ["gaia", "note", noteId],
-    queryFn: () =>
-      apiFetch<{ note: GaiaNote; folderName: string | null; tagNames: string[] }>(
+    queryFn: async () => {
+      // Offline (§25.5): a provisional note only exists in the queue.
+      if (noteId && isProvisionalNoteId(noteId)) {
+        const userId = getOfflineUserId();
+        if (userId && isOfflineQueueSupported()) {
+          const provisional = await readProvisionalNote(
+            getBrowserStore(),
+            userId,
+            noteId,
+          );
+          if (provisional) {
+            return {
+              note: provisional as unknown as GaiaNote,
+              folderName: null as string | null,
+              tagNames: [] as string[],
+            };
+          }
+        }
+      }
+      return apiFetch<{ note: GaiaNote; folderName: string | null; tagNames: string[] }>(
         `${GAIA_BASE}/notes/${noteId}`,
-      ),
+      );
+    },
     enabled: noteId !== null && noteId !== "",
   });
 }
@@ -437,14 +469,24 @@ export function useGaiaNote(noteId: string | null) {
 export function useGaiaFolders() {
   return useQuery({
     queryKey: ["gaia", "folders"],
-    queryFn: () => apiFetch<{ folders: GaiaFolder[] }>(`${GAIA_BASE}/folders`),
+    queryFn: () =>
+      fetchReferenceWithFallback(
+        isOfflineQueueSupported() ? getBrowserStore() : null,
+        "gaia-folders",
+        async () => (await apiFetch<{ folders: GaiaFolder[] }>(`${GAIA_BASE}/folders`)).folders,
+      ),
   });
 }
 
 export function useGaiaTags() {
   return useQuery({
     queryKey: ["gaia", "tags"],
-    queryFn: () => apiFetch<{ tags: GaiaTag[] }>(`${GAIA_BASE}/tags`),
+    queryFn: () =>
+      fetchReferenceWithFallback(
+        isOfflineQueueSupported() ? getBrowserStore() : null,
+        "gaia-tags",
+        async () => (await apiFetch<{ tags: GaiaTag[] }>(`${GAIA_BASE}/tags`)).tags,
+      ),
   });
 }
 
@@ -538,28 +580,133 @@ export interface GaiaNoteUpdateInput {
   tagIds?: string[];
   favorite?: boolean;
   blocks?: GaiaBlock[];
+  /** Offline conflict check (§25.5): updatedAt the client last saw. */
+  expectedUpdatedAt?: string;
 }
 
 export function useCreateGaiaNote() {
   const invalidate = useGaiaInvalidate();
   return useMutation({
-    mutationFn: (input: GaiaNoteCreateInput) =>
-      apiFetch<{ note: GaiaNote }>(`${GAIA_BASE}/notes`, {
+    mutationFn: async (input: GaiaNoteCreateInput) => {
+      // Offline (§25.5): queue the create and return a provisional note
+      // the editor can open immediately. The replay sends the same
+      // payload (same clientMutationId) against the same route.
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        const userId = getOfflineUserId();
+        if (userId && isOfflineQueueSupported()) {
+          const provisionalId = newProvisionalNoteId();
+          const payload = {
+            title: input.title ?? "",
+            folderId: input.folderId ?? null,
+            templateId: input.templateId,
+            blocks: input.blocks,
+            clientMutationId: provisionalId,
+          } as unknown as Record<string, unknown>;
+          const item = await enqueueOperation(getBrowserStore(), {
+            userId,
+            kind: "NOTE_CREATE",
+            entityKey: provisionalId,
+            idempotencyKey: provisionalId,
+            payload,
+            id: provisionalId,
+          });
+          return { note: provisionalNoteFromItem(item) as unknown as GaiaNote };
+        }
+      }
+      return apiFetch<{ note: GaiaNote }>(`${GAIA_BASE}/notes`, {
         method: "POST",
         body: JSON.stringify(input),
-      }),
+      });
+    },
     onSuccess: () => invalidate(),
   });
 }
 
+/**
+ * Queue a note update while offline (§25.5). Returns false when the
+ * queue is unavailable (no user id or no IndexedDB) - the caller then
+ * falls back to the normal online path. A provisional note folds the
+ * patch into its queued create payload; a server note queues a
+ * NOTE_UPDATE with the base the client last saw.
+ */
+export async function queueGaiaNoteUpdateOffline(
+  noteId: string,
+  patch: GaiaNoteUpdateInput,
+  baseUpdatedAt: string | null,
+): Promise<boolean> {
+  const userId = getOfflineUserId();
+  if (!userId || !isOfflineQueueSupported()) return false;
+  const store = getBrowserStore();
+  if (isProvisionalNoteId(noteId)) {
+    const item = await store.getItem(noteId);
+    if (item && item.kind === "NOTE_CREATE") {
+      await enqueueOperation(store, {
+        userId,
+        kind: "NOTE_CREATE",
+        entityKey: noteId,
+        idempotencyKey: noteId,
+        payload: foldPatchIntoCreatePayload(
+          item.payload,
+          patch as unknown as Record<string, unknown>,
+        ),
+        id: noteId,
+      });
+      return true;
+    }
+    return false;
+  }
+  await enqueueOperation(store, {
+    userId,
+    kind: "NOTE_UPDATE",
+    entityKey: noteId,
+    idempotencyKey: noteId,
+    payload: {
+      ...patch,
+      expectedUpdatedAt: baseUpdatedAt ?? undefined,
+    } as unknown as Record<string, unknown>,
+    baseUpdatedAt,
+  });
+  return true;
+}
+
 export function useUpdateGaiaNote() {
+  const qc = useQueryClient();
   const invalidate = useGaiaInvalidate();
   return useMutation({
-    mutationFn: ({ noteId, patch }: { noteId: string; patch: GaiaNoteUpdateInput }) =>
-      apiFetch<{ note: GaiaNote; folderName: string | null; tagNames: string[] }>(
+    mutationFn: async ({ noteId, patch }: { noteId: string; patch: GaiaNoteUpdateInput }) => {
+      // Offline (§25.5): queue the update instead of failing.
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        const cached = qc.getQueryData<{
+          note: GaiaNote;
+          folderName: string | null;
+          tagNames: string[];
+        }>(["gaia", "note", noteId]);
+        const baseUpdatedAt =
+          patch.expectedUpdatedAt ?? cached?.note.updatedAt ?? null;
+        if (await queueGaiaNoteUpdateOffline(noteId, patch, baseUpdatedAt)) {
+          const { expectedUpdatedAt: _expected, ...notePatch } = patch;
+          const note = {
+            ...(cached?.note as GaiaNote | undefined),
+            ...notePatch,
+            id: noteId,
+            // The queued edit has no server write yet, so the base stays
+            // the last known server updatedAt (empty when unknown - the
+            // editor path always has a cached note, so this only happens
+            // for list actions whose result is ignored).
+            updatedAt: baseUpdatedAt ?? "",
+          } as GaiaNote;
+          return {
+            note,
+            folderName: cached?.folderName ?? null,
+            tagNames: cached?.tagNames ?? [],
+          };
+        }
+      }
+      return apiFetch<{ note: GaiaNote; folderName: string | null; tagNames: string[] }>(
         `${GAIA_BASE}/notes/${noteId}`,
         { method: "PATCH", body: JSON.stringify(patch) },
-      ),
+      );
+    },
     onSuccess: () => invalidate(),
   });
 }
