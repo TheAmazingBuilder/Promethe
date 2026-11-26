@@ -864,7 +864,7 @@ describe("account deletion (erasure)", () => {
 // ── Daily maintenance ────────────────────────────────────────────────────────
 
 describe("daily maintenance (cron)", () => {
-  it("purges old sync payloads, merge logs and expired invitations", async () => {
+  it("purges old sync payloads and merge logs", async () => {
     const old = new Date(Date.now() - 20 * 24 * 3600_000);
 
     const connection = await db.brokerConnection.findFirst({
