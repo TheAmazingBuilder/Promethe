@@ -363,3 +363,41 @@ export async function getFrozenChecklistItems(
   }
   return null;
 }
+
+/**
+ * Bulk frozen checklists for the cross-analysis loader (§25.7).
+ *
+ * Same rule as getFrozenChecklistItems, one query instead of one per
+ * trade: every StrategyVersion row of the user's strategies, keyed
+ * `${strategyId}:${snapshot.strategyVersion}`. A trade whose frozen
+ * version has no matching snapshot simply has no entry here, and its
+ * caller falls back to the live checklist - exactly like the detail
+ * view. The newest snapshot carrying a version wins (rows are read
+ * oldest-first so a later row overwrites an earlier one).
+ */
+export async function loadFrozenChecklistMap(
+  userId: string
+): Promise<
+  Map<string, Array<{ id?: string; label: string; isRequired: boolean }>>
+> {
+  const rows = await db.strategyVersion.findMany({
+    where: { strategy: { userId } },
+    orderBy: { createdAt: "asc" },
+  });
+  const map = new Map<
+    string,
+    Array<{ id?: string; label: string; isRequired: boolean }>
+  >();
+  for (const row of rows) {
+    const snapshot = parseSnapshot(row);
+    if (snapshot == null) continue;
+    map.set(`${row.strategyId}:${snapshot.strategyVersion}`, (
+      snapshot.checklistItems ?? []
+    ).map((item) => ({
+      id: (item as { id?: string }).id,
+      label: item.label,
+      isRequired: item.isRequired,
+    })));
+  }
+  return map;
+}

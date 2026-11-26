@@ -62,6 +62,7 @@ export const VIEW_IDS = [
   "analytics-setups",
   "analytics-confluences",
   "analytics-grades",
+  "analytics-cross-analysis",
   "analytics-sequences",
   "analytics-seasonality",
   "analytics-anomalies",
@@ -188,6 +189,7 @@ const ANALYTICS_SUB_VIEW: Record<string, ViewId> = {
   setups: "analytics-setups",
   confluences: "analytics-confluences",
   grades: "analytics-grades",
+  "cross-analysis": "analytics-cross-analysis",
   sequences: "analytics-sequences",
   seasonality: "analytics-seasonality",
   anomalies: "analytics-anomalies",
@@ -396,6 +398,8 @@ export function routeToPath(route: AppRoute): string {
       return withSearch("/analytics/confluences", query);
     case "analytics-grades":
       return withSearch("/analytics/grades", query);
+    case "analytics-cross-analysis":
+      return withSearch("/analytics/cross-analysis", query);
     case "analytics-sequences":
       return withSearch("/analytics/sequences", query);
     case "analytics-seasonality":

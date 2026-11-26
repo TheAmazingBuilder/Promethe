@@ -89,6 +89,9 @@ const ConfluencesView = dynamic(() => import("@/components/analytics/confluences
 const GradesView = dynamic(() => import("@/components/analytics/grades-view").then((m) => m.GradesView), {
   loading: () => <ViewLoading />,
 });
+const CrossAnalysisView = dynamic(() => import("@/components/analytics/cross-analysis-view").then((m) => m.CrossAnalysisView), {
+  loading: () => <ViewLoading />,
+});
 const SequencesView = dynamic(() => import("@/components/analytics/sequences-view").then((m) => m.SequencesView), {
   loading: () => <ViewLoading />,
 });
@@ -272,6 +275,9 @@ export function ViewSwitch() {
       break;
     case "analytics-grades":
       view = <GradesView />;
+      break;
+    case "analytics-cross-analysis":
+      view = <CrossAnalysisView />;
       break;
     case "analytics-sequences":
       view = <SequencesView />;

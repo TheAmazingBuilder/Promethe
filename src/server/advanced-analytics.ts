@@ -52,6 +52,11 @@ import type { AnalyticsQuery } from "@/lib/validations/analytics";
 import type { AdvancedAnalyticsPayload } from "@/lib/trading/dto";
 import type { Prisma } from "@prisma/client";
 import { parseCustomFields } from "@/lib/custom-fields/validate";
+import {
+  evaluateChecklist,
+  resolveFrozenChecklistItems,
+} from "@/lib/playbook/checklist";
+import { loadFrozenChecklistMap } from "@/server/strategy-versions";
 import { getDisplayPreferences } from "@/server/display-preferences";
 import { calendarYearStartUtc, getTradingDay, tradingDayOfTrade } from "@/lib/time/trading-day";
 import { scopeTradesToCurrency } from "@/lib/analytics/currency-scope";
@@ -61,7 +66,13 @@ import { unstable_cache } from "next/cache";
 const TRADE_INCLUDE = {
   instrument: true,
   account: true,
-  strategy: true,
+  strategy: {
+    include: {
+      checklistItems: {
+        select: { id: true, label: true, isRequired: true },
+      },
+    },
+  },
   tags: { include: { tag: true } },
   ruleViolations: { select: { ruleId: true } },
   review: {
@@ -172,8 +183,25 @@ export async function loadAdvancedTrades(
       })
     : [];
   const mistakeTagNames = new Map(mistakeTags.map((tag) => [tag.id, tag.name]));
+  // §25.7 - frozen checklists in bulk (one query, never one per trade):
+  // only when at least one trade froze a strategy version. Trades
+  // without a matching snapshot fall back to the live checklist in
+  // toAdvancedTrade, exactly like the trade detail view.
+  const needsFrozen = scoped.trades.some(
+    (trade) => trade.strategyId != null && trade.strategyVersion != null
+  );
+  const frozenChecklists = needsFrozen
+    ? await loadFrozenChecklistMap(userId)
+    : new Map<string, Array<{ id?: string; label: string; isRequired: boolean }>>();
   const trades: AdvancedTrade[] = scoped.trades.map((t) =>
-    toAdvancedTrade(t, timezone, prefs.tradingDay, timeMap.get(t.id), mistakeTagNames)
+    toAdvancedTrade(
+      t,
+      timezone,
+      prefs.tradingDay,
+      timeMap.get(t.id),
+      mistakeTagNames,
+      frozenChecklists
+    )
   );
   return {
     trades,
@@ -254,7 +282,11 @@ function toAdvancedTrade(
   timezone: string,
   tradingDay: Parameters<typeof getTradingDay>[2],
   time?: { profitMin: number | null; lossMin: number | null },
-  mistakeTagNames: ReadonlyMap<string, string> = new Map()
+  mistakeTagNames: ReadonlyMap<string, string> = new Map(),
+  frozenChecklists: ReadonlyMap<
+    string,
+    Array<{ id?: string; label: string; isRequired: boolean }>
+  > = new Map()
 ): AdvancedTrade {
   const exit = t.exitTime ?? t.entryTime;
   // Daily attribution follows the user's TRADING day (default MIDNIGHT_LOCAL
@@ -279,6 +311,37 @@ function toAdvancedTrade(
     t.stopLoss?.toString() ?? null
   );
   const liveStrategy = t.strategy?.deletedAt == null ? t.strategy : null;
+  // §25.7 - mandatory-checklist verdict (same rule as the trade detail
+  // view, Lot 11): the frozen snapshot when one matches the trade's
+  // frozen version, else the live checklist. Null when there is no
+  // checklist to judge (no live strategy, or no required items) - a
+  // trade is never counted as compliant or non-compliant by default.
+  const checklistComplete = (() => {
+    if (liveStrategy == null || t.strategyId == null) return null;
+    let results: Record<string, boolean> | null = null;
+    if (t.checklistResults) {
+      try {
+        results = JSON.parse(t.checklistResults) as Record<string, boolean>;
+      } catch {
+        results = null;
+      }
+    }
+    const liveItems = (liveStrategy.checklistItems ?? []).map((item) => ({
+      id: item.id,
+      label: item.label,
+      isRequired: item.isRequired,
+    }));
+    const frozen =
+      t.strategyVersion != null
+        ? frozenChecklists.get(`${t.strategyId}:${t.strategyVersion}`)
+        : undefined;
+    const items =
+      frozen != null
+        ? resolveFrozenChecklistItems(frozen, liveItems)
+        : liveItems;
+    const status = evaluateChecklist(items, results);
+    return status.requiredTotal === 0 ? null : status.complete;
+  })();
   return {
     id: t.id,
     exitTime: exit.toISOString(),
@@ -324,6 +387,8 @@ function toAdvancedTrade(
       .filter((tt) => tt.tag.kind === "CONFLUENCE" && tt.tag.deletedAt == null)
       .map((tt) => ({ id: tt.tag.id, name: tt.tag.name, color: tt.tag.color })),
     violationCount: t.ruleViolations.length,
+    strategyVersion: t.strategyVersion,
+    checklistComplete,
     playbookMatch: t.review?.playbookMatch ?? null,
     review: t.review == null ? null : {
       followedPlan: t.review.followedPlan,

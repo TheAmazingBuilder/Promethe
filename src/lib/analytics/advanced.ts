@@ -84,6 +84,17 @@ export interface AdvancedTrade extends AnalyticsTrade {
   confluenceTags?: Array<{ id: string; name: string; color: string }>;
   /** Rule violations attached to the trade. */
   violationCount: number;
+  /** Frozen strategy definition version at entry (`Trade.strategyVersion`),
+   * null when the trade predates versioning or has no strategy. Optional
+   * for callers that only carry tag dimensions. */
+  strategyVersion?: number | null;
+  /** Mandatory-checklist verdict for this trade (Lot 11 semantics:
+   * evaluated against the frozen snapshot when one matches the frozen
+   * version, else the live checklist). True = every required item was
+   * checked, false = at least one required item unchecked, null = no
+   * checklist to judge (no strategy, or no required items). Optional for
+   * callers that only carry tag dimensions. */
+  checklistComplete?: boolean | null;
   /** Declared playbook match at review time (MATCHED | PARTIAL |
    * OFF_PLAYBOOK), null when the trade was never reviewed. */
   playbookMatch?: string | null;
@@ -934,6 +945,304 @@ export function computeGrades(trades: AdvancedTrade[]): GradesResult {
   };
 }
 
+// ── (d4) Cross-analysis: review / playbook / performance (§25.7) ──────────
+// One place that relates the dimensions the app already records - review
+// quality, rule compliance (checklist), strategy version used - to the
+// financial result, without confusing association and causation.
+//
+// What this is NOT: a verdict. Every comparison below is an observed
+// association between two groups of the user's own trades. Groups can
+// differ in strategy mix, market conditions or period, so a gap between
+// two groups never proves that one thing causes the other. The UI says
+// so in plain words, and a comparison is only drawn when both groups
+// meet the sample bar (same bar as grades / setups: 10 trades).
+//
+// Reuse, not rebuild: per-grade outcomes already live in computeGrades,
+// average R per playbook-match category in computeTradeReviewAnalytics,
+// per-version performance in src/lib/playbook/version-performance.ts.
+// This module adds only the genuinely missing cross-dimension groups:
+// checklist-complete vs incomplete, reviewed vs not reviewed (with
+// review completeness), and the app-wide (strategy, frozen version)
+// table. No new data is collected; every number comes from the closed
+// trades in scope.
+
+/** Minimum sample per group before a comparison is drawn (same bar as
+ * grades / setups / confluences). */
+export const MIN_SAMPLE_CROSS = 10;
+
+/** Minimum closed trades before the cross-analysis tab shows its
+ * tables at all (honest empty state below that). */
+export const MIN_TRADES_CROSS = 5;
+
+/** Review completeness slots: the nine declared/scored review fields
+ * carried on AdvancedTrade.review. Mistake tags are not counted - an
+ * empty mistake list is normal for a good trade. */
+export const REVIEW_COMPLETENESS_SLOTS = 9;
+
+export interface CrossGradeMix {
+  plus: number;
+  a: number;
+  b: number;
+  c: number;
+  ungraded: number;
+}
+
+/** One group of trades with its outcome metrics. Groups never invent
+ * data: a trade without an R multiple still counts for win rate and
+ * net P&L, and a metric is null when its sample is empty. */
+export interface CrossGroupRow {
+  /** Stable group id, e.g. "complete", "reviewed", "not-reviewed". */
+  id: string;
+  /** All trades in the group. */
+  count: number;
+  /** Trades with a finite R multiple. */
+  rSampleSize: number;
+  /** WIN/LOSS trades used for the Wilson interval. */
+  decidedSampleSize: number;
+  wins: number;
+  losses: number;
+  breakevens: number;
+  winRate: number | null;
+  wilsonLower: number | null;
+  wilsonUpper: number | null;
+  /** Mean R per trade, null when no trade in the group carries an R. */
+  expectancy: number | null;
+  avgR: number | null;
+  totalR: number | null;
+  netPnl: string;
+  /** Grade mix inside the group (counts, never a verdict). */
+  gradeMix: CrossGradeMix;
+}
+
+export interface CrossComparison {
+  /** True when both compared groups meet MIN_SAMPLE_CROSS. */
+  comparable: boolean;
+  /** First group avg R minus second group avg R, null unless comparable
+   * and both groups carry an R sample. */
+  avgRDiff: number | null;
+  /** First group win rate minus second group win rate (points), null
+   * unless comparable and both groups carry a decided sample. */
+  winRateDiff: number | null;
+}
+
+export interface CrossChecklistSection extends CrossComparison {
+  complete: CrossGroupRow;
+  incomplete: CrossGroupRow;
+  /** Trades with no checklist to judge (no strategy, or no required
+   * items). Counted, never compared. */
+  noChecklist: CrossGroupRow;
+}
+
+export interface CrossReviewSection extends CrossComparison {
+  reviewed: CrossGroupRow;
+  notReviewed: CrossGroupRow;
+  /** Reviewed trades with every review slot filled. */
+  reviewedFull: CrossGroupRow;
+  /** Reviewed trades with at least one review slot empty. */
+  reviewedPartial: CrossGroupRow;
+  /** Mean review completeness (0-1) among reviewed trades, null when
+   * no trade was reviewed. */
+  avgCompleteness: number | null;
+}
+
+export interface CrossVersionRow extends CrossGroupRow {
+  strategyId: string | null;
+  strategyName: string | null;
+  /** Frozen definition version, null for the pre-versioning bucket
+   * (and for trades with no strategy). */
+  version: number | null;
+}
+
+export interface CrossAnalysisResult {
+  /** Closed trades in scope (all, grouped or not). */
+  total: number;
+  checklist: CrossChecklistSection;
+  review: CrossReviewSection;
+  /** One row per (strategy, frozen version) present in the data,
+   * strategy name then newest version first. */
+  versions: CrossVersionRow[];
+}
+
+/** Share of the nine review slots filled, 0-1; null when the trade was
+ * never reviewed. */
+export function reviewCompletenessOf(trade: AdvancedTrade): number | null {
+  const review = trade.review;
+  if (review == null) return null;
+  let filled = 0;
+  if (review.followedPlan != null) filled += 1;
+  if (review.planAdherenceScore != null) filled += 1;
+  if (review.executionQuality != null) filled += 1;
+  if (review.entryQuality != null) filled += 1;
+  if (review.exitQuality != null) filled += 1;
+  if (review.riskManagementScore != null) filled += 1;
+  if (review.emotionalControlScore != null) filled += 1;
+  if (review.wouldTakeAgain != null) filled += 1;
+  if (review.customAnswers != null && review.customAnswers.length > 0) {
+    filled += 1;
+  }
+  return filled / REVIEW_COMPLETENESS_SLOTS;
+}
+
+function summarizeCrossGroup(
+  id: string,
+  list: AdvancedTrade[]
+): CrossGroupRow {
+  const rs = list
+    .map((t) => (t.rMultiple == null ? null : Number(t.rMultiple)))
+    .filter((v): v is number => v != null && Number.isFinite(v));
+  const wins = list.filter((t) => t.resultType === "WIN").length;
+  const losses = list.filter((t) => t.resultType === "LOSS").length;
+  const breakevens = list.filter((t) => t.resultType === "BREAKEVEN").length;
+  const decided = wins + losses;
+  const wilson = decided > 0 ? wilsonInterval(wins, decided) : null;
+  const expectancy = rs.length > 0 ? mean(rs) : null;
+  const gradeMix: CrossGradeMix = {
+    plus: 0,
+    a: 0,
+    b: 0,
+    c: 0,
+    ungraded: 0,
+  };
+  for (const t of list) {
+    if (t.grade === "A+") gradeMix.plus += 1;
+    else if (t.grade === "A") gradeMix.a += 1;
+    else if (t.grade === "B") gradeMix.b += 1;
+    else if (t.grade === "C") gradeMix.c += 1;
+    else gradeMix.ungraded += 1;
+  }
+  return {
+    id,
+    count: list.length,
+    rSampleSize: rs.length,
+    decidedSampleSize: decided,
+    wins,
+    losses,
+    breakevens,
+    winRate: decided > 0 ? round((wins / decided) * 100, 1) : null,
+    wilsonLower: wilson != null ? round(wilson.lower * 100, 1) : null,
+    wilsonUpper: wilson != null ? round(wilson.upper * 100, 1) : null,
+    expectancy: expectancy != null ? round(expectancy, 2) : null,
+    avgR: expectancy != null ? round(expectancy, 2) : null,
+    totalR:
+      rs.length > 0 ? round(rs.reduce((a, b) => a + b, 0), 2) : null,
+    netPnl: list
+      .reduce((acc, t) => acc.plus(toD(t.netPnl ?? 0)), D0)
+      .toString(),
+    gradeMix,
+  };
+}
+
+function crossComparisonOf(
+  first: CrossGroupRow,
+  second: CrossGroupRow
+): CrossComparison {
+  const comparable =
+    first.count >= MIN_SAMPLE_CROSS && second.count >= MIN_SAMPLE_CROSS;
+  return {
+    comparable,
+    avgRDiff:
+      comparable && first.avgR != null && second.avgR != null
+        ? round(first.avgR - second.avgR, 2)
+        : null,
+    winRateDiff:
+      comparable && first.winRate != null && second.winRate != null
+        ? round(first.winRate - second.winRate, 1)
+        : null,
+  };
+}
+
+export function computeCrossAnalysis(
+  trades: AdvancedTrade[]
+): CrossAnalysisResult {
+  const complete = summarizeCrossGroup(
+    "complete",
+    trades.filter((t) => t.checklistComplete === true)
+  );
+  const incomplete = summarizeCrossGroup(
+    "incomplete",
+    trades.filter((t) => t.checklistComplete === false)
+  );
+  const noChecklist = summarizeCrossGroup(
+    "no-checklist",
+    trades.filter((t) => t.checklistComplete == null)
+  );
+  const reviewedList = trades.filter((t) => t.review != null);
+  const reviewed = summarizeCrossGroup("reviewed", reviewedList);
+  const notReviewed = summarizeCrossGroup(
+    "not-reviewed",
+    trades.filter((t) => t.review == null)
+  );
+  const reviewedFull = summarizeCrossGroup(
+    "reviewed-full",
+    reviewedList.filter((t) => reviewCompletenessOf(t) === 1)
+  );
+  const reviewedPartial = summarizeCrossGroup(
+    "reviewed-partial",
+    reviewedList.filter((t) => {
+      const c = reviewCompletenessOf(t);
+      return c != null && c < 1;
+    })
+  );
+  const completenessValues = reviewedList
+    .map((t) => reviewCompletenessOf(t))
+    .filter((c): c is number => c != null);
+  const versionsByKey = new Map<string, AdvancedTrade[]>();
+  for (const t of trades) {
+    const key = `${t.strategyId ?? ""}|${t.strategyVersion ?? ""}`;
+    const list = versionsByKey.get(key) ?? [];
+    list.push(t);
+    versionsByKey.set(key, list);
+  }
+  const versions: CrossVersionRow[] = [...versionsByKey.entries()].map(
+    ([, list]) => {
+      const first = list[0];
+      const row = summarizeCrossGroup(
+        `version-${first?.strategyId ?? "none"}-${first?.strategyVersion ?? "none"}`,
+        list
+      );
+      return {
+        ...row,
+        strategyId: first?.strategyId ?? null,
+        strategyName: first?.strategyName ?? null,
+        version: first?.strategyVersion ?? null,
+      };
+    }
+  );
+  // Strategy name (A-Z, no-strategy last), newest version first.
+  versions.sort((a, b) => {
+    if (a.strategyName == null && b.strategyName != null) return 1;
+    if (a.strategyName != null && b.strategyName == null) return -1;
+    const byName = (a.strategyName ?? "").localeCompare(
+      b.strategyName ?? ""
+    );
+    if (byName !== 0) return byName;
+    if (a.version == null && b.version != null) return 1;
+    if (a.version != null && b.version == null) return -1;
+    return (b.version ?? 0) - (a.version ?? 0);
+  });
+  return {
+    total: trades.length,
+    checklist: {
+      ...crossComparisonOf(complete, incomplete),
+      complete,
+      incomplete,
+      noChecklist,
+    },
+    review: {
+      ...crossComparisonOf(reviewed, notReviewed),
+      reviewed,
+      notReviewed,
+      reviewedFull,
+      reviewedPartial,
+      avgCompleteness:
+        completenessValues.length > 0
+          ? round(mean(completenessValues), 2)
+          : null,
+    },
+    versions,
+  };
+}
+
 // ── (e) Sequence analysis ────────────────────────────────────────────────────
 
 export interface AfterStreakRow {
@@ -1564,6 +1873,7 @@ export interface AdvancedAnalytics {
   setups: SetupRank[];
   confluences: ConfluencesResult;
   grades: GradesResult;
+  crossAnalysis: CrossAnalysisResult;
   sequences: SequencesResult;
   seasonality: SeasonalityResult;
   anomalies: AnomaliesResult;
@@ -1596,6 +1906,9 @@ export function computeAdvancedAnalyticsModules(
   if (want.has("setups")) out.setups = computeSetupRanking(trades);
   if (want.has("confluences")) out.confluences = computeConfluences(trades);
   if (want.has("grades")) out.grades = computeGrades(trades);
+  if (want.has("cross-analysis")) {
+    out.crossAnalysis = computeCrossAnalysis(trades);
+  }
   if (want.has("sequences")) out.sequences = computeSequences(trades);
   if (want.has("seasonality")) out.seasonality = computeSeasonality(trades);
   if (want.has("anomalies")) out.anomalies = computeAnomalies(trades);

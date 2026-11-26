@@ -505,6 +505,7 @@ export function AnalyticsView() {
               "quality",
               "setups",
               "grades",
+              "cross-analysis",
               "sequences",
               "seasonality",
               "anomalies",

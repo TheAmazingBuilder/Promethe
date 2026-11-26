@@ -18,6 +18,7 @@ export const ADVANCED_MODULES = [
   "setups",
   "confluences",
   "grades",
+  "cross-analysis",
   "sequences",
   "seasonality",
   "anomalies",
