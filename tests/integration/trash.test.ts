@@ -65,6 +65,7 @@ import {
 } from "@/server/reference";
 import {
   deleteTrashItemsPermanently,
+  emptyTrash,
   listTrash,
   purgeExpiredTrash,
   restoreTrashItems,
@@ -109,6 +110,34 @@ async function makeTrade(overrides: Record<string, unknown> = {}) {
       ...overrides,
     },
   });
+}
+
+/** Bulk row factory for the >500 cap tests (one createMany round trip). */
+function bulkTrashedTradeRows(count: number, deletedAt: Date, prefix: string) {
+  return Array.from({ length: count }, (_, i) => ({
+    userId: userA.id,
+    accountId: accountAId,
+    instrumentId,
+    direction: "LONG",
+    orderType: "MARKET",
+    status: "CLOSED",
+    entryTime: new Date(now - 2 * 86_400_000),
+    exitTime: new Date(now - 1 * 86_400_000),
+    entryPrice: "2300.00",
+    exitPrice: "2310.00",
+    lots: "1",
+    netPnl: "100",
+    resultType: "WIN",
+    pnlSource: "CALCULATED",
+    pnlCurrency: "USD",
+    reviewStatus: "NOT_REVIEWED",
+    preTradeAnalysis: "",
+    postTradeReview: "",
+    notes: `${prefix}-${i}`,
+    searchText: `${prefix}-${i}`,
+    deletedAt,
+    deletedBy: userA.id,
+  }));
 }
 
 beforeAll(async () => {
@@ -524,5 +553,57 @@ describe("trash isolation", () => {
     ).not.toBeNull();
 
     await db.trade.deleteMany({ where: { id: trade.id } });
+  });
+});
+
+// ── 8. Empty trash beyond the per-entity list cap ──────────────────────────
+
+describe("emptyTrash beyond the list cap", () => {
+  it("deletes every trashed trade even when one entity holds more than 500", async () => {
+    await db.trade.createMany({
+      data: bulkTrashedTradeRows(
+        501,
+        new Date(now - 1 * 86_400_000),
+        "empty-bulk"
+      ),
+    });
+    const before = await withDeleted(() =>
+      db.trade.count({ where: { userId: userA.id, deletedAt: { not: null } } })
+    );
+    expect(before).toBeGreaterThanOrEqual(501);
+
+    const { deleted } = await emptyTrash(userA.id);
+    expect(deleted).toBeGreaterThanOrEqual(501);
+
+    const after = await withDeleted(() =>
+      db.trade.count({ where: { userId: userA.id, deletedAt: { not: null } } })
+    );
+    expect(after).toBe(0);
+  });
+});
+
+// ── 9. Purge beyond the trades batch cap ───────────────────────────────────
+
+describe("purgeExpiredTrash beyond the batch cap", () => {
+  it("purges more than 500 expired trades in a single run", async () => {
+    await db.trade.createMany({
+      data: bulkTrashedTradeRows(
+        501,
+        new Date(now - (TRASH_RETENTION_DAYS + 1) * 86_400_000),
+        "purge-bulk"
+      ),
+    });
+    const report = await purgeExpiredTrash(new Date(now));
+    expect(report.trades).toBeGreaterThanOrEqual(501);
+    const remaining = await withDeleted(() =>
+      db.trade.count({
+        where: {
+          userId: userA.id,
+          deletedAt: { not: null },
+          notes: { contains: "purge-bulk-" },
+        },
+      })
+    );
+    expect(remaining).toBe(0);
   });
 });

@@ -15,6 +15,7 @@ import {
 import {
   useCreateJournalTemplate,
   useDeleteJournalTemplate,
+  useDuplicateJournalTemplate,
   useJournalTemplates,
   useUpdateJournalTemplate,
 } from "@/hooks/use-journal";
@@ -33,6 +34,7 @@ export function JournalTemplateControls({
   const create = useCreateJournalTemplate();
   const update = useUpdateJournalTemplate();
   const remove = useDeleteJournalTemplate();
+  const duplicate = useDuplicateJournalTemplate();
   const [name, setName] = React.useState("");
   const [selectedId, setSelectedId] = React.useState("");
   const [editing, setEditing] = React.useState(false);
@@ -98,6 +100,19 @@ export function JournalTemplateControls({
     }
   };
 
+  const handleDuplicate = async () => {
+    if (!selected) return;
+    try {
+      const copy = await duplicate.mutateAsync(selected.id);
+      setSelectedId(copy.id);
+      setEditing(false);
+      setName("");
+      setStatus("Template duplicated.");
+    } catch {
+      setStatus("Could not duplicate this template.");
+    }
+  };
+
   return (
     <div className="space-y-3 rounded-xl border border-border/70 bg-muted/15 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -143,6 +158,7 @@ export function JournalTemplateControls({
         </Select>
         <Button size="sm" variant="outline" disabled={!selected} onClick={() => selected && onApply(selected)}>Apply</Button>
         <Button size="sm" variant="outline" disabled={!selected || update.isPending} onClick={handleEdit}>Edit</Button>
+        <Button size="sm" variant="outline" disabled={!selected || duplicate.isPending} onClick={() => void handleDuplicate()}>Duplicate</Button>
         <Button size="sm" variant="ghost" disabled={!selected || selected.isDefault || update.isPending} onClick={() => void handleSetDefault()}>
           {selected?.isDefault ? "Default" : "Set default"}
         </Button>

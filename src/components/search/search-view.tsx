@@ -9,6 +9,7 @@ import {
   Search,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/ui/page-header";
@@ -23,14 +24,25 @@ export function SearchView() {
   const route = useRoute();
   const [input, setInput] = React.useState(() => route.query?.q ?? "");
   const [query, setQuery] = React.useState(input);
+  // Raising the limit re-fetches a superset (stable ordering), so
+  // "Show more" needs no result merging.
+  const [limit, setLimit] = React.useState(8);
 
   React.useEffect(() => {
     const handle = setTimeout(() => setQuery(input.trim()), 300);
     return () => clearTimeout(handle);
   }, [input]);
 
-  const results = useGlobalSearch(query, 8);
+  React.useEffect(() => {
+    setLimit(8);
+  }, [query]);
+
+  const results = useGlobalSearch(query, limit);
   const data = results.data;
+  const shown =
+    (data?.trades.length ?? 0) +
+    (data?.strategies.length ?? 0) +
+    (data?.journal.length ?? 0);
 
   const groups: Array<{
     key: "trades" | "strategies" | "journal";
@@ -127,6 +139,15 @@ export function SearchView() {
                   </div>
                 </section>
               )
+          )}
+          {data.total > shown && (
+            <Button
+              variant="outline"
+              onClick={() => setLimit((l) => l + 8)}
+              disabled={results.isFetching}
+            >
+              {t("showMore")}
+            </Button>
           )}
         </>
       )}

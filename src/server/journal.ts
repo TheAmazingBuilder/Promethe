@@ -304,6 +304,34 @@ export async function deleteJournalTemplate(userId: string, id: string): Promise
   return result.count > 0;
 }
 
+/**
+ * Duplicate a journal template - the copy is never the default (a
+ * duplicate must not silently replace the active template) and its name
+ * gets " (copy)" appended, capped at the 60 characters the create
+ * validation allows.
+ */
+export async function duplicateJournalTemplate(userId: string, id: string) {
+  const existing = await db.journalTemplate.findFirst({ where: { id, userId } });
+  if (!existing) return null;
+  const base =
+    existing.name.length > 52 ? existing.name.slice(0, 52) : existing.name;
+  return db.journalTemplate.create({
+    data: {
+      userId,
+      name: `${base} (copy)`,
+      description: existing.description,
+      marketBias: existing.marketBias,
+      preMarketPlan: existing.preMarketPlan,
+      keyLevels: existing.keyLevels,
+      primaryScenario: existing.primaryScenario,
+      alternateScenario: existing.alternateScenario,
+      invalidationConditions: existing.invalidationConditions,
+      maxRiskPercent: existing.maxRiskPercent,
+      isDefault: false,
+    },
+  });
+}
+
 
 export async function getJournalExportData(userId: string, from: string, to: string) {
   const [entries, periodReviews, account] = await Promise.all([

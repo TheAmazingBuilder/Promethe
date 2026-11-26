@@ -185,6 +185,20 @@ export function useDeleteTemplate() {
   });
 }
 
+export function useDuplicateTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (
+        await apiFetch<{ template: TemplateDTO }>(
+          `/api/v1/templates/${id}/duplicate`,
+          { method: "POST" }
+        )
+      ).template,
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["templates"] }),
+  });
+}
+
 // ── Trades ───────────────────────────────────────────────────────────────────
 
 export function tradesQueryKey(query: TradeListQuery) {

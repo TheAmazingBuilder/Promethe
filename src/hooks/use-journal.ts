@@ -462,3 +462,19 @@ export function useDeleteJournalTemplate() {
     },
   });
 }
+
+export function useDuplicateJournalTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (
+        await apiFetch<{ template: JournalTemplateDTO }>(
+          `/api/v1/journal/templates/${id}/duplicate`,
+          { method: "POST" },
+        )
+      ).template,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["journal", "templates"] });
+    },
+  });
+}

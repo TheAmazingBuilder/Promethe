@@ -707,7 +707,11 @@ export interface SearchPayload {
   trades: SearchResultItemDTO[];
   strategies: SearchResultItemDTO[];
   journal: SearchResultItemDTO[];
+  /** Real match counts (all pages), not just the returned rows. */
   total: number;
+  totalTrades: number;
+  totalStrategies: number;
+  totalJournal: number;
 }
 
 /** One undoable action = one ChangeLog group (bulk edit or bulk delete). */

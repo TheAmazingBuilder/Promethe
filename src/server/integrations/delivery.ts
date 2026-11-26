@@ -639,7 +639,7 @@ export async function processOutbox(
     if (!parsed) {
       if (await updateClaimedOutbox(row.id, claimedAt, {
         status: "DEAD",
-        lastError: "Payload illisible.",
+        lastError: "Unreadable payload.",
       })) report.dead += 1;
       continue;
     }

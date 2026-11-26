@@ -10,6 +10,7 @@
 import * as React from "react";
 import { useTranslations } from "next-intl";
 import {
+  Copy,
   LayoutTemplate,
   Loader2,
   Pencil,
@@ -67,6 +68,7 @@ import {
 } from "@/components/trades/trade-bits";
 import {
   useDeleteTemplate,
+  useDuplicateTemplate,
   useInstruments,
   useRecordTemplateUse,
   useTags,
@@ -178,6 +180,7 @@ export function TemplatesView() {
   const createTemplate = useCreateTemplate();
   const updateTemplate = useUpdateTemplate();
   const deleteTemplate = useDeleteTemplate();
+  const duplicateTemplate = useDuplicateTemplate();
   const recordTemplateUse = useRecordTemplateUse();
 
   const [editorOpen, setEditorOpen] = React.useState(false);
@@ -282,6 +285,23 @@ export function TemplatesView() {
     }
   }
 
+  async function onDuplicate(tpl: TemplateDTO) {
+    try {
+      await duplicateTemplate.mutateAsync(tpl.id);
+      toast({ title: t("duplicated") });
+    } catch (error) {
+      const err = error instanceof ApiClientError ? error : null;
+      toast({
+        title: apiErrorMessage(
+          tRoot,
+          err?.code,
+          error instanceof Error ? error.message : ""
+        ),
+        variant: "destructive",
+      });
+    }
+  }
+
   const onUse = (tpl: TemplateDTO) => {
     recordTemplateUse.mutate(tpl.id);
     toast({ title: t("useToast") });
@@ -353,6 +373,7 @@ export function TemplatesView() {
               deleting={deletingId === tpl.id}
               onUse={() => onUse(tpl)}
               onEdit={() => openEdit(tpl)}
+              onDuplicate={() => void onDuplicate(tpl)}
               onDelete={() => void onDelete(tpl)}
             />
           ))}
@@ -656,6 +677,7 @@ function TemplateCard({
   deleting,
   onUse,
   onEdit,
+  onDuplicate,
   onDelete,
 }: {
   tpl: TemplateDTO;
@@ -665,6 +687,7 @@ function TemplateCard({
   deleting: boolean;
   onUse: () => void;
   onEdit: () => void;
+  onDuplicate: () => void;
   onDelete: () => void;
 }) {
   const t = useTranslations("templates");
@@ -757,6 +780,10 @@ function TemplateCard({
           <Button variant="outline" size="sm" onClick={onEdit}>
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
             {t("edit")}
+          </Button>
+          <Button variant="outline" size="sm" onClick={onDuplicate}>
+            <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+            {t("duplicate")}
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>

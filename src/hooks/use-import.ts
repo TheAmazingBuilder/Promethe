@@ -12,6 +12,10 @@ import { invalidateTradeDerivedQueries } from "@/lib/query/invalidation";
 import type { ImportFileContent, ParseResult } from "@/lib/import/types";
 import type { WorkerRequest, WorkerResponse } from "@/lib/import/parse-worker";
 import type { ImportBatchDTO } from "@/server/import";
+import {
+  assertImportFileSize,
+  decodeImportText,
+} from "@/lib/import/primitives";
 
 export interface ImportProgress {
   phase: "idle" | "parsing" | "preview" | "uploading" | "completing" | "done" | "error";
@@ -50,12 +54,15 @@ async function hashFile(file: File): Promise<string> {
  * first, and files of a few MB parse in ~100-300 ms).
  */
 export async function parseFileInWorker(file: File): Promise<ParseResult> {
+  assertImportFileSize(file);
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
   const content: ImportFileContent = { fileName: file.name, extension };
   if (extension === "xlsx" || extension === "xls") {
     content.bytes = new Uint8Array(await file.arrayBuffer());
   } else {
-    content.text = await file.text();
+    // Text files are decoded here (UTF-8, Windows-1252 fallback), never
+    // with File.text(): that assumes UTF-8 and mojibakes other encodings.
+    content.text = decodeImportText(new Uint8Array(await file.arrayBuffer()));
   }
 
   // Let the spinner paint before the (potentially) heavy parse.
@@ -186,11 +193,11 @@ export function useStartImport(onProgress: (progress: ImportProgress) => void) {
         onProgress({
           phase: "uploading",
           percent: Math.round(((chunkIndex + 1) / totalChunks) * 90),
-          message: `Lot ${chunkIndex + 1}/${totalChunks}…`,
+          message: `Batch ${chunkIndex + 1}/${totalChunks}…`,
         });
       }
 
-      onProgress({ phase: "completing", percent: 95, message: "Finalisation…" });
+      onProgress({ phase: "completing", percent: 95, message: "Finalizing…" });
       const completed = await apiFetch<{
         batch: ImportBatchDTO;
         reconciliation: { created: number };
@@ -236,7 +243,9 @@ export function buildErrorReportCsv(
       .map(escapeCsvField)
       .join(",")
   );
-  return [header, ...lines].join("\r\n");
+  // UTF-8 BOM, like the trade export: without it Excel on Windows
+  // misreads accented characters in the report.
+  return "\uFEFF" + [header, ...lines].join("\r\n");
 }
 
 /** CSV download helper for the error report. */
@@ -250,7 +259,7 @@ export function downloadErrorReport(
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `erreurs-${fileName}.csv`;
+  anchor.download = `errors-${fileName}.csv`;
   anchor.click();
   URL.revokeObjectURL(url);
 }

@@ -39,32 +39,52 @@ function pickSnippetField(
 export async function globalSearch(
   userId: string,
   query: string,
-  limit: number
+  limit: number,
+  offset = 0
 ): Promise<SearchPayload> {
   const terms = foldedTerms(query);
   if (terms.length === 0) {
-    return { query, trades: [], strategies: [], journal: [], total: 0 };
+    return {
+      query,
+      trades: [],
+      strategies: [],
+      journal: [],
+      total: 0,
+      totalTrades: 0,
+      totalStrategies: 0,
+      totalJournal: 0,
+    };
   }
   const where = searchTextFilter(terms);
 
-  const [tradeRows, strategyRows, journalRows] = await Promise.all([
-    db.trade.findMany({
-      where: { userId, ...where },
-      include: { instrument: { select: { symbol: true } }, account: { select: { name: true } } },
-      orderBy: { entryTime: "desc" },
-      take: limit,
-    }),
-    db.strategy.findMany({
-      where: { userId, ...where },
-      orderBy: { updatedAt: "desc" },
-      take: limit,
-    }),
-    db.journalEntry.findMany({
-      where: { userId, ...where },
-      orderBy: { date: "desc" },
-      take: limit,
-    }),
-  ]);
+  // Paged rows + real per-category totals (the totals count every
+  // match, not just the returned page - the UI count and the
+  // "Show more" affordance depend on them).
+  const [tradeRows, strategyRows, journalRows, totalTrades, totalStrategies, totalJournal] =
+    await Promise.all([
+      db.trade.findMany({
+        where: { userId, ...where },
+        include: { instrument: { select: { symbol: true } }, account: { select: { name: true } } },
+        orderBy: { entryTime: "desc" },
+        take: limit,
+        skip: offset,
+      }),
+      db.strategy.findMany({
+        where: { userId, ...where },
+        orderBy: { updatedAt: "desc" },
+        take: limit,
+        skip: offset,
+      }),
+      db.journalEntry.findMany({
+        where: { userId, ...where },
+        orderBy: { date: "desc" },
+        take: limit,
+        skip: offset,
+      }),
+      db.trade.count({ where: { userId, ...where } }),
+      db.strategy.count({ where: { userId, ...where } }),
+      db.journalEntry.count({ where: { userId, ...where } }),
+    ]);
 
   const trades: SearchResultItemDTO[] = tradeRows.map((t) => ({
     id: t.id,
@@ -110,6 +130,9 @@ export async function globalSearch(
     trades,
     strategies,
     journal,
-    total: trades.length + strategies.length + journal.length,
+    total: totalTrades + totalStrategies + totalJournal,
+    totalTrades,
+    totalStrategies,
+    totalJournal,
   };
 }

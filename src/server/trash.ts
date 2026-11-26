@@ -336,16 +336,23 @@ export async function deleteTrashItemsPermanently(
 export async function emptyTrash(
   userId: string
 ): Promise<{ deleted: number }> {
-  const { items } = await listTrash(userId, { limit: 500 });
-  // Chunked to keep PostgreSQL statements bounded (200 ids per batch).
+  // listTrash caps at 500 rows per entity, so a single pass would
+  // silently leave items behind once an entity holds more than 500
+  // trashed rows. Repeat until a pass finds nothing (bounded: 25 passes
+  // cover far more trash than a user can accumulate between purges).
   let deleted = 0;
   const CHUNK = 200;
-  for (let i = 0; i < items.length; i += CHUNK) {
-    const r = await deleteTrashItemsPermanently(
-      userId,
-      items.slice(i, i + CHUNK).map((it) => ({ entity: it.entity, id: it.id }))
-    );
-    deleted += r.deleted;
+  for (let pass = 0; pass < 25; pass++) {
+    const { items } = await listTrash(userId, { limit: 500 });
+    if (items.length === 0) break;
+    // Chunked to keep PostgreSQL statements bounded (200 ids per batch).
+    for (let i = 0; i < items.length; i += CHUNK) {
+      const r = await deleteTrashItemsPermanently(
+        userId,
+        items.slice(i, i + CHUNK).map((it) => ({ entity: it.entity, id: it.id }))
+      );
+      deleted += r.deleted;
+    }
   }
   return { deleted };
 }
@@ -370,32 +377,38 @@ export async function purgeExpiredTrash(
   const CHUNK = 200;
 
   return withDeleted(async () => {
-    // ── Trades: collect ids first (storage cleanup needs userId + tradeId) ──
-    const expiredTrades: { id: string; userId: string }[] =
-      await db.trade.findMany({
-        where: expired,
-        select: { id: true, userId: true },
-        take: 500,
-      });
-    // Group by owner and remove Storage objects BEFORE cascading DB deletes.
-    const byUser = new Map<string, string[]>();
-    for (const t of expiredTrades) {
-      const list = byUser.get(t.userId) ?? [];
-      list.push(t.id);
-      byUser.set(t.userId, list);
-    }
-    for (const [userId, ids] of byUser) {
-      await purgeTradeStorage(userId, ids);
-    }
-
+    // ── Trades: collect ids first (storage cleanup needs userId + tradeId).
+    // Loop in batches of 500 until none are left, like the other
+    // entities below: a single capped pass would leave expired trades
+    // behind for the next daily run instead of finishing the purge.
     let trades = 0;
-    for (let i = 0; i < expiredTrades.length; i += CHUNK) {
-      const r = await db.trade.deleteMany({
-        where: {
-          id: { in: expiredTrades.slice(i, i + CHUNK).map((t) => t.id) },
-        },
-      });
-      trades += r.count;
+    for (;;) {
+      const batch: { id: string; userId: string }[] =
+        await db.trade.findMany({
+          where: expired,
+          select: { id: true, userId: true },
+          take: 500,
+        });
+      if (batch.length === 0) break;
+      // Group by owner and remove Storage objects BEFORE cascading DB deletes.
+      const byUser = new Map<string, string[]>();
+      for (const t of batch) {
+        const list = byUser.get(t.userId) ?? [];
+        list.push(t.id);
+        byUser.set(t.userId, list);
+      }
+      for (const [userId, ids] of byUser) {
+        await purgeTradeStorage(userId, ids);
+      }
+      for (let i = 0; i < batch.length; i += CHUNK) {
+        const r = await db.trade.deleteMany({
+          where: {
+            id: { in: batch.slice(i, i + CHUNK).map((t) => t.id) },
+          },
+        });
+        trades += r.count;
+      }
+      if (batch.length < 500) break;
     }
 
     // ── Other entities: chunked find-ids → delete ──

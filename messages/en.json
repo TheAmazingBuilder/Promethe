@@ -1389,7 +1389,9 @@
     "invalid": "The name is required.",
     "useToast": "Opening the quick trade…",
     "summaryAny": "Any instrument · any direction",
-    "loadError": "Cannot load the templates."
+    "loadError": "Cannot load the templates.",
+    "duplicate": "Duplicate",
+    "duplicated": "Template duplicated"
   },
   "trades": {
     "list": {
@@ -4628,7 +4630,8 @@
       "trades": "Trades",
       "strategies": "Strategies",
       "journal": "Journal"
-    }
+    },
+    "showMore": "Show more results"
   },
   "historyView": {
     "title": "Change history",
@@ -4641,7 +4644,8 @@
     "expired": "Expired",
     "expires": "Undo until {date}",
     "undo": "Undo",
-    "undoneToast": "{count, plural, =1 {# change undone} other {# changes undone}}"
+    "undoneToast": "{count, plural, =1 {# change undone} other {# changes undone}}",
+    "showMore": "Show more"
   },
   "customFieldsView": {
     "title": "Custom fields",

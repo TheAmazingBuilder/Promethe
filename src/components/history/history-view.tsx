@@ -24,7 +24,10 @@ export function HistoryView() {
   const t = useTranslations("historyView");
   const tRoot = useTranslations();
   const { toast } = useToast();
-  const history = useHistory(50);
+  // Raising the limit re-fetches a superset (stable ordering), so
+  // "Show more" needs no result merging.
+  const [limit, setLimit] = React.useState(50);
+  const history = useHistory(limit);
   const undo = useUndoGroup();
   const groups = history.data ?? [];
   const onUndo = (group: ChangeLogGroupDTO) => {
@@ -120,6 +123,15 @@ export function HistoryView() {
               </Card>
             );
           })}
+          {groups.length >= limit && (
+            <Button
+              variant="outline"
+              onClick={() => setLimit((l) => l + 50)}
+              disabled={history.isFetching}
+            >
+              {t("showMore")}
+            </Button>
+          )}
         </div>
       )}
     </div>

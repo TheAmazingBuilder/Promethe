@@ -23,14 +23,14 @@ import type {
 
 // ── Global search ────────────────────────────────────────────────────────────
 
-export function useGlobalSearch(query: string, limit = 8) {
+export function useGlobalSearch(query: string, limit = 8, offset = 0) {
   const q = query.trim();
   return useQuery({
-    queryKey: ["search", q, limit],
+    queryKey: ["search", q, limit, offset],
     enabled: q.length >= 2,
     queryFn: async () =>
       apiFetch<SearchPayload>(
-        `/api/v1/search?q=${encodeURIComponent(q)}&limit=${limit}`
+        `/api/v1/search?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}`
       ),
     staleTime: 30 * 1000,
   });

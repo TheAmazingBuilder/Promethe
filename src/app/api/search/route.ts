@@ -22,7 +22,8 @@ export async function GET(req: Request) {
     const result = await globalSearch(
       session.user.id,
       parsed.data.q,
-      parsed.data.limit
+      parsed.data.limit,
+      parsed.data.offset
     );
     return NextResponse.json(result);
   } catch (error) {
