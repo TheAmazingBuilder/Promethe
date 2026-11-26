@@ -49,6 +49,7 @@ model User {
   // ── v2 ──
   templates               TradeTemplate[]
   pushSubscriptions       PushSubscription[]
+  pushOutbox              PushOutbox[]
   reminderSettings        ReminderSetting[]
   notificationLogs        NotificationLog[]
   offlineSyncLogs         OfflineSyncLog[]
@@ -912,9 +913,44 @@ model PushSubscription {
   lastSeenAt DateTime @default(now()) @map("last_seen_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pushOutbox PushOutbox[]
 
   @@index([userId])
   @@map("push_subscriptions")
+}
+
+/// Durable Web Push delivery queue (mirrors the integrations outbox in
+/// shape: claim, retry with backoff, DEAD after N attempts). One row per
+/// (alert instance, device): dedupeKey is the in-app notification row id,
+/// unique per subscription, so a re-enqueue of the same alert is a no-op
+/// while a later alert instance always gets a fresh row.
+model PushOutbox {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  subscriptionId String   @map("subscription_id")
+  /// SYNC_STALE | SYNC_MISMATCH | ECONOMIC_EVENT_SOON | DELETION_SCHEDULED | DELETION_CANCELLED | TEST
+  type           String
+  title          String
+  body           String
+  url            String?
+  /// In-app notification row id (the alert instance).
+  dedupeKey      String   @map("dedupe_key")
+  /// PENDING | PROCESSING | SENT | FAILED | DEAD
+  status         String   @default("PENDING")
+  attempts       Int      @default(0)
+  nextAttemptAt  DateTime @default(now()) @map("next_attempt_at")
+  lastError      String?  @map("last_error")
+  sentAt         DateTime? @map("sent_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription PushSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, dedupeKey])
+  @@index([status, nextAttemptAt])
+  @@index([userId, createdAt])
+  @@map("push_outbox")
 }
 
 /// Per-type reminder settings, evaluated in the USER's timezone (v2 §4.3).

@@ -49,7 +49,7 @@ import { classifyResult, priceDiff, stopDistance, toPips, toPoints } from "@/lib
 import { detectSessionForUser } from "@/server/tools";
 import { findPreset } from "@/lib/trading/instruments";
 import type { InstrumentSpec } from "@/lib/trading/types";
-import { notifyInApp } from "@/server/notifications";
+import { notifyUser } from "@/server/notifications";
 import type { InferredSpec } from "./normalize";
 import {
   balanceOperationType,
@@ -1120,7 +1120,7 @@ export async function processIngestPayload(
       where: { id: connection.id },
       data: { status: "MISMATCH" },
     });
-    await notifyInApp({
+    await notifyUser({
       userId: connection.userId,
       type: "SYNC_MISMATCH",
       title: "MT connection conflict",
@@ -1226,7 +1226,7 @@ export async function sweepStaleConnections(now: Date = new Date()): Promise<Sta
       });
       if (life === "STALE") {
         staleCount += 1;
-        await notifyInApp({
+        await notifyUser({
           userId: connection.userId,
           type: "SYNC_STALE",
           title: "Synchronisation interrompue",

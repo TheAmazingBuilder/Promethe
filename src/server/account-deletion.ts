@@ -20,7 +20,7 @@
 import { db } from "@/lib/db";
 import { verifyPassword } from "@/lib/auth/password";
 import { hashUserId } from "@/lib/tokens";
-import { notifyInApp } from "@/server/notifications";
+import { notifyUser } from "@/server/notifications";
 import { deleteUploadObjects } from "@/server/uploads";
 
 export const DELETION_GRACE_DAYS = 7;
@@ -89,7 +89,7 @@ export async function scheduleAccountDeletion(
     update: { status: "PENDING", requestedAt: now, scheduledFor, completedAt: null },
   });
 
-  await notifyInApp({
+  await notifyUser({
     userId,
     type: "DELETION_SCHEDULED",
     title: "Account deletion scheduled",
@@ -119,7 +119,7 @@ export async function cancelAccountDeletion(userId: string): Promise<boolean> {
   });
   if (updated.count === 0) return false;
 
-  await notifyInApp({
+  await notifyUser({
     userId,
     type: "DELETION_CANCELLED",
     title: "Account deletion cancelled",

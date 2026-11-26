@@ -1,11 +1,13 @@
 /**
- * v3 — Notification service (in-app center only).
+ * v3 - Notification service (in-app center + Web Push fan-out).
  *
- * Only the IN_APP channel exists. Email and web push are NOT implemented:
- * there is no notifyUser() fan-out, no Resend/SMTP sender, no VAPID keys
- * and no web-push sender. The external alerts (daily summary, drawdown,
- * prop) live in the integrations outbox (Discord/Telegram) and are NOT
- * driven by this service. Channel design and what is still missing are
+ * The in-app center is the source of truth: notifyInApp() creates a
+ * deduped IN_APP row, and notifyUser() fans the same alert out to Web
+ * Push for the user's subscribed devices (src/server/push/delivery.ts).
+ * Email is NOT implemented: no Resend/SMTP sender, no notifyUser()
+ * email fan-out. The external alerts (daily summary, drawdown, prop)
+ * live in the integrations outbox (Discord/Telegram) and are NOT driven
+ * by this service. Channel design and what is still missing are
  * documented in docs/notifications.md.
  *
  * Features: per-type dedupe windows (a STALE connection alerts at most
@@ -18,6 +20,7 @@
 import { db } from "@/lib/db";
 import { shouldHideAmountsInNotifications } from "@/server/display-preferences";
 import { redactAmountsInText } from "@/lib/privacy/policy";
+import { enqueuePushNotification } from "@/server/push/delivery";
 
 export type NotificationChannel = "IN_APP" | "PUSH" | "EMAIL";
 
@@ -51,13 +54,14 @@ const DEFAULT_DEDUPE_MS = 10 * 60 * 1000;
  * through the check.
  */
 /**
- * In-app notification (notification center only). Returns true when a
- * row was actually created, false when the notification was deduped
- * away (an unread twin inside the window) or the write failed. Callers
- * that count sent notifications must use this return value: a deduped
- * call is not a sent notification (lot 10 economic-calendar alerts).
+ * In-app notification (notification center only). Returns the created row
+ * id when a row was actually created, null when the notification was
+ * deduped away (an unread twin inside the window) or the write failed.
+ * Callers that count sent notifications must use this return value: a
+ * deduped call is not a sent notification (lot 10 economic-calendar
+ * alerts). The id is also the push outbox dedupe key (see notifyUser).
  */
-export async function notifyInApp(input: NotifyInput): Promise<boolean> {
+export async function notifyInApp(input: NotifyInput): Promise<string | null> {
   try {
     // v2.5 Module 8 — when hideAmountsInNotifications is on, amounts never
     // reach the persisted body (R/pips policy). Composers should already
@@ -84,8 +88,8 @@ export async function notifyInApp(input: NotifyInput): Promise<boolean> {
       status: "SENT",
     };
     if (dedupeMs <= 0) {
-      await db.notificationLog.create({ data });
-      return true;
+      const row = await db.notificationLog.create({ data });
+      return row.id;
     }
 
     // Serialize concurrent notifies for the same dedupe key: the lock is
@@ -107,15 +111,40 @@ export async function notifyInApp(input: NotifyInput): Promise<boolean> {
         },
         select: { id: true },
       });
-      if (existing) return false;
-      await tx.notificationLog.create({ data });
-      return true;
+      if (existing) return null;
+      const row = await tx.notificationLog.create({ data });
+      return row.id;
     });
     return created;
   } catch (error) {
     console.error("[notifications] failed:", error);
-    return false;
+    return null;
   }
+}
+
+/**
+ * Fan-out for user alerts: creates the in-app notification, then queues
+ * the same alert (exact title/body, amounts already redacted) as a Web
+ * Push per subscribed device of that user. Only alerts that were actually
+ * created fan out: a deduped call sends nothing anywhere. The push
+ * enqueue is best-effort and never throws, so a push failure can never
+ * break the in-app notification or the operation that triggered it.
+ *
+ * Fanned-out types (the notifyInApp alert types): SYNC_STALE,
+ * SYNC_MISMATCH, ECONOMIC_EVENT_SOON, DELETION_SCHEDULED,
+ * DELETION_CANCELLED. Daily summaries, drawdown and prop alerts are NOT
+ * fanned out here: they live in the integrations outbox with their own
+ * per-endpoint subscriptions and quiet hours (Discord / Telegram).
+ */
+export async function notifyUser(input: NotifyInput): Promise<boolean> {
+  const notificationId = await notifyInApp(input);
+  if (!notificationId) return false;
+  try {
+    await enqueuePushNotification(input.userId, notificationId);
+  } catch (error) {
+    console.error("[notifications] push fan-out failed:", error);
+  }
+  return true;
 }
 
 export interface NotificationDTO {

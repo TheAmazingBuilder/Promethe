@@ -29,7 +29,7 @@ import {
 } from "@/lib/economic-calendar/providers";
 import { fetchFredEvents } from "@/lib/economic-calendar/fred";
 import { fetchForexFactoryEvents } from "@/lib/economic-calendar/forexfactory";
-import { notifyInApp } from "@/server/notifications";
+import { notifyUser } from "@/server/notifications";
 import type { ManualEconomicEventInput, WatchlistPrefsInput } from "@/lib/validations/economic-calendar";
 
 export class EconomicCalendarError extends Error {
@@ -830,7 +830,7 @@ export async function getTradeEventContext(
 
 /**
  * Notify users whose watchlist matches an event starting within their
- * alert window. In-app only (notifyInApp). Dedupe key is the event id,
+ * alert window. In-app + Web Push fan-out (notifyUser). Dedupe key is the event id,
  * window 12 h, so a user is pinged at most once per event per half day.
  * Titles and bodies follow the existing server-side notification strings
  * (French, like the other composers in this service).
@@ -875,10 +875,10 @@ export async function checkUpcomingEventAlerts(now?: Date): Promise<number> {
       if (!passesMinImpact((event.impact as EconomicImpact | null) ?? null, prefs.minImpact)) {
         continue;
       }
-      // notifyInApp returns false when the alert was deduped away: only
+      // notifyUser returns false when the alert was deduped away: only
       // actually created notifications count as sent.
       if (
-        await notifyInApp({
+        await notifyUser({
           userId: prefs.userId,
           type: "ECONOMIC_EVENT_SOON",
           title: `Annonce économique bientôt : ${event.title}`,

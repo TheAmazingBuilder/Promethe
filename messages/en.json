@@ -3036,7 +3036,7 @@
     "sessionsEmpty": "No other active session.",
     "notifTitle": "Notification Preferences",
     "notifDesc": "Choose what notifications you want to receive.",
-    "notifNote": "Promethe sends notifications only through Discord or Telegram. There is no email or push channel.",
+    "notifNote": "Promethe sends notifications in the app, by browser push when enabled below, and through Discord or Telegram. There is no email channel.",
     "notifEmptyTitle": "No notification channel yet",
     "notifEmptyDesc": "Add a Discord webhook or a Telegram bot to receive daily summaries and alerts.",
     "notifEmptyButton": "Set up integrations",
@@ -3047,7 +3047,17 @@
     "eventDrawdownAlert": "Drawdown Alert",
     "eventDrawdownAlertDesc": "Alert when a drawdown threshold is hit",
     "eventPropAlert": "Prop Alert",
-    "eventPropAlertDesc": "Alerts about your prop firm challenges"
+    "eventPropAlertDesc": "Alerts about your prop firm challenges",
+    "pushTitle": "Browser Push",
+    "pushDesc": "Receive alerts in your browser, even when Promethe is closed.",
+    "pushOn": "Enabled on this device",
+    "pushOff": "Off - enable to receive browser alerts",
+    "pushLoading": "Checking push availability…",
+    "pushUnavailable": "Browser push is not available yet. The server keys are not configured.",
+    "pushUnsupported": "This browser does not support push notifications.",
+    "pushDenied": "Notifications are blocked for this site in your browser settings. Allow them there to enable push.",
+    "pushTest": "Send test",
+    "pushTestSent": "Test notification sent."
   },
   "legal": {
     "tabMentions": "Legal notice",

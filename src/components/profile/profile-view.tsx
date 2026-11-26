@@ -15,8 +15,9 @@
  * - Security: change password (new real route), two-factor shown as
  *   "Not available" (no TOTP exists), active sessions from AuthSession
  *   rows with revoke. No login-notification toggle: no such channel exists.
- * - Notifications: Discord / Telegram subscription toggles only. There is
- *   no email, push or marketing channel in Promethe, so none is rendered.
+ * - Notifications: Discord / Telegram subscription toggles, plus the
+ *   browser push opt-in (PushNotificationsSection, default off). There
+ *   is no email or marketing channel in Promethe, so none is rendered.
  */
 import * as React from "react";
 import Link from "next/link";
@@ -61,6 +62,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useSession } from "@/components/app/session-context";
+import { PushNotificationsSection } from "@/components/profile/push-notifications-section";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
@@ -760,6 +762,7 @@ function NotificationsTab() {
   const subscriptions = integrations.data?.subscriptions ?? [];
 
   return (
+    <>
     <Card>
       <CardHeader>
         <CardTitle className="text-base">{t("notifTitle")}</CardTitle>
@@ -844,6 +847,10 @@ function NotificationsTab() {
         <p className="mt-4 text-[11px] text-muted-foreground">{t("notifNote")}</p>
       </CardContent>
     </Card>
+      <div className="mt-4">
+        <PushNotificationsSection />
+      </div>
+    </>
   );
 }
 

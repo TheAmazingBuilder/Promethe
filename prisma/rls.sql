@@ -5,7 +5,7 @@
 -- identify a Promethe user. Prisma connects server-side using the database
 -- owner role, which bypasses RLS unless FORCE ROW LEVEL SECURITY is enabled.
 --
--- This script applies ONLY to the 95 tables declared in prisma/schema.prisma.
+-- This script applies ONLY to the 96 tables declared in prisma/schema.prisma.
 -- It deliberately does not alter unrelated public tables, Supabase-managed
 -- objects, Storage tables, functions, schema usage, or application data.
 --
@@ -53,6 +53,7 @@ BEGIN
     'trade_rule_violations',
     'trade_templates',
     'push_subscriptions',
+    'push_outbox',
     'reminder_settings',
     'notification_logs',
     'offline_sync_logs',

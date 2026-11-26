@@ -32,6 +32,12 @@ inside the window:
   both slip through the check.
 - `notifyInApp()` never throws (best effort): a failure is logged and
   the notification is skipped.
+- `notifyInApp()` returns the created row id (or null when deduped or
+  failed). `notifyUser()` creates the in-app row, then fans the same
+  alert out to Web Push for the user's subscribed devices (section 3);
+  the push payload is the redacted title/body of the row, and the row id
+  is the push outbox dedupe key. Only alerts that were actually created
+  fan out: a deduped call sends nothing anywhere.
 - Mark-read is scoped to `IN_APP`: `markNotificationRead()` and
   `markAllNotificationsRead()` only touch in-app rows, so a future
   PUSH/EMAIL attempt logged in the same table is never marked read here.
@@ -46,13 +52,60 @@ through the integrations outbox (`src/server/integrations/delivery.ts`,
 per-endpoint subscriptions with quiet hours. They are NOT driven by
 `notifyInApp()`. The profile "Notification Preferences" section manages
 these endpoints and subscriptions, and states honestly that there is no
-email or push channel.
+email channel.
 
-## 3. Channels NOT built - design
+## 3. Channels
 
-### Email
+### Web push (built)
 
-Not implemented. No Resend/SMTP sender, no `notifyUser()` fan-out.
+VAPID sender with no new dependency: `src/lib/push/vapid.ts` (RFC 8292
+ES256 JWT, P-256) and `src/lib/push/encrypt.ts` (RFC 8291 / RFC 8188
+`aes128gcm`, ECDH + HKDF-SHA256 + AES-128-GCM, Node built-in `crypto`
+only). Env vars: `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` (server) and
+`NEXT_PUBLIC_VAPID_PUBLIC_KEY` (client, inlined at build time, so a
+redeploy is required after setting the keys). `GET /api/push/config`
+reports availability; when the keys are missing the UI states honestly
+that push is unavailable and offers no working toggle.
+
+- Subscribe / unsubscribe: `POST` / `DELETE /api/push/subscribe`
+  (payload validated: https endpoint, 65-byte p256dh, 16-byte auth),
+  one row per device in `push_subscriptions` (upsert on endpoint,
+  `lastSeenAt` refreshed on re-subscribe). Ownership enforced: a user
+  manages only their own rows. An endpoint transfers to the latest
+  subscriber, so pushes always go to the account signed in on that
+  device.
+- Outbox: `push_outbox` table (`PushOutbox`, migration
+  `20261126073000_push_outbox`), drained by `processPushOutbox()` from
+  the same cron that drains the integrations outbox
+  (`POST /api/cron/integrations`, Bearer `CRON_SECRET`). Same pattern
+  as the integrations outbox: compare-and-set claims, 2-minute lease,
+  max 5 attempts, exponential backoff (`2^attempts` min, capped at
+  60), `Retry-After` honored, DEAD after exhaustion, per-user rate
+  limit 30/min. A missing VAPID config defers the whole queue (no
+  attempts consumed) instead of burning rows on an ops problem.
+- Per-attempt logging: one `NotificationLog` row with `channel =
+  'PUSH'` per attempt (`SENT` / `FAILED` / `SKIPPED`), reusing the
+  in-app row id as dedupe key and the already-redacted title/body.
+  The in-app center only lists `IN_APP` rows, so push attempts never
+  appear in the bell.
+- Expired subscriptions: a 410/404 from the push service deletes the
+  subscription row and the queued row goes DEAD.
+- Service worker: `public/sw.js` has a `push` handler (shows
+  title/body, click opens the deep link) and a `notificationclick`
+  handler. Payloads are shown once and never cached.
+- UI: `PushNotificationsSection` in the profile Notification
+  Preferences tab (default OFF, per device). A test button sends one
+  real push to the device (`POST /api/push/test`).
+- Fan-out (`notifyUser()`): SYNC_STALE, SYNC_MISMATCH,
+  ECONOMIC_EVENT_SOON, DELETION_SCHEDULED, DELETION_CANCELLED.
+  DAILY_SUMMARY, DRAWDOWN_ALERT and PROP_ALERT are NOT fanned out:
+  they live in the integrations outbox with their own per-endpoint
+  subscriptions and quiet hours (Discord / Telegram).
+
+### Email (not built - design)
+
+Not implemented. No Resend/SMTP sender, no email fan-out in
+`notifyUser()`.
 To build it: a Resend account, `RESEND_API_KEY` in the environment,
 a verified sender domain, an explicit per-user opt-in (consent), and a
 `channel = 'EMAIL'` write in `NotificationLog` per attempt
@@ -61,20 +114,6 @@ amount-redaction from section 1. Send through the integrations outbox
 pattern (claim, retry with backoff, dead after N attempts) rather than
 inline, so a provider outage never blocks the request. Never send
 amounts when the user hid them; never send another user's data.
-
-### Web push
-
-Not implemented. The `push_subscriptions` table exists (per-device VAPID
-subscription, endpoint unique) but nothing reads or writes it: no
-subscription API route, no VAPID keys, no `web-push` dependency, no
-sender, no service-worker `push` handler.
-To build it: VAPID key pair (`VAPID_PUBLIC_KEY` /
-`VAPID_PRIVATE_KEY`, the public key also served to the client),
-a subscribe/unsubscribe API route storing one row per device,
-a `push` event handler in `public/sw.js` showing the notification,
-a `channel = 'PUSH'` write in `NotificationLog` per attempt, and an
-explicit per-device opt-in. Expired subscriptions (410 Gone) must be
-deleted. Same outbox pattern, same privacy rules as email.
 
 ### Reminders (`reminder_settings`)
 

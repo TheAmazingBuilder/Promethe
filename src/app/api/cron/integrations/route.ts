@@ -1,8 +1,8 @@
 /**
  * POST|GET /api/cron/integrations - drain the Discord / Telegram outbox,
- * then queue (and send) the daily summaries that are due, then drain again.
- * Same Bearer CRON_SECRET auth as /api/cron/daily (>= 16 chars, 503 when
- * unset). Idempotent - safe to re-run.
+ * then queue (and send) the daily summaries that are due, then drain again,
+ * then drain the Web Push outbox. Same Bearer CRON_SECRET auth as
+ * /api/cron/daily (>= 16 chars, 503 when unset). Idempotent - safe to re-run.
  *
  * NOTE - free Vercel plan: crons run at most once a day, so alerts are NOT
  * real time: they leave at the next cron pass. The settings page says so.
@@ -16,6 +16,7 @@ import {
   processOutbox,
   sendDailySummariesDue,
 } from "@/server/integrations/delivery";
+import { processPushOutbox } from "@/server/push/delivery";
 
 function authorized(req: Request): boolean {
   const secret = process.env.CRON_SECRET;
@@ -45,11 +46,13 @@ async function handle(req: Request) {
   const firstPass = await processOutbox();
   const summaries = await sendDailySummariesDue();
   const secondPass = await processOutbox();
+  const pushOutbox = await processPushOutbox();
   return NextResponse.json({
     report: {
       outboxFirstPass: firstPass,
       summaries,
       outboxSecondPass: secondPass,
+      pushOutbox,
     },
   });
 }

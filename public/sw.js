@@ -5,6 +5,8 @@
  * - Cache only public, immutable/static assets.
  * - Never cache API responses or navigations: authenticated pages can contain
  *   private trading data and must never be replayed after logout/revocation.
+ * - Web Push payloads are shown, never stored: the push handler decrypts
+ *   the payload, shows the notification, and keeps nothing in the cache.
  * - Bump CACHE_NAME to purge caches created by older Promethe workers.
  */
 const CACHE_NAME = "promethe-v2-private-safe";
@@ -125,4 +127,46 @@ self.addEventListener("fetch", (event) => {
       )
     );
   }
+});
+
+// Web Push: show the notification, never store the payload.
+// The payload is the encrypted { title, body, url } sent by the server;
+// it is shown once and discarded. Clicking opens the deep link (or the
+// dashboard when none was given), reusing an open tab when possible.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = {};
+  }
+  const title = typeof data.title === "string" && data.title ? data.title : "Promethe";
+  const body = typeof data.body === "string" ? data.body : "";
+  const url = typeof data.url === "string" && data.url.startsWith("/") ? data.url : "/";
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      data: { url },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/";
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clients) => {
+        for (const client of clients) {
+          if (new URL(client.url).pathname === url && "focus" in client) {
+            return client.focus();
+          }
+        }
+        if (self.clients.openWindow) return self.clients.openWindow(url);
+        return undefined;
+      })
+  );
 });
