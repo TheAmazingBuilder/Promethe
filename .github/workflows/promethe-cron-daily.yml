@@ -1,0 +1,25 @@
+# Promethe cron - daily maintenance (B7, prepared 25 Nov 2026).
+# Calls POST /api/cron/daily on production once a day.
+# Runs ONLY from the default branch (main): GitHub scheduled workflows
+# never trigger from any other branch. This file must live on main.
+# Needs a repository secret named CRON_SECRET (same value as the
+# CRON_SECRET environment variable in Vercel, Production + Preview).
+# The economic-calendar cron (/api/cron/economic-calendar) is NOT listed
+# here: that route only exists on Features-promethe and is not in
+# production yet. Add it after the branch is merged to main.
+name: Promethe cron - daily
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  call:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call daily maintenance cron
+        run: |
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://promethe-nine.vercel.app/api/cron/daily
