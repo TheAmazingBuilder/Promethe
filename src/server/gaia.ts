@@ -23,7 +23,6 @@ import {
   parseJsonBlocks,
   parseJsonStringArray,
   searchSnippet,
-  textOfBlocks,
   searchTextOfBlocks,
   type GaiaBlock,
   type GaiaRefKind,
@@ -543,7 +542,7 @@ export async function listNotes(
     }
   }
 
-  const q = (query.q ?? "").trim().toLowerCase();
+  const q = foldSearchText(query.q ?? "");
   if (q !== "") {
     // Text search needs block text, tag names and folder names —
     // in-memory path over the scoped set (same matching as before),
@@ -553,14 +552,12 @@ export async function listNotes(
       const blocks = parseJsonBlocks(note.blocks);
       const tagIds = parseJsonStringArray(note.tagIds);
       return (
-        note.title.toLowerCase().includes(q) ||
-        searchTextOfBlocks(blocks).toLowerCase().includes(q) ||
+        foldSearchText(note.title).includes(q) ||
+        foldSearchText(searchTextOfBlocks(blocks)).includes(q) ||
         tagNamesOf(tagIds, tags).some((name) =>
-          name.toLowerCase().includes(q),
+          foldSearchText(name).includes(q),
         ) ||
-        (folderNameOf(note.folderId, folders) ?? "")
-          .toLowerCase()
-          .includes(q)
+        foldSearchText(folderNameOf(note.folderId, folders) ?? "").includes(q)
       );
     });
     const sort = query.sort ?? "updated";
@@ -1200,8 +1197,11 @@ export async function searchNotes(
   const tokens = searchTokens(q);
   const results = ranked.slice(0, 30).map(({ note, blocks }) => {
     const row = toRow(note, folders, tags);
+    // Match against the same indexed text used for ranking (pattern names
+    // and aliases included), so a pattern-only hit still gets a snippet
+    // centered on the pattern instead of an empty excerpt.
     const bodyHit = tokens.some((token) =>
-      foldSearchText(textOfBlocks(blocks)).includes(token),
+      foldSearchText(searchTextOfBlocks(blocks)).includes(token),
     );
     return {
       ...row,

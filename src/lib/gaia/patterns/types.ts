@@ -27,8 +27,6 @@ export interface CandlestickPattern {
   interpretation: string;
   confirmation: string;
   caveats: string;
-  /** Fixed, repository-owned public asset path; never user supplied. */
-  illustration: string;
 }
 
 export interface CandlestickPatternSearchOptions {

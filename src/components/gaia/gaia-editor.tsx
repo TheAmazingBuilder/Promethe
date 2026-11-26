@@ -172,7 +172,7 @@ export function blocksToMarkdown(
         }
         break;
       }
-      case "pattern": { const pattern = block.patternId ? getCandlestickPattern(block.patternId) : null; if (pattern) lines.push(`![${pattern.name}](${pattern.illustration})`, `*${pattern.description}*`, ""); break; }
+      case "pattern": { const pattern = block.patternId ? getCandlestickPattern(block.patternId) : null; if (pattern) lines.push(`**${pattern.name}**`, `*${pattern.description}*`, ""); break; }
       case "ref": {
         if (block.ref) {
           const kindLabel = refLabel(block.ref.kind);

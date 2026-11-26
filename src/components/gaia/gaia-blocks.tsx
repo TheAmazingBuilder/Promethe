@@ -10,6 +10,7 @@
  */
 import * as React from "react";
 import { getCandlestickPattern } from "@/lib/gaia/patterns/catalog";
+import { PatternGlyph } from "./gaia-pattern-diagram";
 import {
   AlertTriangle,
   ArrowUp,
@@ -856,7 +857,7 @@ export function GaiaBlockRow({
     case "ref":
       body = <RefBlock block={block} ops={ops} t={t} />;
       break;
-    case "pattern": { const pattern = block.patternId ? getCandlestickPattern(block.patternId) : null; body = pattern ? <figure className="my-2 flex max-w-sm items-center gap-4 rounded-lg border border-border bg-card p-3" data-testid="gaia-pattern-block"><img src={pattern.illustration} alt={`Illustration ${pattern.name}`} className="h-24 w-28 object-contain" /><figcaption className="min-w-0"><strong className="block text-sm">{pattern.name}</strong><span className="text-xs text-muted-foreground">{pattern.description}</span></figcaption></figure> : <p className="text-sm text-destructive">Pattern indisponible</p>; break; }
+    case "pattern": { const pattern = block.patternId ? getCandlestickPattern(block.patternId) : null; body = pattern ? <figure className="my-2 flex max-w-sm items-center gap-4 rounded-lg border border-border bg-card p-3" data-testid="gaia-pattern-block"><div className="h-24 w-28 shrink-0" role="img" aria-label={`${pattern.name} diagram`}><PatternGlyph patternId={pattern.id} compact /></div><figcaption className="min-w-0"><strong className="block text-sm">{pattern.name}</strong><span className="text-xs text-muted-foreground">{pattern.description}</span></figcaption></figure> : <p className="text-sm text-destructive">{t("gaia.blocks.patternUnavailable")}</p>; break; }
     default:
       body = <TextBlockBody block={block} ops={ops} t={t} />;
   }

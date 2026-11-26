@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { listCandlestickPatterns } from "@/lib/gaia/patterns/catalog";
-import { getCandlestickPatternCandleCount } from "@/components/gaia/gaia-pattern-library";
+import { getCandlestickPatternCandleCount } from "@/components/gaia/gaia-pattern-diagram";
 
 describe("Gaia candlestick pattern diagrams", () => {
   it("provides a diagram with the expected number of candles for every catalog entry", () => {

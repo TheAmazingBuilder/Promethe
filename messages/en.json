@@ -5025,7 +5025,8 @@
       "missingRef": "Missing reference",
       "remove": "Remove",
       "open": "Open",
-      "removeRef": "Remove reference"
+      "removeRef": "Remove reference",
+      "patternUnavailable": "Pattern unavailable"
     },
     "refKinds": {
       "trade": "Trade",

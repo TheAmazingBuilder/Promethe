@@ -81,7 +81,7 @@ export const gaiaBlockInputSchema = z.object({
     .optional(),
   ref: gaiaBlockRefInputSchema.optional(),
   patternId: z.string().refine(isCandlestickPatternId, "Unknown candlestick pattern").optional(),
-}).superRefine((block, context) => { if (block.type === "pattern" && !block.patternId) context.addIssue({ code: z.ZodIssueCode.custom, path: ["patternId"], message: "Pattern id is required" }); }).superRefine((block, context) => { if (block.type === "pattern" && !block.patternId) context.addIssue({ code: z.ZodIssueCode.custom, path: ["patternId"], message: "Pattern id is required" }); });
+}).superRefine((block, context) => { if (block.type === "pattern" && !block.patternId) context.addIssue({ code: z.ZodIssueCode.custom, path: ["patternId"], message: "Pattern id is required" }); });
 
 export const gaiaBlocksInputSchema = z
   .array(gaiaBlockInputSchema)
@@ -130,9 +130,14 @@ export function normalizeBlocks(input: GaiaBlockInput[]): GaiaBlock[] {
     };
     if (block.checked !== undefined) out.checked = block.checked;
     if (block.tone !== undefined) out.tone = block.tone;
-    if (block.src !== undefined) out.src = block.src;
-    if (block.alt !== undefined) out.alt = block.alt;
-    if (block.caption !== undefined) out.caption = block.caption;
+    // A pattern block carries no image: its illustration is derived from
+    // the pattern id in-app. Drop any src/alt/caption so no arbitrary URL
+    // can ride along with a pattern.
+    if (block.type !== "pattern") {
+      if (block.src !== undefined) out.src = block.src;
+      if (block.alt !== undefined) out.alt = block.alt;
+      if (block.caption !== undefined) out.caption = block.caption;
+    }
     if (block.rows !== undefined) out.rows = block.rows;
     if (block.type === "pattern" && block.patternId) out.patternId = block.patternId;
     if (block.ref !== undefined && block.ref !== null) {
@@ -184,9 +189,13 @@ export function parseStoredBlocks(value: unknown): GaiaBlock[] {
       block.tone = raw.tone as GaiaCalloutTone;
     }
     if (raw.type === "pattern") { if (typeof raw.patternId !== "string" || !isCandlestickPatternId(raw.patternId)) continue; block.patternId = raw.patternId; }
-    if (typeof raw.src === "string") block.src = raw.src;
-    if (typeof raw.alt === "string") block.alt = raw.alt;
-    if (typeof raw.caption === "string") block.caption = raw.caption;
+    // A pattern block carries no image: drop any stored src/alt/caption
+    // so a persisted pattern can never smuggle in an arbitrary URL.
+    if (raw.type !== "pattern") {
+      if (typeof raw.src === "string") block.src = raw.src;
+      if (typeof raw.alt === "string") block.alt = raw.alt;
+      if (typeof raw.caption === "string") block.caption = raw.caption;
+    }
     if (
       Array.isArray(raw.rows) &&
       raw.rows.every(
@@ -325,7 +334,7 @@ export function excerptOf(blocks: GaiaBlock[]): string {
  */
 export function searchSnippet(blocks: GaiaBlock[], query: string): string {
   const fullText = searchTextOfBlocks(blocks);
-  const index = fullText.toLowerCase().indexOf(query);
+  const index = fullText.toLowerCase().indexOf(query.toLowerCase());
   if (index === -1) return excerptOf(blocks);
   const start = Math.max(0, index - 60);
   const end = Math.min(fullText.length, index + query.length + 80);

@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getCandlestickPattern } from "@/lib/gaia/patterns/catalog";
+import { PatternGlyph } from "./gaia-pattern-diagram";
 import {
   GAIA_REF_META,
   gaiaRefLabel,
@@ -119,7 +120,7 @@ function PrintBlock({ block, t }: { block: GaiaBlock; t: GaiaT }) {
         </table>
       );
     }
-    case "pattern": { const pattern = block.patternId ? getCandlestickPattern(block.patternId) : null; return pattern ? <figure className="my-3 flex items-center gap-3"><img src={pattern.illustration} alt={pattern.name} className="h-24 w-28 object-contain" /><figcaption><strong>{pattern.name}</strong><p className="text-xs">{pattern.description}</p></figcaption></figure> : null; }
+    case "pattern": { const pattern = block.patternId ? getCandlestickPattern(block.patternId) : null; return pattern ? <figure className="my-3 flex items-center gap-3 break-inside-avoid"><div className="h-24 w-28 shrink-0" role="img" aria-label={`${pattern.name} diagram`}><PatternGlyph patternId={pattern.id} compact /></div><figcaption><strong>{pattern.name}</strong><p className="text-xs">{pattern.description}</p></figcaption></figure> : null; }
     case "ref": {
       if (!block.ref) return null;
       const meta = GAIA_REF_META[block.ref.kind];
