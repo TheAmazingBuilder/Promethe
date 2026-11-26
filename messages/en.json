@@ -5566,6 +5566,9 @@
     "syncing": "Syncing…",
     "synced": "All changes synced.",
     "syncFailed": "Some changes could not sync.",
-    "notSupported": "Offline queue is unavailable in this browser."
+    "notSupported": "Offline queue is unavailable in this browser.",
+    "installApp": "Install app",
+    "installPromethe": "Install Promethe",
+    "dismissInstall": "Dismiss install prompt"
   }
 }

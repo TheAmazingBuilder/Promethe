@@ -1,11 +1,43 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, WifiOff } from "lucide-react";
+import { Download, WifiOff, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { useOfflineQueue } from "@/lib/offline/use-offline-queue";
 import { OfflineQueuePanel } from "@/components/offline/offline-queue-panel";
+
+/** localStorage flag: the user dismissed the install action on this device. */
+const INSTALL_DISMISSED_KEY = "promethe.pwa.installDismissed";
+
+/**
+ * True when the app already runs installed: a standalone display mode
+ * (Chrome/Edge/Firefox) or the iOS Safari standalone flag. The browser
+ * does not fire `beforeinstallprompt` for an installed app, but the check
+ * is kept as defence in depth so the action can never show next to an
+ * installed app.
+ */
+function isAppInstalled(): boolean {
+  if (typeof window === "undefined") return false;
+  if (
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(display-mode: standalone)").matches
+  ) {
+    return true;
+  }
+  return (
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
+}
+
+function isInstallDismissed(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(INSTALL_DISMISSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -17,6 +49,9 @@ export function PwaRoot() {
   const [installPrompt, setInstallPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalling, setIsInstalling] = useState(false);
+  const [installDismissed, setInstallDismissed] = useState<boolean>(() =>
+    isInstallDismissed(),
+  );
   const [queueOpen, setQueueOpen] = useState(false);
   // Single mount point (root layout): this hook owns the online/offline
   // listeners, the replay triggers and the Background Sync registration.
@@ -25,7 +60,12 @@ export function PwaRoot() {
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (event: Event) => {
+      // Always defer the prompt: the action is only ever offered through
+      // our own button, never through the browser's default infobar.
       event.preventDefault();
+      // Never offer an install the user already refused on this device,
+      // and never offer one to an already installed app.
+      if (isAppInstalled() || isInstallDismissed()) return;
       setInstallPrompt(event as BeforeInstallPromptEvent);
     };
     const handleAppInstalled = () => setInstallPrompt(null);
@@ -61,6 +101,20 @@ export function PwaRoot() {
     } finally {
       setIsInstalling(false);
     }
+  };
+
+  // Dismiss the install action for good on this device. The app can still
+  // be installed from the browser menu; the dismissal only removes our
+  // own button. It persists across loads in localStorage.
+  const handleDismissInstall = () => {
+    try {
+      window.localStorage.setItem(INSTALL_DISMISSED_KEY, "1");
+    } catch {
+      // Storage unavailable (private mode): the dismissal lasts for this
+      // session through component state.
+    }
+    setInstallDismissed(true);
+    setInstallPrompt(null);
   };
 
   // Offline banner: while offline it shows the queued work; while online
@@ -110,17 +164,26 @@ export function PwaRoot() {
 
       <OfflineQueuePanel open={queueOpen} onOpenChange={setQueueOpen} />
 
-      {installPrompt ? (
-        <div className="fixed bottom-4 right-4 z-[100]">
+      {installPrompt && !installDismissed ? (
+        <div className="fixed bottom-4 right-4 z-[100] flex items-center gap-1">
           <Button
             type="button"
             size="sm"
             onClick={() => void handleInstall()}
             disabled={isInstalling}
-            aria-label="Install Promethe"
+            aria-label={t("installPromethe")}
           >
             <Download aria-hidden="true" />
-            Install app
+            {t("installApp")}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={handleDismissInstall}
+            aria-label={t("dismissInstall")}
+          >
+            <X aria-hidden="true" />
           </Button>
         </div>
       ) : null}

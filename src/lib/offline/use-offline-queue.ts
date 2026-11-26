@@ -68,6 +68,27 @@ function subscribeOnline(cb: (online: boolean) => void): () => void {
   };
 }
 
+/**
+ * Re-read the browser's connectivity and publish it. Returns true when the
+ * state flipped to online.
+ *
+ * The `online`/`offline` event stream is lossy: a transition that fires
+ * before the listeners are attached (page load, bfcache restore), or one
+ * the browser never delivers, leaves the displayed state stuck offline
+ * even though navigator.onLine is true - the banner then never disappears
+ * until the next event. Every re-sync point below re-reads navigator.onLine
+ * instead of trusting the last event, so the displayed state converges
+ * back to the browser's truth on focus, visibility, restore and on a
+ * periodic backstop.
+ */
+function resyncOnline(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const next = navigator.onLine;
+  const was = onlineState;
+  publishOnline(next);
+  return !was && next;
+}
+
 let replayingState = false;
 const replayingSubscribers = new Set<(replaying: boolean) => void>();
 
@@ -236,8 +257,12 @@ export function useOfflineQueue(): OfflineQueueState {
   // Replay when the connection returns.
   React.useEffect(() => {
     // Re-sync from the browser on every mount: the module state may be
-    // stale from a previous mount (or a previous test).
-    publishOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
+    // stale from a previous mount (or a previous test). A flip back to
+    // online replays the queue, like the `online` event does.
+    const handleResync = () => {
+      if (resyncOnline()) void replayNow();
+    };
+    handleResync();
     const handleOnline = () => {
       publishOnline(true);
       void replayNow();
@@ -245,9 +270,22 @@ export function useOfflineQueue(): OfflineQueueState {
     const handleOffline = () => publishOnline(false);
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
+    // The event stream alone cannot be trusted: re-read navigator.onLine
+    // whenever the user comes back to the tab, when a bfcache restore
+    // resumes the page (mount effects do not re-run there), and on a
+    // periodic backstop, so a missed `online` transition can never leave
+    // the offline banner stuck while the browser is online.
+    window.addEventListener("focus", handleResync);
+    window.addEventListener("pageshow", handleResync);
+    document.addEventListener("visibilitychange", handleResync);
+    const resyncTimer = window.setInterval(handleResync, 30_000);
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("focus", handleResync);
+      window.removeEventListener("pageshow", handleResync);
+      document.removeEventListener("visibilitychange", handleResync);
+      window.clearInterval(resyncTimer);
     };
   }, [replayNow]);
 

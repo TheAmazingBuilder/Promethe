@@ -8,6 +8,7 @@ import messages from "../../messages/en.json";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  window.localStorage.clear();
 });
 
 // PwaRoot reads the offlineQueue namespace (§25.5 banner + queue panel),
@@ -117,6 +118,90 @@ describe("PwaRoot", () => {
       expect((installButton as HTMLButtonElement).disabled).toBe(false);
     });
     expect(screen.getByRole("button", { name: "Install Promethe" })).toBeTruthy();
+  });
+
+  it("dismisses the install action and keeps it gone across loads", async () => {
+    const prompt = vi.fn().mockResolvedValue(undefined);
+    const installEvent = new Event("beforeinstallprompt", { cancelable: true }) as Event & {
+      prompt: typeof prompt;
+      userChoice: Promise<{ outcome: "dismissed"; platform: string }>;
+    };
+    installEvent.prompt = prompt;
+    installEvent.userChoice = Promise.resolve({ outcome: "dismissed", platform: "web" });
+
+    renderPwaRoot();
+    window.dispatchEvent(installEvent);
+    await screen.findByRole("button", { name: "Install Promethe" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss install prompt" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Install Promethe" })).toBeNull();
+    });
+    expect(window.localStorage.getItem("promethe.pwa.installDismissed")).toBe("1");
+
+    // A fresh mount on the same device still hides the action.
+    cleanup();
+    renderPwaRoot();
+    window.dispatchEvent(installEvent);
+    expect(screen.queryByRole("button", { name: "Install Promethe" })).toBeNull();
+  });
+
+  it("never offers an install when the app runs standalone", async () => {
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn((query: string) => ({
+        matches: query === "(display-mode: standalone)",
+        media: query,
+        onchange: null,
+        addListener: () => undefined,
+        removeListener: () => undefined,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        dispatchEvent: () => false,
+      })),
+    });
+    try {
+      const prompt = vi.fn().mockResolvedValue(undefined);
+      const installEvent = new Event("beforeinstallprompt", { cancelable: true }) as Event & {
+        prompt: typeof prompt;
+        userChoice: Promise<{ outcome: "dismissed"; platform: string }>;
+      };
+      installEvent.prompt = prompt;
+      installEvent.userChoice = Promise.resolve({ outcome: "dismissed", platform: "web" });
+
+      renderPwaRoot();
+      window.dispatchEvent(installEvent);
+      expect(screen.queryByRole("button", { name: "Install Promethe" })).toBeNull();
+    } finally {
+      if (originalMatchMedia === undefined) {
+        delete (window as unknown as Record<string, unknown>).matchMedia;
+      } else {
+        window.matchMedia = originalMatchMedia;
+      }
+    }
+  });
+
+  it("never offers an install on iOS standalone (navigator.standalone)", async () => {
+    Object.defineProperty(window.navigator, "standalone", {
+      configurable: true,
+      value: true,
+    });
+    try {
+      const prompt = vi.fn().mockResolvedValue(undefined);
+      const installEvent = new Event("beforeinstallprompt", { cancelable: true }) as Event & {
+        prompt: typeof prompt;
+        userChoice: Promise<{ outcome: "dismissed"; platform: string }>;
+      };
+      installEvent.prompt = prompt;
+      installEvent.userChoice = Promise.resolve({ outcome: "dismissed", platform: "web" });
+
+      renderPwaRoot();
+      window.dispatchEvent(installEvent);
+      expect(screen.queryByRole("button", { name: "Install Promethe" })).toBeNull();
+    } finally {
+      delete (window.navigator as unknown as Record<string, unknown>).standalone;
+    }
   });
 
 });
