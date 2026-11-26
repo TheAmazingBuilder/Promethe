@@ -636,6 +636,8 @@ model Trade {
   @@index([userId, setupId])
   @@index([userId, instrumentId])
   @@index([userId, status])
+  @@index([userId, status, exitTime])
+  @@index([userId, status, entryTime])
   @@index([userId, isDraft])
   @@index([userId, reviewStatus])
   @@index([userId, grade])
