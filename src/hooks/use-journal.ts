@@ -6,6 +6,7 @@
  * silent about Prisma. Invalidation: ["journal"], ["calendar"], ["strategies"].
  */
 import {
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -17,10 +18,15 @@ import type {
   JournalEntryDTO,
   StrategyDTO,
   StrategyStatsDTO,
+  StrategyVersionCompareDTO,
   StrategyVersionDTO,
+  StrategyVersionPerformanceDTO,
   PropStatusPayload,
 } from "@/lib/trading/dto";
 import type { JournalEntryInput } from "@/lib/validations/journal";
+import { getBrowserStore, isOfflineQueueSupported } from "@/lib/offline/store";
+import { getOfflineUserId } from "@/lib/offline/session";
+import { enqueueOperation } from "@/lib/offline/queue";
 
 // ── Calendar ─────────────────────────────────────────────────────────────────
 
@@ -74,11 +80,37 @@ export function useJournalEntry(date: string) {
   });
 }
 
-export function useRecentJournal() {
-  return useQuery({
-    queryKey: ["journal", "recent"],
-    queryFn: async () =>
-      (await apiFetch<{ entries: JournalEntryDTO[] }>("/api/v1/journal")).entries,
+export interface JournalHistoryQuery {
+  q?: string;
+  from?: string;
+  to?: string;
+  mood?: number | null;
+  discipline?: number | null;
+  limit?: number;
+}
+
+interface JournalHistoryPage {
+  entries: JournalEntryDTO[];
+  hasMore: boolean;
+}
+
+export function useRecentJournal(filters: JournalHistoryQuery = {}) {
+  const limit = filters.limit ?? 20;
+  return useInfiniteQuery({
+    queryKey: ["journal", "recent", filters],
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
+      const params = new URLSearchParams({ limit: String(limit), offset: String(pageParam) });
+      if (filters.q?.trim()) params.set("q", filters.q.trim());
+      if (filters.from) params.set("from", filters.from);
+      if (filters.to) params.set("to", filters.to);
+      if (filters.mood != null) params.set("mood", String(filters.mood));
+      if (filters.discipline != null) params.set("discipline", String(filters.discipline));
+      return apiFetch<JournalHistoryPage>(`/api/v1/journal?${params.toString()}`);
+    },
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.hasMore ? allPages.reduce((total, page) => total + page.entries.length, 0) : undefined,
+    enabled: !filters.from || !filters.to || filters.from <= filters.to,
     staleTime: 60 * 1000,
   });
 }
@@ -86,18 +118,48 @@ export function useRecentJournal() {
 export function useSaveJournalEntry() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: JournalEntryInput) =>
-      (
+    mutationFn: async (
+      input: JournalEntryInput,
+    ): Promise<JournalEntryDTO | { queued: true; date: string }> => {
+      // Offline (§25.5): queue the upsert instead of failing. The base
+      // comes from the cached entry, so a replay that finds a newer
+      // server row becomes a conflict instead of a silent overwrite.
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        const userId = getOfflineUserId();
+        if (userId && isOfflineQueueSupported()) {
+          const cached = qc.getQueryData<{ entry: JournalEntryDTO | null }>([
+            "journal",
+            input.date,
+          ]);
+          const baseUpdatedAt = cached?.entry?.updatedAt ?? null;
+          const payload = {
+            ...input,
+            expectedUpdatedAt: baseUpdatedAt ?? undefined,
+          } as unknown as Record<string, unknown>;
+          await enqueueOperation(getBrowserStore(), {
+            userId,
+            kind: "JOURNAL_UPSERT",
+            entityKey: input.date,
+            idempotencyKey: `journal-${input.date}`,
+            payload,
+            baseUpdatedAt,
+          });
+          return { queued: true, date: input.date };
+        }
+      }
+      return (
         await apiFetch<{ entry: JournalEntryDTO }>("/api/v1/journal", {
           method: "PUT",
           body: JSON.stringify(input),
         })
-      ).entry,
-    onSuccess: (entry) => {
+      ).entry;
+    },
+    onSuccess: (result) => {
+      if ("queued" in result) return result;
       void qc.invalidateQueries({ queryKey: ["journal"] });
       void qc.invalidateQueries({ queryKey: ["calendar"] });
       void qc.invalidateQueries({ queryKey: ["dashboard"] });
-      return entry;
+      return result;
     },
   });
 }
@@ -181,6 +243,39 @@ export function useDeleteStrategyVersion() {
   });
 }
 
+// ── Strategy version comparison + per-version performance (Lot 11) ───────
+
+export function useStrategyVersionCompare(
+  strategyId: string | null,
+  idA: string | null,
+  idB: string | null,
+) {
+  return useQuery({
+    queryKey: ["strategy-version-compare", strategyId, idA, idB],
+    queryFn: async () =>
+      await apiFetch<StrategyVersionCompareDTO>(
+        `/api/v1/strategies/${strategyId}/versions/compare?a=${encodeURIComponent(idA ?? "")}&b=${encodeURIComponent(idB ?? "")}`,
+      ),
+    enabled:
+      strategyId != null && strategyId !== "" && idA != null && idB != null && idA !== idB,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useStrategyVersionPerformance(strategyId: string | null) {
+  return useQuery({
+    queryKey: ["strategy-version-performance", strategyId],
+    queryFn: async () =>
+      (
+        await apiFetch<{ versions: StrategyVersionPerformanceDTO[] }>(
+          `/api/v1/strategies/${strategyId}/version-performance`,
+        )
+      ).versions,
+    enabled: strategyId != null && strategyId !== "",
+    staleTime: 30 * 1000,
+  });
+}
+
 // ── Strategy CRUD (with checklist, phase 5) ─────────────────────────────────
 
 /** Per-strategy stats (phase 5 view) - separate query key from the selector list. */
@@ -208,6 +303,8 @@ export interface StrategyInputBody {
   entryRules?: string | null;
   exitRules?: string | null;
   riskRules?: string | null;
+  /** Reason for the change (Lot 11): stored on the AUTO version snapshot. */
+  changeNote?: string;
   /** Replace-all semantics - the FULL list is sent on every write. */
   checklistItems?: Array<{
     label: string;
@@ -259,6 +356,158 @@ export function useDeleteStrategy() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["strategies"] });
       void qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  });
+}
+
+
+export type JournalPeriodType = "WEEKLY" | "MONTHLY";
+
+export interface JournalPeriodReviewDTO {
+  id: string;
+  userId: string;
+  periodType: JournalPeriodType;
+  periodStart: string;
+  periodEnd: string;
+  whatWentWell: string | null;
+  whatToImprove: string | null;
+  keyLesson: string | null;
+  nextCommitment: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface JournalPeriodReviewInput {
+  periodType: JournalPeriodType;
+  periodStart: string;
+  periodEnd: string;
+  whatWentWell?: string | null;
+  whatToImprove?: string | null;
+  keyLesson?: string | null;
+  nextCommitment?: string | null;
+}
+
+export function useJournalPeriodReview(periodType: JournalPeriodType, periodStart: string) {
+  return useQuery({
+    queryKey: ["journal", "period-review", periodType, periodStart],
+    queryFn: async () => (
+      await apiFetch<{ review: JournalPeriodReviewDTO | null }>(
+        `/api/v1/journal/period-reviews?periodType=${periodType}&periodStart=${periodStart}`,
+      )
+    ).review,
+    enabled: Boolean(periodStart),
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useSaveJournalPeriodReview() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: JournalPeriodReviewInput) => (
+      await apiFetch<{ review: JournalPeriodReviewDTO }>(
+        "/api/v1/journal/period-reviews",
+        { method: "PUT", body: JSON.stringify(input) },
+      )
+    ).review,
+    onSuccess: async (review) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["journal", "period-review", review.periodType, review.periodStart],
+      });
+    },
+  });
+}
+
+
+export interface JournalTemplateDTO {
+  id: string;
+  userId: string;
+  name: string;
+  description: string | null;
+  marketBias: string | null;
+  preMarketPlan: string | null;
+  keyLevels: string | null;
+  primaryScenario: string | null;
+  alternateScenario: string | null;
+  invalidationConditions: string | null;
+  maxRiskPercent: string | null;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface JournalTemplateInput {
+  name: string;
+  description?: string | null;
+  marketBias?: string | null;
+  preMarketPlan?: string | null;
+  keyLevels?: string | null;
+  primaryScenario?: string | null;
+  alternateScenario?: string | null;
+  invalidationConditions?: string | null;
+  maxRiskPercent?: string | null;
+}
+
+export function useJournalTemplates() {
+  return useQuery({
+    queryKey: ["journal", "templates"],
+    queryFn: async () =>
+      (await apiFetch<{ templates: JournalTemplateDTO[] }>("/api/v1/journal/templates")).templates,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useCreateJournalTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: JournalTemplateInput) => (
+      await apiFetch<{ template: JournalTemplateDTO }>(
+        "/api/v1/journal/templates",
+        { method: "POST", body: JSON.stringify(input) },
+      )
+    ).template,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["journal", "templates"] });
+    },
+  });
+}
+
+export function useUpdateJournalTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; patch: Partial<JournalTemplateInput> & { isDefault?: boolean } }) =>
+      (await apiFetch<{ template: JournalTemplateDTO }>(
+        `/api/v1/journal/templates/${args.id}`,
+        { method: "PATCH", body: JSON.stringify(args.patch) },
+      )).template,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["journal", "templates"] });
+    },
+  });
+}
+
+export function useDeleteJournalTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      apiFetch<{ deleted: boolean }>(`/api/v1/journal/templates/${id}`, { method: "DELETE" }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["journal", "templates"] });
+    },
+  });
+}
+
+export function useDuplicateJournalTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (
+        await apiFetch<{ template: JournalTemplateDTO }>(
+          `/api/v1/journal/templates/${id}/duplicate`,
+          { method: "POST" },
+        )
+      ).template,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["journal", "templates"] });
     },
   });
 }

@@ -1,6 +1,6 @@
 /**
  * Analytics aggregation (v2 Phase 4) — powers /analytics: KPIs + advanced
- * stats (SQN, Sharpe/Sortino), equity curve, R distribution, breakdowns and
+ * stats (SQN, recovery factor, payoff), equity curve, R distribution, breakdowns and
  * rule-based insights over CLOSED non-draft trades.
  *
  * Timezone: weekday/hour/localDate are computed here in the user's profile
@@ -28,7 +28,10 @@ import type { Prisma } from "@prisma/client";
 import { parseCustomFields } from "@/lib/custom-fields/validate";
 import { activeCustomFieldDefinitions } from "@/server/custom-fields";
 import { getDisplayPreferences } from "@/server/display-preferences";
-import { getTradingDay, tradingDayOfTrade } from "@/lib/time/trading-day";
+import { calendarYearStartUtc, getTradingDay, tradingDayOfTrade } from "@/lib/time/trading-day";
+import { selectEquityAccounts } from "@/lib/analytics/account-scope";
+import { scopeTradesToCurrency } from "@/lib/analytics/currency-scope";
+import { resolveOwnedAccount } from "@/server/account-errors";
 
 const TRADE_INCLUDE = {
   instrument: true,
@@ -40,7 +43,10 @@ type Row = Prisma.TradeGetPayload<{ include: typeof TRADE_INCLUDE }>;
 
 /** Period start (UTC Date) - null for "all". Exported for the
  * when-you-trade endpoint, which filters the same closed trades. */
-export function periodCutoff(period: AnalyticsQuery["period"]): Date | null {
+export function periodCutoff(
+  period: AnalyticsQuery["period"],
+  timezone = "UTC"
+): Date | null {
   const now = new Date();
   switch (period) {
     case "30d":
@@ -48,7 +54,7 @@ export function periodCutoff(period: AnalyticsQuery["period"]): Date | null {
     case "90d":
       return new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
     case "ytd":
-      return new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+      return calendarYearStartUtc(timezone, now);
     default:
       return null;
   }
@@ -147,6 +153,7 @@ export function toAnalyticsTrade(
     swap: t.swap?.toString() ?? null,
     fees: t.fees?.toString() ?? null,
     localDate: tradingDayOfExit,
+    localEntryDate: getTradingDay(t.entryTime, timezone, tradingDay),
     localWeekday:
       entryLocal != null ? weekdayOfIsoDate(entryLocal.date) : null,
     localHour: entryLocal?.hour ?? null,
@@ -165,11 +172,9 @@ export async function getAnalytics(
     getDisplayPreferences(userId),
   ]);
 
-  // Account filter must belong to the user (silent fallback to "all").
-  const accountFilter =
-    query.account != null
-      ? (accounts.find((a) => a.id === query.account) ?? null)
-      : null;
+  // Invalid or foreign account IDs are rejected; never widen to all accounts.
+  const accountFilter = resolveOwnedAccount(accounts, query.account);
+  const timezone = profile?.timezone ?? "UTC";
 
   const where: Prisma.TradeWhereInput = {
     userId,
@@ -177,7 +182,7 @@ export async function getAnalytics(
     isDraft: false,
     ...(accountFilter ? { accountId: accountFilter.id } : {}),
   };
-  const cutoff = periodCutoff(query.period);
+  const cutoff = periodCutoff(query.period, timezone);
   if (cutoff != null) where.exitTime = { gte: cutoff };
 
   const rows = await db.trade.findMany({
@@ -185,11 +190,11 @@ export async function getAnalytics(
     include: TRADE_INCLUDE,
   });
 
-  const timezone = profile?.timezone ?? "UTC";
   const currency =
     accountFilter?.currency ?? profile?.baseCurrency ?? "USD";
 
-  const trades = rows.map((t) => toAnalyticsTrade(t, timezone, prefs.tradingDay));
+  const currencyScope = scopeTradesToCurrency(rows, currency);
+  const trades = currencyScope.trades.map((t) => toAnalyticsTrade(t, timezone, prefs.tradingDay));
 
   const dayOf = tradingDayOfTrade(timezone, prefs.tradingDay);
   const stats =
@@ -206,10 +211,10 @@ export async function getAnalytics(
       : [];
   const rDistribution = computeRDistribution(trades);
 
-  // Equity — same convention as the dashboard: accounts whose currency
-  // matches the display currency (naive multi-currency aggregation excluded,
-  // documented limitation).
-  const curveAccounts = accounts.filter((a) => a.currency === currency);
+  // Equity — a selected account contributes only its own starting balance.
+  // The global view retains the existing same-currency aggregation convention;
+  // never add balances from sibling accounts to a filtered account's curve.
+  const curveAccounts = selectEquityAccounts(accounts, accountFilter, currency);
   const initialBalance = curveAccounts.reduce(
     (acc, a) => acc.plus(toD(a.initialBalance)),
     toD(0)
@@ -226,6 +231,7 @@ export async function getAnalytics(
     accountId: accountFilter?.id ?? null,
     currency,
     timezone,
+    excludedTradeCount: currencyScope.excludedTradeCount,
     stats,
     advanced,
     equityInitialBalance: initialBalance.toString(),

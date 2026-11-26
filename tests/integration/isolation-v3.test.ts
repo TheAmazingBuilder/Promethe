@@ -1,10 +1,10 @@
 /**
  * v3 Phase 1 — Extended cross-user isolation tests for the new v3 tables.
  *
- * Proves (against db/test.db) that user A can never read, write or delete
+ * Proves (against PostgreSQL schema promethe_test) that user A can never read, write or delete
  * user B's broker connections, sync event logs, symbol/magic mappings,
  * import batches, reconciliation candidates, merge logs, share links,
- * mentor invitations, mentor accesses, comments, consents or export logs —
+ * comments, consents or export logs -
  * and that cascade-on-user-delete cleans every v3 table.
  *
  * The ingest/token rules ("a token of user A can never write into user B's
@@ -34,8 +34,6 @@ let strategyAId: string;
 let connectionAId: string;
 let tradeAId: string;
 let shareAId: string;
-let mentorAccessId: string;
-let invitationAId: string;
 
 beforeAll(async () => {
   const instrument = await db.instrument.create({
@@ -126,27 +124,6 @@ beforeAll(async () => {
     },
   });
   shareAId = share.id;
-
-  const access = await db.mentorAccess.create({
-    data: {
-      ownerId: userA.id,
-      mentorId: userB.id,
-      status: "ACTIVE",
-      accountScope: "ALL",
-    },
-  });
-  mentorAccessId = access.id;
-
-  const invitation = await db.mentorInvitation.create({
-    data: {
-      ownerId: userA.id,
-      inviteeEmail: "carol@test.local",
-      tokenHash: "c".repeat(64),
-      permissionsJson: "{}",
-      expiresAt: new Date(Date.now() + 7 * 24 * 3600_000),
-    },
-  });
-  invitationAId = invitation.id;
 });
 
 afterAll(async () => {
@@ -292,58 +269,23 @@ describe("v3 table isolation (A cannot touch B's rows)", () => {
     expect(intact.revokedAt).toBeNull();
   });
 
-  it("mentor invitations and accesses", async () => {
-    const bSeesInvites = await db.mentorInvitation.findMany({
-      where: { ownerId: userB.id, id: invitationAId },
-    });
-    expect(bSeesInvites).toHaveLength(0);
-
-    // B is the mentor: they see the access row via mentorId, but CANNOT
-    // mutate scope or status through owner-scoped queries.
-    const bAsMentor = await db.mentorAccess.findMany({ where: { mentorId: userB.id } });
-    expect(bAsMentor.map((x) => x.id)).toContain(mentorAccessId);
-
-    const bEscalation = await db.mentorAccess.updateMany({
-      where: { id: mentorAccessId, ownerId: userB.id },
-      data: { canViewAmounts: true, accountScope: "ALL" },
-    });
-    expect(bEscalation.count).toBe(0);
-    const intact = await db.mentorAccess.findUniqueOrThrow({ where: { id: mentorAccessId } });
-    expect(intact.canViewAmounts).toBe(true); // unchanged (was default true)
-    expect(intact.accountScope).toBe("ALL");
-
-    // A owner-scoped update works and stays invisible to B's owner queries.
-    const aUpdate = await db.mentorAccess.updateMany({
-      where: { id: mentorAccessId, ownerId: userA.id },
-      data: { canViewAmounts: false },
-    });
-    expect(aUpdate.count).toBe(1);
-  });
-
-  it("comments: B (mentor) can author but only under their own id; A owns the thread", async () => {
+  it("comments: owner-only notes on the owner's own trade", async () => {
     const comment = await db.tradeComment.create({
       data: {
         tradeId: tradeAId,
         ownerId: userA.id,
-        authorId: userB.id,
+        authorId: userA.id,
         body: "Nice entry discipline",
       },
     });
     // Owner sees the thread on their trade.
     const aThread = await db.tradeComment.findMany({ where: { ownerId: userA.id } });
     expect(aThread.map((c) => c.id)).toContain(comment.id);
-    // B sees only what they authored.
+    // B sees nothing: they neither own the trade nor authored anything.
+    const bSees = await db.tradeComment.findMany({ where: { ownerId: userB.id } });
+    expect(bSees).toHaveLength(0);
     const bAuthored = await db.tradeComment.findMany({ where: { authorId: userB.id } });
-    expect(bAuthored).toHaveLength(1);
-    // B cannot create a comment attributed to A.
-    await expect(
-      db.tradeComment.create({
-        data: { tradeId: tradeAId, ownerId: userA.id, authorId: userA.id, body: "forged" },
-      })
-    ).resolves.toBeTruthy(); // DB allows it — the ACCESS LAYER must prevent it;
-    // the layer test lives in Phase 5 (requireMentorAccess + canComment).
-    // Delete the forged row to keep the fixture clean.
-    await db.tradeComment.deleteMany({ where: { authorId: userA.id } });
+    expect(bAuthored).toHaveLength(0);
   });
 
   it("consent records and export logs", async () => {
@@ -408,16 +350,11 @@ describe("cascade cleanup on user deletion", () => {
         expiresAt: new Date(),
       },
     });
-    await db.mentorAccess.create({
-      data: { ownerId: userC.user.id, mentorId: userA.id, status: "ACTIVE" },
-    });
-
     await db.user.delete({ where: { id: userC.user.id } });
 
     expect(await db.brokerConnection.count({ where: { userId: userC.user.id } })).toBe(0);
     expect(await db.syncEventLog.count({ where: { userId: userC.user.id } })).toBe(0);
     expect(await db.shareLink.count({ where: { userId: userC.user.id } })).toBe(0);
-    expect(await db.mentorAccess.count({ where: { ownerId: userC.user.id } })).toBe(0);
     expect(await db.account.count({ where: { userId: userC.user.id } })).toBe(0);
   });
 });

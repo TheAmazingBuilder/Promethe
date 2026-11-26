@@ -38,6 +38,9 @@ const SettingsView = dynamic(() => import("./settings-view").then((m) => m.Setti
 const CalendarView = dynamic(() => import("@/components/calendar/calendar-view").then((m) => m.CalendarView), {
   loading: () => <ViewLoading />,
 });
+const EconomicCalendarView = dynamic(() => import("@/components/economic-calendar/economic-calendar-view").then((m) => m.EconomicCalendarView), {
+  loading: () => <ViewLoading />,
+});
 const JournalView = dynamic(() => import("@/components/journal/journal-view").then((m) => m.JournalView), {
   loading: () => <ViewLoading />,
 });
@@ -54,6 +57,9 @@ const RulesView = dynamic(() => import("@/components/rules/rules-view").then((m)
   loading: () => <ViewLoading />,
 });
 const AccountsView = dynamic(() => import("@/components/settings-views/accounts-view").then((m) => m.AccountsView), {
+  loading: () => <ViewLoading />,
+});
+const PropFirmsView = dynamic(() => import("@/components/prop-firms/prop-firms-view").then((m) => m.PropFirmsView), {
   loading: () => <ViewLoading />,
 });
 const InstrumentsView = dynamic(() => import("@/components/settings-views/instruments-view").then((m) => m.InstrumentsView), {
@@ -83,6 +89,9 @@ const ConfluencesView = dynamic(() => import("@/components/analytics/confluences
 const GradesView = dynamic(() => import("@/components/analytics/grades-view").then((m) => m.GradesView), {
   loading: () => <ViewLoading />,
 });
+const CrossAnalysisView = dynamic(() => import("@/components/analytics/cross-analysis-view").then((m) => m.CrossAnalysisView), {
+  loading: () => <ViewLoading />,
+});
 const SequencesView = dynamic(() => import("@/components/analytics/sequences-view").then((m) => m.SequencesView), {
   loading: () => <ViewLoading />,
 });
@@ -96,6 +105,9 @@ const WeeklyPlanView = dynamic(() => import("@/components/analytics/weekly-plan-
   loading: () => <ViewLoading />,
 });
 const GoalsView = dynamic(() => import("@/components/analytics/goals-view").then((m) => m.GoalsView), {
+  loading: () => <ViewLoading />,
+});
+const MonteCarloView = dynamic(() => import("@/components/analytics/monte-carlo-view").then((m) => m.MonteCarloView), {
   loading: () => <ViewLoading />,
 });
 const PerformanceReportView = dynamic(() => import("@/components/analytics/performance-report-view").then((m) => m.PerformanceReportView), {
@@ -138,21 +150,6 @@ const ReconciliationView = dynamic(() => import("@/components/reconciliation/rec
   loading: () => <ViewLoading />,
 });
 const SharingView = dynamic(() => import("@/components/sharing/sharing-view").then((m) => m.SharingView), {
-  loading: () => <ViewLoading />,
-});
-const MentorsView = dynamic(() => import("@/components/mentors/mentors-view").then((m) => m.MentorsView), {
-  loading: () => <ViewLoading />,
-});
-const MentorView = dynamic(() => import("@/components/mentor/mentor-view").then((m) => m.MentorView), {
-  loading: () => <ViewLoading />,
-});
-const MentorOwnerView = dynamic(() => import("@/components/mentor/mentor-owner-view").then((m) => m.MentorOwnerView), {
-  loading: () => <ViewLoading />,
-});
-const MentorTradeView = dynamic(() => import("@/components/mentor/mentor-trade-view").then((m) => m.MentorTradeView), {
-  loading: () => <ViewLoading />,
-});
-const InvitationView = dynamic(() => import("@/components/mentor/invitation-view").then((m) => m.InvitationView), {
   loading: () => <ViewLoading />,
 });
 const AccountSettingsView = dynamic(() => import("@/components/settings/account-settings-view").then((m) => m.AccountSettingsView), {
@@ -214,8 +211,6 @@ export function ViewSwitch() {
     route.view,
     route.id,
     route.mode,
-    route.ownerId,
-    route.token,
     route.legalPage,
     route.journalDate,
   ]
@@ -281,6 +276,9 @@ export function ViewSwitch() {
     case "analytics-grades":
       view = <GradesView />;
       break;
+    case "analytics-cross-analysis":
+      view = <CrossAnalysisView />;
+      break;
     case "analytics-sequences":
       view = <SequencesView />;
       break;
@@ -299,6 +297,9 @@ export function ViewSwitch() {
     case "analytics-performance-report":
       view = <PerformanceReportView />;
       break;
+    case "analytics-monte-carlo":
+      view = <MonteCarloView />;
+      break;
     case "analytics-charts":
       view = <ChartBuilderView />;
       break;
@@ -313,6 +314,9 @@ export function ViewSwitch() {
       break;
     case "calendar":
       view = <CalendarView />;
+      break;
+    case "economic-calendar":
+      view = <EconomicCalendarView />;
       break;
     case "journal":
       view = <JournalView date={route.journalDate} />;
@@ -331,6 +335,9 @@ export function ViewSwitch() {
       break;
     case "accounts":
       view = <AccountsView />;
+      break;
+    case "prop-firms":
+      view = <PropFirmsView />;
       break;
     case "instruments":
       view = <InstrumentsView />;
@@ -371,23 +378,6 @@ export function ViewSwitch() {
     case "sharing":
       view = <SharingView />;
       break;
-    case "mentors":
-      view = <MentorsView />;
-      break;
-    case "mentor":
-      view = <MentorView />;
-      break;
-    case "mentor-owner":
-      view = <MentorOwnerView ownerId={route.ownerId ?? ""} />;
-      break;
-    case "mentor-trade":
-      view = (
-        <MentorTradeView ownerId={route.ownerId ?? ""} tradeId={route.id ?? ""} />
-      );
-      break;
-    case "invitation":
-      view = <InvitationView token={route.token ?? ""} />;
-      break;
     case "account-settings":
       view = <AccountSettingsView />;
       break;
@@ -419,21 +409,25 @@ export function ViewSwitch() {
     }
   }
 
-  // Reduced motion: no transition at all, the page just swaps.
-  if (reduceMotion) return <>{view}</>;
-
+  // Keep hooks unconditional: reduced-motion preferences may change at runtime.
   // Short opacity-only fade between pages (150 ms, CSS keyframe in
   // globals.css). The first mount skips the fade - the dashboard widgets
   // already have their own entrance animation. Replaces the previous
   // framer-motion AnimatePresence (same 150 ms, same ease).
-  const firstRender = React.useRef(true);
+  const [hasMounted, setHasMounted] = React.useState(false);
   React.useEffect(() => {
-    firstRender.current = false;
+    // Defer the mounted flag until after the initial paint so the first view
+    // does not animate. Later viewKey changes can then use the fade class.
+    const frame = window.requestAnimationFrame(() => setHasMounted(true));
+    return () => window.cancelAnimationFrame(frame);
   }, []);
+
+  // Reduced motion: no transition at all, the page just swaps.
+  if (reduceMotion) return <>{view}</>;
   return (
     <div
       key={viewKey}
-      className={firstRender.current ? undefined : "view-fade-in"}
+      className={hasMounted ? "view-fade-in" : undefined}
     >
       {view}
     </div>

@@ -204,6 +204,15 @@ describe("computePropStatus", () => {
     expect(s80.overall).toBe("WARNING");
   });
 
+  it("perte du jour à 95 % de la limite → IMMINENT (Lot 5)", () => {
+    const s95 = computePropStatus({ ...base, todayPnl: "-4750" });
+    expect(s95.dailyLoss.status).toBe("IMMINENT");
+    expect(s95.overall).toBe("IMMINENT");
+    expect(s95.breached).toBe(false);
+    const s94 = computePropStatus({ ...base, todayPnl: "-4700" });
+    expect(s94.dailyLoss.status).toBe("WARNING");
+  });
+
   it("perte du jour au-delà de la limite → BREACHED", () => {
     const s = computePropStatus({ ...base, todayPnl: "-5200" });
     expect(s.dailyLoss.status).toBe("BREACHED");

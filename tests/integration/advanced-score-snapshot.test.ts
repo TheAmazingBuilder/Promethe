@@ -1,6 +1,6 @@
 /**
  * Phase 2 perf item 3 — trader score served from TraderScoreSnapshot
- * (db/test.db).
+ * (PostgreSQL schema promethe_test).
  *
  * Today's snapshot (when present) freezes the headline score: one
  * indexed read, no recompute. History is built from the snapshots
@@ -35,6 +35,7 @@ let instrumentId: string;
 let userA: { id: string };
 let userB: { id: string };
 let accountAId: string;
+let accountA2Id: string;
 let accountBId: string;
 
 async function makeUser(email: string) {
@@ -53,7 +54,8 @@ async function makeUser(email: string) {
 async function seedClosedTrade(
   userId: string,
   accountId: string,
-  index: number
+  index: number,
+  pnlCurrency = "USD"
 ) {
   const day = new Date(Date.UTC(2026, 9, 10 + index, 14, 0, 0));
   const win = index % 2 === 0;
@@ -70,6 +72,7 @@ async function seedClosedTrade(
       exitPrice: "2010",
       lots: "1",
       netPnl: win ? "100" : "-50",
+      pnlCurrency,
       rMultiple: win ? "1" : "-0.5",
       resultType: win ? "WIN" : "LOSS",
       followedPlan: true,
@@ -116,6 +119,16 @@ beforeAll(async () => {
   const a = await makeUser("adv-score-a@test.local");
   userA = a.user;
   accountAId = a.accountId;
+  const secondAccount = await db.account.create({
+    data: {
+      userId: userA.id,
+      name: "Second account",
+      currency: "CAD",
+      initialBalance: "10000",
+    },
+  });
+  accountA2Id = secondAccount.id;
+
   const b = await makeUser("adv-score-b@test.local");
   userB = b.user;
   accountBId = b.accountId;
@@ -135,6 +148,12 @@ beforeAll(async () => {
   await seedSnapshot(userB.id, new Date(Date.UTC(2026, 1, 10)), 70, 10);
   for (let i = 0; i < 5; i++) {
     await seedClosedTrade(userB.id, accountBId, i);
+  }
+
+  // User A's second account has its own trade sample; its score must not
+  // reuse or overwrite the user's global daily snapshot.
+  for (let i = 20; i < 23; i++) {
+    await seedClosedTrade(userA.id, accountA2Id, i, "CAD");
   }
 });
 
@@ -220,6 +239,29 @@ describe("trader score from snapshots", () => {
     ]) {
       expect(Number.isInteger(c)).toBe(true);
     }
+  });
+
+  it("does not reuse or overwrite the global snapshot for an account filter", async () => {
+    const globalBefore = await db.traderScoreSnapshot.findUnique({
+      where: { userId_date: { userId: userA.id, date: utcDay(new Date()) } },
+    });
+    expect(globalBefore).not.toBeNull();
+
+    const payload = await getAdvancedAnalytics(userA.id, {
+      period: "all",
+      account: accountA2Id,
+      module: "score",
+    });
+
+    expect(payload.accountId).toBe(accountA2Id);
+    expect(payload.advanced.score.trades).toBe(3);
+    expect(payload.excludedTradeCount).toBe(0);
+    expect(payload.advanced.score.total).not.toBe(globalBefore?.score);
+    const globalAfter = await db.traderScoreSnapshot.findUnique({
+      where: { userId_date: { userId: userA.id, date: utcDay(new Date()) } },
+    });
+    expect(globalAfter?.score).toBe(globalBefore?.score);
+    expect(globalAfter?.tradeCount).toBe(12);
   });
 
   it("loads history from snapshots only (no replay)", async () => {

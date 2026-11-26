@@ -12,6 +12,14 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import type { StrategyVersionDTO } from "@/lib/trading/dto";
+import {
+  diffStrategySnapshots,
+  type SnapshotDiffRow,
+} from "@/lib/playbook/version-diff";
+import {
+  versionPerformance,
+  type VersionPerformanceRow,
+} from "@/lib/playbook/version-performance";
 
 interface SnapshotShape {
   name: string;
@@ -26,7 +34,19 @@ interface SnapshotShape {
   riskRules: string | null;
   /** Strategy definition version frozen in this snapshot. */
   strategyVersion: number;
+  /** Extended definition (Lot 11): snapshots used to freeze only the
+   *  base fields, so an edit of entry conditions or the risk block left
+   *  no trace of the old values. Old snapshots simply lack these keys. */
+  detailedDescription: string | null;
+  marketConditions: unknown[];
+  entryConditions: unknown[];
+  confirmations: unknown[];
+  invalidations: string[];
+  risk: Record<string, unknown> | null;
+  tradeManagement: unknown[];
+  exitPlan: unknown[];
   checklistItems: Array<{
+    id: string;
     label: string;
     category: string;
     order: number;
@@ -35,6 +55,48 @@ interface SnapshotShape {
 }
 
 type VersionRow = Prisma.StrategyVersionGetPayload<Record<string, never>>;
+
+/** Lenient JSON helpers for the extended definition fields. */
+function parseJsonArray(json: string | null | undefined): unknown[] {
+  if (!json) return [];
+  try {
+    const parsed: unknown = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseStringList(json: string | null | undefined): string[] {
+  return parseJsonArray(json).filter(
+    (v): v is string => typeof v === "string",
+  );
+}
+
+function parseJsonObject(
+  json: string | null | undefined,
+): Record<string, unknown> | null {
+  if (!json) return null;
+  try {
+    const parsed: unknown = JSON.parse(json);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Parses a stored snapshot row; null when the JSON is unusable. */
+function parseSnapshot(row: VersionRow): SnapshotShape | null {
+  try {
+    const parsed: unknown = JSON.parse(row.snapshot);
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed as SnapshotShape;
+  } catch {
+    return null;
+  }
+}
 
 function toVersionDTO(v: VersionRow): StrategyVersionDTO {
   let snapshot: SnapshotShape | null = null;
@@ -56,6 +118,14 @@ function toVersionDTO(v: VersionRow): StrategyVersionDTO {
     exitRules: null,
     riskRules: null,
     strategyVersion: v.version,
+    detailedDescription: null,
+    marketConditions: [],
+    entryConditions: [],
+    confirmations: [],
+    invalidations: [],
+    risk: null,
+    tradeManagement: [],
+    exitPlan: [],
     checklistItems: [],
   };
   return {
@@ -131,7 +201,16 @@ export async function createVersion(
     exitRules: strategy.exitRules,
     riskRules: strategy.riskRules,
     strategyVersion: strategy.version,
+    detailedDescription: strategy.detailedDescription,
+    marketConditions: parseJsonArray(strategy.marketConditionsJson),
+    entryConditions: parseJsonArray(strategy.entryConditionsJson),
+    confirmations: parseJsonArray(strategy.confirmationsJson),
+    invalidations: parseStringList(strategy.invalidationsJson),
+    risk: parseJsonObject(strategy.riskJson),
+    tradeManagement: parseJsonArray(strategy.tradeManagementJson),
+    exitPlan: parseJsonArray(strategy.exitPlanJson),
     checklistItems: strategy.checklistItems.map((c) => ({
+      id: c.id,
       label: c.label,
       category: c.category,
       order: c.order,
@@ -176,4 +255,149 @@ export async function deleteVersion(
     where: { id: versionId, strategyId },
   });
   return { deleted: deleted.count > 0, protected: false };
+}
+
+/**
+ * Compares two snapshots of one strategy (Lot 11, roadmap §14).
+ * `a` is the older version row id, `b` the newer one. Returns null when
+ * the strategy is not owned or either snapshot is missing/unreadable.
+ */
+export async function compareStrategyVersions(
+  userId: string,
+  strategyId: string,
+  idA: string,
+  idB: string,
+): Promise<{
+  a: StrategyVersionDTO;
+  b: StrategyVersionDTO;
+  changes: SnapshotDiffRow[];
+} | null> {
+  const owned = await db.strategy.findFirst({
+    where: { id: strategyId, userId },
+    select: { id: true },
+  });
+  if (!owned) return null;
+  if (idA === idB) return null;
+  const [rowA, rowB] = await Promise.all([
+    db.strategyVersion.findFirst({ where: { id: idA, strategyId } }),
+    db.strategyVersion.findFirst({ where: { id: idB, strategyId } }),
+  ]);
+  if (!rowA || !rowB) return null;
+  const snapA = parseSnapshot(rowA);
+  const snapB = parseSnapshot(rowB);
+  if (!snapA || !snapB) return null;
+  // Oldest first by creation, regardless of the order the caller passed.
+  const [older, newer, olderSnap, newerSnap] =
+    rowA.createdAt.getTime() <= rowB.createdAt.getTime()
+      ? [rowA, rowB, snapA, snapB]
+      : [rowB, rowA, snapB, snapA];
+  return {
+    a: toVersionDTO(older),
+    b: toVersionDTO(newer),
+    changes: diffStrategySnapshots(olderSnap, newerSnap),
+  };
+}
+
+/**
+ * Per-version performance of one strategy (Lot 11, roadmap §14).
+ * Groups the user's closed non-draft trades by the definition version
+ * frozen at entry, so results tie to the version actually traded under.
+ * Returns null when the strategy is not owned.
+ */
+export async function strategyVersionPerformance(
+  userId: string,
+  strategyId: string,
+): Promise<VersionPerformanceRow[] | null> {
+  const owned = await db.strategy.findFirst({
+    where: { id: strategyId, userId },
+    select: { id: true },
+  });
+  if (!owned) return null;
+  const trades = await db.trade.findMany({
+    where: { userId, strategyId, status: "CLOSED", isDraft: false },
+    select: { strategyVersion: true, rMultiple: true, resultType: true },
+  });
+  return versionPerformance(
+    trades.map((t) => ({
+      strategyVersion: t.strategyVersion,
+      rMultiple: t.rMultiple == null ? null : Number(t.rMultiple),
+      resultType: t.resultType,
+    })),
+  );
+}
+
+/**
+ * Checklist items frozen in the snapshot for a trade's definition
+ * version (Lot 11, roadmap §14). The snapshot's `strategyVersion` is
+ * the definition revision the trade froze at entry; the newest snapshot
+ * carrying it wins. `id` is present on snapshots taken after Lot 11;
+ * older snapshots only carry labels, so the caller resolves answers by
+ * label against the live list. Returns null when no snapshot matches
+ * (old trades, or snapshots deleted) - the caller then falls back to
+ * the live list.
+ */
+export async function getFrozenChecklistItems(
+  userId: string,
+  strategyId: string,
+  strategyVersion: number | null,
+): Promise<Array<{ id?: string; label: string; isRequired: boolean }> | null> {
+  if (strategyVersion == null) return null;
+  const owned = await db.strategy.findFirst({
+    where: { id: strategyId, userId },
+    select: { id: true },
+  });
+  if (!owned) return null;
+  const rows = await db.strategyVersion.findMany({
+    where: { strategyId },
+    orderBy: { createdAt: "desc" },
+  });
+  for (const row of rows) {
+    const snapshot = parseSnapshot(row);
+    if (snapshot && snapshot.strategyVersion === strategyVersion) {
+      return (snapshot.checklistItems ?? []).map((item) => ({
+        id: (item as { id?: string }).id,
+        label: item.label,
+        isRequired: item.isRequired,
+      }));
+    }
+  }
+  return null;
+}
+
+/**
+ * Bulk frozen checklists for the cross-analysis loader (§25.7).
+ *
+ * Same rule as getFrozenChecklistItems, one query instead of one per
+ * trade: every StrategyVersion row of the user's strategies, keyed
+ * `${strategyId}:${snapshot.strategyVersion}`. A trade whose frozen
+ * version has no matching snapshot simply has no entry here, and its
+ * caller falls back to the live checklist - exactly like the detail
+ * view. The newest snapshot carrying a version wins (rows are read
+ * oldest-first so a later row overwrites an earlier one).
+ */
+export async function loadFrozenChecklistMap(
+  userId: string
+): Promise<
+  Map<string, Array<{ id?: string; label: string; isRequired: boolean }>>
+> {
+  const rows = await db.strategyVersion.findMany({
+    where: { strategy: { userId } },
+    orderBy: { createdAt: "asc" },
+  });
+  const map = new Map<
+    string,
+    Array<{ id?: string; label: string; isRequired: boolean }>
+  >();
+  for (const row of rows) {
+    const snapshot = parseSnapshot(row);
+    if (snapshot == null) continue;
+    map.set(`${row.strategyId}:${snapshot.strategyVersion}`, (
+      snapshot.checklistItems ?? []
+    ).map((item) => ({
+      id: (item as { id?: string }).id,
+      label: item.label,
+      isRequired: item.isRequired,
+    })));
+  }
+  return map;
 }

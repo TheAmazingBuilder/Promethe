@@ -42,6 +42,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { PageHeader } from "@/components/ui/page-header";
+import { QueryErrorState } from "@/components/ui/query-error-state";
 import { useToast } from "@/hooks/use-toast";
 import { useAccounts } from "@/hooks/use-trading";
 import {
@@ -189,10 +190,18 @@ export function SharingView() {
           <CardDescription>{t("createCardDesc")}</CardDescription>
         </CardHeader>
         <CardContent>
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            {t("newLink")}
-          </Button>
+          {accountsQuery.isError ? (
+            <QueryErrorState
+              title="Unable to load trading accounts"
+              description="Report sharing is paused until account data loads, so you do not accidentally share a broader report than intended."
+              onRetry={() => void accountsQuery.refetch()}
+            />
+          ) : (
+            <Button onClick={() => setCreateOpen(true)} disabled={accountsQuery.isLoading}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              {t("newLink")}
+            </Button>
+          )}
         </CardContent>
       </Card>
 
@@ -209,7 +218,13 @@ export function SharingView() {
           <CardDescription>{t("tokenNote")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {linksQuery.isLoading ? (
+          {linksQuery.isError ? (
+            <QueryErrorState
+              title="Unable to load shared links"
+              description="Your existing share links have not been changed. Retry to load them again."
+              onRetry={() => void linksQuery.refetch()}
+            />
+          ) : linksQuery.isLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 3 }).map((_, i) => (
                 <Skeleton key={i} className="h-20 w-full" />

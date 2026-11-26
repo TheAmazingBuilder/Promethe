@@ -92,7 +92,11 @@ export function ConfluencesView() {
   const best = React.useMemo(
     () =>
       rows
-        .filter((r) => r.count >= MIN_SAMPLE_CONFLUENCE)
+        .filter(
+          (r) =>
+            r.rSampleSize >= MIN_SAMPLE_CONFLUENCE &&
+            r.expectancy != null
+        )
         .sort(
           (a, b) =>
             (b.expectancy ?? -Infinity) - (a.expectancy ?? -Infinity)
@@ -250,6 +254,9 @@ export function ConfluencesView() {
                           <span className="text-muted-foreground">
                             {" "}
                             ({t("winsLosses", { wins: row.wins, losses: row.losses })})
+                          </span>
+                          <span className="block text-xs text-muted-foreground">
+                            {row.rSampleSize} R
                           </span>
                         </TableCell>
                         <TableCell className="text-right">

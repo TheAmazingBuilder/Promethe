@@ -58,8 +58,13 @@ export async function refreshJournalSearchText(entryId: string): Promise<void> {
         date: row.date,
         preMarketPlan: row.preMarketPlan,
         postMarketReview: row.postMarketReview,
+        keyLevels: row.keyLevels,
+        primaryScenario: row.primaryScenario,
+        alternateScenario: row.alternateScenario,
+        invalidationConditions: row.invalidationConditions,
         keyLesson: row.keyLesson,
         marketBias: row.marketBias,
+        nextSessionCommitment: row.nextSessionCommitment,
       }),
     },
   });

@@ -13,8 +13,10 @@ import {
   MAX_EXPIRY_DAYS,
 } from "@/lib/sharing/status";
 import {
+  projectPublicTrade,
   redactReportPayload,
   parseStoredSnapshot,
+  sanitizeStoredSnapshot,
   toPublicPayload,
 } from "@/lib/sharing/snapshot";
 import {
@@ -232,5 +234,179 @@ describe("parseStoredSnapshot / toPublicPayload", () => {
     expect(parsed?.kind).toBe("REPORT");
     const payload = toPublicPayload(parsed!, "tok");
     expect(payload.kind).toBe("REPORT");
+  });
+});
+
+// ── Lot 14 Sharing: snapshot allowlist + strategy anonymization ─────────────
+
+describe("projectPublicTrade - field allowlist", () => {
+  it("drops unknown keys a future DTO field would introduce", () => {
+    const trade = {
+      symbol: "XAUUSD",
+      direction: "LONG",
+      pips: "42.5",
+      netPnl: "100",
+      // Fields that do not exist today - must never reach a snapshot.
+      futureSecretField: "TOPSECRET-1",
+      brokerLogin: "login-007",
+      customFields: { accountNumber: "ACC-1" },
+      internalNote: "do not share",
+    };
+    const out = projectPublicTrade(trade);
+    expect(out.symbol).toBe("XAUUSD");
+    expect(out.pips).toBe("42.5");
+    expect(out).not.toHaveProperty("futureSecretField");
+    expect(out).not.toHaveProperty("brokerLogin");
+    expect(out).not.toHaveProperty("customFields");
+    expect(out).not.toHaveProperty("internalNote");
+    expect(JSON.stringify(out)).not.toContain("TOPSECRET-1");
+  });
+
+  it("projects nested review, executions and tags onto known keys", () => {
+    const trade = {
+      symbol: "XAUUSD",
+      review: {
+        id: "r1",
+        planAdherenceScore: 4,
+        mainLesson: "Wait",
+        futureReviewField: "leak-me",
+      },
+      executions: [
+        { id: "e1", type: "ENTRY", time: "2025-01-15T08:00:00Z", price: "2650", lots: "0.5", commission: "1", pnl: null, futureExecField: "x" },
+      ],
+      tags: [
+        { id: "t1", name: "Breakout", color: "#fff", kind: "SETUP", isPreset: false, futureTagField: "y" },
+      ],
+      checklistStatus: { requiredTotal: 2, requiredChecked: 1, missing: ["A"], complete: false, future: 1 },
+    };
+    const out = projectPublicTrade(trade);
+    const review = out.review as Record<string, unknown>;
+    expect(review.mainLesson).toBe("Wait");
+    expect(review).not.toHaveProperty("futureReviewField");
+    const executions = out.executions as Record<string, unknown>[];
+    expect(executions[0]).not.toHaveProperty("futureExecField");
+    expect(executions[0].price).toBe("2650");
+    const tags = out.tags as Record<string, unknown>[];
+    expect(tags[0].name).toBe("Breakout");
+    expect(tags[0]).not.toHaveProperty("futureTagField");
+    const status = out.checklistStatus as Record<string, unknown>;
+    expect(status.missing).toEqual(["A"]);
+    expect(status).not.toHaveProperty("future");
+  });
+
+  it("is idempotent", () => {
+    const trade = { symbol: "XAUUSD", unknownKey: "x", review: { id: "r", future: 1 } };
+    expect(projectPublicTrade(projectPublicTrade(trade))).toEqual(
+      projectPublicTrade(trade)
+    );
+  });
+});
+
+describe("redactReportPayload - hideStrategyName", () => {
+  const hideStrategy = { ...NO_REDACTION, hideStrategyName: true };
+
+  it("anonymizes strategy names and ids in byStrategy rows", () => {
+    const out = redactReportPayload(RAW_REPORT, hideStrategy);
+    expect(out.byStrategy[0].name).toBe("Strategy 1");
+    expect(out.byStrategy[0].key).toBe("strategy-1");
+    const serialized = JSON.stringify(out);
+    expect(serialized).not.toContain("Breakout");
+    expect(serialized).not.toContain("s1");
+    // Symbols are not strategy names - they stay.
+    expect(out.bySymbol[0].name).toBe("XAUUSD");
+    expect(out.bySymbol[0].key).toBe("XAUUSD");
+  });
+
+  it("keeps real strategy names when the policy does not hide them", () => {
+    const out = redactReportPayload(RAW_REPORT, NO_REDACTION);
+    expect(out.byStrategy[0].name).toBe("Breakout");
+    expect(out.byStrategy[0].key).toBe("s1");
+  });
+
+  it("drops unknown stat keys a future engine field would introduce", () => {
+    const raw = {
+      ...RAW_REPORT,
+      stats: { ...RAW_REPORT.stats, futureStat: "TOPSECRET-2", accountName: "Hidden" },
+    };
+    const out = redactReportPayload(raw, NO_REDACTION);
+    expect(out.stats).not.toHaveProperty("futureStat");
+    expect(out.stats).not.toHaveProperty("accountName");
+    expect(JSON.stringify(out)).not.toContain("TOPSECRET-2");
+    expect(out.stats.tradeCount).toBe(10);
+  });
+});
+
+describe("sanitizeStoredSnapshot - old snapshots served under new rules", () => {
+  it("strips captions, strategy names and unknown keys from a pre-Lot-14 snapshot", () => {
+    const old = {
+      kind: "TRADE" as const,
+      title: "Old link",
+      mode: "SNAPSHOT" as const,
+      capturedAt: "2025-06-01T12:00:00.000Z",
+      policy: { ...NO_REDACTION, hideNotes: true },
+      trade: {
+        symbol: "XAUUSD",
+        notes: "should have been hidden",
+        futureSecretField: "TOPSECRET-3",
+        customFields: { login: "x" },
+      },
+      screenshotRefs: [{ id: "s1", label: "ENTRY", caption: "caption secrete-77" }],
+    };
+    const clean = sanitizeStoredSnapshot(old as never);
+    expect(clean.kind).toBe("TRADE");
+    if (clean.kind === "TRADE") {
+      expect(clean.trade).not.toHaveProperty("futureSecretField");
+      expect(clean.trade).not.toHaveProperty("customFields");
+      expect(clean.screenshotRefs[0].caption).toBeNull();
+      expect(clean.screenshotRefs[0].label).toBe("ENTRY");
+      expect(JSON.stringify(clean)).not.toContain("caption secrete-77");
+      expect(JSON.stringify(clean)).not.toContain("TOPSECRET-3");
+    }
+  });
+
+  it("anonymizes strategy rows of a stored report snapshot", () => {
+    const stored = redactReportPayload(RAW_REPORT, NO_REDACTION);
+    const withNames = { ...stored, policy: { ...NO_REDACTION, hideStrategyName: true } };
+    const clean = sanitizeStoredSnapshot(withNames as never);
+    expect(clean.kind).toBe("REPORT");
+    if (clean.kind === "REPORT") {
+      expect(clean.byStrategy[0].name).toBe("Strategy 1");
+      expect(JSON.stringify(clean)).not.toContain("Breakout");
+    }
+  });
+
+  it("re-applies current redaction rules to a stored trade snapshot", () => {
+    const old = {
+      kind: "TRADE" as const,
+      title: "Old link",
+      mode: "SNAPSHOT" as const,
+      capturedAt: "2025-06-01T12:00:00.000Z",
+      policy: { ...NO_REDACTION, hideNotes: true },
+      trade: {
+        symbol: "XAUUSD",
+        notes: "old note that should have been hidden",
+        review: {
+          id: "r1",
+          planAdherenceScore: 4,
+          customAnswers: [
+            { questionId: "q1", question: "Q?", type: "TEXT", answer: "old answer secrete-55" },
+          ],
+        },
+      },
+      screenshotRefs: [],
+    };
+    const clean = sanitizeStoredSnapshot(old as never);
+    expect(clean.kind).toBe("TRADE");
+    if (clean.kind === "TRADE") {
+      expect(clean.trade).not.toHaveProperty("notes");
+      const review = clean.trade.review as Record<string, unknown>;
+      expect(review).not.toHaveProperty("customAnswers");
+      expect(JSON.stringify(clean)).not.toContain("old answer secrete-55");
+    }
+  });
+
+  it("leaves a current snapshot unchanged", () => {
+    const current = redactReportPayload(RAW_REPORT, PIPS_R_ONLY_PRESET);
+    expect(sanitizeStoredSnapshot(current as never)).toEqual(current);
   });
 });

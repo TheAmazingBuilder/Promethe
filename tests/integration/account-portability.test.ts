@@ -1,5 +1,5 @@
 /**
- * v3 Phase 6 — Portability & compliance integration tests (db/test.db).
+ * v3 Phase 6 — Portability & compliance integration tests (PostgreSQL schema promethe_test).
  *
  * Proves the GDPR model end-to-end:
  *  - export: COMPLETE (every domain file present), ISOLATED (user B's trades
@@ -23,8 +23,6 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { strFromU8, unzipSync } from "fflate";
 import { db } from "@/lib/db";
 import { createUserWithDefaults } from "@/server/users";
@@ -42,7 +40,9 @@ import {
 import { listConsents } from "@/server/consent";
 import { runDailyMaintenance } from "@/server/maintenance";
 import { hashUserId } from "@/lib/tokens";
-import { UPLOAD_ROOT } from "@/server/uploads";
+import { mockSupabaseStorage } from "../helpers/supabase-storage";
+
+const storage = mockSupabaseStorage();
 
 let aliceId: string;
 let bobId: string;
@@ -51,6 +51,11 @@ let aliceAccountId: string;
 let aliceTradeId: string;
 let aliceShotId: string;
 let shotStoragePath: string;
+let caraStoragePath: string;
+let aliceNoteId: string;
+let aliceDashboardId: string;
+let bobNoteId: string;
+let bobDashboardId: string;
 
 const SHOT_BYTES = Buffer.from(
   "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c6360000002000154a24f5f0000000049454e44ae426082",
@@ -152,9 +157,8 @@ beforeAll(async () => {
 
   // Screenshot file + row for Alice.
   aliceShotId = "shot_export_0001";
-  shotStoragePath = path.posix.join(aliceId, aliceTradeId, `${aliceShotId}.png`);
-  await mkdir(path.join(UPLOAD_ROOT, aliceId, aliceTradeId), { recursive: true });
-  await writeFile(path.join(UPLOAD_ROOT, shotStoragePath), SHOT_BYTES);
+  shotStoragePath = `${aliceId}/${aliceTradeId}/${aliceShotId}.png`;
+  storage.objects.set(shotStoragePath, { bytes: SHOT_BYTES, contentType: "image/png" });
   await db.tradeScreenshot.create({
     data: {
       id: aliceShotId,
@@ -223,9 +227,8 @@ beforeAll(async () => {
     },
   });
   const caraShotId = "shot_cara_0001";
-  const caraStoragePath = path.posix.join(caraId, caraTrade.id, `${caraShotId}.png`);
-  await mkdir(path.join(UPLOAD_ROOT, caraId, caraTrade.id), { recursive: true });
-  await writeFile(path.join(UPLOAD_ROOT, caraStoragePath), SHOT_BYTES);
+  caraStoragePath = `${caraId}/${caraTrade.id}/${caraShotId}.png`;
+  storage.objects.set(caraStoragePath, { bytes: SHOT_BYTES, contentType: "image/png" });
   await db.tradeScreenshot.create({
     data: {
       id: caraShotId,
@@ -235,13 +238,257 @@ beforeAll(async () => {
       label: "ENTRY",
     },
   });
+
+  // ── Lot 15 fixtures: one row per previously unexported user-owned model ──
+  const noteFolder = await db.noteFolder.create({
+    data: { userId: aliceId, name: "Stratégie" },
+  });
+  const noteTag = await db.noteTag.create({
+    data: { userId: aliceId, name: "gold" },
+  });
+  await db.noteTemplate.create({
+    data: { userId: aliceId, name: "Trade review" },
+  });
+  const note = await db.note.create({
+    data: {
+      userId: aliceId,
+      title: "Note Gaïa export",
+      folderId: noteFolder.id,
+      tagIds: JSON.stringify([noteTag.id]),
+      blocks: JSON.stringify([{ type: "p", text: "Contenu Gaïa" }]),
+    },
+  });
+  aliceNoteId = note.id;
+  await db.noteVersion.create({
+    data: {
+      userId: aliceId,
+      noteId: note.id,
+      title: "Note Gaïa export v1",
+      blocks: "[]",
+      savedAt: new Date("2025-01-16T09:00:00Z"),
+    },
+  });
+
+  const dashboard = await db.dashboard.create({
+    data: { userId: aliceId, name: "Vue principale" },
+  });
+  aliceDashboardId = dashboard.id;
+  await db.dashboardWidget.create({
+    data: {
+      dashboardId: dashboard.id,
+      userId: aliceId,
+      type: "EQUITY_CURVE",
+      layouts: "{}",
+    },
+  });
+
+  await db.setup.create({
+    data: {
+      userId: aliceId,
+      strategyId: strategy.id,
+      name: "London open",
+      invalidation: "Perte du plus bas asiatique",
+    },
+  });
+  await db.playbookRule.create({
+    data: {
+      userId: aliceId,
+      title: "Jamais plus de 2 % par trade",
+      category: "RISK",
+    },
+  });
+  await db.checklistTemplate.create({
+    data: { userId: aliceId, name: "Avant entrée", itemsJson: "[]" },
+  });
+
+  await db.journalPeriodReview.create({
+    data: {
+      userId: aliceId,
+      periodType: "WEEK",
+      periodStart: "2025-01-13",
+      periodEnd: "2025-01-19",
+    },
+  });
+  await db.journalTemplate.create({
+    data: { userId: aliceId, name: "Fin de semaine" },
+  });
+
+  await db.customMetric.create({
+    data: { userId: aliceId, name: "Win rate Londres", definition: "{}" },
+  });
+  await db.savedChart.create({
+    data: { userId: aliceId, name: "Courbe XAUUSD", configJson: "{}" },
+  });
+  await db.chartAnnotation.create({
+    data: {
+      userId: aliceId,
+      date: new Date("2025-01-15T08:00:00Z"),
+      label: "FOMC",
+    },
+  });
+  await db.benchmarkProfile.create({
+    data: { userId: aliceId, name: "SP500", type: "FIXED", params: "{}" },
+  });
+
+  await db.userDisplayPreference.create({ data: { userId: aliceId } });
+  await db.userAppearance.create({ data: { userId: aliceId } });
+  await db.keyboardShortcut.create({
+    data: { userId: aliceId, actionId: "NEW_TRADE", keys: "n" },
+  });
+  await db.tableColumnPreference.create({
+    data: {
+      userId: aliceId,
+      tableKey: "trades",
+      columnOrder: "[]",
+      columnVisibility: "{}",
+      columnSizing: "{}",
+      pinning: "{}",
+    },
+  });
+  await db.customFieldDefinition.create({
+    data: {
+      userId: aliceId,
+      entity: "TRADE",
+      key: "session",
+      label: "Session",
+      type: "TEXT",
+    },
+  });
+  await db.userDashboardTemplate.create({
+    data: { userId: aliceId, name: "Minimal", definitionJson: "{}" },
+  });
+  await db.marketSessionSetting.create({
+    data: {
+      userId: aliceId,
+      name: "Londres",
+      openTime: "08:00",
+      closeTime: "16:30",
+    },
+  });
+  await db.exitPlan.create({
+    data: { userId: aliceId, name: "Sortie 2R", tiersJson: "[]" },
+  });
+  await db.exposureAlertSetting.create({ data: { userId: aliceId } });
+
+  await db.tradeLifecycleStats.create({
+    data: { tradeId: aliceTradeId, userId: aliceId },
+  });
+  await db.traderScoreSnapshot.create({
+    data: {
+      userId: aliceId,
+      date: new Date("2025-01-15T00:00:00Z"),
+      score: 72,
+      discipline: 80,
+      edge: 65,
+      consistency: 70,
+      risk: 75,
+      tradeCount: 1,
+    },
+  });
+  await db.tradeAnomaly.create({
+    data: {
+      tradeId: aliceTradeId,
+      userId: aliceId,
+      kind: "OUTLIER_PNL",
+      severity: "LOW",
+      zScore: "2.5",
+    },
+  });
+  await db.weeklyPlanAction.create({
+    data: {
+      userId: aliceId,
+      weekStart: new Date("2025-01-13T00:00:00Z"),
+      rule: "MAX_TRADES_PER_DAY",
+      title: "Limiter à 3 trades par jour",
+      target: "3",
+    },
+  });
+  await db.fxRate.create({
+    data: {
+      userId: aliceId,
+      baseCurrency: "USD",
+      quoteCurrency: "EUR",
+      rate: "0.92",
+      rateDate: new Date("2025-01-15T00:00:00Z"),
+    },
+  });
+
+  await db.changeLog.create({
+    data: {
+      userId: aliceId,
+      groupId: "lot15-export-group",
+      entity: "TRADE",
+      entityId: aliceTradeId,
+      action: "BULK_UPDATE",
+      expiresAt: new Date("2030-01-01T00:00:00Z"),
+    },
+  });
+  await db.batchEntryDraft.create({
+    data: { userId: aliceId, accountId: aliceAccountId, rowsJson: "[]" },
+  });
+
+  // Credential-bearing rows: their VALUES must never reach the archive.
+  await db.pushSubscription.create({
+    data: {
+      userId: aliceId,
+      endpoint: "https://push.example.test/alice-push-endpoint-secret",
+      p256dh: "alice-push-p256dh-secret-value",
+      auth: "alice-push-auth-secret-value",
+    },
+  });
+  const endpoint = await db.integrationEndpoint.create({
+    data: {
+      userId: aliceId,
+      type: "DISCORD",
+      label: "Alertes Discord",
+      secretEncrypted: "alice-integration-secret-ciphertext",
+      secretHint: "alice-integration-secret-hint",
+    },
+  });
+  await db.integrationSubscription.create({
+    data: { userId: aliceId, endpointId: endpoint.id, eventType: "DRAWDOWN" },
+  });
+  await db.outboundMessage.create({
+    data: {
+      userId: aliceId,
+      endpointId: endpoint.id,
+      eventType: "DRAWDOWN",
+      dedupeKey: "lot15-export-outbound",
+      payloadJson: "{}",
+    },
+  });
+
+  // Bob rows in the new domains - must NEVER appear in Alice's archive.
+  const bobNote = await db.note.create({
+    data: { userId: bobId, title: "Note de Bob" },
+  });
+  bobNoteId = bobNote.id;
+  const bobDashboard = await db.dashboard.create({
+    data: { userId: bobId, name: "Vue de Bob" },
+  });
+  bobDashboardId = bobDashboard.id;
+  await db.changeLog.create({
+    data: {
+      userId: bobId,
+      groupId: "lot15-export-group-bob",
+      entity: "TRADE",
+      entityId: aliceTradeId,
+      action: "BULK_UPDATE",
+      expiresAt: new Date("2030-01-01T00:00:00Z"),
+    },
+  });
 });
 
 afterAll(async () => {
-  // Best-effort cleanup (the test DB is recreated by pretest anyway).
-  for (const userId of [aliceId, bobId, caraId]) {
-    if (userId) await rm(path.join(UPLOAD_ROOT, userId), { recursive: true, force: true }).catch(() => undefined);
-  }
+  storage.restore();
+  // Delete the fixture users (cascade removes their rows everywhere): a
+  // re-run of this file alone on a non-fresh database must not fail in
+  // beforeAll on the unique-email constraint (lot 16). The filter keeps
+  // the cleanup a no-op if beforeAll failed partway (e.g. Cara's row is
+  // already gone - the deletion flow under test deletes her).
+  await db.user.deleteMany({
+    where: { id: { in: [aliceId, bobId, caraId].filter(Boolean) } },
+  });
   await db.$disconnect();
 });
 
@@ -298,10 +545,19 @@ describe("data export (portability)", () => {
       "propfirms.json",
       "sync.json",
       "sharing.json",
-      "mentoring.json",
       "comments.json",
       "notifications.json",
       "misc.json",
+      "preferences.json",
+      "charts.json",
+      "analytics.json",
+      "changelog.json",
+      "drafts.json",
+      "integrations.json",
+      "gaia.json",
+      "dashboards.json",
+      "playbook.json",
+      "journal-reviews.json",
       "consents.json",
       "exports.json",
       "deletion.json",
@@ -332,8 +588,9 @@ describe("data export (portability)", () => {
 
   it("includes the screenshot file with byte-identical content", async () => {
     const inZip = Buffer.from(zip[`screenshots/${aliceShotId}.png`]);
-    const onDisk = await readFile(path.join(UPLOAD_ROOT, shotStoragePath));
-    expect(inZip.equals(onDisk)).toBe(true);
+    const stored = storage.objects.get(shotStoragePath);
+    expect(stored).toBeDefined();
+    expect(inZip.equals(Buffer.from(stored!.bytes))).toBe(true);
   });
 
   it("exports Bob's comment on Alice's trade under onMyTrades", () => {
@@ -365,6 +622,122 @@ describe("data export (portability)", () => {
     const sharing = JSON.parse(strFromU8(zip["sharing.json"]));
     expect(sharing).toHaveLength(1);
     expect(sharing[0].tokenPrefix).toBe("shr_abc");
+  });
+
+  it("exports the lot 15 domains (gaia, dashboards, playbook, preferences, charts, analytics, changelog, drafts, integrations) - and NEVER Bob's", () => {
+    const read = (name: string) => JSON.parse(strFromU8(zip[name]));
+
+    const gaia = read("gaia.json");
+    expect(gaia.notes.map((n: { id: string }) => n.id)).toContain(aliceNoteId);
+    expect(gaia.notes[0].versions).toHaveLength(1);
+    expect(gaia.folders).toHaveLength(1);
+    expect(gaia.folders[0].name).toBe("Stratégie");
+    expect(gaia.tags).toHaveLength(1);
+    expect(gaia.templates).toHaveLength(1);
+    expect(strFromU8(zip["gaia.json"])).not.toContain(bobNoteId);
+
+    const dashboards = read("dashboards.json");
+    expect(dashboards.map((d: { id: string }) => d.id)).toContain(aliceDashboardId);
+    expect(dashboards[0].widgets).toHaveLength(1);
+    expect(strFromU8(zip["dashboards.json"])).not.toContain(bobDashboardId);
+
+    const playbook = read("playbook.json");
+    expect(playbook.setups).toHaveLength(1);
+    expect(playbook.setups[0].name).toBe("London open");
+    expect(playbook.playbookRules).toHaveLength(1);
+    expect(playbook.checklistTemplates).toHaveLength(1);
+
+    const journalReviews = read("journal-reviews.json");
+    expect(journalReviews.periodReviews).toHaveLength(1);
+    expect(journalReviews.templates).toHaveLength(1);
+
+    const preferences = read("preferences.json");
+    expect(preferences.displayPreference.userId).toBe(aliceId);
+    expect(preferences.appearance.userId).toBe(aliceId);
+    expect(preferences.shortcuts).toHaveLength(1);
+    expect(preferences.columnPreferences).toHaveLength(1);
+    expect(preferences.customFieldDefinitions).toHaveLength(1);
+    expect(preferences.dashboardTemplates).toHaveLength(1);
+    expect(preferences.marketSessionSettings).toHaveLength(1);
+    expect(preferences.exitPlans).toHaveLength(1);
+    expect(preferences.exposureAlertSettings.userId).toBe(aliceId);
+
+    const charts = read("charts.json");
+    expect(charts.savedCharts).toHaveLength(1);
+    expect(charts.annotations).toHaveLength(1);
+    expect(charts.benchmarks).toHaveLength(1);
+
+    const analytics = read("analytics.json");
+    expect(analytics.lifecycleStats).toHaveLength(1);
+    expect(analytics.lifecycleStats[0].tradeId).toBe(aliceTradeId);
+    expect(analytics.scoreSnapshots).toHaveLength(1);
+    expect(analytics.anomalies).toHaveLength(1);
+    expect(analytics.weeklyPlanActions).toHaveLength(1);
+    expect(analytics.fxRates).toHaveLength(1);
+    expect(analytics.customMetrics).toHaveLength(1);
+
+    const changelog = read("changelog.json");
+    expect(changelog).toHaveLength(1);
+    expect(changelog[0].groupId).toBe("lot15-export-group");
+    expect(strFromU8(zip["changelog.json"])).not.toContain(
+      "lot15-export-group-bob"
+    );
+
+    expect(read("drafts.json")).toHaveLength(1);
+
+    const integrations = read("integrations.json");
+    expect(integrations.endpoints).toHaveLength(1);
+    expect(integrations.endpoints[0].label).toBe("Alertes Discord");
+    expect(integrations.subscriptions).toHaveLength(1);
+    expect(integrations.outboundMessages).toHaveLength(1);
+
+    const manifest = read("manifest.json");
+    expect(manifest.counts.gaiaNotes).toBe(1);
+    expect(manifest.counts.dashboards).toBe(1);
+    expect(manifest.counts.setups).toBe(1);
+    expect(manifest.counts.changeLogs).toBe(1);
+    expect(manifest.counts.integrationEndpoints).toBe(1);
+  });
+
+  it("exports push subscriptions and integration endpoints as metadata only (no credentials)", () => {
+    // Credential VALUES must appear nowhere in the archive - not even in
+    // the manifest, which documents the exclusions by name only.
+    const secrets = [
+      "https://push.example.test/alice-push-endpoint-secret",
+      "alice-push-p256dh-secret-value",
+      "alice-push-auth-secret-value",
+      "alice-integration-secret-ciphertext",
+      "alice-integration-secret-hint",
+    ];
+    for (const [name, bytes] of Object.entries(zip)) {
+      const raw = strFromU8(bytes);
+      for (const secret of secrets) {
+        expect(raw, `credential leak in ${name}`).not.toContain(secret);
+      }
+    }
+    // Push subscriptions: metadata only (no endpoint, no keys).
+    const misc = JSON.parse(strFromU8(zip["misc.json"]));
+    expect(misc.pushSubscriptions).toHaveLength(1);
+    expect(Object.keys(misc.pushSubscriptions[0]).sort()).toEqual([
+      "createdAt",
+      "id",
+      "lastSeenAt",
+      "userAgent",
+    ]);
+    // Integration endpoints: metadata only (no secret, no hint).
+    const integrations = JSON.parse(strFromU8(zip["integrations.json"]));
+    expect(Object.keys(integrations.endpoints[0]).sort()).toEqual([
+      "chatId",
+      "consecutiveFailures",
+      "createdAt",
+      "id",
+      "isEnabled",
+      "label",
+      "lastErrorAt",
+      "lastSentAt",
+      "type",
+      "updatedAt",
+    ]);
   });
 
   it("logs the export and enforces the 24 h cooldown", async () => {
@@ -471,11 +844,8 @@ describe("account deletion (erasure)", () => {
     expect(caraHash).not.toBe(caraId);
     expect(caraHash).toHaveLength(64);
 
-    // Uploads directory removed from disk.
-    const dirExists = await readFile(path.join(UPLOAD_ROOT, caraId))
-      .then(() => true)
-      .catch(() => false);
-    expect(dirExists).toBe(false);
+    // Supabase Storage object removed with the account cascade.
+    expect(storage.objects.has(caraStoragePath)).toBe(false);
 
     // Alice and Bob untouched.
     expect(await db.user.findUnique({ where: { id: aliceId } })).not.toBeNull();

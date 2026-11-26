@@ -10,6 +10,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { getCandlestickPattern, isCandlestickPatternId } from "./patterns/catalog";
 
 export const GAIA_BLOCK_TYPES = [
   "paragraph",
@@ -26,6 +27,7 @@ export const GAIA_BLOCK_TYPES = [
   "image",
   "divider",
   "ref",
+  "pattern",
 ] as const;
 
 export type GaiaBlockType = (typeof GAIA_BLOCK_TYPES)[number];
@@ -78,7 +80,8 @@ export const gaiaBlockInputSchema = z.object({
     .max(GAIA_MAX_TABLE_ROWS)
     .optional(),
   ref: gaiaBlockRefInputSchema.optional(),
-});
+  patternId: z.string().refine(isCandlestickPatternId, "Unknown candlestick pattern").optional(),
+}).superRefine((block, context) => { if (block.type === "pattern" && !block.patternId) context.addIssue({ code: z.ZodIssueCode.custom, path: ["patternId"], message: "Pattern id is required" }); });
 
 export const gaiaBlocksInputSchema = z
   .array(gaiaBlockInputSchema)
@@ -105,6 +108,7 @@ export type GaiaBlock = {
   caption?: string;
   rows?: string[][];
   ref?: GaiaBlockRef;
+  patternId?: string;
 };
 
 /** Nouvel id de bloc : `nb-` + 24 caractères hex. */
@@ -126,10 +130,16 @@ export function normalizeBlocks(input: GaiaBlockInput[]): GaiaBlock[] {
     };
     if (block.checked !== undefined) out.checked = block.checked;
     if (block.tone !== undefined) out.tone = block.tone;
-    if (block.src !== undefined) out.src = block.src;
-    if (block.alt !== undefined) out.alt = block.alt;
-    if (block.caption !== undefined) out.caption = block.caption;
+    // A pattern block carries no image: its illustration is derived from
+    // the pattern id in-app. Drop any src/alt/caption so no arbitrary URL
+    // can ride along with a pattern.
+    if (block.type !== "pattern") {
+      if (block.src !== undefined) out.src = block.src;
+      if (block.alt !== undefined) out.alt = block.alt;
+      if (block.caption !== undefined) out.caption = block.caption;
+    }
     if (block.rows !== undefined) out.rows = block.rows;
+    if (block.type === "pattern" && block.patternId) out.patternId = block.patternId;
     if (block.ref !== undefined && block.ref !== null) {
       out.ref = { kind: block.ref.kind, id: block.ref.id };
     }
@@ -178,9 +188,14 @@ export function parseStoredBlocks(value: unknown): GaiaBlock[] {
     ) {
       block.tone = raw.tone as GaiaCalloutTone;
     }
-    if (typeof raw.src === "string") block.src = raw.src;
-    if (typeof raw.alt === "string") block.alt = raw.alt;
-    if (typeof raw.caption === "string") block.caption = raw.caption;
+    if (raw.type === "pattern") { if (typeof raw.patternId !== "string" || !isCandlestickPatternId(raw.patternId)) continue; block.patternId = raw.patternId; }
+    // A pattern block carries no image: drop any stored src/alt/caption
+    // so a persisted pattern can never smuggle in an arbitrary URL.
+    if (raw.type !== "pattern") {
+      if (typeof raw.src === "string") block.src = raw.src;
+      if (typeof raw.alt === "string") block.alt = raw.alt;
+      if (typeof raw.caption === "string") block.caption = raw.caption;
+    }
     if (
       Array.isArray(raw.rows) &&
       raw.rows.every(
@@ -269,6 +284,30 @@ export function textOfBlocks(blocks: GaiaBlock[]): string {
   return parts.join("\n");
 }
 
+/**
+ * Text searchable by users, including metadata for non-text blocks.
+ * Pattern descriptions and aliases are indexed without inflating the note's
+ * visible excerpt or word count.
+ */
+export function searchTextOfBlocks(blocks: GaiaBlock[]): string {
+  const parts = [textOfBlocks(blocks)];
+  for (const block of blocks) {
+    if (block.type !== "pattern" || !block.patternId) continue;
+    const pattern = getCandlestickPattern(block.patternId);
+    if (!pattern) continue;
+    parts.push(
+      pattern.name,
+      ...pattern.aliases,
+      pattern.description,
+      pattern.marketContext,
+      pattern.interpretation,
+      pattern.confirmation,
+      pattern.caveats,
+    );
+  }
+  return parts.filter(Boolean).join("\n");
+}
+
 export function wordCountOf(text: string): number {
   return text.split(/\s+/).filter((word) => word !== "").length;
 }
@@ -294,8 +333,8 @@ export function excerptOf(blocks: GaiaBlock[]): string {
  * tags ont matché.
  */
 export function searchSnippet(blocks: GaiaBlock[], query: string): string {
-  const fullText = textOfBlocks(blocks);
-  const index = fullText.toLowerCase().indexOf(query);
+  const fullText = searchTextOfBlocks(blocks);
+  const index = fullText.toLowerCase().indexOf(query.toLowerCase());
   if (index === -1) return excerptOf(blocks);
   const start = Math.max(0, index - 60);
   const end = Math.min(fullText.length, index + query.length + 80);

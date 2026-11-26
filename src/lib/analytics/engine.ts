@@ -44,7 +44,7 @@ export interface TradeStats {
   wins: number;
   losses: number;
   breakevens: number;
-  /** 0-100. */
+  /** 0-100: wins / (wins + losses); breakevens are excluded. */
   winRate: string | null;
   netPnl: string;
   grossWin: string;
@@ -101,6 +101,24 @@ export function sortChronologically<T extends StatTrade>(trades: T[]): T[] {
   );
 }
 
+/**
+ * Balance curve from CLOSED trades only (MD §3.4).
+ *
+ * This is initialBalance + cumulative trade P&L — it is NOT account
+ * equity: deposits, withdrawals, bonuses and adjustments (CashTransaction)
+ * are not inputs here, and open positions contribute nothing (their
+ * floating P&L is unknown without live prices). Callers must therefore
+ * label it "Cumulative P&L curve" / "Max P&L drawdown", never "Equity
+ * curve" / equity drawdown. A true balance/equity drawdown would need
+ * per-account initialBalance + dated cash flows merged with trade P&L
+ * in every caller (analytics, dashboard, reports, share) plus a
+ * complete equity series — AccountEquitySnapshot is EA-heartbeat-only
+ * (sparse, 15-min, 30-day retention), so no such series exists today.
+ * That wiring is deliberately NOT attempted in this lot.
+ *
+ * initialBalance = 0 is valid: the curve then starts at 0 and tracks
+ * cumulative P&L exactly (drawdown = peak-to-trough of cum P&L).
+ */
 export function computeEquityCurve(
   trades: StatTrade[],
   initialBalance: DecimalInput
@@ -134,22 +152,37 @@ export function computeTradeStats(
     .map((t) => (t.rMultiple == null ? null : toD(t.rMultiple)))
     .filter((r): r is Decimal => r !== null);
 
-  const wins = pnls.filter((p) => p.gt(0));
-  const losses = pnls.filter((p) => p.lt(0));
-  const breakevens = pnls.length - wins.length - losses.length;
+  // Outcome classification follows the stored R-aware resultType. Older
+  // trades without a classification fall back to the sign of realized P&L.
+  const outcomes = ordered.map((trade, index) => {
+    const stored = trade.resultType;
+    if (stored === "WIN" || stored === "LOSS" || stored === "BREAKEVEN") {
+      return stored;
+    }
+    const pnl = pnls[index];
+    return pnl.gt(0) ? "WIN" : pnl.lt(0) ? "LOSS" : "BREAKEVEN";
+  });
+  const wins = outcomes.filter((outcome) => outcome === "WIN").length;
+  const losses = outcomes.filter((outcome) => outcome === "LOSS").length;
+  const breakevens = outcomes.filter((outcome) => outcome === "BREAKEVEN").length;
+  const decidedTrades = wins + losses;
 
-  const grossWin = sum(wins);
-  const grossLoss = sum(losses).abs();
+  // Money-based metrics still use actual P&L signs, including small R-aware
+  // breakeven trades, so profit factor and net P&L reconcile to cash results.
+  const positivePnls = pnls.filter((pnl) => pnl.gt(0));
+  const negativePnls = pnls.filter((pnl) => pnl.lt(0));
+  const grossWin = sum(positivePnls);
+  const grossLoss = sum(negativePnls).abs();
 
   // Streaks (WIN/LOSS, breakeven keeps the current streak going).
   let maxWinStreak = 0;
   let maxLossStreak = 0;
   let cur = 0;
-  for (const t of ordered) {
-    if (t.resultType === "WIN") {
+  for (const outcome of outcomes) {
+    if (outcome === "WIN") {
       cur = cur >= 0 ? cur + 1 : 1;
       maxWinStreak = Math.max(maxWinStreak, cur);
-    } else if (t.resultType === "LOSS") {
+    } else if (outcome === "LOSS") {
       cur = cur <= 0 ? cur - 1 : -1;
       maxLossStreak = Math.max(maxLossStreak, -cur);
     }
@@ -157,7 +190,12 @@ export function computeTradeStats(
   }
   const currentStreak = cur;
 
-  // Max drawdown from the cumulative P&L curve.
+  // Max drawdown from the cumulative P&L curve (MD §3.4) — NOT an
+  // equity drawdown: deposits/withdrawals never enter this computation
+  // (they are not inputs), open trades are excluded (server callers
+  // pass CLOSED trades only), and maxDrawdownPercent stays null until
+  // cumulative P&L has made a positive peak — with initialBalance 0 and
+  // an all-losing series there is no meaningful percentage.
   let cum = D0;
   let peak = D0;
   let maxDd = D0;
@@ -166,11 +204,15 @@ export function computeTradeStats(
     cum = cum.plus(p);
     if (cum.gt(peak)) peak = cum;
     const dd = peak.minus(cum);
-    if (dd.gt(maxDd)) {
-      maxDd = dd;
-      // % of the peak cumulative level (meaningful once the curve is net
-      // positive; null otherwise — callers with a balance use the equity curve).
-      maxDdPct = peak.gt(0) ? dd.div(peak).times(100) : null;
+    if (dd.gt(maxDd)) maxDd = dd;
+
+    // Track the largest percentage drawdown independently from the largest
+    // cash drawdown: their peaks can occur at different points in the curve.
+    // The percentage is meaningful only after cumulative P&L has made a
+    // positive peak; callers with an account balance should use equity curve.
+    if (peak.gt(0)) {
+      const ddPct = dd.div(peak).times(100);
+      if (maxDdPct == null || ddPct.gt(maxDdPct)) maxDdPct = ddPct;
     }
   }
 
@@ -181,14 +223,14 @@ export function computeTradeStats(
 
   return {
     tradeCount: ordered.length,
-    wins: wins.length,
-    losses: losses.length,
+    wins,
+    losses,
     breakevens,
     winRate:
-      ordered.length === 0
+      decidedTrades === 0
         ? null
-        : new Decimal(wins.length)
-            .div(ordered.length)
+        : new Decimal(wins)
+            .div(decidedTrades)
             .times(100)
             .toString(),
     netPnl: sum(pnls).toString(),
@@ -200,13 +242,13 @@ export function computeTradeStats(
         : grossLoss.isZero()
           ? "Infinity"
           : grossWin.div(grossLoss).toString(),
-    avgWin: avg(wins),
-    avgLoss: avg(losses.map((l) => l.abs())),
-    maxWin: wins.length === 0 ? null : wins.reduce((m, v) => (v.gt(m) ? v : m)).toString(),
+    avgWin: avg(positivePnls),
+    avgLoss: avg(negativePnls.map((loss) => loss.abs())),
+    maxWin: positivePnls.length === 0 ? null : positivePnls.reduce((m, v) => (v.gt(m) ? v : m)).toString(),
     maxLoss:
-      losses.length === 0
+      negativePnls.length === 0
         ? null
-        : losses.reduce((m, v) => (v.lt(m) ? v : m)).toString(),
+        : negativePnls.reduce((m, v) => (v.lt(m) ? v : m)).toString(),
     avgR: avg(rs),
     expectancyR:
       rs.length === 0 ? null : sum(rs).div(rs.length).toString(),

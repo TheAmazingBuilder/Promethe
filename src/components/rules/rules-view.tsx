@@ -574,6 +574,13 @@ export function RulesView() {
         }
       />
 
+      <p className="text-sm text-muted-foreground">
+        {t("playbookHint")}{" "}
+        <Button variant="link" size="sm" className="h-auto p-0 text-sm" onClick={() => navigate("/playbook?tab=rules")}>
+          {t("playbookLink")}
+        </Button>
+      </p>
+
       <Tabs defaultValue="goals" className="gap-4">
         <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
           <TabsTrigger value="goals">

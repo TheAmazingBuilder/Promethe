@@ -69,9 +69,22 @@ describe("stopDistance / R multiples", () => {
     const r = calcRMultiple("LONG", "2345.00", "2351.80", "2340.00")!;
     expect(r.toString()).toBe("1.36");
   });
-  it("planned RR: reward 13 / risk 5 = 2.6", () => {
+  it("planned RR: reward 13 / risk 5 = 2.6 for LONG", () => {
     const rr = calcPlannedRR("LONG", "2345.00", "2340.00", "2358.00")!;
     expect(rr.toString()).toBe("2.6");
+  });
+  it("planned RR: reward 13 / risk 5 = 2.6 for SHORT", () => {
+    const rr = calcPlannedRR("SHORT", "2345.00", "2350.00", "2332.00")!;
+    expect(rr.toString()).toBe("2.6");
+  });
+  it("returns null when LONG take profit is below entry", () => {
+    expect(calcPlannedRR("LONG", "2345.00", "2340.00", "2332.00")).toBeNull();
+  });
+  it("returns null when SHORT take profit is above entry", () => {
+    expect(calcPlannedRR("SHORT", "2345.00", "2350.00", "2358.00")).toBeNull();
+  });
+  it("returns null when take profit equals entry", () => {
+    expect(calcPlannedRR("LONG", "2345.00", "2340.00", "2345.00")).toBeNull();
   });
   it("R is null without a valid stop", () => {
     expect(calcRMultiple("LONG", "2345.00", "2351.80", null)).toBeNull();
@@ -118,7 +131,7 @@ describe("calcPnL", () => {
     expect(r.grossPnl.toString()).toBe("240");
   });
 
-  it("USDJPY with quote→account conversion (JPY ≠ USD → estimate)", () => {
+  it("USDJPY with quote→account conversion (valid rate applied → NOT an estimate)", () => {
     const r = calcPnL({
       instrument: USDJPY,
       direction: "LONG",
@@ -132,7 +145,40 @@ describe("calcPnL", () => {
     expect(r.grossPnlQuote.toString()).toBe("100000");
     expect(r.grossPnl.toString()).toBe("600");
     expect(r.converted).toBe(true);
+    // Lot 1 Phase C (7b): isEstimate is true ONLY when the rate was
+    // actually missing — a valid applied rate is not an estimate.
+    expect(r.isEstimate).toBe(false);
+  });
+
+  it("USDJPY without any rate is an estimate (unconverted amounts)", () => {
+    const r = calcPnL({
+      instrument: USDJPY,
+      direction: "LONG",
+      lots: "1",
+      entry: "149.000",
+      exit: "150.000",
+      accountCurrency: "USD",
+    });
     expect(r.isEstimate).toBe(true);
+    expect(r.converted).toBe(false);
+  });
+
+  it("uses a stored FX rate before subtracting account-currency costs", () => {
+    const r = calcPnL({
+      instrument: USDJPY,
+      direction: "LONG",
+      lots: "1",
+      entry: "149.000",
+      exit: "150.000",
+      commission: "7",
+      accountCurrency: "USD",
+      fxRates: [{ base: "JPY", quote: "USD", rate: "0.006" }],
+    });
+    expect(r.grossPnlQuote.toString()).toBe("100000");
+    expect(r.grossPnl.toString()).toBe("600");
+    expect(r.totalCosts.toString()).toBe("7");
+    expect(r.netPnl.toString()).toBe("593");
+    expect(r.converted).toBe(true);
   });
 
   it("signed costs: net = gross − (commission + swap + fees)", () => {
@@ -196,6 +242,7 @@ describe("calcPositionSize", () => {
       entry: "1.08000",
       stopLoss: "1.07500",
       instrument: EURUSD,
+      accountCurrency: "USD",
       direction: "LONG",
     });
     expect(r.valid).toBe(true);
@@ -211,6 +258,7 @@ describe("calcPositionSize", () => {
       entry: "2345.00",
       stopLoss: "2340.00",
       instrument: XAUUSD,
+      accountCurrency: "USD",
       direction: "LONG",
     });
     // units = 33/5 = 6.6 → lots 0.066 → floored to 0.06
@@ -226,6 +274,7 @@ describe("calcPositionSize", () => {
       entry: "2345.00",
       stopLoss: "2350.00",
       instrument: XAUUSD,
+      accountCurrency: "USD",
       direction: "LONG",
     });
     expect(r.valid).toBe(false);
@@ -239,6 +288,7 @@ describe("calcPositionSize", () => {
       entry: "2345.00",
       stopLoss: "2340.00",
       instrument: XAUUSD,
+      accountCurrency: "USD",
       direction: "SHORT",
     });
     expect(r.reason).toBe("STOP_SIDE_SHORT");
@@ -251,6 +301,7 @@ describe("calcPositionSize", () => {
       entry: "2345.00",
       stopLoss: "2345.00",
       instrument: XAUUSD,
+      accountCurrency: "USD",
     });
     expect(r.reason).toBe("STOP_EQUALS_ENTRY");
   });
@@ -262,6 +313,7 @@ describe("calcPositionSize", () => {
       entry: "2345.00",
       stopLoss: "2340.00",
       instrument: XAUUSD,
+      accountCurrency: "USD",
       direction: "LONG",
     });
     expect(r.reason).toBe("INVALID_AMOUNT");
@@ -274,6 +326,7 @@ describe("calcPositionSize", () => {
       entry: "2345.00",
       stopLoss: "2340.00",
       instrument: XAUUSD,
+      accountCurrency: "USD",
       direction: "LONG",
     });
     // units = 1/5 = 0.2 → lots 0.002 → floored to 0
@@ -289,10 +342,379 @@ describe("calcPositionSize", () => {
       entry: "2345.00",
       stopLoss: "2340.00",
       instrument: XAUUSD,
+      accountCurrency: "USD",
       direction: "LONG",
       maxLots: "1",
     });
     expect(r.lots.toString()).toBe("1");
+  });
+  it("reports equal entry and stop-loss prices before direction-side errors", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000",
+      riskPercent: "1",
+      entry: "2345.00",
+      stopLoss: "2345.00",
+      instrument: XAUUSD,
+      accountCurrency: "USD",
+      direction: "LONG",
+    });
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("STOP_EQUALS_ENTRY");
+  });
+
+  it("rejects invalid entry and stop-loss prices", () => {
+    for (const [entry, stopLoss] of [["0", "2340"], ["2345", "-1"], ["not-a-price", "2340"]]) {
+      const r = calcPositionSize({
+        accountBalance: "10000",
+        riskPercent: "1",
+        entry,
+        stopLoss,
+        instrument: XAUUSD,
+        accountCurrency: "USD",
+        direction: "LONG",
+      });
+      expect(r.valid).toBe(false);
+      expect(r.reason).toBe("INVALID_PRICE");
+    }
+  });
+
+  it("rejects an instrument with a non-positive contract size", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000",
+      riskPercent: "1",
+      entry: "2345.00",
+      stopLoss: "2340.00",
+      instrument: { ...XAUUSD, contractSize: "0" },
+      accountCurrency: "USD",
+      direction: "LONG",
+    });
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("INVALID_INSTRUMENT_SPECS");
+  });
+
+  it("does not increase risk to satisfy a broker minimum lot", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000",
+      riskAmount: "25",
+      entry: "2345.00",
+      stopLoss: "2340.00",
+      instrument: XAUUSD,
+      accountCurrency: "USD",
+      direction: "LONG",
+      minLots: "0.1",
+    });
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("INSUFFICIENT_RISK");
+    expect(r.lots.isZero()).toBe(true);
+    expect(r.actualRiskAmount.isZero()).toBe(true);
+    expect(r.minLots.toString()).toBe("0.1");
+  });
+
+  it("rounds a non-aligned broker maximum DOWN to the tradable lot step", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000",
+      riskAmount: "1000",
+      entry: "2345.00",
+      stopLoss: "2340.00",
+      instrument: XAUUSD,
+      accountCurrency: "USD",
+      direction: "LONG",
+      lotStep: "0.1",
+      minLots: "0.1",
+      maxLots: "0.155",
+    });
+    expect(r.valid).toBe(true);
+    expect(r.lots.toString()).toBe("0.1");
+    expect(r.actualRiskAmount.toString()).toBe("50");
+    expect(r.actualRiskAmount.lte(r.riskAmount)).toBe(true);
+  });
+
+  it("rejects incompatible minimum, maximum and lot-step constraints", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000",
+      riskAmount: "1000",
+      entry: "2345.00",
+      stopLoss: "2340.00",
+      instrument: XAUUSD,
+      accountCurrency: "USD",
+      direction: "LONG",
+      lotStep: "0.1",
+      minLots: "0.1",
+      maxLots: "0.05",
+    });
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("INVALID_LOT_CONSTRAINTS");
+  });
+
+  it("rejects a non-positive lot step", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000",
+      riskPercent: "1",
+      entry: "2345.00",
+      stopLoss: "2340.00",
+      instrument: XAUUSD,
+      accountCurrency: "USD",
+      direction: "LONG",
+      lotStep: "0",
+    });
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("INVALID_LOT_CONSTRAINTS");
+  });
+
+  it("uses the broker minimum as the origin for volume-step increments", () => {
+    const atMinimum = calcPositionSize({
+      accountBalance: "10000",
+      riskAmount: "75",
+      entry: "2345.00",
+      stopLoss: "2340.00",
+      instrument: XAUUSD,
+      accountCurrency: "USD",
+      direction: "LONG",
+      lotStep: "0.1",
+      minLots: "0.15",
+    });
+    expect(atMinimum.valid).toBe(true);
+    expect(atMinimum.lots.toString()).toBe("0.15");
+    expect(atMinimum.actualRiskAmount.toString()).toBe("75");
+
+    const belowMinimum = calcPositionSize({
+      accountBalance: "10000",
+      riskAmount: "74.5",
+      entry: "2345.00",
+      stopLoss: "2340.00",
+      instrument: XAUUSD,
+      accountCurrency: "USD",
+      direction: "LONG",
+      lotStep: "0.1",
+      minLots: "0.15",
+    });
+    expect(belowMinimum.valid).toBe(false);
+    expect(belowMinimum.reason).toBe("INSUFFICIENT_RISK");
+    expect(belowMinimum.minLots.toString()).toBe("0.15");
+  });
+
+  it("does not fall back to percentage risk when an explicit amount is zero", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000",
+      riskPercent: "1",
+      riskAmount: "0",
+      entry: "2345.00",
+      stopLoss: "2340.00",
+      instrument: XAUUSD,
+      accountCurrency: "USD",
+      direction: "LONG",
+    });
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("INVALID_AMOUNT");
+  });
+
+  it("requires an account currency to establish the sizing currency", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000", riskPercent: "1", entry: "2345.00",
+      stopLoss: "2340.00", instrument: XAUUSD, direction: "LONG",
+    });
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("MISSING_ACCOUNT_CURRENCY");
+  });
+
+  it("blocks cross-currency sizing when the conversion rate is missing", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000", riskPercent: "1", entry: "149.000",
+      stopLoss: "148.000", instrument: USDJPY, direction: "LONG",
+      accountCurrency: "USD",
+    });
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("MISSING_CONVERSION_RATE");
+    expect(r.lots.isZero()).toBe(true);
+  });
+
+  it("converts quote-currency risk into account currency before sizing", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000", riskPercent: "1", entry: "149.000",
+      stopLoss: "148.000", instrument: USDJPY, direction: "LONG",
+      accountCurrency: "USD", quoteToAccountRate: "0.006",
+    });
+    expect(r.valid).toBe(true);
+    expect(r.lots.toString()).toBe("0.16");
+    expect(r.actualRiskAmount.toString()).toBe("96");
+    expect(r.pipValue.account.toString()).toBe("0.96");
+    expect(r.isEstimate).toBe(true);
+  });
+
+  it("rejects zero, negative and non-numeric conversion rates", () => {
+    for (const quoteToAccountRate of ["0", "-0.5", "not-a-rate"]) {
+      const r = calcPositionSize({
+        accountBalance: "10000", riskPercent: "1", entry: "149.000",
+        stopLoss: "148.000", instrument: USDJPY, direction: "LONG",
+        accountCurrency: "USD", quoteToAccountRate,
+      });
+      expect(r.valid).toBe(false);
+      expect(r.reason).toBe("INVALID_CONVERSION_RATE");
+    }
+  });
+
+  it("does not require FX conversion when quote and account currencies match", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000", riskPercent: "1", entry: "2345.00",
+      stopLoss: "2340.00", instrument: XAUUSD, direction: "LONG",
+      accountCurrency: "USD",
+    });
+    expect(r.valid).toBe(true);
+    expect(r.isEstimate).toBe(false);
+    expect(r.actualRiskAmount.toString()).toBe("100");
+  });
+
+});
+
+describe("calcPlannedRR — entry == SL", () => {
+  it("returns null when LONG entry equals the stop", () => {
+    expect(calcPlannedRR("LONG", "2345.00", "2345.00", "2358.00")).toBeNull();
+  });
+  it("returns null when SHORT entry equals the stop", () => {
+    expect(calcPlannedRR("SHORT", "2345.00", "2345.00", "2332.00")).toBeNull();
+  });
+});
+
+describe("calcPositionSize — Lot 1 FX policy (quick-trade sizing inputs)", () => {
+  const today = new Date().toISOString().slice(0, 10);
+
+  it("quick-trade same-currency sizing works with the account currency passed", () => {
+    // Regression: quick-trade used to omit accountCurrency, so % risk
+    // sizing always failed with MISSING_ACCOUNT_CURRENCY.
+    const r = calcPositionSize({
+      accountBalance: "10000",
+      riskPercent: "1",
+      entry: "2345.00",
+      stopLoss: "2340.00",
+      instrument: XAUUSD,
+      direction: "LONG",
+      accountCurrency: "USD",
+    });
+    expect(r.valid).toBe(true);
+    expect(r.lots.toString()).toBe("0.2");
+    expect(r.rateSource).toBe("NONE");
+    expect(r.rateDate).toBeNull();
+    expect(r.rateStale).toBe(false);
+    expect(r.conversionRate).toBeNull();
+  });
+
+  it("quick-trade cross-currency sizing works with a stored FX rate", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000",
+      riskPercent: "1",
+      entry: "149.000",
+      stopLoss: "148.000",
+      instrument: USDJPY,
+      direction: "LONG",
+      accountCurrency: "USD",
+      fxRates: [{ base: "JPY", quote: "USD", rate: "0.006", date: today, source: "MANUAL" }],
+    });
+    expect(r.valid).toBe(true);
+    expect(r.lots.toString()).toBe("0.16");
+    expect(r.actualRiskAmount.toString()).toBe("96");
+    expect(r.rateSource).toBe("STORED");
+    expect(r.rateDate).toBe(today);
+    expect(r.rateStale).toBe(false);
+    expect(r.conversionRate?.toString()).toBe("0.006");
+  });
+
+  it("a stored inverted pair is corrected, not used backwards", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000",
+      riskPercent: "1",
+      entry: "149.000",
+      stopLoss: "148.000",
+      instrument: USDJPY,
+      direction: "LONG",
+      accountCurrency: "USD",
+      fxRates: [{ base: "USD", quote: "JPY", rate: "150", date: today, source: "CSV" }],
+    });
+    expect(r.valid).toBe(true);
+    // 1 USDJPY = 1/150 USD → 100 USD risk / (1.00 × 1/150) = 0.15 lot
+    expect(r.lots.toString()).toBe("0.15");
+    expect(r.actualRiskAmount.toString()).toBe("100");
+    expect(r.conversionRate?.toString()).toBe(new Decimal(1).div(150).toString());
+    expect(r.rateSource).toBe("STORED");
+  });
+
+  it("an inverted manual pair is corrected to 1/rate", () => {
+    const directRate = new Decimal(1).div(149).toString();
+    const direct = calcPositionSize({
+      accountBalance: "10000",
+      riskPercent: "1",
+      entry: "149.000",
+      stopLoss: "148.000",
+      instrument: USDJPY,
+      direction: "LONG",
+      accountCurrency: "USD",
+      quoteToAccountRate: directRate,
+    });
+    const inverted = calcPositionSize({
+      accountBalance: "10000",
+      riskPercent: "1",
+      entry: "149.000",
+      stopLoss: "148.000",
+      instrument: USDJPY,
+      direction: "LONG",
+      accountCurrency: "USD",
+      quoteToAccountRate: "149", // typed as USDJPY (account→quote)
+      quoteToAccountRatePair: { base: "USD", quote: "JPY" },
+    });
+    expect(direct.valid).toBe(true);
+    expect(inverted.valid).toBe(true);
+    expect(inverted.lots.toString()).toBe(direct.lots.toString());
+    expect(inverted.conversionRate?.toString()).toBe(direct.conversionRate?.toString());
+    expect(inverted.rateSource).toBe("MANUAL");
+  });
+
+  it("a manual rate pair naming unrelated currencies is rejected explicitly", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000",
+      riskPercent: "1",
+      entry: "149.000",
+      stopLoss: "148.000",
+      instrument: USDJPY,
+      direction: "LONG",
+      accountCurrency: "USD",
+      quoteToAccountRate: "1.08",
+      quoteToAccountRatePair: { base: "EUR", quote: "GBP" },
+    });
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("INVALID_CONVERSION_RATE_PAIR");
+  });
+
+  it("a stale stored rate is flagged but still applied", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000",
+      riskPercent: "1",
+      entry: "149.000",
+      stopLoss: "148.000",
+      instrument: USDJPY,
+      direction: "LONG",
+      accountCurrency: "USD",
+      fxRates: [{ base: "JPY", quote: "USD", rate: "0.006", date: "2020-01-01", source: "CSV" }],
+    });
+    expect(r.valid).toBe(true);
+    expect(r.rateStale).toBe(true);
+    expect(r.rateDate).toBe("2020-01-01");
+    expect(r.rateSource).toBe("STORED");
+  });
+
+  it("a manual rate is labeled undated/manual on the result", () => {
+    const r = calcPositionSize({
+      accountBalance: "10000",
+      riskPercent: "1",
+      entry: "149.000",
+      stopLoss: "148.000",
+      instrument: USDJPY,
+      direction: "LONG",
+      accountCurrency: "USD",
+      quoteToAccountRate: "0.006",
+    });
+    expect(r.valid).toBe(true);
+    expect(r.rateSource).toBe("MANUAL");
+    expect(r.rateDate).toBeNull();
+    expect(r.rateStale).toBe(false);
   });
 });
 
@@ -312,7 +734,12 @@ describe("previewTrade (live form aggregate)", () => {
     });
     expect(p.pips.toString()).toBe("68");
     expect(p.netPnl.toString()).toBe("333");
-    expect(p.rMultiple!.toString()).toBe("1.36");
+    // Net-based R (MD §3.3): 333 / 250 = 1.332 — the same value the
+    // stored rMultiple carries. The price-only (gross) R is 1.36 and
+    // lives under its own name now.
+    expect(p.rMultiple!.toString()).toBe("1.332");
+    expect(p.grossRMultiple!.toString()).toBe("1.36");
+    expect(p.rMultiple!.toString()).toBe(p.realizedRR!.toString());
     expect(p.plannedRR!.toString()).toBe("2.6");
     // riskAmount = 5.00 × 50 oz = 250 → realizedRR = 333/250
     expect(p.riskAmount!.toString()).toBe("250");
@@ -332,6 +759,53 @@ describe("previewTrade (live form aggregate)", () => {
       accountCurrency: "USD",
     });
     expect(p.resultType).toBe("BREAKEVEN");
+    // No costs here, so net R and gross R agree.
+    expect(p.rMultiple!.toString()).toBe("0.06");
+    expect(p.grossRMultiple!.toString()).toBe("0.06");
+  });
+
+  it("uses stored FX rates for account-currency risk and realized R", () => {
+    const p = previewTrade({
+      instrument: USDJPY,
+      direction: "LONG",
+      lots: "1",
+      entry: "149.000",
+      exit: "150.000",
+      stopLoss: "148.000",
+      accountCurrency: "USD",
+      accountBalance: "10000",
+      fxRates: [{ base: "JPY", quote: "USD", rate: "0.006" }],
+    });
+
+    expect(p.grossPnl.toString()).toBe("600");
+    expect(p.riskAmount?.toString()).toBe("600");
+    expect(p.realizedRR?.toString()).toBe("1");
+    expect(p.riskPercent?.toString()).toBe("6");
+    // No costs: net R and gross R agree here too.
+    expect(p.rMultiple?.toString()).toBe("1");
+    expect(p.grossRMultiple?.toString()).toBe("1");
+  });
+
+  it("does not invent account-currency risk when a cross-currency rate is missing", () => {
+    const p = previewTrade({
+      instrument: USDJPY,
+      direction: "LONG",
+      lots: "1",
+      entry: "149.000",
+      exit: "150.000",
+      stopLoss: "148.000",
+      accountCurrency: "USD",
+      accountBalance: "10000",
+    });
+
+    expect(p.isEstimate).toBe(true);
+    expect(p.riskAmount).toBeNull();
+    expect(p.realizedRR).toBeNull();
+    expect(p.riskPercent).toBeNull();
+    // The stored convention never presents a guessed R: net R is null
+    // without a conversion rate. The gross R needs no FX rate.
+    expect(p.rMultiple).toBeNull();
+    expect(p.grossRMultiple!.toString()).toBe("1");
   });
 });
 

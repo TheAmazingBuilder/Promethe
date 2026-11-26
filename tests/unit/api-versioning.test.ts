@@ -83,8 +83,10 @@ describe("API v1 — frontend calls the versioned surface", () => {
         const snippet = source.split("\n")[line - 1].trim();
         // Allowlist: the Google sign-in link (OAuth flow is unversioned).
         if (
-          file.endsWith("components/auth/auth-screen.tsx") &&
-          snippet.includes('href="/api/auth/google"')
+          (file.endsWith("components/auth/auth-screen.tsx") &&
+            snippet.includes('href="/api/auth/google"')) ||
+          (file.endsWith("lib/auth/google.ts") &&
+            snippet.includes('url.pathname !== "/api/auth/google/callback"'))
         ) {
           continue;
         }

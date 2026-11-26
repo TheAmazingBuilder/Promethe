@@ -57,8 +57,13 @@ export interface JournalSearchFields {
   date: string;
   preMarketPlan?: string | null;
   postMarketReview?: string | null;
+  keyLevels?: string | null;
+  primaryScenario?: string | null;
+  alternateScenario?: string | null;
+  invalidationConditions?: string | null;
   keyLesson?: string | null;
   marketBias?: string | null;
+  nextSessionCommitment?: string | null;
 }
 
 /** JournalEntry.searchText - plan, review, lesson, bias, date. */
@@ -67,8 +72,13 @@ export function buildJournalSearchText(f: JournalSearchFields): string {
     f.date,
     f.preMarketPlan,
     f.postMarketReview,
+    f.keyLevels,
+    f.primaryScenario,
+    f.alternateScenario,
+    f.invalidationConditions,
     f.keyLesson,
     f.marketBias,
+    f.nextSessionCommitment,
   ]);
 }
 

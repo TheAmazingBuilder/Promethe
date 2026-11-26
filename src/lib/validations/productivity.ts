@@ -11,6 +11,7 @@ import { CUSTOM_FIELD_TYPES } from "@/lib/custom-fields/validate";
 export const searchQuerySchema = z.object({
   q: z.string().trim().min(1).max(100),
   limit: z.coerce.number().int().min(1).max(20).default(8),
+  offset: z.coerce.number().int().min(0).max(10000).default(0),
 });
 
 export type SearchQuery = z.infer<typeof searchQuerySchema>;

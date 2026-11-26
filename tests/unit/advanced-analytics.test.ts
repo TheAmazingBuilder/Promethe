@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  benjaminiHochberg,
   binomialTwoSidedP,
   mad,
   robustZ,
@@ -18,7 +19,9 @@ import {
   computeLifecycle,
   computeSequences,
   computeSetupRanking,
+  computeSeasonality,
   computeTraderScore,
+  computeTradeReviewAnalytics,
   isAlmostTp,
   type AdvancedTrade,
 } from "@/lib/analytics/advanced";
@@ -96,6 +99,10 @@ describe("stats helpers", () => {
     expect(big.upper - big.lower).toBeLessThan(small.upper - small.lower);
   });
 
+  it("adjusts multiple p-values with Benjamini-Hochberg in input order", () => {
+    expect(benjaminiHochberg([0.01, 0.04, 0.03])).toEqual([0.03, 0.04, 0.04]);
+    expect(benjaminiHochberg([])).toEqual([]);
+  });
   it("binomial two-sided p-value: balanced sample is not extreme", () => {
     const p = binomialTwoSidedP(50, 100, 0.5);
     expect(p).not.toBeNull();
@@ -118,6 +125,74 @@ describe("stats helpers", () => {
     expect(robustZ(8, spread)).not.toBeNull();
     expect(Math.abs(robustZ(8, spread)!)).toBeGreaterThan(3);
     expect(Math.abs(robustZ(0.5, spread)!)).toBeLessThan(1);
+  });
+});
+
+describe("structured trade reviews", () => {
+  it("calculates review coverage and score averages from answered samples only", () => {
+    const trades = [
+      makeTrade({ review: {
+        followedPlan: true, planAdherenceScore: 5, executionQuality: 4,
+        entryQuality: 4, exitQuality: 3, riskManagementScore: 5,
+        emotionalControlScore: 4, wouldTakeAgain: "YES", mistakeTags: ["FOMO"],
+      }, playbookMatch: "MATCHED" }),
+      makeTrade({ review: {
+        followedPlan: false, planAdherenceScore: 2, executionQuality: null,
+        entryQuality: null, exitQuality: null, riskManagementScore: 3,
+        emotionalControlScore: null, wouldTakeAgain: "NO", mistakeTags: ["FOMO", "EARLY_EXIT"],
+      }, playbookMatch: "OFF_PLAYBOOK" }),
+      makeTrade({ review: null }),
+    ];
+    const result = computeTradeReviewAnalytics(trades);
+    expect(result.closedTrades).toBe(3);
+    expect(result.reviewedTrades).toBe(2);
+    expect(result.coveragePct).toBeCloseTo(66.7, 1);
+    expect(result.plan.ratePct).toBe(50);
+    expect(result.scores.planAdherence).toEqual({ average: 3.5, count: 2 });
+    expect(result.scores.execution).toEqual({ average: 4, count: 1 });
+    expect(result.wouldTakeAgain).toEqual({ yes: 1, no: 1, maybe: 0, unanswered: 0 });
+    expect(result.playbookMatch.matched).toBe(1);
+    expect(result.playbookMatch.offPlaybook).toBe(1);
+    expect(result.topMistakes).toEqual([
+      { label: "FOMO", count: 2 },
+      { label: "EARLY_EXIT", count: 1 },
+    ]);
+  });
+
+  it("keeps missing reviews and unanswered review fields distinct", () => {
+    const result = computeTradeReviewAnalytics([
+      makeTrade({ review: {
+        followedPlan: null, planAdherenceScore: null, executionQuality: null,
+        entryQuality: null, exitQuality: null, riskManagementScore: null,
+        emotionalControlScore: null, wouldTakeAgain: null, mistakeTags: [],
+      }, playbookMatch: null }),
+    ]);
+    expect(result.coveragePct).toBe(100);
+    expect(result.plan.ratePct).toBeNull();
+    expect(result.plan.unanswered).toBe(1);
+    expect(result.scores.entry).toEqual({ average: null, count: 0 });
+    expect(result.wouldTakeAgain.unanswered).toBe(1);
+    expect(result.playbookMatch.unclassified).toBe(1);
+  });
+
+  it("aggregates custom question snapshots without exposing written answers", () => {
+    const trades = [4, 2].map((score, index) => makeTrade({ review: {
+      followedPlan: null, planAdherenceScore: null, executionQuality: null,
+      entryQuality: null, exitQuality: null, riskManagementScore: null,
+      emotionalControlScore: null, wouldTakeAgain: null, mistakeTags: [],
+      customAnswers: [
+        { questionId: "q-scale", question: "Setup clarity", type: "SCALE", answer: score },
+        { questionId: "q-bool", question: "Waited for confirmation", type: "BOOLEAN", answer: index === 0 },
+        { questionId: "q-text", question: "What did you learn?", type: "TEXT", answer: `private answer ${index}` },
+      ],
+    } }));
+    const result = computeTradeReviewAnalytics(trades);
+    expect(result.customQuestions).toEqual([
+      { questionId: "q-scale", question: "Setup clarity", type: "SCALE", answered: 2, average: 3, scaleDistribution: [0, 1, 0, 1, 0], booleanYes: 0, booleanNo: 0 },
+      { questionId: "q-bool", question: "Waited for confirmation", type: "BOOLEAN", answered: 2, average: null, scaleDistribution: [0, 0, 0, 0, 0], booleanYes: 1, booleanNo: 1 },
+      { questionId: "q-text", question: "What did you learn?", type: "TEXT", answered: 2, average: null, scaleDistribution: [0, 0, 0, 0, 0], booleanYes: 0, booleanNo: 0 },
+    ]);
+    expect(JSON.stringify(result.customQuestions)).not.toContain("private answer");
   });
 });
 
@@ -149,6 +224,20 @@ describe("lifecycle", () => {
     expect(res.withMfe).toBe(2);
     expect(res.avgMfeR).toBeCloseTo(1.2, 5);
     expect(res.almostTpCount).toBe(1);
+  });
+
+  it("uses the MAE sample independently when some trades have no MAE", () => {
+    const trades = [
+      makeTrade({ mfeR: "2", maeR: "0.5" }),
+      makeTrade({ mfeR: "1", maeR: null }),
+      makeTrade({ mfeR: null, maeR: "0.25" }),
+    ];
+    const res = computeLifecycle(trades);
+    expect(res.withMfe).toBe(2);
+    expect(res.withMae).toBe(2);
+    expect(res.avgMfeR).toBeCloseTo(1.5, 5);
+    expect(res.avgMaeR).toBe(0.38); // Lifecycle values are rounded to two decimals.
+    expect(res.maeBuckets.reduce((sum, bucket) => sum + bucket.count, 0)).toBe(2);
   });
 });
 
@@ -202,6 +291,43 @@ describe("setups", () => {
     expect(byKey.get("C")!.category).toBe("unproven");
     expect(byKey.get("D")!.category).toBe("losing");
   });
+
+  it("does not call a setup proven when most trades have no valid R", () => {
+    const trades = Array.from({ length: 30 }, (_, i) =>
+      makeTrade({
+        setupType: "sparse-R",
+        rMultiple: i < 8 ? "1" : null,
+        resultType: i < 8 ? "WIN" : "BREAKEVEN",
+      })
+    );
+    const rank = computeSetupRanking(trades)[0];
+    expect(rank.count).toBe(30);
+    expect(rank.rSampleSize).toBe(8);
+    expect(rank.decidedSampleSize).toBe(8);
+    expect(rank.expectancy).toBe(1);
+    expect(rank.category).toBe("unproven");
+  });
+});
+
+describe("seasonality", () => {
+  it("requires five valid R and five decided trades before issuing a verdict", () => {
+    const trades = Array.from({ length: 5 }, (_, i) =>
+      makeTrade({
+        localEntryDate: "2026-01-15",
+        localYear: 2026,
+        localMonth: 1,
+        localDayOfMonth: 15,
+        localIsoWeek: 3,
+        rMultiple: i < 3 ? "1" : null,
+        resultType: i < 3 ? "WIN" : "BREAKEVEN",
+      })
+    );
+    const cell = computeSeasonality(trades).months[0];
+    expect(cell.count).toBe(5);
+    expect(cell.rSampleSize).toBe(3);
+    expect(cell.decidedSampleSize).toBe(3);
+    expect(cell.verdict).toBe("insufficient");
+  });
 });
 
 describe("sequences", () => {
@@ -241,6 +367,22 @@ describe("anomalies", () => {
 });
 
 describe("trader score", () => {
+  it("measures monthly consistency in average R, not account-currency P&L", () => {
+    const makeSet = (scale: number) => [
+      makeTrade({ localDate: "2026-01-05", rMultiple: "1", netPnl: String(100 * scale) }),
+      makeTrade({ localDate: "2026-01-15", rMultiple: "3", netPnl: String(300 * scale) }),
+      makeTrade({ localDate: "2026-02-05", rMultiple: "0", netPnl: String(50 * scale), resultType: "BREAKEVEN" }),
+      makeTrade({ localDate: "2026-02-15", rMultiple: "2", netPnl: String(200 * scale) }),
+    ];
+    const scoreFor = (trades: AdvancedTrade[]) => {
+      const stats = computeTradeStats(trades);
+      return computeTraderScore(trades, stats, computeAdvancedStats(trades, stats));
+    };
+    const normal = scoreFor(makeSet(1));
+    const scaled = scoreFor(makeSet(100));
+    expect(normal.details.monthlyRStd).not.toBeNull();
+    expect(scaled.details.monthlyRStd).toBe(normal.details.monthlyRStd);
+  });
   it("stays within 0-100 and rewards a clean, profitable run", () => {
     const trades = Array.from({ length: 20 }, (_, i) =>
       makeTrade({

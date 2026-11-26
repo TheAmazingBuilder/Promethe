@@ -6,17 +6,18 @@
  * only real Promethe data and working actions.
  *
  * What is real here, and what is honestly left out:
- * - Personal: display name, email (read-only), timezone, base currency,
- *   mentor handle and public display name. Promethe stores no phone, bio,
- *   company, job title or location, so those fields are not shown.
+ * - Personal: display name, email (read-only), timezone, base currency.
+ *   Promethe stores no phone, bio, company, job title or location, so
+ *   those fields are not shown.
  * - Account: status Active, plan Free (no subscription to manage),
  *   data export (real ZIP, 24 h cooldown), danger zone wired to the real
  *   deletion flow (password + DELETE, 7-day grace, cancellable).
  * - Security: change password (new real route), two-factor shown as
  *   "Not available" (no TOTP exists), active sessions from AuthSession
  *   rows with revoke. No login-notification toggle: no such channel exists.
- * - Notifications: Discord / Telegram subscription toggles only. There is
- *   no email, push or marketing channel in Promethe, so none is rendered.
+ * - Notifications: Discord / Telegram subscription toggles, plus the
+ *   browser push opt-in (PushNotificationsSection, default off). There
+ *   is no email or marketing channel in Promethe, so none is rendered.
  */
 import * as React from "react";
 import Link from "next/link";
@@ -61,6 +62,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useSession } from "@/components/app/session-context";
+import { PushNotificationsSection } from "@/components/profile/push-notifications-section";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
@@ -158,8 +160,6 @@ function PersonalTab({
   const [name, setName] = React.useState("");
   const [timezone, setTimezone] = React.useState("UTC");
   const [currency, setCurrency] = React.useState("USD");
-  const [handle, setHandle] = React.useState("");
-  const [publicName, setPublicName] = React.useState("");
   const [saving, setSaving] = React.useState(false);
 
   React.useEffect(() => {
@@ -167,8 +167,6 @@ function PersonalTab({
     setName(session.profile.displayName);
     setTimezone(session.profile.timezone);
     setCurrency(session.profile.baseCurrency);
-    setHandle(session.profile.handle ?? "");
-    setPublicName(session.profile.publicDisplayName ?? "");
   }, [session]);
 
   if (!session) return null;
@@ -176,9 +174,7 @@ function PersonalTab({
   const dirty =
     name.trim() !== session.profile.displayName ||
     timezone !== session.profile.timezone ||
-    currency !== session.profile.baseCurrency ||
-    handle.trim() !== (session.profile.handle ?? "") ||
-    publicName.trim() !== (session.profile.publicDisplayName ?? "");
+    currency !== session.profile.baseCurrency;
 
   const tzOptions = COMMON_TIMEZONES.includes(timezone)
     ? COMMON_TIMEZONES
@@ -198,36 +194,7 @@ function PersonalTab({
           baseCurrency: currency,
         }),
       });
-      let next = result;
-      // The handle lives on its own route; only call it when it changed
-      // and is not empty (there is no way to unset a handle once set).
-      if (handle.trim() !== "" && handle.trim() !== (session.profile.handle ?? "")) {
-        next = await apiFetch<{
-          user: { id: string; email: string };
-          profile: typeof session.profile;
-        }>("/api/v1/profile/handle", {
-          method: "PUT",
-          body: JSON.stringify({
-            handle: handle.trim(),
-            publicDisplayName: publicName.trim() || null,
-          }),
-        });
-      } else if (
-        publicName.trim() !== (session.profile.publicDisplayName ?? "") &&
-        session.profile.handle
-      ) {
-        next = await apiFetch<{
-          user: { id: string; email: string };
-          profile: typeof session.profile;
-        }>("/api/v1/profile/handle", {
-          method: "PUT",
-          body: JSON.stringify({
-            handle: session.profile.handle,
-            publicDisplayName: publicName.trim() || null,
-          }),
-        });
-      }
-      setSession(next);
+      setSession(result);
       toast({ title: t("profileSaved") });
     } catch (error) {
       const err = error instanceof ApiClientError ? error : null;
@@ -303,31 +270,6 @@ function PersonalTab({
             </Select>
           </div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="profile-handle">{t("handle")}</Label>
-            <Input
-              id="profile-handle"
-              value={handle}
-              onChange={(e) => setHandle(e.target.value)}
-              maxLength={24}
-              placeholder="@trader"
-            />
-            <p className="text-[11px] text-muted-foreground">{t("handleHint")}</p>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="profile-public-name">{t("publicDisplayName")}</Label>
-            <Input
-              id="profile-public-name"
-              value={publicName}
-              onChange={(e) => setPublicName(e.target.value)}
-              maxLength={60}
-            />
-            <p className="text-[11px] text-muted-foreground">
-              {t("publicDisplayNameHint")}
-            </p>
-          </div>
-        </div>
         <div className="flex justify-end">
           <Button
             onClick={() => void onSave()}
@@ -359,7 +301,7 @@ function AccountTab() {
 
   const download = useMutation({
     mutationFn: async () => {
-      const res = await fetch("/api/v1/account/export");
+      const res = await fetch("/api/v1/account/export", { method: "POST" });
       if (res.ok) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
@@ -820,6 +762,7 @@ function NotificationsTab() {
   const subscriptions = integrations.data?.subscriptions ?? [];
 
   return (
+    <>
     <Card>
       <CardHeader>
         <CardTitle className="text-base">{t("notifTitle")}</CardTitle>
@@ -904,6 +847,10 @@ function NotificationsTab() {
         <p className="mt-4 text-[11px] text-muted-foreground">{t("notifNote")}</p>
       </CardContent>
     </Card>
+      <div className="mt-4">
+        <PushNotificationsSection />
+      </div>
+    </>
   );
 }
 

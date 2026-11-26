@@ -1,24 +1,26 @@
 /**
- * Screenshot storage — local filesystem equivalent of Supabase Storage in the
- * sandbox: uploads/{userId}/{tradeId}/{id}.{ext}, served ONLY through the
- * ownership-checked /api/v1/uploads/[id] route (never as static files).
+ * Private screenshot storage backed by Supabase Storage.
  *
- * Client-side compression (max 1600px, WebP q0.8) happens BEFORE the upload
- * (addendum §11.7) — the server enforces type + size limits as defense in depth.
+ * Objects are stored under:
+ *   <userId>/<tradeId>/<screenshotId>.<ext>
+ *
+ * The bucket must remain private. All reads and deletes are performed by this
+ * server module with the service-role key, only after a Prisma ownership check.
+ * The service-role key must never be sent to the browser.
  */
 import { createId } from "@/lib/id";
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { db } from "@/lib/db";
-
-export const UPLOAD_ROOT = path.join(process.cwd(), "uploads");
+import { screenshotAnnotationsDocumentSchema, screenshotAnnotationsInputSchema, type ScreenshotAnnotation } from "@/lib/validations/screenshot-annotations";
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+const DEFAULT_BUCKET = "trade-screenshots";
+
 const MIME_EXT: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
   "image/webp": "webp",
 };
+
 const EXT_MIME: Record<string, string> = {
   png: "image/png",
   jpg: "image/jpeg",
@@ -28,11 +30,19 @@ const EXT_MIME: Record<string, string> = {
 export class UploadValidationError extends Error {
   readonly code: string;
   readonly status: number;
+
   constructor(code: string, status = 422) {
     super(code);
     this.name = "UploadValidationError";
     this.code = code;
     this.status = status;
+  }
+}
+
+class UploadStorageError extends UploadValidationError {
+  constructor() {
+    super("STORAGE_UNAVAILABLE", 503);
+    this.name = "UploadStorageError";
   }
 }
 
@@ -42,6 +52,141 @@ export interface SavedUpload {
   caption: string | null;
   createdAt: string;
   url: string;
+}
+
+function storageConfig() {
+  const baseUrl = process.env.SUPABASE_URL?.replace(/\/+$/, "");
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const bucket = process.env.SUPABASE_STORAGE_BUCKET || DEFAULT_BUCKET;
+
+  if (!baseUrl || !serviceKey) throw new UploadStorageError();
+
+  let parsed: URL;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    throw new UploadStorageError();
+  }
+  if (parsed.protocol !== "https:" && parsed.hostname !== "localhost") {
+    throw new UploadStorageError();
+  }
+
+  return { baseUrl, serviceKey, bucket };
+}
+
+function objectUrl(baseUrl: string, bucket: string, objectPath: string) {
+  const encodedBucket = encodeURIComponent(bucket);
+  const encodedPath = objectPath
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return `${baseUrl}/storage/v1/object/${encodedBucket}/${encodedPath}`;
+}
+
+function normalizeStoragePath(storagePath: string) {
+  // Compatibility for rows created by the former local-filesystem backend.
+  return storagePath.replace(/^uploads\//, "");
+}
+
+/** Sidecar path derived from the screenshot object; no DB column or migration is needed. */
+export function screenshotAnnotationStoragePath(storagePath: string): string {
+  return normalizeStoragePath(storagePath).replace(/\.[^.]+$/, ".annotations.json");
+}
+
+async function storageRequest(
+  objectPath: string,
+  init: RequestInit = {}
+): Promise<Response> {
+  const { baseUrl, serviceKey, bucket } = storageConfig();
+  try {
+    return await fetch(objectUrl(baseUrl, bucket, objectPath), {
+      ...init,
+      cache: "no-store",
+      headers: (() => {
+        const headers = new Headers(init.headers);
+        headers.set("apikey", serviceKey);
+        headers.set("Authorization", `Bearer ${serviceKey}`);
+        return headers;
+      })(),
+    });
+  } catch {
+    throw new UploadStorageError();
+  }
+}
+
+async function isMissingObjectResponse(response: Response): Promise<boolean> {
+  if (response.status !== 404) return false;
+
+  const payload = (await response.clone().json().catch(() => null)) as
+    | { code?: string; error?: string; message?: string }
+    | null;
+  const code = payload?.code ?? payload?.error;
+
+  // Supabase distinguishes a missing object from a missing bucket.
+  return (
+    code === "NoSuchKey" ||
+    code === "not_found" ||
+    payload?.message === "Object not found"
+  );
+}
+
+async function removeStorageObject(objectPath: string): Promise<void> {
+  const { baseUrl, serviceKey, bucket } = storageConfig();
+  let response: Response;
+  try {
+    response = await fetch(
+      `${baseUrl}/storage/v1/object/${encodeURIComponent(bucket)}`,
+      {
+        method: "DELETE",
+        cache: "no-store",
+        headers: {
+          apikey: serviceKey,
+          Authorization: `Bearer ${serviceKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ prefixes: [objectPath] }),
+      }
+    );
+  } catch {
+    throw new UploadStorageError();
+  }
+
+  // A missing object is already in the desired state; a missing bucket is
+  // a configuration failure and must not be mistaken for successful cleanup.
+  if (!response.ok && !(await isMissingObjectResponse(response))) {
+    throw new UploadStorageError();
+  }
+}
+
+function hasValidImageSignature(buffer: Buffer, mime: string): boolean {
+  if (mime === "image/png") {
+    return (
+      buffer.length >= 8 &&
+      buffer.subarray(0, 8).equals(
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+      )
+    );
+  }
+
+  if (mime === "image/jpeg") {
+    return (
+      buffer.length >= 3 &&
+      buffer[0] === 0xff &&
+      buffer[1] === 0xd8 &&
+      buffer[2] === 0xff
+    );
+  }
+
+  if (mime === "image/webp") {
+    return (
+      buffer.length >= 12 &&
+      buffer.toString("ascii", 0, 4) === "RIFF" &&
+      buffer.toString("ascii", 8, 12) === "WEBP"
+    );
+  }
+
+  return false;
 }
 
 export async function saveUpload(
@@ -63,31 +208,50 @@ export async function saveUpload(
     throw new UploadValidationError("FILE_TOO_LARGE");
   }
 
-  const id = createId();
-  const dir = path.join(UPLOAD_ROOT, userId, tradeId);
-  const fileName = `${id}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
-  await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, fileName), buffer);
+  if (!hasValidImageSignature(buffer, file.type)) {
+    throw new UploadValidationError("INVALID_IMAGE");
+  }
 
-  const row = await db.tradeScreenshot.create({
-    data: {
-      id,
-      tradeId,
-      userId,
-      storagePath: path.posix.join(userId, tradeId, fileName),
-      label,
-      caption,
+  const id = createId();
+  const fileName = `${id}.${ext}`;
+  const storagePath = `${userId}/${tradeId}/${fileName}`;
+
+  const uploadResponse = await storageRequest(storagePath, {
+    method: "POST",
+    headers: {
+      "Content-Type": file.type,
+      "Cache-Control": "private, max-age=0, no-store",
+      "x-upsert": "false",
     },
+    body: new Uint8Array(buffer),
   });
 
-  return {
-    id: row.id,
-    label: row.label,
-    caption: row.caption,
-    createdAt: row.createdAt.toISOString(),
-    url: `/api/v1/uploads/${row.id}`,
-  };
+  if (!uploadResponse.ok) throw new UploadStorageError();
+
+  try {
+    const row = await db.tradeScreenshot.create({
+      data: {
+        id,
+        tradeId,
+        userId,
+        storagePath,
+        label,
+        caption,
+      },
+    });
+
+    return {
+      id: row.id,
+      label: row.label,
+      caption: row.caption,
+      createdAt: row.createdAt.toISOString(),
+      url: `/api/v1/uploads/${row.id}`,
+    };
+  } catch (error) {
+    await removeStorageObject(storagePath).catch(() => undefined);
+    throw error;
+  }
 }
 
 export async function readUpload(
@@ -98,20 +262,125 @@ export async function readUpload(
     where: { id, userId },
   });
   if (!row) return null;
-  const ext = row.storagePath.split(".").pop() ?? "";
-  const contentType = EXT_MIME[ext] ?? "application/octet-stream";
-  try {
-    const buffer = await readFile(path.join(UPLOAD_ROOT, row.storagePath));
-    return { buffer, contentType };
-  } catch {
-    return null;
+
+  const storagePath = normalizeStoragePath(row.storagePath);
+  const response = await storageRequest(storagePath);
+
+  if (await isMissingObjectResponse(response)) return null;
+  if (!response.ok) throw new UploadStorageError();
+
+  const ext = storagePath.split(".").pop() ?? "";
+  const contentType = EXT_MIME[ext];
+  if (!contentType) return null;
+
+  return {
+    buffer: Buffer.from(await response.arrayBuffer()),
+    contentType,
+  };
+}
+
+export async function updateUpload(
+  userId: string,
+  id: string,
+  input: { label: string | null; caption: string | null }
+): Promise<SavedUpload | null> {
+  const allowedLabels = new Set(["BEFORE", "ENTRY", "EXIT", "AFTER"]);
+  if (input.label !== null && !allowedLabels.has(input.label)) {
+    throw new UploadValidationError("INVALID_SCREENSHOT_LABEL");
   }
+  const caption = input.caption?.trim() ?? "";
+  if (caption.length > 500) {
+    throw new UploadValidationError("SCREENSHOT_CAPTION_TOO_LONG");
+  }
+  const result = await db.tradeScreenshot.updateMany({
+    where: { id, userId },
+    data: { label: input.label, caption: caption || null },
+  });
+  if (result.count === 0) return null;
+  const row = await db.tradeScreenshot.findFirst({ where: { id, userId } });
+  if (!row) return null;
+  return { id: row.id, label: row.label, caption: row.caption, createdAt: row.createdAt.toISOString(), url: `/api/v1/uploads/${row.id}` };
+}
+
+export async function readScreenshotAnnotations(
+  userId: string,
+  screenshotId: string
+): Promise<ScreenshotAnnotation[] | null> {
+  const row = await db.tradeScreenshot.findFirst({
+    where: { id: screenshotId, userId },
+    select: { storagePath: true },
+  });
+  if (!row) return null;
+
+  const response = await storageRequest(screenshotAnnotationStoragePath(row.storagePath));
+  if (await isMissingObjectResponse(response)) return [];
+  if (!response.ok) throw new UploadStorageError();
+
+  const payload: unknown = await response.json().catch(() => null);
+  const parsed = screenshotAnnotationsDocumentSchema.safeParse(payload);
+  if (!parsed.success) throw new UploadStorageError();
+  return parsed.data.annotations;
+}
+
+export async function saveScreenshotAnnotations(
+  userId: string,
+  screenshotId: string,
+  input: ScreenshotAnnotation[]
+): Promise<ScreenshotAnnotation[] | null> {
+  const parsed = screenshotAnnotationsInputSchema.safeParse(input);
+  if (!parsed.success) throw new UploadValidationError("INVALID_SCREENSHOT_ANNOTATIONS");
+
+  const row = await db.tradeScreenshot.findFirst({
+    where: { id: screenshotId, userId },
+    select: { storagePath: true },
+  });
+  if (!row) return null;
+
+  const document = {
+    version: 1 as const,
+    updatedAt: new Date().toISOString(),
+    annotations: parsed.data,
+  };
+  const body = JSON.stringify(document);
+  if (Buffer.byteLength(body, "utf8") > 96 * 1024) {
+    throw new UploadValidationError("SCREENSHOT_ANNOTATIONS_TOO_LARGE");
+  }
+
+  const response = await storageRequest(screenshotAnnotationStoragePath(row.storagePath), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "private, max-age=0, no-store",
+      "x-upsert": "true",
+    },
+    body,
+  });
+  if (!response.ok) throw new UploadStorageError();
+  return parsed.data;
 }
 
 export async function deleteUpload(userId: string, id: string): Promise<boolean> {
   const row = await db.tradeScreenshot.findFirst({ where: { id, userId } });
   if (!row) return false;
+
+  await removeStorageObject(screenshotAnnotationStoragePath(row.storagePath));
+  await removeStorageObject(normalizeStoragePath(row.storagePath));
   await db.tradeScreenshot.deleteMany({ where: { id, userId } });
-  await unlink(path.join(UPLOAD_ROOT, row.storagePath)).catch(() => undefined);
   return true;
+}
+
+/**
+ * Deletes screenshot objects captured before an account cascade.
+ * The caller must collect the paths before deleting the user's DB rows.
+ */
+export async function deleteUploadObjects(storagePaths: string[]): Promise<void> {
+  const results = await Promise.allSettled(
+    storagePaths.flatMap((storagePath) => [
+      removeStorageObject(screenshotAnnotationStoragePath(storagePath)),
+      removeStorageObject(normalizeStoragePath(storagePath)),
+    ])
+  );
+  if (results.some((result) => result.status === "rejected")) {
+    throw new UploadStorageError();
+  }
 }

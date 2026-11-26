@@ -1,5 +1,5 @@
 /**
- * v2.5 Module 2 — benchmark engine unit tests (spec §4.5, §7).
+ * v2.5 Module 2 - benchmark engine unit tests (spec §4.5, §7).
  *
  * Covers: fixed % compounding/linear, fixed R per period, partial periods
  * (prorated), empty history, normalization to 100, gap at end, period
@@ -7,6 +7,7 @@
  * monthly returns, timezone boundaries (period borders don't move with DST).
  */
 import { describe, expect, it } from "vitest";
+import { benchmarkInputSchema } from "@/lib/validations/charts";
 import {
   buildFixedBenchmark,
   compareEquityToBenchmark,
@@ -16,7 +17,7 @@ import {
   type EquityPointLite,
 } from "@/lib/charts/benchmark";
 
-describe("benchmark — fixed series", () => {
+describe("benchmark - fixed series", () => {
   it("compounding 1 %/month grows geometrically", () => {
     const s = buildFixedBenchmark(
       {
@@ -132,7 +133,7 @@ describe("benchmark — fixed series", () => {
   });
 });
 
-describe("benchmark — comparison", () => {
+describe("benchmark - comparison", () => {
   const benchmark = buildFixedBenchmark(
     {
       percent: 1,
@@ -186,7 +187,7 @@ describe("benchmark — comparison", () => {
   });
 });
 
-describe("benchmark — goal & projection", () => {
+describe("benchmark - goal & projection", () => {
   it("required monthly return compounds to the goal", () => {
     const r = requiredMonthlyReturn(1000, 2000, 12);
     expect(r).not.toBeNull();
@@ -218,5 +219,143 @@ describe("benchmark — goal & projection", () => {
     expect(r).toHaveLength(2);
     expect(r[0]).toBeCloseTo(4, 6);
     expect(r[1]).toBeCloseTo((1100 / 1040 - 1) * 100, 6);
+  });
+});
+
+describe("benchmark - comparable window clamp (lot 13)", () => {
+  const equity: EquityPointLite[] = [
+    { date: "2025-01-01T00:00:00.000Z", equity: 1000 },
+    { date: "2025-02-01T00:00:00.000Z", equity: 1020 },
+    { date: "2025-02-05T00:00:00.000Z", equity: 1030 },
+  ];
+  const fixedToApril = buildFixedBenchmark(
+    {
+      percent: 1,
+      period: "MONTH",
+      compounding: false,
+      startDate: "2025-01-01T00:00:00.000Z",
+      startBalance: "1000",
+    },
+    "2025-04-01T00:00:00.000Z"
+  );
+
+  it("benchmark running past the last trade is cut off at the last equity date", () => {
+    const r = compareEquityToBenchmark(equity, fixedToApril, { unit: "MONTH" });
+    expect(r.lastDate).toBe("2025-02-05T00:00:00.000Z");
+    expect(r.points[r.points.length - 1].date).toBe("2025-02-05T00:00:00.000Z");
+    // No period past Feb 5 is compared: the Mar and Apr benchmark steps
+    // must not be scored against flat, extrapolated equity.
+    expect(r.periods.every((p) => p.end <= "2025-02-05T00:00:00.000Z")).toBe(true);
+    expect(r.periods).toHaveLength(1);
+    expect(r.periods[0].beaten).not.toBeNull();
+    // Gap at end is the Feb 5 gap (equity 103 vs benchmark 101), not the
+    // April gap against carried-forward equity.
+    expect(r.gapAtEnd).toBeCloseTo(2, 6);
+  });
+
+  it("equity running past the imported series is cut off at the series end", () => {
+    const series = [
+      { date: "2025-01-01T00:00:00.000Z", value: 1000 },
+      { date: "2025-02-01T00:00:00.000Z", value: 1010 },
+    ];
+    const r = compareEquityToBenchmark(equity, series, { unit: "MONTH" });
+    expect(r.lastDate).toBe("2025-02-01T00:00:00.000Z");
+    expect(r.points[r.points.length - 1].date).toBe("2025-02-01T00:00:00.000Z");
+    expect(r.periods).toHaveLength(1);
+  });
+
+  it("no overlap at all yields an empty comparison", () => {
+    const late = buildFixedBenchmark(
+      {
+        percent: 1,
+        period: "MONTH",
+        compounding: false,
+        startDate: "2025-03-01T00:00:00.000Z",
+        startBalance: "1000",
+      },
+      "2025-04-01T00:00:00.000Z"
+    );
+    const r = compareEquityToBenchmark(equity, late, { unit: "MONTH" });
+    expect(r.points).toHaveLength(0);
+    expect(r.periods).toHaveLength(0);
+    expect(r.beatRate).toBeNull();
+    expect(r.gapAtEnd).toBeNull();
+    expect(r.firstDate).toBeNull();
+    expect(r.lastDate).toBeNull();
+  });
+
+  it("unsorted input series compare the same as sorted ones", () => {
+    const shuffled = [...fixedToApril].reverse();
+    const a = compareEquityToBenchmark(equity, fixedToApril, { unit: "MONTH" });
+    const b = compareEquityToBenchmark(equity, shuffled, { unit: "MONTH" });
+    expect(b).toEqual(a);
+  });
+});
+
+describe("benchmark - custom series schema (lot 13)", () => {
+  const base = {
+    name: "Index",
+    type: "CUSTOM_SERIES" as const,
+    params: { period: "MONTH" as const, compounding: true },
+  };
+  it("accepts a strictly increasing series with positive values", () => {
+    const parsed = benchmarkInputSchema.safeParse({
+      ...base,
+      series: [
+        { date: "2025-01-01", value: 100 },
+        { date: "2025-02-01", value: 101 },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+  });
+  it("rejects unsorted and duplicate dates", () => {
+    const unsorted = benchmarkInputSchema.safeParse({
+      ...base,
+      series: [
+        { date: "2025-02-01", value: 101 },
+        { date: "2025-01-01", value: 100 },
+      ],
+    });
+    expect(unsorted.success).toBe(false);
+    const duplicate = benchmarkInputSchema.safeParse({
+      ...base,
+      series: [
+        { date: "2025-01-01", value: 100 },
+        { date: "2025-01-01", value: 101 },
+      ],
+    });
+    expect(duplicate.success).toBe(false);
+  });
+  it("rejects zero or negative values", () => {
+    const zero = benchmarkInputSchema.safeParse({
+      ...base,
+      series: [
+        { date: "2025-01-01", value: 100 },
+        { date: "2025-02-01", value: 0 },
+      ],
+    });
+    expect(zero.success).toBe(false);
+    const negative = benchmarkInputSchema.safeParse({
+      ...base,
+      series: [
+        { date: "2025-01-01", value: 100 },
+        { date: "2025-02-01", value: -5 },
+      ],
+    });
+    expect(negative.success).toBe(false);
+  });
+  it("a fixed benchmark still needs a rate, a custom one needs none", () => {
+    const fixedNoRate = benchmarkInputSchema.safeParse({
+      name: "Fixed",
+      type: "FIXED_PERCENT_PER_PERIOD",
+      params: { period: "MONTH", compounding: true },
+    });
+    expect(fixedNoRate.success).toBe(false);
+    const fixedWithRate = benchmarkInputSchema.safeParse({
+      name: "Fixed",
+      type: "FIXED_PERCENT_PER_PERIOD",
+      params: { percent: 1, period: "MONTH", compounding: true },
+    });
+    expect(fixedWithRate.success).toBe(true);
   });
 });

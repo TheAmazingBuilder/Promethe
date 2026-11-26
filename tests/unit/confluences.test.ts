@@ -180,6 +180,8 @@ describe("computeConfluences — hit rate per confluence", () => {
     expect(row.tagId).toBe("tag-fvg");
     expect(row.name).toBe("Fair Value Gap");
     expect(row.count).toBe(4);
+    expect(row.rSampleSize).toBe(4);
+    expect(row.decidedSampleSize).toBe(3);
     expect(row.wins).toBe(2);
     expect(row.losses).toBe(1);
     expect(row.breakevens).toBe(1);

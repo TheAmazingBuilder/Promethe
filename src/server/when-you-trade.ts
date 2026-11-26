@@ -14,6 +14,8 @@ import { getDisplayPreferences } from "@/server/display-preferences";
 import type { AnalyticsQuery } from "@/lib/validations/analytics";
 import type { WhenYouTradePayload } from "@/lib/trading/dto";
 import type { Prisma } from "@prisma/client";
+import { scopeTradesToCurrency } from "@/lib/analytics/currency-scope";
+import { resolveOwnedAccount } from "@/server/account-errors";
 
 export async function getWhenYouTrade(
   userId: string,
@@ -25,11 +27,8 @@ export async function getWhenYouTrade(
     getDisplayPreferences(userId),
   ]);
 
-  // Account filter must belong to the user (silent fallback to "all").
-  const accountFilter =
-    query.account != null
-      ? (accounts.find((a) => a.id === query.account) ?? null)
-      : null;
+  // Invalid or foreign account IDs are rejected; never widen to all accounts.
+  const accountFilter = resolveOwnedAccount(accounts, query.account);
 
   const where: Prisma.TradeWhereInput = {
     userId,
@@ -37,7 +36,7 @@ export async function getWhenYouTrade(
     isDraft: false,
     ...(accountFilter ? { accountId: accountFilter.id } : {}),
   };
-  const cutoff = periodCutoff(query.period);
+  const cutoff = periodCutoff(query.period, profile?.timezone ?? "UTC");
   if (cutoff != null) where.exitTime = { gte: cutoff };
 
   const rows = await db.trade.findMany({
@@ -48,7 +47,8 @@ export async function getWhenYouTrade(
   const timezone = profile?.timezone ?? "UTC";
   const currency =
     accountFilter?.currency ?? profile?.baseCurrency ?? "USD";
-  const trades = rows.map((t) =>
+  const currencyScope = scopeTradesToCurrency(rows, currency);
+  const trades = currencyScope.trades.map((t) =>
     toAnalyticsTrade(t, timezone, prefs.tradingDay)
   );
 

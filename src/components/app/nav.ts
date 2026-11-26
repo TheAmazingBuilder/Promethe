@@ -27,18 +27,19 @@ import {
   BarChart3,
   BookOpen,
   Calculator,
+  CalendarClock,
   CalendarDays,
   CandlestickChart,
   Coins,
   Database,
   GitMerge,
-  GraduationCap,
   LayoutDashboard,
   ListChecks,
   NotebookPen,
   NotebookText,
   Plug,
   Settings,
+  ShieldCheck,
   Tags,
   Target,
   Upload,
@@ -58,8 +59,6 @@ export interface NavItem {
   /** Roadmap phase (README) - null when the section is already live. */
   phase: number | null;
   ready: boolean;
-  /** v3 Phase 5 - only shown when the user mentors at least one trader. */
-  mentorOnly?: boolean;
 }
 
 export interface NavGroup {
@@ -103,6 +102,15 @@ export const NAV_GROUPS: NavGroup[] = [
         path: "/calendar",
         view: "calendar",
         icon: CalendarDays,
+        phase: null,
+        ready: true,
+      },
+      {
+        labelKey: "nav.propFirms",
+        descriptionKey: "nav.propFirmsDesc",
+        path: "/prop-firms",
+        view: "prop-firms",
+        icon: ShieldCheck,
         phase: null,
         ready: true,
       },
@@ -237,16 +245,6 @@ export const NAV_GROUPS: NavGroup[] = [
     labelKey: "nav.groups.app",
     items: [
       {
-        labelKey: "nav.mentorSpace",
-        descriptionKey: "nav.mentorSpaceDesc",
-        path: "/mentor",
-        view: "mentor",
-        icon: GraduationCap,
-        phase: null,
-        ready: true,
-        mentorOnly: true,
-      },
-      {
         labelKey: "nav.settings",
         descriptionKey: "nav.settingsDesc",
         path: "/settings",
@@ -280,6 +278,18 @@ export const EXTRA_NAV_ITEMS: NavItem[] = [
     path: "/strategies",
     view: "strategies",
     icon: Target,
+    phase: null,
+    ready: true,
+  },
+  {
+    // Lot 10 - the economic calendar is a real route, reachable from the
+    // command palette, search and the calendar page, but it stays out of
+    // the 10-entry sidebar on purpose (same rule as Strategies).
+    labelKey: "nav.economicCalendar",
+    descriptionKey: "nav.economicCalendarDesc",
+    path: "/economic-calendar",
+    view: "economic-calendar",
+    icon: CalendarClock,
     phase: null,
     ready: true,
   },

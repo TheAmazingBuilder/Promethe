@@ -404,7 +404,7 @@ function CategoricalPreview({
             >
               {colorBySign &&
                 data.map((d, i) => {
-                  const v = d[s.key] as number | null;
+                  const v = d.raw.values[s.key];
                   return (
                     <Cell
                       key={i}

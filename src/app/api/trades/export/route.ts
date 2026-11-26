@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/server/session";
 import { apiError } from "@/server/api";
-import { rateLimit, sweepRateLimits } from "@/lib/rate-limit";
+import { consumeRateLimit } from "@/lib/rate-limit";
+import { hashRateLimitIdentifier } from "@/lib/tokens";
 import {
   tradeListQuerySchema,
   zodFieldErrors,
@@ -16,11 +17,20 @@ import { exportTradesCsv } from "@/server/export";
 export async function GET(req: Request) {
   try {
     const session = await requireUser();
-    sweepRateLimits();
-    if (!rateLimit(`trades-export:${session.user.id}`, 10, 60 * 1000)) {
+    const exportLimit = await consumeRateLimit(
+      `trades-export:${hashRateLimitIdentifier("trades-export-user", session.user.id)}`,
+      10,
+      60 * 1000
+    );
+    if (!exportLimit.allowed) {
       return NextResponse.json(
         { error: "RATE_LIMITED", message: "Too many exports, please wait." },
-        { status: 429 }
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.max(1, Math.ceil((exportLimit.resetAt - Date.now()) / 1000))),
+          },
+        }
       );
     }
     const url = new URL(req.url);

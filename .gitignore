@@ -12,6 +12,8 @@ node_modules
 
 # testing
 /coverage
+/db/*.db
+/db/*.db-*
 
 # next.js
 /.next/
@@ -50,5 +52,9 @@ dev.out.log
 /prompt
 
 server.log
+/download/
+/upload/
+/uploads/
+
 # Skills directory
 /skills/tool-results

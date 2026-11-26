@@ -3,11 +3,11 @@
 /**
  * Gaïa — reusable "linked notes" section.
  *
- * Rendered inside other modules (strategy detail, trade review) — not inside
- * Gaïa itself. Lists the notes whose ref blocks point at this entity and
- * offers a "Take notes" button; creation itself is the host's job
- * (onCreateNote), this section only lists and deep-links to the editor.
- * Not injected anywhere yet.
+ * Rendered inside other modules (strategy detail, trade review) and inside
+ * the Gaïa editor itself for NOTE → NOTE backlinks. Lists the notes whose
+ * ref blocks point at this entity and offers a "Take notes" button;
+ * creation itself is the host's job (onCreateNote), this section only
+ * lists and deep-links to the editor.
  */
 import * as React from "react";
 import { ArrowUpRight, NotebookText, StickyNote } from "lucide-react";

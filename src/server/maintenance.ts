@@ -33,44 +33,94 @@ export interface MaintenanceReport {
   notificationsPruned: number;
   trashPurged: TrashPurgeReport;
   traderScoreSnapshots: number;
+  failures: string[];
+}
+
+async function runStep<T>(
+  name: string,
+  action: () => Promise<T>,
+  fallback: T,
+  failures: string[]
+): Promise<T> {
+  try {
+    return await action();
+  } catch (error) {
+    failures.push(name);
+    console.error("[maintenance] " + name + " failed:", error);
+    return fallback;
+  }
 }
 
 export async function runDailyMaintenance(now: Date = new Date()): Promise<MaintenanceReport> {
   const day = (n: number) => new Date(now.getTime() - n * 24 * 60 * 60 * 1000);
+  const failures: string[] = [];
 
-  // 1. Due deletions first — RGPD deadlines beat housekeeping.
-  const deletions = await executeDueDeletions(now);
+  // Each step is isolated: a Storage or table failure must not prevent
+  // unrelated retention, invitation or notification cleanup from running.
+  const deletions = await runStep(
+    "account deletions",
+    () => executeDueDeletions(now),
+    { executed: 0, tombstones: [] },
+    failures
+  );
 
-  // 2. Rate-limit buckets.
-  const rateLimitBucketsPruned = await pruneRateLimits(24 * 60 * 60 * 1000);
+  const rateLimitBucketsPruned = await runStep(
+    "rate-limit pruning",
+    () => pruneRateLimits(24 * 60 * 60 * 1000),
+    0,
+    failures
+  );
 
-  // 3. Sync payloads (audit rows stay, personal payloads go).
-  const syncPayloads = await db.syncEventLog.updateMany({
-    where: { receivedAt: { lt: day(14) }, NOT: { payloadJson: null } },
-    data: { payloadJson: null },
-  });
+  const syncPayloads = await runStep(
+    "sync payload purge",
+    () => db.syncEventLog.updateMany({
+      where: { receivedAt: { lt: day(14) }, NOT: { payloadJson: null } },
+      data: { payloadJson: null },
+    }),
+    { count: 0 },
+    failures
+  );
 
-  // 4. Merge undo snapshots past expiry.
-  const mergeLogs = await db.tradeMergeLog.deleteMany({
-    where: { expiresAt: { lt: now } },
-  });
+  const mergeLogs = await runStep(
+    "merge log pruning",
+    () => db.tradeMergeLog.deleteMany({ where: { expiresAt: { lt: now } } }),
+    { count: 0 },
+    failures
+  );
 
-  // 5. Long-expired share links (+7 d grace for open tabs).
-  const shareLinks = await db.shareLink.deleteMany({
-    where: { expiresAt: { lt: day(7) } },
-  });
+  const shareLinks = await runStep(
+    "share link pruning",
+    () => db.shareLink.deleteMany({ where: { expiresAt: { lt: day(7) } } }),
+    { count: 0 },
+    failures
+  );
 
-  // 6. Old notifications.
-  const notifications = await db.notificationLog.deleteMany({
-    where: { sentAt: { lt: day(90) } },
-  });
+  const notifications = await runStep(
+    "notification pruning",
+    () => db.notificationLog.deleteMany({ where: { sentAt: { lt: day(90) } } }),
+    { count: 0 },
+    failures
+  );
 
-  // 7. v2.5 M4 — trash retention (30 days) + ChangeLog pruning.
-  const trashPurged = await purgeExpiredTrash(now);
+  const trashPurged = await runStep(
+    "trash retention",
+    () => purgeExpiredTrash(now),
+    {
+      trades: 0,
+      journalEntries: 0,
+      strategies: 0,
+      tags: 0,
+      changeLogsPruned: 0,
+    },
+    failures
+  );
 
-  // 8. v2.5 M6 — daily trader score snapshots (best-effort, never blocks
-  // the report: a failing step logs inside recordDailyTraderScores).
-  const traderScores = await recordDailyTraderScores(now);
+  const traderScores = await runStep(
+    "trader score snapshots",
+    () => recordDailyTraderScores(now),
+    { users: 0, snapshots: 0 },
+    failures
+  );
 
   return {
     ranAt: now.toISOString(),
@@ -82,5 +132,6 @@ export async function runDailyMaintenance(now: Date = new Date()): Promise<Maint
     notificationsPruned: notifications.count,
     trashPurged,
     traderScoreSnapshots: traderScores.snapshots,
+    failures,
   };
 }

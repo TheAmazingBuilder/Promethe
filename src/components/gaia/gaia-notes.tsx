@@ -163,7 +163,7 @@ function MoveDialog({
     setInitializedFor(note.id);
     setTarget(note.folderId);
   }
-  const folders = foldersQuery.data?.folders ?? [];
+  const folders = foldersQuery.data ?? [];
   return (
     <Dialog open={note !== null} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="max-w-sm" data-testid="gaia-move-dialog">
@@ -264,7 +264,7 @@ export function NotesBrowser({
   const tagsQuery = useGaiaTags();
   const notes = notesQuery.data?.notes ?? [];
   const total = notesQuery.data?.total ?? 0;
-  const tags = (tagsQuery.data?.tags ?? []).filter((tag) => tag.noteCount > 0);
+  const tags = (tagsQuery.data ?? []).filter((tag) => tag.noteCount > 0);
 
   return (
     <div data-testid={testid ?? "gaia-notes-panel"} className="space-y-3">

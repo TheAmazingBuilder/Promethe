@@ -21,6 +21,7 @@ import { toTradeListItem } from "@/server/trades";
 import type { Prisma } from "@prisma/client";
 import { getDisplayPreferences } from "@/server/display-preferences";
 import { tradingDayOfTrade } from "@/lib/time/trading-day";
+import { scopeTradesToCurrency } from "@/lib/analytics/currency-scope";
 
 const TRADE_INCLUDE = {
   instrument: true,
@@ -72,7 +73,8 @@ export async function getDashboard(userId: string): Promise<DashboardPayload> {
     where: { userId, status: "CLOSED", isDraft: false },
     include: TRADE_INCLUDE,
   });
-  const statTrades = closedRows.map(toStatTrade);
+  const currencyScope = scopeTradesToCurrency(closedRows, currency);
+  const statTrades = currencyScope.trades.map(toStatTrade);
 
   const now = Date.now();
   const cutoff = now - 30 * 24 * 60 * 60 * 1000;
@@ -93,11 +95,12 @@ export async function getDashboard(userId: string): Promise<DashboardPayload> {
     toD(0)
   );
   const curveAccountIds = new Set(curveAccounts.map((a) => a.id));
-  const curveTrades = statTrades.filter((t) =>
-    curveAccountIds.has(
-      closedRows.find((r) => r.id === t.id)?.accountId ?? ""
-    )
+  const curveTradeIds = new Set(
+    currencyScope.trades
+      .filter((trade) => curveAccountIds.has(trade.accountId))
+      .map((trade) => trade.id)
   );
+  const curveTrades = statTrades.filter((trade) => curveTradeIds.has(trade.id));
   const equityCurve = computeEquityCurve(curveTrades, initialBalance);
 
   // Open positions + counters + recent trades.
@@ -148,6 +151,7 @@ export async function getDashboard(userId: string): Promise<DashboardPayload> {
 
   return {
     currency,
+    excludedTradeCount: currencyScope.excludedTradeCount,
     accounts: accounts.map(toAccountDTO),
     kpis30d,
     kpisAllTime,

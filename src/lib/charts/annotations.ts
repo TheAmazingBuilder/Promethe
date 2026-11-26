@@ -47,6 +47,37 @@ export function annotationApplies(
   }
 }
 
+export interface ScopeTarget {
+  /** Display name of the scoped account/strategy, null for GLOBAL. */
+  name: string | null;
+  /** True when the annotation is scoped to an account/strategy that no
+   * longer exists - the annotation is kept (never silently deleted) but
+   * its target is gone, so the list must say so instead of showing "?". */
+  missing: boolean;
+}
+
+/**
+ * Resolve the display name of an annotation's scope target. Accounts and
+ * strategies are referenced by id only (no foreign key), so deleting one
+ * leaves the annotation behind - this reports the orphan instead of
+ * hiding it.
+ */
+export function annotationScopeTarget(
+  a: Annotation,
+  accounts: Array<{ id: string; name: string }>,
+  strategies: Array<{ id: string; name: string }>
+): ScopeTarget {
+  if (a.scope === "ACCOUNT") {
+    const found = accounts.find((x) => x.id === a.accountId);
+    return { name: found?.name ?? null, missing: found == null };
+  }
+  if (a.scope === "STRATEGY") {
+    const found = strategies.find((x) => x.id === a.strategyId);
+    return { name: found?.name ?? null, missing: found == null };
+  }
+  return { name: null, missing: false };
+}
+
 // ── Before / after statistics ────────────────────────────────────────────────
 
 export interface SideStats {

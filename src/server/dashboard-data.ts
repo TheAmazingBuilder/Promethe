@@ -20,6 +20,7 @@
 import type { Prisma } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
+import { resolveOwnedAccount } from "@/server/account-errors";
 import { D0, Decimal, toD } from "@/lib/trading/dec";
 import {
   computeEquityCurve,
@@ -79,6 +80,7 @@ import { listGoalsWithProgress } from "@/server/goals";
 import { recentViolations } from "@/server/rules";
 import { DashboardValidationError } from "@/server/dashboards";
 import { toDashboardDTO } from "@/server/dashboards";
+import { scopeTradesToCurrency } from "@/lib/analytics/currency-scope";
 
 // ── Requirements (feature prerequisites, registry "requires") ────────────────
 
@@ -131,7 +133,10 @@ export interface DashboardWidgetDataPayload {
   timezone: string;
   /** ISO production instant. */
   generatedAt: string;
-  widgets: Record<string, { data: unknown | null; error: string | null }>;
+  widgets: Record<
+    string,
+    { data: unknown | null; error: string | null; currency?: string; excludedTradeCount?: number }
+  >;
   requirements: Requirements;
 }
 
@@ -220,6 +225,8 @@ type AccountRow = Prisma.AccountGetPayload<Record<string, never>>;
  * list-item DTOs.
  */
 interface DashboardTrade extends AnalyticsTrade {
+  /** Stored P&L denomination; do not infer from mutable account settings. */
+  pnlCurrency: string;
   /** Narrowed from StatTrade's optional - always set by the mapper below. */
   strategyName: string | null;
   pips: string | null;
@@ -282,6 +289,7 @@ function toDashboardTrade(
     lots: t.lots.toString(),
     accountId: t.accountId,
     accountName: t.account.name,
+    pnlCurrency: t.pnlCurrency,
     timeframe: t.timeframe,
     setupType: t.setupType,
     marketCondition: t.marketCondition,
@@ -736,7 +744,9 @@ async function computeWidgetData(
         id: e.id,
         title: e.title,
         currency: e.currency,
-        impact: e.impact,
+        // Impact is nullable since lot 10 (FRED rates nothing): the widget
+        // only badges HIGH, and an unrated event never claims to be HIGH.
+        impact: e.impact ?? "UNKNOWN",
         category: e.category,
         scheduledAt: e.scheduledAt.toISOString(),
       }));
@@ -840,10 +850,7 @@ async function loadDashboardData(
   // behaviour).
   const dayOf = tradingDayOfTrade(timezone, prefs.tradingDay);
   const todayTradingDay = getTradingDay(new Date(), timezone, prefs.tradingDay);
-  const globalAccount =
-    query.accountId != null
-      ? (accounts.find((a) => a.id === query.accountId) ?? null)
-      : null;
+  const globalAccount = resolveOwnedAccount(accounts, query.accountId);
   const dto = toDashboardDTO(dashboardRow);
 
   // Resolve every loader widget's period + account once, up front. The
@@ -874,7 +881,7 @@ async function loadDashboardData(
     }
     const account =
       widget.accountOverride != null
-        ? (accounts.find((a) => a.id === widget.accountOverride) ?? null)
+        ? resolveOwnedAccount(accounts, widget.accountOverride)
         : globalAccount;
     const period = resolvePeriod(
       { preset: query.preset, accountId: widget.accountOverride ?? null },
@@ -957,19 +964,32 @@ async function loadDashboardData(
     openRows,
   };
 
-  const widgets: Record<string, { data: unknown | null; error: string | null }> =
-    {};
+  const widgets: DashboardWidgetDataPayload["widgets"] = {};
 
   for (const { widget, account, period } of resolved) {
     try {
-      const scoped =
+      const accountScoped =
         account != null
           ? trades.filter((t) => t.accountId === account.id)
           : trades;
+      const widgetCurrency = account?.currency ?? ctx.currency;
+      // Money-based aggregates must never combine raw P&L from different
+      // currencies. Recent-trade and open-position lists remain cross-currency
+      // because each row carries its own pnlCurrency.
+      const shouldScopeCurrency =
+        CLOSED_DATASET_WIDGETS.has(widget.type) &&
+        widget.type !== "recent-trades";
+      const currencyScope =
+        shouldScopeCurrency
+          ? scopeTradesToCurrency(accountScoped, widgetCurrency)
+          : { trades: accountScoped, excludedTradeCount: 0 };
+      const scoped = currencyScope.trades;
       const sample = applyPeriod(scoped, period);
       widgets[widget.id] = {
         data: await computeWidgetData(ctx, widget, account, scoped, sample, period),
         error: null,
+        currency: widgetCurrency,
+        excludedTradeCount: currencyScope.excludedTradeCount,
       };
     } catch (error) {
       if (error instanceof DashboardValidationError) {

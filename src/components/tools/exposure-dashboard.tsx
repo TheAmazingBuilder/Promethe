@@ -14,6 +14,13 @@ import { useTranslations } from "next-intl";
 import { AlertTriangle, Info } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAccounts, useInstruments, useTradesList, useUpdateTrade } from "@/hooks/use-trading";
 import {
   aggregateExposure,
@@ -36,6 +43,7 @@ export function ExposureDashboard() {
   const t = useTranslations("tools");
   const [balance, setBalance] = React.useState("10000");
   const [currency, setCurrency] = React.useState("USD");
+  const [accountId, setAccountId] = React.useState("");
   const settingsQuery = useExposureSettings();
   const settings = settingsQuery.data ?? DEFAULT_EXPOSURE_SETTINGS;
   const saveSettings = useSaveExposureSettings();
@@ -72,7 +80,9 @@ export function ExposureDashboard() {
     });
   };
 
-  const { data: accounts } = useAccounts();
+  const { data: accounts, isLoading: accountsLoading } = useAccounts();
+  const account = accounts?.find((item) => item.id === accountId) ?? accounts?.[0];
+  const selectedAccountId = account?.id ?? null;
   const { data: instruments } = useInstruments();
   const openTrades = useTradesList({
     page: 1,
@@ -81,9 +91,8 @@ export function ExposureDashboard() {
     order: "desc",
     includeDrafts: false,
     status: "OPEN",
+    accountId: selectedAccountId ?? undefined,
   });
-
-  const account = accounts?.[0];
   React.useEffect(() => {
     if (!account) return;
     setBalance(account.initialBalance);
@@ -103,7 +112,9 @@ export function ExposureDashboard() {
   }, [instruments]);
 
   const trades: OpenTradeLike[] = React.useMemo(() => {
-    return (openTrades.data?.data ?? []).map((item) => ({
+    return (openTrades.data?.data ?? [])
+      .filter((item) => selectedAccountId !== null && item.accountId === selectedAccountId)
+      .map((item) => ({
       id: item.id,
       symbol: item.symbol,
       direction: item.direction,
@@ -120,7 +131,7 @@ export function ExposureDashboard() {
       accountCurrency: currency,
       riskAmount: null,
     }));
-  }, [openTrades.data, priceDrafts, currency]);
+  }, [openTrades.data, priceDrafts, currency, selectedAccountId]);
 
   const summary = React.useMemo(() => {
     const decomposed = trades.map((trade) =>
@@ -139,17 +150,39 @@ export function ExposureDashboard() {
     [summary, balance, settings]
   );
 
-  const loading = openTrades.isLoading;
+  const loading = accountsLoading || (!!account && openTrades.isLoading);
   const noStopLossCount = summary.summary.noStopLoss.length;
 
   return (
     <div className="space-y-6">
       {toolsUnavailable && <ToolsUnavailable />}
-      <div className="grid gap-4 sm:grid-cols-3">
+      {summary.summary.missingFxSymbols.length > 0 && (
+        <p className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          {t("exposureMissingFx", { symbols: summary.summary.missingFxSymbols.join(", ") })}
+        </p>
+      )}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="space-y-2">
+          <Label htmlFor="ex-account">{t("exposureAccount")}</Label>
+          <Select value={account?.id ?? ""} onValueChange={setAccountId}>
+            <SelectTrigger id="ex-account" className="w-full">
+              <SelectValue placeholder={t("exposureAccountPlaceholder")} />
+            </SelectTrigger>
+            <SelectContent>
+              {(accounts ?? []).map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {item.name} ({item.currency})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <div className="space-y-2">
           <Label htmlFor="ex-balance">{t("balance")}</Label>
           <Input id="ex-balance" type="number" inputMode="decimal" min="0" step="any"
             value={balance} onChange={(e) => setBalance(e.target.value)} className="tabular-nums" />
+          <p className="text-xs text-muted-foreground">{t("exposureBalanceHint")}</p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="ex-dup">{t("exposureDupThreshold")}</Label>
@@ -177,7 +210,7 @@ export function ExposureDashboard() {
         <>
           <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Stat label={t("exposureOpenTrades")} value={String(trades.length)} />
-            <Stat label={t("exposureTotalRisk")} value={`${fmtNum(summary.summary.totalOpenRisk, 2)} ${currency}`} />
+            <Stat label={t("exposureTotalRisk")} value={summary.summary.totalOpenRisk !== null ? `${fmtNum(summary.summary.totalOpenRisk, 2)} ${currency}` : "—"} />
             <Stat label={t("exposureNoStopLoss")} value={String(noStopLossCount)} />
             <Stat label={t("exposureAlerts")} value={String(duplications.length)} />
           </dl>
@@ -216,10 +249,10 @@ export function ExposureDashboard() {
                     <tr key={c.currency} className="border-b last:border-0">
                       <td className="px-3 py-2 font-medium">{c.currency}</td>
                       <td className="px-3 py-2 text-right tabular-nums">
-                        {c.notional.gte(0) ? "+" : ""}{fmtNum(c.notional, 0)} {currency}
+                        {c.notional !== null ? `${c.notional.gte(0) ? "+" : ""}${fmtNum(c.notional, 0)} ${currency}` : "—"}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">
-                        {c.risk.gte(0) ? "+" : ""}{fmtNum(c.risk, 2)} {currency}
+                        {c.risk !== null ? `${c.risk.gte(0) ? "+" : ""}${fmtNum(c.risk, 2)} ${currency}` : "—"}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">{c.positionCount}</td>
                     </tr>
@@ -245,7 +278,7 @@ export function ExposureDashboard() {
                     {summary.summary.byInstrument.map((row) => (
                       <tr key={row.key} className="border-b last:border-0">
                         <td className="px-3 py-2 font-medium tabular-nums">{row.key}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.risk, 2)} {currency}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.risk !== null ? `${fmtNum(row.risk, 2)} ${currency}` : "—"}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{row.count}</td>
                       </tr>
                     ))}
@@ -268,7 +301,7 @@ export function ExposureDashboard() {
                     {summary.summary.byStrategy.map((row) => (
                       <tr key={row.key} className="border-b last:border-0">
                         <td className="px-3 py-2 font-medium">{row.key === "" ? t("exposureNoStrategy") : row.key}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.risk, 2)} {currency}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.risk !== null ? `${fmtNum(row.risk, 2)} ${currency}` : "—"}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{row.count}</td>
                       </tr>
                     ))}
@@ -339,9 +372,9 @@ export function ExposureDashboard() {
                           }}
                         />
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums">{fmtNum(d.openRisk, 2)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{d.openRisk !== null ? fmtNum(d.openRisk, 2) : "—"}</td>
                       <td className="px-3 py-2 text-right tabular-nums">
-                        {d.floatingPnl ? `${d.floatingPnl.gte(0) ? "+" : ""}${fmtNum(d.floatingPnl, 2)}` : "-"}
+                        {d.floatingPnl !== null ? `${d.floatingPnl.gte(0) ? "+" : ""}${fmtNum(d.floatingPnl, 2)}` : "-"}
                       </td>
                     </tr>
                   ))}

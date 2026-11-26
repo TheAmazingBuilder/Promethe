@@ -88,12 +88,69 @@ export function comparePlanVsReal(
 ): PlanVsReal {
   const lots = toD(totalLots);
   const closes = executions.filter(
-    (e) => e.type === "PARTIAL_EXIT" || e.type === "FINAL_EXIT"
+    (execution) =>
+      (execution.type === "PARTIAL_EXIT" || execution.type === "FINAL_EXIT") &&
+      toD(execution.price).isFinite() &&
+      toD(execution.price).gt(0) &&
+      toD(execution.lots).isFinite() &&
+      toD(execution.lots).gt(0)
   );
 
+  // Assign each close to at most one tier: the closest matching target.
+  // This prevents a single execution near two adjacent targets from being
+  // counted twice in the plan's total realized percentage.
+  const assigned = new Map<number, Array<{ execution: ExecutionLike; distance: Decimal }>>();
+  for (const execution of closes) {
+    const executionPrice = toD(execution.price);
+    let bestIndex = -1;
+    let bestDistance: Decimal | null = null;
+
+    for (let index = 0; index < plan.tiers.length; index++) {
+      const tier = plan.tiers[index];
+      let distance: Decimal | null = null;
+
+      if (tier.targetType === "PRICE") {
+        const target = toD(tier.target);
+        if (!target.isFinite() || target.lte(0)) continue;
+        const delta = executionPrice.minus(target).abs();
+        const tolerance = target.abs().times("0.02");
+        if (delta.lte(tolerance)) distance = delta;
+      } else {
+        const targetR = toD(tier.target);
+        if (!targetR.isFinite() || targetR.lte(0)) continue;
+        const actualR = tierRMultiple(executionPrice, direction, entry, stopLoss);
+        if (actualR !== null) {
+          const delta = actualR.minus(targetR).abs();
+          if (delta.lte("0.1")) distance = delta;
+        }
+      }
+
+      if (
+        distance !== null &&
+        (bestDistance === null || distance.lt(bestDistance))
+      ) {
+        bestIndex = index;
+        bestDistance = distance;
+      }
+    }
+
+    if (bestIndex >= 0 && bestDistance !== null) {
+      const bucket = assigned.get(bestIndex) ?? [];
+      bucket.push({ execution, distance: bestDistance });
+      assigned.set(bestIndex, bucket);
+    }
+  }
+
   const tiers: TierComparison[] = plan.tiers.map((tier, index) => {
-    const manual = manualRealizedPct?.[index];
-    if (manual !== undefined && manual !== "") {
+    const manual = manualRealizedPct?.[index]?.trim();
+    const manualValid =
+      manual !== undefined &&
+      /^(?:\d+(?:\.\d*)?|\.\d+)$/.test(manual) &&
+      toD(manual).isFinite() &&
+      toD(manual).gte(0) &&
+      toD(manual).lte(100);
+
+    if (manualValid) {
       const pct = toD(manual);
       return {
         tier,
@@ -103,29 +160,22 @@ export function comparePlanVsReal(
         status: pct.gte(toD(tier.pct)) ? "done" : pct.gt(0) ? "partial" : "pending",
       };
     }
-    let realizedPct = D0;
-    let realizedPrice: Decimal | null = null;
-    for (const ex of closes) {
-      const exPrice = toD(ex.price);
-      const exLots = toD(ex.lots);
-      let matches = false;
-      if (tier.targetType === "PRICE") {
-        const target = toD(tier.target);
-        const tolerance = target.abs().times("0.02");
-        matches = exPrice.minus(target).abs().lte(tolerance);
-      } else {
-        const r = tierRMultiple(exPrice, direction, entry, stopLoss);
-        if (r !== null) {
-          matches = r.minus(toD(tier.target)).abs().lte("0.1");
-        }
-      }
-      if (matches) {
-        realizedPct = realizedPct.plus(
-          lots.gt(0) ? exLots.div(lots).times(D100) : D0
-        );
-        realizedPrice = exPrice;
-      }
-    }
+
+    const matches = assigned.get(index) ?? [];
+    const closedLots = matches.reduce(
+      (sum, match) => sum.plus(toD(match.execution.lots)),
+      D0
+    );
+    const realizedPct = lots.gt(0) ? closedLots.div(lots).times(D100) : D0;
+    const closest = matches.reduce<
+      { execution: ExecutionLike; distance: Decimal } | null
+    >(
+      (best, match) =>
+        best === null || match.distance.lt(best.distance) ? match : best,
+      null
+    );
+    const realizedPrice = closest ? toD(closest.execution.price) : null;
+
     return {
       tier,
       index,
@@ -140,29 +190,124 @@ export function comparePlanVsReal(
     };
   });
 
-  const totalRealizedPct = tiers.reduce((acc, t) => acc.plus(t.realizedPct), D0);
-  const plannedTotalPct = plan.tiers.reduce((acc, t) => acc.plus(toD(t.pct)), D0);
-  const breakevenMoved = modifications.some(
-    (m) =>
-      m.field === "STOP_LOSS" &&
-      m.newValue !== null &&
-      toD(m.newValue).eq(toD(entry))
-  );
-  const trailingStarted = modifications.some((m) => m.field === "STOP_LOSS");
+  const totalRealizedPct = tiers.reduce((acc, tier) => acc.plus(tier.realizedPct), D0);
+  const plannedTotalPct = plan.tiers.reduce((acc, tier) => acc.plus(toD(tier.pct)), D0);
+
+  // A configured trigger is reached only after enough volume has closed at
+  // its assigned tier. Manual percentages have no timestamp, so they cannot
+  // be used to infer when a stop modification happened.
+  const tierCompletionTime = (tierIndex: number): number | null => {
+    if (tierIndex < 0 || tierIndex >= plan.tiers.length || !lots.gt(0)) return null;
+    const matches = (assigned.get(tierIndex) ?? [])
+      .filter((match) => Number.isFinite(Date.parse(match.execution.time)))
+      .slice()
+      .sort((a, b) => Date.parse(a.execution.time) - Date.parse(b.execution.time));
+    let closedLots = D0;
+    for (const match of matches) {
+      closedLots = closedLots.plus(toD(match.execution.lots));
+      if (
+        closedLots.div(lots).times(D100).gte(toD(plan.tiers[tierIndex].pct))
+      ) {
+        const timestamp = Date.parse(match.execution.time);
+        return Number.isFinite(timestamp) ? timestamp : null;
+      }
+    }
+    return null;
+  };
+
+  const entryPrice = toD(entry);
+  const breakevenTriggerTime =
+    plan.breakevenAfterTier == null
+      ? null
+      : tierCompletionTime(plan.breakevenAfterTier);
+  const breakevenMoved =
+    breakevenTriggerTime !== null &&
+    modifications.some((modification) => {
+      if (
+        modification.field !== "STOP_LOSS" ||
+        modification.oldValue === null ||
+        modification.newValue === null
+      ) {
+        return false;
+      }
+      const timestamp = Date.parse(modification.time);
+      if (!Number.isFinite(timestamp) || timestamp <= breakevenTriggerTime) return false;
+      const oldStop = toD(modification.oldValue);
+      const newStop = toD(modification.newValue);
+      if (
+        !oldStop.isFinite() ||
+        !newStop.isFinite() ||
+        oldStop.lte(0) ||
+        newStop.lte(0) ||
+        !newStop.eq(entryPrice) ||
+        oldStop.eq(entryPrice)
+      ) {
+        return false;
+      }
+      return direction === "LONG" ? oldStop.lt(entryPrice) : oldStop.gt(entryPrice);
+    });
+
+  // Trailing is considered started only after its configured tier has
+  // completed and a later SL modification advanced further into profit.
+  let trailingStarted = false;
+  const trailingIndex = plan.trailingAfterTier;
+  const trailingTriggerTime =
+    trailingIndex == null ? null : tierCompletionTime(trailingIndex);
+  if (trailingTriggerTime !== null) {
+    trailingStarted = modifications.some((modification) => {
+      if (
+        modification.field !== "STOP_LOSS" ||
+        modification.oldValue === null ||
+        modification.newValue === null
+      ) {
+        return false;
+      }
+      const timestamp = Date.parse(modification.time);
+      if (!Number.isFinite(timestamp) || timestamp <= trailingTriggerTime) return false;
+      const oldStop = toD(modification.oldValue);
+      const newStop = toD(modification.newValue);
+      if (
+        !oldStop.isFinite() ||
+        !newStop.isFinite() ||
+        oldStop.lte(0) ||
+        newStop.lte(0)
+      ) {
+        return false;
+      }
+      return direction === "LONG"
+        ? newStop.gt(entryPrice) && newStop.gt(oldStop)
+        : newStop.lt(entryPrice) && newStop.lt(oldStop);
+    });
+  }
 
   return { plan, tiers, totalRealizedPct, plannedTotalPct, breakevenMoved, trailingStarted };
 }
-
 /** Validate a plan draft: tiers sum to 100, targets are positive numbers. */
 export function validateExitPlan(
-  tiers: ExitPlanTier[]
+  tiers: ExitPlanTier[],
+  breakevenAfterTier: number | null = null,
+  trailingAfterTier: number | null = null
 ): string | null {
   if (tiers.length === 0) return "empty";
-  const sum = tiers.reduce((acc, t) => acc.plus(toD(t.pct)), D0);
+  if (tiers.length > 4) return "count";
+  if (tiers.some((tier) => !Number.isFinite(tier.pct) || tier.pct <= 0 || tier.pct > 100)) {
+    return "pct";
+  }
+  const sum = tiers.reduce((acc, tier) => acc.plus(toD(tier.pct)), D0);
   if (!sum.eq(D100)) return "sum";
-  for (const t of tiers) {
-    if (toD(t.pct).lte(0)) return "pct";
-    if (toD(t.target).lte(0)) return "target";
+  for (const tier of tiers) {
+    const rawTarget = tier.target.trim();
+    if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(rawTarget)) return "target";
+    const target = toD(rawTarget);
+    if (!target.isFinite() || target.lte(0)) return "target";
+  }
+  for (const trigger of [breakevenAfterTier, trailingAfterTier]) {
+    if (
+      trigger !== null &&
+      (!Number.isInteger(trigger) || trigger < 0 || trigger >= tiers.length)
+    ) {
+      return "trigger";
+    }
   }
   return null;
 }

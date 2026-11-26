@@ -17,6 +17,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { QueryErrorState } from "@/components/ui/query-error-state";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { YearCalendar } from "@/components/charts/year-calendar";
 import { Money, Sensitive } from "@/components/privacy/money";
@@ -35,6 +37,7 @@ import { useTimePrefs } from "@/components/time/time-provider";
 import { pnlClass } from "@/lib/format";
 import { useFormat } from "@/lib/format/use-format";
 import { toD } from "@/lib/trading/dec";
+import { navigate } from "@/lib/router";
 
 const EMERALD_BG = "bg-gain-subtle";
 const ROSE_BG = "bg-loss-subtle";
@@ -82,7 +85,7 @@ export function CalendarView() {
   const { data: accountsData } = useAccounts();
   const accounts = accountsData ?? [];
   const effectiveAccount = accountId === "all" ? undefined : accountId;
-  const { data, isLoading } = useCalendar(
+  const { data, isLoading, isError, refetch } = useCalendar(
     cursor.year,
     cursor.month,
     effectiveAccount,
@@ -152,10 +155,20 @@ export function CalendarView() {
           <Button variant="outline" size="sm" onClick={goToday}>
             {t("today")}
           </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate("/economic-calendar")}>
+            {t("economicCalendar")}
+          </Button>
           </>
         }
       />
 
+      {mode === "month" && isError ? (
+        <QueryErrorState
+          title="Calendar data could not be loaded"
+          description="Check your connection and try again. Your journal entries are safe."
+          onRetry={() => void refetch()}
+        />
+      ) : (
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         {/* Year contribution calendar (v2.5 M2) */}
         {mode === "year" ? (
@@ -405,14 +418,20 @@ export function CalendarView() {
           {data != null &&
           data.summary.tradingDays === 0 &&
           Object.keys(data.days).length === 0 ? (
-            <p className="text-center text-sm text-muted-foreground">
-              {t("emptyTitle")} - {t("emptyDesc")}
-            </p>
+            <EmptyState
+              className="gap-0 py-0"
+              title={
+                <p className="text-center text-sm text-muted-foreground">
+                  {t("emptyTitle")} - {t("emptyDesc")}
+                </p>
+              }
+            />
           ) : null}
         </div>
         </>
         )}
       </div>
+      )}
 
       {/* MRT wave 2 — day-detail panel, below the grid. */}
       {mode === "month" && selectedDay ? (

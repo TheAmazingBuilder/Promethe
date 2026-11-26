@@ -24,12 +24,14 @@ export const VIEW_IDS = [
   "quick-trade",
   "analytics",
   "calendar",
+  "economic-calendar",
   "journal",
   "strategies",
   "playbook",
   "gaia",
   "rules",
   "accounts",
+  "prop-firms",
   "instruments",
   "tags",
   "templates",
@@ -39,12 +41,6 @@ export const VIEW_IDS = [
   "import",
   "reconciliation",
   "sharing",
-  // v3 Phase 5 — mentoring
-  "mentors",
-  "mentor",
-  "mentor-owner",
-  "mentor-trade",
-  "invitation",
   // v3 Phase 6 — portability & compliance
   "account-settings",
   // Profile page (/settings/profile)
@@ -66,12 +62,14 @@ export const VIEW_IDS = [
   "analytics-setups",
   "analytics-confluences",
   "analytics-grades",
+  "analytics-cross-analysis",
   "analytics-sequences",
   "analytics-seasonality",
   "analytics-anomalies",
   "analytics-weekly-plan",
   "analytics-performance-report",
   "analytics-goals",
+  "analytics-monte-carlo",
   // v2.5 Module 4 — productivity & ergonomics
   "trash",
   "search",
@@ -94,10 +92,6 @@ export interface AppRoute {
   id?: string;
   /** Trade form mode. */
   mode?: "create" | "edit";
-  /** Mentor space: the mentee (owner) whose journal is being viewed. */
-  ownerId?: string;
-  /** Invitation token (/invitation/{token}). */
-  token?: string;
   /** Legal page (/legal/terms, /legal/privacy, /legal/cookies). */
   legalPage?: "terms" | "privacy" | "cookies";
   /** Journal day (/journal/2025-05-02) - local calendar day. */
@@ -113,6 +107,7 @@ const PATH_TO_VIEW: Record<string, ViewId> = {
   analytics: "analytics",
   calendar: "calendar",
   calendrier: "calendar",
+  "economic-calendar": "economic-calendar",
   journal: "journal",
   strategies: "strategies",
   playbook: "playbook",
@@ -121,6 +116,7 @@ const PATH_TO_VIEW: Record<string, ViewId> = {
   regles: "rules",
   accounts: "accounts",
   comptes: "accounts",
+  "prop-firms": "prop-firms",
   instruments: "instruments",
   tags: "tags",
   tools: "tools",
@@ -157,7 +153,6 @@ const SETTINGS_SUB_VIEW: Record<string, ViewId> = {
   "broker-sync": "broker-sync",
   partage: "sharing",
   sharing: "sharing",
-  mentors: "mentors",
   compte: "account-settings",
   account: "account-settings",
   profile: "profile-settings",
@@ -194,12 +189,14 @@ const ANALYTICS_SUB_VIEW: Record<string, ViewId> = {
   setups: "analytics-setups",
   confluences: "analytics-confluences",
   grades: "analytics-grades",
+  "cross-analysis": "analytics-cross-analysis",
   sequences: "analytics-sequences",
   seasonality: "analytics-seasonality",
   anomalies: "analytics-anomalies",
   "weekly-plan": "analytics-weekly-plan",
   "performance-report": "analytics-performance-report",
   goals: "analytics-goals",
+  "monte-carlo": "analytics-monte-carlo",
 };
 
 /** First segments that belong to the app (English or legacy French). */
@@ -212,9 +209,8 @@ const KNOWN_FIRST_SEGMENTS = new Set([
   "focus",
   "trash",
   "legal",
-  "mentor",
-  "invitation",
   "broker-sync",
+  "prop-firms",
 ]);
 
 function queryFromSearchParams(
@@ -317,20 +313,6 @@ function parseSegments(
     const page = (second ? LEGAL_PAGE_BY_SEGMENT[second] : undefined) ?? "terms";
     return withQuery({ view: "legal", legalPage: page });
   }
-  // /mentor — mentor space; /mentor/{ownerId} — one mentee's journal;
-  // /mentor/{ownerId}/trades/{tradeId} — read-only trade detail
-  if (head === "mentor") {
-    if (!second) return withQuery({ view: "mentor" });
-    if (third === "trades" && fourth) {
-      return withQuery({ view: "mentor-trade", ownerId: second, id: fourth });
-    }
-    return withQuery({ view: "mentor-owner", ownerId: second });
-  }
-  // /invitation/{token} — mentor invitation accept/decline
-  if (head === "invitation" && second) {
-    return withQuery({ view: "invitation", token: second });
-  }
-
   return withQuery({ view });
 }
 
@@ -416,6 +398,8 @@ export function routeToPath(route: AppRoute): string {
       return withSearch("/analytics/confluences", query);
     case "analytics-grades":
       return withSearch("/analytics/grades", query);
+    case "analytics-cross-analysis":
+      return withSearch("/analytics/cross-analysis", query);
     case "analytics-sequences":
       return withSearch("/analytics/sequences", query);
     case "analytics-seasonality":
@@ -426,10 +410,14 @@ export function routeToPath(route: AppRoute): string {
       return withSearch("/analytics/weekly-plan", query);
     case "analytics-goals":
       return withSearch("/analytics/goals", query);
+    case "analytics-monte-carlo":
+      return withSearch("/analytics/monte-carlo", query);
     case "analytics-performance-report":
       return withSearch("/analytics/performance-report", query);
     case "calendar":
       return withSearch("/calendar", query);
+    case "economic-calendar":
+      return withSearch("/economic-calendar", query);
     case "journal":
       return route.journalDate
         ? withSearch(`/journal/${route.journalDate}`, query)
@@ -444,6 +432,8 @@ export function routeToPath(route: AppRoute): string {
       return withSearch("/rules", query);
     case "accounts":
       return withSearch("/accounts", query);
+    case "prop-firms":
+      return withSearch("/prop-firms", query);
     case "instruments":
       return withSearch("/instruments", query);
     case "tags":
@@ -465,25 +455,6 @@ export function routeToPath(route: AppRoute): string {
       return withSearch("/reconciliation", query);
     case "sharing":
       return withSearch("/settings/sharing", query);
-    case "mentors":
-      return withSearch("/settings/mentors", query);
-    case "mentor":
-      return withSearch("/mentor", query);
-    case "mentor-owner":
-      return withSearch(
-        `/mentor/${encodeURIComponent(route.ownerId ?? "")}`,
-        query
-      );
-    case "mentor-trade":
-      return withSearch(
-        `/mentor/${encodeURIComponent(route.ownerId ?? "")}/trades/${encodeURIComponent(route.id ?? "")}`,
-        query
-      );
-    case "invitation":
-      return withSearch(
-        `/invitation/${encodeURIComponent(route.token ?? "")}`,
-        query
-      );
     case "account-settings":
       return withSearch("/settings/account", query);
     case "profile-settings":

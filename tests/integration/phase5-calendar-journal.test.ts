@@ -1,5 +1,5 @@
 /**
- * v1 Phase 5 — integration tests (db/test.db): journal upsert & isolation,
+ * v1 Phase 5 — integration tests (PostgreSQL schema promethe_test): journal upsert & isolation,
  * calendar local-day bucketing (Toronto TZ) + summary/streaks, strategy
  * checklist replace-all + immutable versions + per-strategy stats, PROP
  * breach-risk status.
@@ -12,11 +12,18 @@ import {
 import {
   deleteJournalEntry,
   getJournalEntry,
+  getJournalExportData,
+  createJournalTemplate,
+  deleteJournalTemplate,
+  updateJournalTemplate,
+  getJournalPeriodReview,
   journalDays,
+  listJournalTemplates,
   listRecentJournal,
   upsertJournalEntry,
+  upsertJournalPeriodReview,
 } from "@/server/journal";
-import { getCalendar } from "@/server/calendar";
+import { getCalendar, getCalendarDay } from "@/server/calendar";
 import { getPropStatus } from "@/server/prop-status";
 import {
   createStrategy,
@@ -151,19 +158,37 @@ describe("journal entries", () => {
     const created = await upsertJournalEntry(userA.id, {
       date: "2026-01-06",
       preMarketPlan: "Plan v1",
+      keyLevels: "2,350 resistance",
+      primaryScenario: "Wait for rejection",
+      maxRiskPercent: "1.5",
+      stressLevel: 2,
+      energyLevel: 4,
+      focusLevel: 5,
+      nextSessionCommitment: "Wait for confirmation",
       mood: 3,
     });
     expect(created.preMarketPlan).toBe("Plan v1");
+    expect(created.keyLevels).toBe("2,350 resistance");
+    expect(created.primaryScenario).toBe("Wait for rejection");
+    expect(created.maxRiskPercent).toBe("1.5");
+    expect(created.stressLevel).toBe(2);
+    expect(created.energyLevel).toBe(4);
+    expect(created.focusLevel).toBe(5);
+    expect(created.nextSessionCommitment).toBe("Wait for confirmation");
     expect(created.mood).toBe(3);
 
     const updated = await upsertJournalEntry(userA.id, {
       date: "2026-01-06",
       preMarketPlan: "Plan v2",
+      keyLevels: "2,360 resistance",
+      stressLevel: 1,
       mood: 5,
       keyLesson: "Patience",
     });
     expect(updated.id).toBe(created.id);
     expect(updated.preMarketPlan).toBe("Plan v2");
+    expect(updated.keyLevels).toBe("2,360 resistance");
+    expect(updated.stressLevel).toBe(1);
     expect(updated.keyLesson).toBe("Patience");
 
     const rows = await db.journalEntry.findMany({
@@ -195,13 +220,98 @@ describe("journal entries", () => {
     expect(feb.size).toBe(0);
   });
 
-  it("listRecentJournal is user-scoped and newest first", async () => {
-    const entries = await listRecentJournal(userA.id);
-    expect(entries.length).toBeGreaterThanOrEqual(3);
-    for (let i = 1; i < entries.length; i++) {
-      expect(entries[i - 1].date >= entries[i].date).toBe(true);
+  it("exports only the selected user's daily and period Journal reflections", async () => {
+    const data = await getJournalExportData(userA.id, "2026-01-05", "2026-01-11");
+    expect(data.entries.some((entry) => entry.date === "2026-01-06")).toBe(true);
+    expect(data.periodReviews.every((review) => review.userId === userA.id)).toBe(true);
+    const otherUser = await getJournalExportData(userB.id, "2026-01-05", "2026-01-11");
+    expect(otherUser.entries.every((entry) => entry.date !== "2026-01-06")).toBe(true);
+    expect(otherUser.periodReviews.every((review) => review.userId === userB.id)).toBe(true);
+  });
+
+  it("creates and deletes Journal templates with strict user ownership", async () => {
+    const template = await createJournalTemplate(userA.id, {
+      name: "XAU London breakout",
+      description: "Preparation for the London session.",
+      marketBias: "Bullish above 2340",
+      keyLevels: "2340 / 2352",
+      primaryScenario: "Wait for a confirmed breakout and retest.",
+      maxRiskPercent: "0.5",
+    });
+    const templates = await listJournalTemplates(userA.id);
+    expect(templates.some((item) => item.id === template.id)).toBe(true);
+    expect(await listJournalTemplates(userB.id)).toHaveLength(0);
+    expect(await deleteJournalTemplate(userB.id, template.id)).toBe(false);
+
+    const secondTemplate = await createJournalTemplate(userA.id, {
+      name: "New York reversal",
+      marketBias: "Wait for liquidity sweep",
+    });
+    const updated = await updateJournalTemplate(userA.id, template.id, {
+      name: "XAU London v2",
+      preMarketPlan: "Wait for a retest.",
+      isDefault: true,
+    });
+    expect(updated).toMatchObject({
+      name: "XAU London v2",
+      preMarketPlan: "Wait for a retest.",
+      isDefault: true,
+    });
+    const secondDefault = await updateJournalTemplate(userA.id, secondTemplate.id, { isDefault: true });
+    expect(secondDefault?.isDefault).toBe(true);
+    const templatesAfterDefaultChange = await listJournalTemplates(userA.id);
+    expect(templatesAfterDefaultChange.filter((item) => item.isDefault)).toHaveLength(1);
+    expect(templatesAfterDefaultChange.find((item) => item.id === template.id)?.isDefault).toBe(false);
+    expect(await updateJournalTemplate(userB.id, template.id, { name: "Hijack" })).toBeNull();
+    expect(await deleteJournalTemplate(userA.id, template.id)).toBe(true);
+    expect(await deleteJournalTemplate(userA.id, secondTemplate.id)).toBe(true);
+  });
+
+  it("stores weekly qualitative reviews per user and period", async () => {
+    const input = {
+      periodType: "WEEKLY" as const,
+      periodStart: "2026-01-05",
+      periodEnd: "2026-01-11",
+      whatWentWell: "Waited for confirmation.",
+      whatToImprove: "Avoid late entries.",
+      keyLesson: "Patience protects execution quality.",
+      nextCommitment: "Stop trading after the daily limit.",
+    };
+    const saved = await upsertJournalPeriodReview(userA.id, input);
+    expect(saved.periodType).toBe("WEEKLY");
+    expect(saved.whatWentWell).toBe(input.whatWentWell);
+
+    const loaded = await getJournalPeriodReview(userA.id, "WEEKLY", "2026-01-05");
+    expect(loaded?.nextCommitment).toBe(input.nextCommitment);
+    expect(await getJournalPeriodReview(userB.id, "WEEKLY", "2026-01-05")).toBeNull();
+  });
+
+  it("listRecentJournal is user-scoped, searchable, filterable and paginated", async () => {
+    const firstPage = await listRecentJournal(userA.id, 2);
+    expect(firstPage.entries).toHaveLength(2);
+    expect(firstPage.hasMore).toBe(true);
+    for (let i = 1; i < firstPage.entries.length; i++) {
+      expect(firstPage.entries[i - 1].date >= firstPage.entries[i].date).toBe(true);
     }
-    expect(entries.every((e) => e.date !== "2026-01-08")).toBe(true);
+    expect(firstPage.entries.every((entry) => entry.date !== "2026-01-08")).toBe(true);
+
+    const secondPage = await listRecentJournal(userA.id, 2, {}, 2);
+    expect(secondPage.entries.length).toBeGreaterThanOrEqual(1);
+    expect(secondPage.entries.some((entry) => firstPage.entries.some((first) => first.id === entry.id))).toBe(false);
+
+    const byText = await listRecentJournal(userA.id, 30, { q: "patience" });
+    expect(byText.entries.some((entry) => entry.date === "2026-01-06")).toBe(true);
+
+    const byRange = await listRecentJournal(userA.id, 30, {
+      from: "2026-01-07",
+      to: "2026-01-09",
+    });
+    expect(byRange.entries.map((entry) => entry.date)).toEqual(
+      expect.arrayContaining(["2026-01-07", "2026-01-09"]),
+    );
+
+    const byMood = await listRecentJournal(userA.id, 30, { mood: 5 });
+    expect(byMood.entries.map((entry) => entry.date)).toContain("2026-01-06");
   });
 
   it("deletes only the owner's entry", async () => {
@@ -218,12 +328,31 @@ describe("calendar (local-day bucketing, America/Toronto)", () => {
   beforeAll(async () => {
     // January 2026, all on account A.
     // 2026-01-06 15:05 Toronto (20:05 UTC) → +340 (green day, 2 trades)
-    await makeTrade({
+    const reviewedTrade = await makeTrade({
       userId: userA.id,
       accountId: accountAId,
       exitTime: new Date("2026-01-06T20:05:00Z"),
       netPnl: "200",
       rMultiple: "1.2",
+    });
+    const fomoTag = await db.tag.create({
+      data: { userId: userA.id, name: "FOMO", kind: "MISTAKE" },
+    });
+    await db.tradeReview.create({
+      data: {
+        tradeId: reviewedTrade.id,
+        userId: userA.id,
+        mistakeTagIds: JSON.stringify([fomoTag.id]),
+      },
+    });
+    await db.tradeScreenshot.create({
+      data: {
+        tradeId: reviewedTrade.id,
+        userId: userA.id,
+        storagePath: "test/journal-gallery.webp",
+        label: "ENTRY",
+        caption: "Entry confirmation",
+      },
     });
     await makeTrade({
       userId: userA.id,
@@ -261,6 +390,24 @@ describe("calendar (local-day bucketing, America/Toronto)", () => {
       exitTime: new Date("2026-01-06T20:05:00Z"),
       netPnl: "9999",
     });
+  });
+
+  it("surfaces private screenshots and aggregates Trade Review mistakes for the day", async () => {
+    const payload = await getCalendarDay(userA.id, { date: "2026-01-06" });
+    expect(payload.screenshots).toHaveLength(1);
+    expect(payload.screenshots?.[0]).toMatchObject({
+      tradeId: expect.any(String),
+      symbol: "XAUUSD",
+      label: "ENTRY",
+      caption: "Entry confirmation",
+    });
+    expect(payload.behavioralMistakes).toEqual([
+      expect.objectContaining({ name: "FOMO", count: 1 }),
+    ]);
+
+    const otherUser = await getCalendarDay(userB.id, { date: "2026-01-06" });
+    expect(otherUser.screenshots).toHaveLength(0);
+    expect(otherUser.behavioralMistakes).toHaveLength(0);
   });
 
   it("buckets exits in the user's local day (UTC+5h shift for Toronto in EST)", async () => {
@@ -455,7 +602,8 @@ describe("strategies (checklist, versions, stats)", () => {
     expect(await listVersions(userB.id, strategy.id)).toBeNull();
 
     // Delete a version.
-    expect(await deleteVersion(userA.id, strategy.id, versions[0].id)).toBe(true);
+    const deletion = await deleteVersion(userA.id, strategy.id, versions[0].id);
+    expect(deletion).toEqual({ deleted: true, protected: false });
     expect(await listVersions(userA.id, strategy.id)).toHaveLength(1);
     await db.strategy.delete({ where: { id: strategy.id } });
   });

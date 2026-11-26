@@ -59,7 +59,7 @@ Promethe is a web app you can host yourself. Record your trades, keep a strategy
 **Integrations**
 
 - Discord / Telegram summaries and alerts (drawdown, prop-firm rules)
-- PDF monthly reports, PWA, guided tour, public share links, mentor mode
+- PDF monthly reports, PWA, guided tour, public share links
 
 ## Tech stack
 
@@ -70,11 +70,11 @@ Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS + shadcn/ui ·
 ```bash
 git clone https://github.com/TheAmazingBuilder/Promethe.git
 cd Promethe
-npm install
+bun install --frozen-lockfile
 cp .env.example .env   # fill in your own values (see below)
-npx prisma db push
-npx prisma generate
-npm run dev            # http://localhost:3000
+bunx prisma db push
+bunx prisma generate
+bun run dev            # http://localhost:3000
 ```
 
 Seed the reference data (37 instruments, 21 tags, plus a local demo account - idempotent, local use only):
@@ -83,7 +83,7 @@ Seed the reference data (37 instruments, 21 tags, plus a local demo account - id
 bun prisma/seed.ts
 ```
 
-Apply Row Level Security in Supabase (SQL Editor, `prisma/rls.sql`). It is defense-in-depth for the `anon` / `authenticated` roles; the app itself scopes every query to the signed-in user.
+Apply the Supabase access script (SQL Editor, `prisma/rls.sql`): it disables Row Level Security and revokes all table privileges from the `anon` / `authenticated` roles, so the public PostgREST API cannot read or write any table. This is defense-in-depth only - the real isolation is the app itself, which scopes every query to the signed-in user. Do not enable per-user RLS policies without a migration plan and tests.
 
 ## Environment variables
 
@@ -102,7 +102,7 @@ Generate peppers with `openssl rand -hex 32`. Never commit a real `.env` - this 
 
 ## Deployment
 
-1. **Supabase** - create a project, copy the pooler URLs into `DATABASE_URL` / `DIRECT_URL`, run `npx prisma db push`, apply `prisma/rls.sql` in the SQL Editor.
+1. **Supabase** - create a project, copy the pooler URLs into `DATABASE_URL` / `DIRECT_URL`, run `bunx prisma db push`, apply `prisma/rls.sql` in the SQL Editor.
 2. **Vercel** - import the repo (Next.js preset), set the environment variables above, deploy. The build runs `prisma generate` before `next build`, so the Prisma client always matches the current schema.
 
 Notes for the free tiers: a Supabase free project pauses after ~7 days of inactivity (expect a ~30 s cold start); the Vercel Hobby plan is for non-commercial use. Rate limiting is in-memory - fine for personal use, move to Upstash before opening the app to the public.
@@ -110,7 +110,7 @@ Notes for the free tiers: a Supabase free project pauses after ~7 days of inacti
 ## Project structure
 
 ```
-prisma/            # schema, seed, RLS policies
+prisma/            # schema, seed, Supabase access script
 src/app/           # App Router pages + API routes (/api/v1/…)
 src/lib/trading/   # pure calculation engine (no UI strings)
 src/server/        # data access, always scoped by user
@@ -122,9 +122,13 @@ docs/              # API reference (docs/API.md)
 ## Tests
 
 ```bash
-npm test           # Vitest (recreates an isolated test DB first)
-npm run lint       # ESLint
+bun run test:unit          # Unit tests (no database required)
+bun run test:integration   # PostgreSQL integration tests; resets only schema promethe_test
+bun run test:all           # Unit + integration suites
+bun run lint               # ESLint
 ```
+
+Integration tests require `TEST_DATABASE_URL` and `TEST_DIRECT_URL`, both targeting a dedicated PostgreSQL database/schema named `promethe_test`. The reset script refuses SQLite and the production `public` schema; never point these variables at production.
 
 ## License
 

@@ -317,7 +317,15 @@ export async function listFxRates(userId: string): Promise<FxRateDTO[]> {
 export async function listFxRateInputs(userId: string): Promise<CalcFxRateInput[]> {
   try {
     const rates = await listFxRates(userId);
-    return rates.map((r) => ({ base: r.base, quote: r.quote, rate: r.rate }));
+    // Keep date/source: the sizing path surfaces them as rate provenance
+    // (FxRate.rateDate) instead of dropping them at the mapping boundary.
+    return rates.map((r) => ({
+      base: r.base,
+      quote: r.quote,
+      rate: r.rate,
+      date: r.date,
+      source: r.source,
+    }));
   } catch (error) {
     if (error instanceof ToolsTablesMissingError) return [];
     throw error;
@@ -528,8 +536,12 @@ export async function listExitPlans(userId: string): Promise<ExitPlanDTO[]> {
   return rows.map(toExitPlanDTO);
 }
 
-function assertValidPlan(tiers: ExitPlanTier[]): void {
-  if (validateExitPlan(tiers) !== null) {
+function assertValidPlan(
+  tiers: ExitPlanTier[],
+  breakevenAfterTier: number | null,
+  trailingAfterTier: number | null
+): void {
+  if (validateExitPlan(tiers, breakevenAfterTier, trailingAfterTier) !== null) {
     throw new ToolsValidationError("EXIT_PLAN_INVALID");
   }
 }
@@ -538,7 +550,7 @@ export async function createExitPlan(
   userId: string,
   input: ExitPlanInput
 ): Promise<ExitPlanDTO> {
-  assertValidPlan(input.tiers);
+  assertValidPlan(input.tiers, input.breakevenAfterTier, input.trailingAfterTier);
   const row = await guardToolsTable(() =>
     db.exitPlan.create({
       data: {
@@ -563,7 +575,16 @@ export async function updateExitPlan(
     db.exitPlan.findFirst({ where: { id, userId } })
   );
   if (!existing) return null;
-  if (patch.tiers !== undefined) assertValidPlan(patch.tiers);
+  const nextTiers = patch.tiers ?? parseTiers(existing.tiersJson);
+  const nextBreakeven =
+    patch.breakevenAfterTier !== undefined
+      ? patch.breakevenAfterTier
+      : existing.breakevenAfterTier;
+  const nextTrailing =
+    patch.trailingAfterTier !== undefined
+      ? patch.trailingAfterTier
+      : existing.trailingAfterTier;
+  assertValidPlan(nextTiers, nextBreakeven, nextTrailing);
   const row = await guardToolsTable(() =>
     db.exitPlan.update({
       where: { id },

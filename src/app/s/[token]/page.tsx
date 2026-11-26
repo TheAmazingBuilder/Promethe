@@ -19,7 +19,6 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import {
   resolveShareLink,
-  countShareViewByRawToken,
 } from "@/server/sharing";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { clientIpFrom, hashIp, hashToken } from "@/lib/tokens";
@@ -40,7 +39,7 @@ type PageProps = {
 
 // ── English only (Phase 3): no ?lang= parameter, no locale resolution ──────
 
-/** Deduped resolution - generateMetadata and the page share ONE call. */
+/** Metadata-only resolution (no view counted) - the page body resolves with countView: true. */
 const resolve = cache((token: string) =>
   resolveShareLink(token, { countView: false })
 );
@@ -73,16 +72,18 @@ export default async function SharedPage({ params }: PageProps) {
   const tokenLimit = ipLimit.allowed
     ? await consumeRateLimit(`share:page:token:${hashToken(token)}`, 240, 60 * 60 * 1000)
     : { allowed: false };
+  // Atomic count-before-serve: the increment only succeeds while the link
+  // is usable AND under its view cap, so a maxViews limit can never be
+  // overshot by concurrent opens (counting after render could serve one
+  // view too many). generateMetadata above resolves without counting, so
+  // the view is counted exactly once per HTML navigation, here.
   const result = tokenLimit.allowed
-    ? await resolve(token)
+    ? await resolveShareLink(token, { countView: true })
     : ({ ok: false } as Awaited<ReturnType<typeof resolve>>);
 
   if (!result.ok) {
     return <GoneView m={m} locale={locale} />;
   }
-
-  // Count the view exactly once per HTML navigation.
-  await countShareViewByRawToken(token);
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">

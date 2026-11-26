@@ -1,5 +1,5 @@
 /**
- * Phase 2 perf item 8 — Gaïa listNotes / getOverview (db/test.db).
+ * Phase 2 perf item 8 — Gaïa listNotes / getOverview (PostgreSQL schema promethe_test).
  *
  * listNotes paginates in SQL (filter + orderBy + take/skip, blocks only
  * for the page rows); text search and ref views keep their in-memory

@@ -1,5 +1,5 @@
 /**
- * v3 Phase 1 — DB-backed rate limiter integration tests (db/test.db).
+ * v3 Phase 1 — DB-backed rate limiter integration tests (PostgreSQL schema promethe_test).
  *
  * Verifies the fixed-window semantics: allow up to the limit, deny past it,
  * reset after the window elapses, independent buckets per key, and pruning.

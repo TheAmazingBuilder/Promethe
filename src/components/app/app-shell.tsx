@@ -17,7 +17,6 @@ import {
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarHeader,
   SidebarInset,
   SidebarProvider,
@@ -69,9 +68,7 @@ export function AppShell({
   const activeNavView: ViewId =
     route.view === "trade" || route.view === "trade-form"
       ? "trades"
-      : route.view === "mentor-owner" || route.view === "mentor-trade"
-        ? "mentor"
-        : route.view;
+      : route.view;
   const navItem = findNavItem(activeNavView);
   const pageTitle = navItem ? tRoot(navItem.labelKey) : "Promethe";
 
@@ -117,14 +114,7 @@ export function AppShell({
         <SidebarContent data-tour="nav">
           <NavList activeView={activeNavView} />
         </SidebarContent>
-        <SidebarFooter className="border-t border-sidebar-border px-4 py-3">
-          <p className="text-[11px] leading-relaxed text-sidebar-foreground/60 group-data-[collapsible=icon]:hidden">
-            {t("sidebarNote1")}
-            <br />
-            {t("sidebarNote2")}
-          </p>
-        </SidebarFooter>
-      </Sidebar>
+        </Sidebar>
 
       {/* ── Content column ── */}
       <SidebarInset>

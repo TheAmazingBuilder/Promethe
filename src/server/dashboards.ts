@@ -110,6 +110,7 @@ function toWidgetDTO(widget: WidgetRow): DashboardWidgetDTO {
     layouts: normalized[widget.id] ?? {},
     periodOverride: parseJson<PeriodOverride | null>(widget.periodOverride, null),
     accountOverride: widget.accountOverride,
+    version: widget.version,
   };
 }
 
@@ -142,6 +143,7 @@ export function toDashboardDTO(row: DashboardRow): DashboardDTO {
       layouts: normalized[w.id] ?? {},
       periodOverride: parseJson<PeriodOverride | null>(w.periodOverride, null),
       accountOverride: w.accountOverride,
+      version: w.version,
     })),
   };
 }
@@ -261,7 +263,8 @@ async function insertWidgets(
   dashboardId: string,
   blueprints: readonly WidgetBlueprint[],
   invalidConfig: "fallback" | "skip",
-  recordSkip?: (widgetIndex: number, type: string, reason: ImportSkipReason) => void
+  recordSkip?: (widgetIndex: number, type: string, reason: ImportSkipReason) => void,
+  client: Pick<Prisma.TransactionClient, "dashboardWidget"> = db
 ): Promise<void> {
   const existingLg: WidgetLayout[] = [];
   for (const [widgetIndex, blueprint] of blueprints.entries()) {
@@ -305,7 +308,7 @@ async function insertWidgets(
     const stored = migrateLayouts(1, layouts).layouts;
     if (stored.lg) existingLg.push(stored.lg);
 
-    await db.dashboardWidget.create({
+    await client.dashboardWidget.create({
       data: {
         dashboardId,
         userId,
@@ -323,8 +326,11 @@ async function insertWidgets(
   }
 }
 
-async function nextOrder(userId: string): Promise<number> {
-  const aggregate = await db.dashboard.aggregate({
+async function nextOrder(
+  userId: string,
+  client: Pick<Prisma.TransactionClient, "dashboard"> = db
+): Promise<number> {
+  const aggregate = await client.dashboard.aggregate({
     where: { userId },
     _max: { order: true },
   });
@@ -358,37 +364,41 @@ async function loadDashboardDTO(
  * direct port of the v2 home view).
  */
 export async function listDashboards(userId: string): Promise<DashboardDTO[]> {
-  let rows = await db.dashboard.findMany({
-    where: { userId },
-    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
-    include: { widgets: true },
-  });
-
-  if (rows.length === 0) {
-    // nameKey resolution is impossible server-side — the default bootstrap
-    // stores the literal English name ("Daily"); the UI may rename it.
-    const created = await db.dashboard.create({
-      data: {
-        userId,
-        name: "Daily",
-        icon: DEFAULT_DASHBOARD.icon,
-        order: 0,
-        isDefault: true,
-        templateKey: null,
-      },
-    });
-    await insertWidgets(
-      userId,
-      created.id,
-      templateToBlueprints(DEFAULT_DASHBOARD.widgets),
-      "fallback"
-    );
-    rows = await db.dashboard.findMany({
+  const rows = await db.$transaction(async (tx) => {
+    let dashboards = await tx.dashboard.findMany({
       where: { userId },
       orderBy: [{ order: "asc" }, { createdAt: "asc" }],
       include: { widgets: true },
     });
-  }
+
+    if (dashboards.length === 0) {
+      // Bootstrap the dashboard and its widgets as one atomic operation.
+      const created = await tx.dashboard.create({
+        data: {
+          userId,
+          name: "Daily",
+          icon: DEFAULT_DASHBOARD.icon,
+          order: 0,
+          isDefault: true,
+          templateKey: null,
+        },
+      });
+      await insertWidgets(
+        userId,
+        created.id,
+        templateToBlueprints(DEFAULT_DASHBOARD.widgets),
+        "fallback",
+        undefined,
+        tx
+      );
+      dashboards = await tx.dashboard.findMany({
+        where: { userId },
+        orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+        include: { widgets: true },
+      });
+    }
+    return dashboards;
+  });
 
   return rows.map(toDashboardDTO);
 }
@@ -397,11 +407,6 @@ export async function createDashboard(
   userId: string,
   input: DashboardCreate
 ): Promise<DashboardDTO> {
-  const count = await db.dashboard.count({ where: { userId } });
-  if (count >= MAX_DASHBOARDS) {
-    throw new DashboardValidationError("TOO_MANY_DASHBOARDS", 409);
-  }
-
   let blueprints: WidgetBlueprint[] = [];
   let templateKey: string | null = null;
   if (input.templateKey != null) {
@@ -413,18 +418,31 @@ export async function createDashboard(
     blueprints = templateToBlueprints(template.dashboards[0]?.widgets ?? []);
   }
 
-  const dashboard = await db.dashboard.create({
-    data: {
-      userId,
-      name: input.name,
-      icon: input.icon,
-      order: await nextOrder(userId),
-      isDefault: count === 0,
-      templateKey,
-    },
+  // Dashboard and its initial widgets form one logical operation. If widget
+  // persistence fails, roll back the dashboard instead of leaving it empty.
+  return db.$transaction(async (tx) => {
+    const count = await tx.dashboard.count({ where: { userId } });
+    if (count >= MAX_DASHBOARDS) {
+      throw new DashboardValidationError("TOO_MANY_DASHBOARDS", 409);
+    }
+    const dashboard = await tx.dashboard.create({
+      data: {
+        userId,
+        name: input.name,
+        icon: input.icon,
+        order: await nextOrder(userId, tx),
+        isDefault: count === 0,
+        templateKey,
+      },
+    });
+    await insertWidgets(userId, dashboard.id, blueprints, "fallback", undefined, tx);
+    const row = await tx.dashboard.findFirst({
+      where: { id: dashboard.id, userId },
+      include: { widgets: true },
+    });
+    if (!row) throw new DashboardValidationError("DASHBOARD_NOT_FOUND", 404);
+    return toDashboardDTO(row);
   });
-  await insertWidgets(userId, dashboard.id, blueprints, "fallback");
-  return loadDashboardDTO(userId, dashboard.id);
 }
 
 export async function patchDashboard(
@@ -432,57 +450,85 @@ export async function patchDashboard(
   dashboardId: string,
   patch: DashboardPatch
 ): Promise<DashboardDTO> {
-  const existing = await requireDashboard(userId, dashboardId);
-
-  if (patch.isDefault === true) {
-    // Exactly one default at a time — unset the others first.
-    await db.dashboard.updateMany({
-      where: { userId, isDefault: true, NOT: { id: existing.id } },
-      data: { isDefault: false },
+  return db.$transaction(async (tx) => {
+    const existing = await tx.dashboard.findFirst({
+      where: { id: dashboardId, userId },
     });
-  }
+    if (!existing) throw new DashboardValidationError("DASHBOARD_NOT_FOUND", 404);
 
-  const updated = await db.dashboard.update({
-    where: { id: existing.id },
-    data: {
-      ...(patch.name != null ? { name: patch.name } : {}),
-      ...(patch.icon != null ? { icon: patch.icon } : {}),
-      ...(patch.isDefault != null ? { isDefault: patch.isDefault } : {}),
-    },
-    include: { widgets: true },
+    if (patch.isDefault === true) {
+      // Keep the default switch atomic: never commit with zero defaults
+      // because the second write failed after clearing the previous one.
+      await tx.dashboard.updateMany({
+        where: { userId, isDefault: true, NOT: { id: existing.id } },
+        data: { isDefault: false },
+      });
+    }
+
+    if (patch.isDefault === false && existing.isDefault) {
+      // Unsetting the default must never leave zero defaults (lot 12,
+      // roadmap §16): promote the first remaining dashboard in the same
+      // transaction, mirroring deleteDashboard. On the only dashboard
+      // there is nothing to promote, so the request is refused.
+      const other = await tx.dashboard.findFirst({
+        where: { userId, NOT: { id: existing.id } },
+        orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+      });
+      if (!other) {
+        throw new DashboardValidationError("DEFAULT_REQUIRED", 409);
+      }
+      await tx.dashboard.update({
+        where: { id: other.id },
+        data: { isDefault: true },
+      });
+    }
+
+    const updated = await tx.dashboard.update({
+      where: { id: existing.id },
+      data: {
+        ...(patch.name != null ? { name: patch.name } : {}),
+        ...(patch.icon != null ? { icon: patch.icon } : {}),
+        ...(patch.isDefault != null ? { isDefault: patch.isDefault } : {}),
+      },
+      include: { widgets: true },
+    });
+    return toDashboardDTO(updated);
   });
-  return toDashboardDTO(updated);
 }
 
 export async function deleteDashboard(
   userId: string,
   dashboardId: string
 ): Promise<void> {
-  const existing = await requireDashboard(userId, dashboardId);
-
-  const remaining = await db.dashboard.count({
-    where: { userId, NOT: { id: existing.id } },
-  });
-  if (remaining === 0) {
-    throw new DashboardValidationError("LAST_DASHBOARD", 409);
-  }
-
-  const wasDefault = existing.isDefault;
-  await db.dashboard.delete({ where: { id: existing.id } }); // widgets cascade
-
-  if (wasDefault) {
-    // Promote the first remaining dashboard (lowest order).
-    const first = await db.dashboard.findFirst({
-      where: { userId },
-      orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+  await db.$transaction(async (tx) => {
+    const existing = await tx.dashboard.findFirst({
+      where: { id: dashboardId, userId },
     });
-    if (first) {
-      await db.dashboard.update({
-        where: { id: first.id },
-        data: { isDefault: true },
-      });
+    if (!existing) throw new DashboardValidationError("DASHBOARD_NOT_FOUND", 404);
+
+    const remaining = await tx.dashboard.count({
+      where: { userId, NOT: { id: existing.id } },
+    });
+    if (remaining === 0) {
+      throw new DashboardValidationError("LAST_DASHBOARD", 409);
     }
-  }
+
+    await tx.dashboard.delete({ where: { id: existing.id } }); // widgets cascade
+
+    if (existing.isDefault) {
+      // Promote the first remaining dashboard in the same transaction.
+      const first = await tx.dashboard.findFirst({
+        where: { userId },
+        orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+      });
+      if (first) {
+        await tx.dashboard.update({
+          where: { id: first.id },
+          data: { isDefault: true },
+        });
+      }
+    }
+  });
 }
 
 export async function reorderDashboards(
@@ -635,8 +681,13 @@ export async function patchWidget(
     config = JSON.stringify(configResult.config);
   }
 
-  const updated = await db.dashboardWidget.update({
-    where: { id: widget.id },
+  // Lot 12 (roadmap §16): optimistic concurrency. The update only applies
+  // when the row still carries the version the client last saw; a stale
+  // save (overlapping autosaves, another tab) is rejected with 409 instead
+  // of silently overwriting the newer layout. updateMany is atomic, so two
+  // simultaneous saves with the same version resolve to exactly one winner.
+  const applied = await db.dashboardWidget.updateMany({
+    where: { id: widget.id, version: input.expectedVersion },
     data: {
       ...(input.title !== undefined ? { title: input.title ?? null } : {}),
       ...(config !== undefined ? { config } : {}),
@@ -652,7 +703,14 @@ export async function patchWidget(
           }
         : {}),
       ...(accountOverride !== undefined ? { accountOverride } : {}),
+      version: { increment: 1 },
     },
+  });
+  if (applied.count === 0) {
+    throw new DashboardValidationError("STALE_LAYOUT", 409);
+  }
+  const updated = await db.dashboardWidget.findUniqueOrThrow({
+    where: { id: widget.id },
   });
   return toWidgetDTO(updated);
 }
@@ -692,50 +750,53 @@ export async function importDashboards(
   }
 
   const skipped: DashboardImportSkip[] = [];
-  let limitReached = false;
 
-  for (const [dashboardIndex, dashboardInput] of payload.dashboards.entries()) {
-    const count = await db.dashboard.count({ where: { userId } });
-    if (count >= MAX_DASHBOARDS) {
-      limitReached = true;
-    }
-    if (limitReached) {
-      skipped.push({
-        dashboardIndex,
-        widgetIndex: -1,
-        type: "",
-        reason: "LIMIT_REACHED",
+  // Import all accepted dashboards in one transaction. A persistence error
+  // must not leave a partially imported dashboard collection behind.
+  await db.$transaction(async (tx) => {
+    let limitReached = false;
+    for (const [dashboardIndex, dashboardInput] of payload.dashboards.entries()) {
+      const count = await tx.dashboard.count({ where: { userId } });
+      if (count >= MAX_DASHBOARDS) limitReached = true;
+      if (limitReached) {
+        skipped.push({
+          dashboardIndex,
+          widgetIndex: -1,
+          type: "",
+          reason: "LIMIT_REACHED",
+        });
+        continue;
+      }
+
+      const created = await tx.dashboard.create({
+        data: {
+          userId,
+          name: dashboardInput.name,
+          icon: dashboardInput.icon ?? "layout-dashboard",
+          order: await nextOrder(userId, tx),
+          isDefault: count === 0,
+          templateKey: null,
+        },
       });
-      continue;
-    }
 
-    const created = await db.dashboard.create({
-      data: {
+      const blueprints: WidgetBlueprint[] = dashboardInput.widgets.map((w) => ({
+        type: w.type,
+        title: w.title ?? null,
+        config: w.config,
+        layouts: w.layouts,
+        periodOverride: w.periodOverride ?? null,
+      }));
+      await insertWidgets(
         userId,
-        name: dashboardInput.name,
-        icon: dashboardInput.icon ?? "layout-dashboard",
-        order: await nextOrder(userId),
-        isDefault: count === 0,
-        templateKey: null,
-      },
-    });
-
-    const blueprints: WidgetBlueprint[] = dashboardInput.widgets.map((w) => ({
-      type: w.type,
-      title: w.title ?? null,
-      config: w.config,
-      layouts: w.layouts,
-      periodOverride: w.periodOverride ?? null,
-    }));
-    await insertWidgets(
-      userId,
-      created.id,
-      blueprints,
-      "skip",
-      (widgetIndex, type, reason) =>
-        skipped.push({ dashboardIndex, widgetIndex, type, reason })
-    );
-  }
+        created.id,
+        blueprints,
+        "skip",
+        (widgetIndex, type, reason) =>
+          skipped.push({ dashboardIndex, widgetIndex, type, reason }),
+        tx
+      );
+    }
+  });
 
   const dashboards = await listDashboards(userId);
   return { dashboards, skipped };
@@ -753,29 +814,42 @@ export async function applyTemplate(
   dashboardId: string,
   templateKey: string
 ): Promise<{ dashboard: DashboardDTO; skipped: DashboardImportSkip[] }> {
-  const dashboard = await requireDashboard(userId, dashboardId);
-
   const template = getTemplate(templateKey);
   if (!template) {
     throw new DashboardValidationError("TEMPLATE_NOT_FOUND", 404);
   }
 
-  await db.dashboardWidget.deleteMany({
-    where: { dashboardId: dashboard.id },
-  });
-
   const skipped: DashboardImportSkip[] = [];
   const blueprints = templateToBlueprints(
     template.dashboards[0]?.widgets ?? []
   );
-  await insertWidgets(userId, dashboard.id, blueprints, "fallback", (widgetIndex, type, reason) =>
-    skipped.push({ dashboardIndex: 0, widgetIndex, type, reason })
-  );
+  const dashboard = await db.$transaction(async (tx) => {
+    const existing = await tx.dashboard.findFirst({
+      where: { id: dashboardId, userId },
+    });
+    if (!existing) throw new DashboardValidationError("DASHBOARD_NOT_FOUND", 404);
 
-  return {
-    dashboard: await loadDashboardDTO(userId, dashboard.id),
-    skipped,
-  };
+    await tx.dashboardWidget.deleteMany({
+      where: { dashboardId: existing.id },
+    });
+    await insertWidgets(
+      userId,
+      existing.id,
+      blueprints,
+      "fallback",
+      (widgetIndex, type, reason) =>
+        skipped.push({ dashboardIndex: 0, widgetIndex, type, reason }),
+      tx
+    );
+    const updated = await tx.dashboard.findFirst({
+      where: { id: existing.id, userId },
+      include: { widgets: true },
+    });
+    if (!updated) throw new DashboardValidationError("DASHBOARD_NOT_FOUND", 404);
+    return toDashboardDTO(updated);
+  });
+
+  return { dashboard, skipped };
 }
 
 export async function saveAsTemplate(

@@ -32,10 +32,6 @@ export interface SessionProfile {
   theme: string;
   defaultAccountId: string | null;
   preferences: ProfilePreferences;
-  /** v3 - mentoring handle (null until the user picks one). */
-  handle: string | null;
-  /** v3 - name shown to mentors (falls back to displayName). */
-  publicDisplayName: string | null;
 }
 
 export interface SessionPayload {

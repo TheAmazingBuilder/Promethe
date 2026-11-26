@@ -17,6 +17,7 @@
  */
 import type { Candle, OverlayTrade } from "@/lib/charts/price";
 import { slAt } from "@/lib/charts/price";
+import { stopDistance } from "@/lib/trading/calculate";
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -116,12 +117,16 @@ export function createReplayEngine(
   const initialSl = trade.initialStopLoss != null ? Number(trade.initialStopLoss) : null;
   const fallbackSl = trade.stopLoss != null ? Number(trade.stopLoss) : null;
   const tp = trade.takeProfit != null ? Number(trade.takeProfit) : null;
+  // Risk per unit is DIRECTIONAL (same single logic as stopDistance in
+  // the calculation engine, MD §3.2): LONG → entry − SL, SHORT → SL −
+  // entry. A stop on the wrong side (or equal to entry) yields null, so
+  // the replay never reports R multiples off a bogus risk unit — the
+  // previous Math.abs() turned a wrong-side stop into a positive risk.
+  const slValue = initialSl ?? fallbackSl;
   const riskPerUnit =
-    initialSl != null
-      ? Math.abs(entryPrice - initialSl)
-      : fallbackSl != null
-        ? Math.abs(entryPrice - fallbackSl)
-        : null;
+    slValue != null
+      ? (stopDistance(long ? "LONG" : "SHORT", entryPrice, slValue)?.toNumber() ?? null)
+      : null;
 
   // Events (partial closes, SL moves, news).
   const events: ReplayEvent[] = [];

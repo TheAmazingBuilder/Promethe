@@ -125,3 +125,30 @@ export function binomialTwoSidedP(
   }
   return Math.min(1, p);
 }
+
+
+/**
+ * Benjamini-Hochberg false-discovery-rate adjustment.
+ * Returns adjusted p-values in the same order as the input.
+ */
+export function benjaminiHochberg(pValues: number[]): number[] {
+  const sorted = pValues
+    .map((value, index) => ({
+      value: Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1,
+      index,
+    }))
+    .sort((a, b) => a.value - b.value || a.index - b.index);
+  const adjusted = Array.from({ length: pValues.length }, () => 1);
+  let runningMinimum = 1;
+
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const rank = i + 1;
+    runningMinimum = Math.min(
+      runningMinimum,
+      (sorted[i].value * sorted.length) / rank
+    );
+    adjusted[sorted[i].index] = Math.min(1, runningMinimum);
+  }
+
+  return adjusted;
+}

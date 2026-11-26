@@ -1,5 +1,5 @@
 /**
- * v3 Phase 2 — Sync engine integration tests (db/test.db).
+ * v3 Phase 2 — Sync engine integration tests (PostgreSQL schema promethe_test).
  *
  * Exercises processIngestPayload end-to-end (the same code the /api/ingest/mt
  * route runs): idempotency, retries, out-of-order delivery, partial closes,
@@ -147,6 +147,21 @@ describe("ingest engine — full lifecycle", () => {
     await expect(processIngestPayload(await freshConnection(), wrong)).rejects.toThrow();
     const mismatched = await db.brokerConnection.findUniqueOrThrow({ where: { id: connection.id } });
     expect(mismatched.status).toBe("MISMATCH");
+
+    // Even the previously bound terminal stays blocked until the owner
+    // explicitly resets the binding; MISMATCH is a sticky safety state.
+    await expect(
+      processIngestPayload(await freshConnection(), envelope([
+        {
+          eventId: "MT5:TestBroker-Live:11223344:HB:after-mismatch",
+          type: "HEARTBEAT",
+          time: serverNow(),
+          balance: "10000",
+          equity: "10000",
+          openPositions: 0,
+        },
+      ]))
+    ).rejects.toMatchObject({ code: "CONNECTION_MISMATCH" });
 
     // Owner resets the binding from the UI → PENDING again.
     connection = await db.brokerConnection.update({

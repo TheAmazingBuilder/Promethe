@@ -149,6 +149,7 @@ export function ActionRow({
 
 export function WeeklyPlanView() {
   const t = useTranslations("analytics.advanced.weeklyPlan");
+  const tAnalytics = useTranslations("analytics");
   const [accountId, setAccountId] = React.useState<string>("all");
   const account = accountId === "all" ? undefined : accountId;
   const { data, isLoading, isError, refetch } = useWeeklyPlan(account);
@@ -174,6 +175,11 @@ export function WeeklyPlanView() {
       sampleCount={plan?.sampleSize ?? null}
       hidePeriod
     >
+      {data != null && data.excludedTradeCount > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {tAnalytics("currencyScopeNote", { count: data.excludedTradeCount, currency: data.currency })}
+        </p>
+      ) : null}
       {plan == null ? null : !plan.sufficient ? (
         <Card>
           <CardHeader>
@@ -274,7 +280,12 @@ export function WeeklyPlanView() {
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">{t("sample")}</dt>
-                    <dd className="font-semibold tabular-nums">{plan.edge.sampleSize}</dd>
+                    <dd className="font-semibold tabular-nums">
+                      {plan.edge.sampleSize}
+                      <span className="block text-xs font-normal text-muted-foreground">
+                        {plan.edge.rSampleSize} R
+                      </span>
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">{t("sqn")}</dt>

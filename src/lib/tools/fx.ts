@@ -16,6 +16,13 @@ export interface FxRateInput {
   base: string;
   quote: string;
   rate: DecimalInput;
+  /**
+   * ISO date the rate applies to (YYYY-MM-DD, from FxRate.rateDate).
+   * Null/absent = undated: the rate carries no freshness information.
+   */
+  date?: string | null;
+  /** MANUAL | CSV — where the stored rate came from. */
+  source?: string | null;
 }
 
 export interface ResolvedFxRate {
@@ -24,6 +31,32 @@ export interface ResolvedFxRate {
   path: string[];
   /** True when a triangulation leg was needed. */
   triangulated: boolean;
+  /**
+   * ISO date (YYYY-MM-DD) of the stored rate used; for a triangulated
+   * path the OLDEST leg date (the weakest freshness link). Null when the
+   * stored rate carries no date.
+   */
+  date?: string | null;
+  /** Source of the stored rate(s) used, when all legs agree. */
+  source?: string | null;
+}
+
+/**
+ * A stored rate is stale when it is undated or older than this many days.
+ * Manual/CSV rates in this app are user-maintained, not a live feed, so
+ * staleness is a warning flag on the result — never a silent substitution
+ * and never a block: the user explicitly maintains these rates.
+ */
+export const FX_RATE_STALE_AFTER_DAYS = 7;
+
+/** True when the rate date is missing, invalid, or older than the threshold. */
+export function isFxRateStale(date: string | null | undefined, now: Date = new Date()): boolean {
+  if (!date) return true;
+  const d = new Date(date.length <= 10 ? `${date}T00:00:00.000Z` : date);
+  if (Number.isNaN(d.getTime())) return true;
+  const ageMs = now.getTime() - d.getTime();
+  if (ageMs < 0) return false; // dated in the future: not stale
+  return ageMs > FX_RATE_STALE_AFTER_DAYS * 24 * 60 * 60 * 1000;
 }
 
 const TRIANGULATION_HUBS = ["USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD"];
@@ -36,14 +69,19 @@ function findDirect(
   from: string,
   to: string,
   rates: FxRateInput[]
-): { rate: Decimal; direct: boolean } | null {
+): { rate: Decimal; direct: boolean; date?: string | null; source?: string | null } | null {
   for (const r of rates) {
     const b = norm(r.base);
     const q = norm(r.quote);
     const v = toD(r.rate);
-    if (v.lte(0)) continue;
-    if (b === from && q === to) return { rate: v, direct: true };
-    if (b === to && q === from) return { rate: D1.div(v), direct: true };
+    if (!v.isFinite() || v.lte(0)) continue;
+    // The stored pair may be recorded in either orientation: a stored
+    // USDJPY rate also resolves JPY->USD by inversion (same single
+    // inversion logic the sizing path reuses).
+    if (b === from && q === to)
+      return { rate: v, direct: true, date: r.date ?? null, source: r.source ?? null };
+    if (b === to && q === from)
+      return { rate: D1.div(v), direct: true, date: r.date ?? null, source: r.source ?? null };
   }
   return null;
 }
@@ -56,13 +94,16 @@ export function resolveFxRate(
 ): ResolvedFxRate | null {
   const f = norm(from);
   const t = norm(to);
-  if (f === t) return { rate: D1, path: [], triangulated: false };
+  if (!f || !t) return null;
+  if (f === t) return { rate: D1, path: [], triangulated: false, date: null, source: null };
   const direct = findDirect(f, t, rates);
   if (direct) {
     return {
       rate: direct.rate,
       path: [`${f}${t}`],
       triangulated: false,
+      date: direct.date ?? null,
+      source: direct.source ?? null,
     };
   }
   for (const hub of TRIANGULATION_HUBS) {
@@ -70,10 +111,18 @@ export function resolveFxRate(
     const leg1 = findDirect(f, hub, rates);
     const leg2 = findDirect(hub, t, rates);
     if (leg1 && leg2) {
+      // Freshness of a triangulated rate is the oldest leg's date.
+      const dates = [leg1.date, leg2.date].filter(
+        (d): d is string => typeof d === "string" && d !== ""
+      );
+      dates.sort();
       return {
         rate: leg1.rate.times(leg2.rate),
         path: [`${f}${hub}`, `${hub}${t}`],
         triangulated: true,
+        date: dates[0] ?? null,
+        source:
+          leg1.source && leg1.source === leg2.source ? leg1.source : null,
       };
     }
   }
@@ -91,13 +140,51 @@ export function resolveConversionRate(
   rates: FxRateInput[],
   manualRate?: DecimalInput | null
 ): Decimal | null {
+  return resolveConversionRateDetailed(quoteCurrency, accountCurrency, rates, manualRate)
+    ?.rate ?? null;
+}
+
+export interface ResolvedConversionRate {
+  rate: Decimal;
+  /** MANUAL = typed by the user just now (undated); STORED = FxRate table. */
+  source: "MANUAL" | "STORED";
+  /** ISO date of the stored rate, null for a manual (undated) rate. */
+  date: string | null;
+  /** Legs actually used (stored rates only). */
+  path: string[];
+  triangulated: boolean;
+}
+
+/**
+ * Same resolution as resolveConversionRate, but keeps the provenance the
+ * sizing path must surface (MD §3.1): source + date of the rate used, so
+ * a manual rate is labeled undated/manual and a stored rate shows its
+ * FxRate.rateDate. An invalid manual rate falls back to the stored table,
+ * exactly like resolveConversionRate.
+ */
+export function resolveConversionRateDetailed(
+  quoteCurrency: string,
+  accountCurrency: string,
+  rates: FxRateInput[],
+  manualRate?: DecimalInput | null
+): ResolvedConversionRate | null {
   if (manualRate !== null && manualRate !== undefined && String(manualRate) !== "") {
     const m = toD(manualRate);
-    if (m.gt(0)) return m;
+    if (m.isFinite() && m.gt(0)) {
+      return { rate: m, source: "MANUAL", date: null, path: [], triangulated: false };
+    }
   }
   if (!quoteCurrency || !accountCurrency) return null;
   const resolved = resolveFxRate(quoteCurrency, accountCurrency, rates);
-  return resolved ? resolved.rate : null;
+  return resolved
+    ? {
+        rate: resolved.rate,
+        source: "STORED",
+        date: resolved.date ?? null,
+        path: resolved.path,
+        triangulated: resolved.triangulated,
+      }
+    : null;
 }
 
 /** Parse a CSV of FX rates: header `base,quote,rate` (or pair,rate).
@@ -129,15 +216,15 @@ export function parseFxCsv(text: string): {
       errors.push(`L${idx + 1}: ${line}`);
       return;
     }
-    const n = Number(rateRaw);
-    if (!Number.isFinite(n) || n <= 0) {
+    const parsedRate = toD(rateRaw);
+    if (!parsedRate.isFinite() || parsedRate.lte(0)) {
       errors.push(`L${idx + 1}: ${line}`);
       return;
     }
     rates.push({
       base: base.toUpperCase(),
       quote: quote.toUpperCase(),
-      rate: String(n),
+      rate: parsedRate.toString(),
       source: "CSV",
       date: today,
     });

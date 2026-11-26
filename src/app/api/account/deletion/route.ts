@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/server/session";
 import { apiError } from "@/server/api";
+import { checkReauthRateLimit } from "@/server/reauth-rate-limit";
 import {
   cancelAccountDeletion,
   getDeletionState,
@@ -30,10 +31,18 @@ export async function POST(req: Request) {
       password?: string;
     } | null;
     const password = typeof body?.password === "string" ? body.password : "";
-    if (!password) {
+    if (!password || password.length > 128) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Password required." },
+        { error: "VALIDATION", message: "Password must contain between 1 and 128 characters." },
         { status: 422 }
+      );
+    }
+
+    const rateLimit = await checkReauthRateLimit(session.user.id, req.headers);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "RATE_LIMITED", message: "Too many password attempts. Please wait before trying again." },
+        { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } }
       );
     }
 

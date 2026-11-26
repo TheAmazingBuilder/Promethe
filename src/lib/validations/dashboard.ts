@@ -105,6 +105,8 @@ export const widgetPatchSchema = z
     layouts: widgetLayoutsSchema.optional(),
     periodOverride: periodOverrideSchema.nullable().optional(),
     accountOverride: z.string().nullable().optional(),
+    /** Optimistic-concurrency version (lot 12) - the version the client last saw. */
+    expectedVersion: z.number().int().min(0),
   })
   .strict()
   .refine((v) => Object.keys(v).length > 0, { message: "emptyPatch" });
@@ -320,6 +322,12 @@ export type CustomMetricPatch = z.infer<typeof customMetricPatchSchema>;
 export type AppearanceInput = z.infer<typeof appearanceInputSchema>;
 export type WidgetCreateInput = z.infer<typeof widgetCreateSchema>;
 export type WidgetPatchInput = z.infer<typeof widgetPatchSchema>;
+/**
+ * Client-side patch body (lot 12): the hook injects `expectedVersion`
+ * from the freshest ["dashboards"] cache at the moment the mutation
+ * actually runs, so call sites never send a stale version.
+ */
+export type WidgetPatchBody = Omit<WidgetPatchInput, "expectedVersion">;
 export type DashboardCreate = z.infer<typeof dashboardCreateSchema>;
 export type DashboardPatch = z.infer<typeof dashboardPatchSchema>;
 export type DashboardDataQuery = z.infer<typeof dashboardDataQuerySchema>;

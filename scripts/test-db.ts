@@ -1,27 +1,27 @@
 /**
  * Recreates the test database from scratch — separate from the dev database,
- * per addendum §11.8. SQLite-era file (db/test.db): the schema is now
- * PostgreSQL (prisma/schema.prisma), so a `file:` URL is no longer a valid
- * test database.
+ * per addendum §11.8. The test database is PostgreSQL
+ * (prisma/schema.prisma); there is no SQLite test database anymore.
  *
  * SAFETY GUARD: `prisma db push` uses DIRECT_URL for DDL. On a machine whose
  * .env points DIRECT_URL at the production Supabase database, the old script
- * ran `db push --accept-data-loss` against production on every `npm test`
- * (DATABASE_URL was overridden to a file: URL, DIRECT_URL was inherited
- * untouched). This script now only pushes to a local Postgres, and skips the
- * push — without failing `npm test` — otherwise: the suite runs against
- * mocks and does not need a live test database.
+ * ran `db push --accept-data-loss` against production on every `npm test`.
+ * This script only pushes to a local Postgres, and skips the push - without
+ * failing `npm test` - otherwise: the suite runs against mocks and does not
+ * need a live test database.
+ *
+ * The push target is TEST_DIRECT_URL when set, else DIRECT_URL. Both must
+ * point at a local Postgres with `?schema=promethe_test` (see
+ * vitest.config.ts, which enforces the same isolated schema).
  */
 import { execSync } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const dirname = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(dirname, "..");
-const testDb = path.join(root, "db", "test.db");
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-const directUrl = process.env.DIRECT_URL ?? "";
+const directUrl =
+  process.env.TEST_DIRECT_URL ?? process.env.DIRECT_URL ?? "";
 const isLocalPostgres =
   /^(postgres(ql)?:\/\/[^/]*@(localhost|127\.0\.0\.1|\[::1\])(:\d+)?\/)/.test(
     directUrl
@@ -29,24 +29,17 @@ const isLocalPostgres =
 
 if (!directUrl || !isLocalPostgres) {
   console.log(
-    "Skipping test database push: DIRECT_URL is " +
+    "Skipping test database push: " +
       (directUrl
-        ? "not a local Postgres — refusing to run `prisma db push` against a remote database."
-        : "not set.") +
+        ? "the push target is not a local Postgres - refusing to run `prisma db push` against a remote database."
+        : "TEST_DIRECT_URL / DIRECT_URL is not set.") +
       " Tests run against mocks and do not need a live test database." +
-      " To enable a real test DB, set DIRECT_URL to a local Postgres (e.g. postgresql://postgres:postgres@localhost:5432/promethe_test)."
+      " To enable a real test DB, set TEST_DIRECT_URL to a local Postgres (e.g. postgresql://test:test@127.0.0.1:5432/promethe?schema=promethe_test)."
   );
   process.exit(0);
 }
 
-if (existsSync(testDb)) {
-  rmSync(testDb);
-}
-// Prisma journal files for the test db (e.g. test.db-journal).
-for (const extra of ["test.db-journal", "test.db-shm", "test.db-wal"]) {
-  const p = path.join(root, "db", extra);
-  if (existsSync(p)) rmSync(p);
-}
+const schema = new URL(directUrl).searchParams.get("schema") ?? "(unknown)";
 
 execSync(
   "bunx prisma db push --skip-generate --schema prisma/schema.prisma",
@@ -55,9 +48,9 @@ execSync(
     stdio: "inherit",
     env: {
       ...process.env,
-      DATABASE_URL: `file:${testDb}`,
+      DIRECT_URL: directUrl,
     },
   }
 );
 
-console.log(`Test database ready: ${testDb}`);
+console.log(`Test database ready: local Postgres, schema "${schema}".`);

@@ -136,9 +136,16 @@ export async function importChunk(
 ): Promise<ChunkResult> {
   const batch = await db.importBatch.findFirst({ where: { id: batchId, userId } });
   if (!batch) throw new ImportError("BATCH_NOT_FOUND", 404);
-  if (batch.status === "IMPORTED") throw new ImportError("BATCH_ALREADY_DONE", 409);
+  if (batch.status !== "PREVIEW") {
+    throw new ImportError("BATCH_ALREADY_DONE", 409, "This import batch is already finalized.");
+  }
 
-  const account = await db.account.findUniqueOrThrow({ where: { id: batch.accountId } });
+  // The batch is user-scoped, but also verify its account ownership explicitly:
+  // ImportBatch.accountId is not a composite (userId, accountId) foreign key.
+  const account = await db.account.findFirst({
+    where: { id: batch.accountId, userId },
+  });
+  if (!account) throw new ImportError("ACCOUNT_NOT_FOUND", 422);
 
   // Validate the untrusted payload chunk.
   const tradesRaw = (payload as { trades?: unknown[] })?.trades ?? [];
@@ -366,13 +373,18 @@ export async function completeImportBatch(
   const batch = await db.importBatch.findFirst({ where: { id: batchId, userId } });
   if (!batch) throw new ImportError("BATCH_NOT_FOUND", 404);
 
-  // Aggregate the chunk counters stored progressively in countsJson:
-  // importChunk appends nothing — the client sums chunks; here we read what
-  // the client sent at completion for the final record.
-  const payloadCounts = batch.countsJson;
-  void payloadCounts;
-
-  const status = "IMPORTED";
+  // recordBatchCounts persists the client-aggregated counters immediately
+  // before this call. Preserve PARTIAL when the client reported row errors;
+  // otherwise this unconditional IMPORTED write would erase that state.
+  let counts: { errors?: number } = {};
+  try {
+    counts = JSON.parse(batch.countsJson) as { errors?: number };
+  } catch {
+    // Older/malformed counters are treated as zero errors for compatibility.
+  }
+  const status = Number.isFinite(counts.errors) && (counts.errors ?? 0) > 0
+    ? "PARTIAL"
+    : "IMPORTED";
   const updated = await db.importBatch.update({
     where: { id: batch.id },
     data: { status },
@@ -395,12 +407,23 @@ export async function recordBatchCounts(
 ): Promise<ImportBatchDTO> {
   const batch = await db.importBatch.findFirst({ where: { id: batchId, userId } });
   if (!batch) throw new ImportError("BATCH_NOT_FOUND", 404);
-  const updated = await db.importBatch.update({
-    where: { id: batch.id },
+  if (batch.status !== "PREVIEW") {
+    throw new ImportError("BATCH_ALREADY_DONE", 409, "This import batch is already finalized.");
+  }
+  // Compare-and-set prevents a late/retried completion request from replacing
+  // the final counters of a batch that another request has already closed.
+  const updatedCount = await db.importBatch.updateMany({
+    where: { id: batch.id, userId, status: "PREVIEW" },
     data: {
       countsJson: JSON.stringify(counts),
       status: counts.errors > 0 ? "PARTIAL" : "IMPORTED",
     },
+  });
+  if (updatedCount.count !== 1) {
+    throw new ImportError("BATCH_ALREADY_DONE", 409, "This import batch is already finalized.");
+  }
+  const updated = await db.importBatch.findFirstOrThrow({
+    where: { id: batch.id, userId },
   });
   return toDTO(updated);
 }

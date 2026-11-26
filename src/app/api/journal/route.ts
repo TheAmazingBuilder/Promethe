@@ -11,13 +11,14 @@ import { zodFieldErrors } from "@/lib/validations/shared";
 import {
   deleteJournalEntry,
   getJournalEntry,
+  JournalConflictError,
   listRecentJournal,
   upsertJournalEntry,
 } from "@/server/journal";
 
 /**
  * GET  /api/journal?date=YYYY-MM-DD — single day (null when absent), or the
- *       30 most recent entries when no date is given.
+ *       paginated recent entries when no date is given.
  * PUT  /api/journal — upsert on (user, local day).
  * DELETE /api/journal?date=YYYY-MM-DD
  */
@@ -36,7 +37,7 @@ export async function GET(req: Request) {
     const parsed = journalQuerySchema.safeParse(raw);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "VALIDATION", message: "Invalid date.", fieldErrors: zodFieldErrors(parsed.error) },
+        { error: "VALIDATION", message: "Invalid Journal history filters.", fieldErrors: zodFieldErrors(parsed.error) },
         { status: 422 }
       );
     }
@@ -44,8 +45,13 @@ export async function GET(req: Request) {
       const entry = await getJournalEntry(session.user.id, parsed.data.date);
       return NextResponse.json({ entry });
     }
-    const entries = await listRecentJournal(session.user.id);
-    return NextResponse.json({ entries });
+    const page = await listRecentJournal(
+      session.user.id,
+      parsed.data.limit,
+      parsed.data,
+      parsed.data.offset,
+    );
+    return NextResponse.json(page);
   } catch (error) {
     return apiError(error, "journal");
   }
@@ -72,6 +78,18 @@ export async function PUT(req: Request) {
     const entry = await upsertJournalEntry(session.user.id, parsed.data);
     return NextResponse.json({ entry });
   } catch (error) {
+    if (error instanceof JournalConflictError) {
+      return NextResponse.json(
+        {
+          error: "CONFLICT",
+          message: "Journal entry edited elsewhere.",
+          entry: error.serverEntry,
+          baseUpdatedAt: error.baseUpdatedAt,
+          serverUpdatedAt: error.serverUpdatedAt,
+        },
+        { status: 409 }
+      );
+    }
     return apiError(error, "journal");
   }
 }

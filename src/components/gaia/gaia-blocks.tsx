@@ -9,6 +9,8 @@
  * focused. Slash commands and the "Turn into" menu live here too.
  */
 import * as React from "react";
+import { getCandlestickPattern } from "@/lib/gaia/patterns/catalog";
+import { PatternGlyph } from "./gaia-pattern-diagram";
 import {
   AlertTriangle,
   ArrowUp,
@@ -760,7 +762,7 @@ export function GaiaBlockRow({
   onDragStart: (id: string) => void;
   onDragOver: (e: React.DragEvent, id: string) => void;
   onDragEnd: () => void;
-  onDrop: (id: string) => void;
+  onDrop: (id: string, patternId?: string, position?: "above" | "below") => void;
   t: GaiaT;
 }) {
   const isDragging = dragState.dragId === block.id;
@@ -855,6 +857,7 @@ export function GaiaBlockRow({
     case "ref":
       body = <RefBlock block={block} ops={ops} t={t} />;
       break;
+    case "pattern": { const pattern = block.patternId ? getCandlestickPattern(block.patternId) : null; body = pattern ? <figure className="my-2 flex max-w-sm items-center gap-4 rounded-lg border border-border bg-card p-3" data-testid="gaia-pattern-block"><div className="h-24 w-28 shrink-0" role="img" aria-label={`${pattern.name} diagram`}><PatternGlyph patternId={pattern.id} compact /></div><figcaption className="min-w-0"><strong className="block text-sm">{pattern.name}</strong><span className="text-xs text-muted-foreground">{pattern.description}</span></figcaption></figure> : <p className="text-sm text-destructive">{t("gaia.blocks.patternUnavailable")}</p>; break; }
     default:
       body = <TextBlockBody block={block} ops={ops} t={t} />;
   }
@@ -869,7 +872,10 @@ export function GaiaBlockRow({
       onDragOver={(e) => onDragOver(e, block.id)}
       onDrop={(e) => {
         e.preventDefault();
-        onDrop(block.id);
+        const patternId = e.dataTransfer.getData("application/x-promethe-gaia-pattern");
+        const rect = e.currentTarget.getBoundingClientRect();
+        const position = e.clientY < rect.top + rect.height / 2 ? "above" : "below";
+        onDrop(block.id, patternId || undefined, position);
       }}
     >
       {showAbove ? (

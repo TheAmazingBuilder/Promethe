@@ -16,14 +16,15 @@ import {
 describe("sidebar slimming", () => {
   it("lists every page for the command palette and the mobile sheet", () => {
     const items = allNavItems();
-    // 17 visible pages + Mentor Space (mentorOnly, hidden by default)
-    // + Profile settings (palette-only, added with the Profile page).
-    expect(items).toHaveLength(19);
+    // 18 visible pages + Profile settings (palette-only, added with the
+    // Profile page) + Economic Calendar (palette-only, added with lot 10).
+    expect(items).toHaveLength(20);
     const views = items.map((item) => item.view);
     for (const view of [
       "dashboard",
       "trades",
       "calendar",
+      "prop-firms",
       "tools",
       "analytics",
       "journal",
@@ -37,9 +38,9 @@ describe("sidebar slimming", () => {
       "import",
       "broker-sync",
       "reconciliation",
-      "mentor",
       "settings",
       "profile-settings",
+      "economic-calendar",
     ]) {
       expect(views).toContain(view);
     }
@@ -50,24 +51,21 @@ describe("sidebar slimming", () => {
       (group) =>
         group.collapsible
           ? [{ key: group.labelKey }]
-          : group.items
-              .filter((item) => !item.mentorOnly)
-              .map((item) => ({ key: item.view }))
+          : group.items.map((item) => ({ key: item.view }))
     );
-    // 10 page entries + the Data parent row.
-    expect(visibleTopLevel).toHaveLength(11);
+    // 11 page entries + the Data parent row.
+    expect(visibleTopLevel).toHaveLength(12);
     const pageEntries = NAV_GROUPS.flatMap((group) =>
-      group.collapsible
-        ? []
-        : group.items.filter((item) => !item.mentorOnly)
+      group.collapsible ? [] : group.items
     );
-    expect(pageEntries).toHaveLength(10);
+    expect(pageEntries).toHaveLength(11);
     expect(
       pageEntries.map((item) => item.view)
     ).toEqual([
       "dashboard",
       "trades",
       "calendar",
+      "prop-firms",
       "tools",
       "analytics",
       "journal",

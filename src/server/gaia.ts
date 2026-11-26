@@ -23,11 +23,16 @@ import {
   parseJsonBlocks,
   parseJsonStringArray,
   searchSnippet,
-  textOfBlocks,
+  searchTextOfBlocks,
   type GaiaBlock,
   type GaiaRefKind,
 } from "@/lib/gaia/content";
 import { builtInTemplates, findBuiltInTemplate, type GaiaBuiltInTemplate } from "@/lib/gaia/templates";
+import {
+  foldSearchText,
+  rankSearchNotes,
+  searchTokens,
+} from "@/lib/gaia/search";
 import { listRefs as listRefsRaw, resolveNoteRefs, type GaiaRefHit } from "@/lib/gaia/refs";
 import {
   shouldSnapshot,
@@ -42,12 +47,15 @@ export class GaiaError extends Error {
   readonly code: string;
   readonly status: number;
   readonly issues?: { path: string; message: string }[];
+  /** Extra payload for the response body (conflict snapshots). */
+  readonly details?: unknown;
   constructor(
     error: string,
     code: string,
     status: number,
     message: string,
     issues?: { path: string; message: string }[],
+    details?: unknown,
   ) {
     super(message);
     this.name = "GaiaError";
@@ -55,6 +63,7 @@ export class GaiaError extends Error {
     this.code = code;
     this.status = status;
     this.issues = issues;
+    this.details = details;
   }
 }
 
@@ -69,8 +78,8 @@ function validationError(
   return new GaiaError("ValidationError", "VALIDATION", 422, message, issues);
 }
 
-function conflictError(code: string, message: string): GaiaError {
-  return new GaiaError("Conflict", code, 409, message);
+function conflictError(code: string, message: string, details?: unknown): GaiaError {
+  return new GaiaError("Conflict", code, 409, message, undefined, details);
 }
 
 const NOTE_NOT_FOUND = () => notFound("NOTE_NOT_FOUND", "Note not found.");
@@ -79,8 +88,9 @@ const TEMPLATE_NOT_FOUND = () => notFound("TEMPLATE_NOT_FOUND", "Template not fo
 const VERSION_NOT_FOUND = () => notFound("VERSION_NOT_FOUND", "Version not found.");
 
 /**
- * Convertit une GaiaError en réponse HTTP ({ error, code?, message?, issues? }).
- * Retourne null pour les autres erreurs (à passer à apiError).
+ * Convertit une GaiaError en réponse HTTP ({ error, code?, message?,
+ * issues?, details? }). Retourne null pour les autres erreurs (à passer
+ * à apiError).
  */
 export function gaiaErrorResponse(error: unknown): NextResponse | null {
   if (!(error instanceof GaiaError)) return null;
@@ -90,6 +100,7 @@ export function gaiaErrorResponse(error: unknown): NextResponse | null {
       code: error.code,
       message: error.message,
       ...(error.issues ? { issues: error.issues } : {}),
+      ...(error.details !== undefined ? { details: error.details } : {}),
     },
     { status: error.status },
   );
@@ -102,6 +113,8 @@ const noteCreateInputSchema = z.object({
   folderId: z.string().nullable().optional(),
   templateId: z.string().optional(),
   blocks: gaiaBlocksInputSchema.optional(),
+  /** Offline idempotency (§25.5): replaying the same key returns the stored note. */
+  clientMutationId: z.string().max(64).optional(),
 });
 
 const noteUpdateInputSchema = z.object({
@@ -112,6 +125,10 @@ const noteUpdateInputSchema = z.object({
   favorite: z.boolean().optional(),
   blocks: gaiaBlocksInputSchema.optional(),
   touchViewed: z.boolean().optional(),
+  /** Offline conflict check (§25.5): updatedAt the client last saw. */
+  expectedUpdatedAt: z.string().optional(),
+  /** Replay a conflicted edit, overwriting the server row on purpose. */
+  force: z.boolean().optional(),
 });
 
 const noteDuplicateInputSchema = z.object({
@@ -407,7 +424,14 @@ async function versionsOf(userId: string, noteId: string): Promise<NoteVersion[]
   return sortVersionsNewestFirst(versions);
 }
 
-async function maybeSnapshotVersion(userId: string, note: Note): Promise<void> {
+async function maybeSnapshotVersion(
+  userId: string,
+  note: Note,
+  contentChanged = true,
+): Promise<void> {
+  // Lot 11 (roadmap §15): metadata-only changes (favorite, folder, icon,
+  // tags) never burn a version slot with an identical copy of the note.
+  if (!contentChanged) return;
   const versions = await versionsOf(userId, note.id);
   const newest = versions[0] ?? null;
   if (!shouldSnapshot(newest ? newest.savedAt : null, new Date())) return;
@@ -530,7 +554,7 @@ export async function listNotes(
     }
   }
 
-  const q = (query.q ?? "").trim().toLowerCase();
+  const q = foldSearchText(query.q ?? "");
   if (q !== "") {
     // Text search needs block text, tag names and folder names —
     // in-memory path over the scoped set (same matching as before),
@@ -540,14 +564,12 @@ export async function listNotes(
       const blocks = parseJsonBlocks(note.blocks);
       const tagIds = parseJsonStringArray(note.tagIds);
       return (
-        note.title.toLowerCase().includes(q) ||
-        textOfBlocks(blocks).toLowerCase().includes(q) ||
+        foldSearchText(note.title).includes(q) ||
+        foldSearchText(searchTextOfBlocks(blocks)).includes(q) ||
         tagNamesOf(tagIds, tags).some((name) =>
-          name.toLowerCase().includes(q),
+          foldSearchText(name).includes(q),
         ) ||
-        (folderNameOf(note.folderId, folders) ?? "")
-          .toLowerCase()
-          .includes(q)
+        foldSearchText(folderNameOf(note.folderId, folders) ?? "").includes(q)
       );
     });
     const sort = query.sort ?? "updated";
@@ -606,11 +628,27 @@ export async function getNote(
 
 /* ── Notes : écriture ────────────────────────────────────────────────── */
 
+export type CreateNoteResult = GaiaNoteResponse & { deduplicated: boolean };
+
 export async function createNote(
   userId: string,
   input: unknown,
-): Promise<GaiaNoteResponse> {
+): Promise<CreateNoteResult> {
   const parsed = parseOrThrow(noteCreateInputSchema, input);
+
+  // Offline idempotency (§25.5): replaying the same mutation returns the
+  // stored note instead of creating a duplicate (same contract as
+  // Trade.clientMutationId, v2 §4.2).
+  if (parsed.clientMutationId) {
+    const existing = await db.note.findFirst({
+      where: { userId, clientMutationId: parsed.clientMutationId },
+    });
+    if (existing) {
+      const [folders, tags] = await Promise.all([loadFolders(userId), loadTags(userId)]);
+      const response = await noteResponse(userId, existing, folders, tags);
+      return { ...response, deduplicated: true };
+    }
+  }
 
   let folderId: string | null = parsed.folderId ?? null;
   if (folderId !== null) {
@@ -646,6 +684,7 @@ export async function createNote(
       favorite: false,
       templateId: template?.id ?? null,
       blocks: JSON.stringify(blocks),
+      clientMutationId: parsed.clientMutationId ?? null,
       createdAt: now,
       updatedAt: now,
       lastViewedAt: now,
@@ -653,7 +692,8 @@ export async function createNote(
     },
   });
   const [folders, tags] = await Promise.all([loadFolders(userId), loadTags(userId)]);
-  return noteResponse(userId, note, folders, tags);
+  const response = await noteResponse(userId, note, folders, tags);
+  return { ...response, deduplicated: false };
 }
 
 export async function updateNote(
@@ -664,6 +704,41 @@ export async function updateNote(
   const parsed = parseOrThrow(noteUpdateInputSchema, input);
   const note = await findActiveNote(userId, noteId);
   if (!note) throw NOTE_NOT_FOUND();
+
+  // A note may only reference a folder owned by the same user. The create
+  // path already enforces this; PATCH must enforce it before snapshotting or
+  // writing so a foreign folder id cannot be attached to this note.
+  if (parsed.folderId !== undefined && parsed.folderId !== null) {
+    const folder = await db.noteFolder.findFirst({
+      where: { userId, id: parsed.folderId },
+      select: { id: true },
+    });
+    if (!folder) throw FOLDER_NOT_FOUND();
+  }
+
+  // Offline conflict check (§25.5): a content edit (title or blocks) made
+  // from a stale base never silently overwrites the server row. The caller
+  // gets a 409 with the server note and chooses (keep mine with force, or
+  // keep the server version). Metadata-only patches (favorite, folder,
+  // icon, tags) touch no content field and apply without a base check.
+  const touchesContent =
+    parsed.title !== undefined || parsed.blocks !== undefined;
+  if (
+    touchesContent &&
+    parsed.expectedUpdatedAt !== undefined &&
+    parsed.force !== true
+  ) {
+    const base = new Date(parsed.expectedUpdatedAt).getTime();
+    if (Number.isFinite(base) && base !== note.updatedAt.getTime()) {
+      const [folders, tags] = await Promise.all([loadFolders(userId), loadTags(userId)]);
+      const server = await noteResponse(userId, note, folders, tags);
+      throw conflictError("NOTE_CONFLICT", "Note edited elsewhere.", {
+        note: server.note,
+        baseUpdatedAt: parsed.expectedUpdatedAt,
+        serverUpdatedAt: note.updatedAt.toISOString(),
+      });
+    }
+  }
 
   const hasMeaningfulChange =
     parsed.title !== undefined ||
@@ -686,7 +761,15 @@ export async function updateNote(
     return noteResponse(userId, note, folders, tags);
   }
 
-  await maybeSnapshotVersion(userId, note);
+  // Lot 11 (roadmap §15): a version snapshots CONTENT, not metadata.
+  // Toggling a favorite, moving a folder or changing an icon used to
+  // burn one of the 12 version slots with an identical copy of the note.
+  const contentChanged =
+    (parsed.title !== undefined && parsed.title.trim() !== note.title) ||
+    (parsed.blocks !== undefined &&
+      JSON.stringify(normalizeBlocks(parsed.blocks)) !== note.blocks);
+
+  await maybeSnapshotVersion(userId, note, contentChanged);
 
   const data: {
     title?: string;
@@ -752,7 +835,7 @@ export async function duplicateNote(
   if (!source) throw NOTE_NOT_FOUND();
   const title =
     parsed.title?.trim() ??
-    (source.title === "" ? "Untitled note (copy)" : `${source.title} (copie)`);
+    (source.title === "" ? "Untitled note (copy)" : `${source.title} (copy)`);
   const now = new Date();
   const copy = await db.note.create({
     data: {
@@ -1142,33 +1225,44 @@ export async function searchNotes(
   userId: string,
   q: string,
 ): Promise<{ results: (GaiaNoteRow & { snippet: string })[]; total: number }> {
-  const query = q.trim().toLowerCase();
-  if (query === "") return { results: [], total: 0 };
   const [folders, tags, notes] = await Promise.all([
     loadFolders(userId),
     loadTags(userId),
     db.note.findMany({ where: { userId, deletedAt: null } }),
   ]);
-  const results: (GaiaNoteRow & { snippet: string })[] = [];
-  for (const note of notes) {
-    const blocks = parseJsonBlocks(note.blocks);
-    const tagIds = parseJsonStringArray(note.tagIds);
-    const titleHit = note.title.toLowerCase().includes(query);
-    const fullText = textOfBlocks(blocks);
-    const textHit = fullText.toLowerCase().includes(query);
-    const tagHit = tagNamesOf(tagIds, tags).some((name) =>
-      name.toLowerCase().includes(query),
-    );
-    if (!titleHit && !textHit && !tagHit) continue;
+  // Lot 11 (roadmap §15): ranked search - a title hit outranks a tag
+  // hit, which outranks a body hit; every query token must match (AND).
+  // `total` is the real match count, not the page size.
+  const ranked = rankSearchNotes(
+    notes.map((note) => {
+      const blocks = parseJsonBlocks(note.blocks);
+      return {
+        note,
+        blocks,
+        title: note.title,
+        tagNames: tagNamesOf(parseJsonStringArray(note.tagIds), tags),
+        bodyText: searchTextOfBlocks(blocks),
+        updatedAt: note.updatedAt.toISOString(),
+      };
+    }),
+    q,
+  );
+  const total = ranked.length;
+  const tokens = searchTokens(q);
+  const results = ranked.slice(0, 30).map(({ note, blocks }) => {
     const row = toRow(note, folders, tags);
-    results.push({
+    // Match against the same indexed text used for ranking (pattern names
+    // and aliases included), so a pattern-only hit still gets a snippet
+    // centered on the pattern instead of an empty excerpt.
+    const bodyHit = tokens.some((token) =>
+      foldSearchText(searchTextOfBlocks(blocks)).includes(token),
+    );
+    return {
       ...row,
-      snippet: textHit ? searchSnippet(blocks, query) : excerptOf(blocks),
-    });
-  }
-  results.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  const sliced = results.slice(0, 30);
-  return { results: sliced, total: sliced.length };
+      snippet: bodyHit ? searchSnippet(blocks, q) : excerptOf(blocks),
+    };
+  });
+  return { results, total };
 }
 
 /* ── Refs ────────────────────────────────────────────────────────────── */

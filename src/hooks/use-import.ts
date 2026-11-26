@@ -7,9 +7,15 @@
 import * as React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
+import { escapeCsvField } from "@/lib/csv";
+import { invalidateTradeDerivedQueries } from "@/lib/query/invalidation";
 import type { ImportFileContent, ParseResult } from "@/lib/import/types";
 import type { WorkerRequest, WorkerResponse } from "@/lib/import/parse-worker";
 import type { ImportBatchDTO } from "@/server/import";
+import {
+  assertImportFileSize,
+  decodeImportText,
+} from "@/lib/import/primitives";
 
 export interface ImportProgress {
   phase: "idle" | "parsing" | "preview" | "uploading" | "completing" | "done" | "error";
@@ -48,12 +54,15 @@ async function hashFile(file: File): Promise<string> {
  * first, and files of a few MB parse in ~100-300 ms).
  */
 export async function parseFileInWorker(file: File): Promise<ParseResult> {
+  assertImportFileSize(file);
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
   const content: ImportFileContent = { fileName: file.name, extension };
   if (extension === "xlsx" || extension === "xls") {
     content.bytes = new Uint8Array(await file.arrayBuffer());
   } else {
-    content.text = await file.text();
+    // Text files are decoded here (UTF-8, Windows-1252 fallback), never
+    // with File.text(): that assumes UTF-8 and mojibakes other encodings.
+    content.text = decodeImportText(new Uint8Array(await file.arrayBuffer()));
   }
 
   // Let the spinner paint before the (potentially) heavy parse.
@@ -184,11 +193,11 @@ export function useStartImport(onProgress: (progress: ImportProgress) => void) {
         onProgress({
           phase: "uploading",
           percent: Math.round(((chunkIndex + 1) / totalChunks) * 90),
-          message: `Lot ${chunkIndex + 1}/${totalChunks}…`,
+          message: `Batch ${chunkIndex + 1}/${totalChunks}…`,
         });
       }
 
-      onProgress({ phase: "completing", percent: 95, message: "Finalisation…" });
+      onProgress({ phase: "completing", percent: 95, message: "Finalizing…" });
       const completed = await apiFetch<{
         batch: ImportBatchDTO;
         reconciliation: { created: number };
@@ -209,29 +218,48 @@ export function useStartImport(onProgress: (progress: ImportProgress) => void) {
       return { batch: completed.batch, outcome };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["trades"] });
-      queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
+      invalidateTradeDerivedQueries(queryClient);
+      // Imports can contain cash transactions as well as trades.
+      void queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      void queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
     },
   });
 }
 
 /** CSV download helper for the error report. */
-export function downloadErrorReport(errors: ImportOutcome["errors"], fileName: string): void {
-  const header = "row,externalId,code,detail";
+export function buildErrorReportCsv(
+  errors: ImportOutcome["errors"]
+): string {
+  const header = ["row", "externalId", "code", "detail"]
+    .map(escapeCsvField)
+    .join(",");
   const lines = errors.map((error) =>
     [
       error.row,
       error.externalId ?? "",
       error.code,
-      (error.detail ?? "").replace(/["\n,]/g, " "),
-    ].join(",")
+      error.detail ?? "",
+    ]
+      .map(escapeCsvField)
+      .join(",")
   );
-  const blob = new Blob([[header, ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
+  // UTF-8 BOM, like the trade export: without it Excel on Windows
+  // misreads accented characters in the report.
+  return "\uFEFF" + [header, ...lines].join("\r\n");
+}
+
+/** CSV download helper for the error report. */
+export function downloadErrorReport(
+  errors: ImportOutcome["errors"],
+  fileName: string
+): void {
+  const blob = new Blob([buildErrorReportCsv(errors)], {
+    type: "text/csv;charset=utf-8",
+  });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `erreurs-${fileName}.csv`;
+  anchor.download = `errors-${fileName}.csv`;
   anchor.click();
   URL.revokeObjectURL(url);
 }

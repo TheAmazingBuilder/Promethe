@@ -21,10 +21,11 @@ import {
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { QueryErrorState } from "@/components/ui/query-error-state";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
-import { navigate, useRoute } from "@/lib/router";
+import { navigateShallow, useRoute } from "@/lib/router";
 import {
   GAIA_DEFAULT_PARAMS,
   gaiaErrorMessage,
@@ -41,6 +42,7 @@ import {
 import { NotesBrowser } from "./gaia-notes";
 import { FoldersPanel, OverviewPanel, TemplatesPanel, TrashPanel } from "./gaia-panels";
 import { GaiaEditor } from "./gaia-editor";
+import { onNoteSynced } from "@/lib/offline/replay";
 
 const TABS: Array<{ id: GaiaTab; icon: typeof LayoutDashboard }> = [
   { id: "overview", icon: LayoutDashboard },
@@ -83,7 +85,7 @@ export function GaiaView() {
         else params.set(key, value);
       }
       const qs = params.toString();
-      navigate(`/gaia${qs === "" ? "" : `?${qs}`}`);
+      navigateShallow(`/gaia${qs === "" ? "" : `?${qs}`}`);
     },
     [query],
   );
@@ -99,6 +101,14 @@ export function GaiaView() {
     [setParams],
   );
   const closeNote = React.useCallback(() => setParams({ note: null }), [setParams]);
+
+  // Offline (§25.5): when a provisional note's create replays, the editor
+  // follows the note to its server id instead of staying on a dead id.
+  React.useEffect(() => {
+    return onNoteSynced(({ provisionalId, serverId }) => {
+      if (noteId === provisionalId) openNote(serverId);
+    });
+  }, [noteId, openNote]);
 
   const handleCreateNote = React.useCallback(
     (folderId?: string | null) => {
@@ -238,7 +248,13 @@ export function GaiaView() {
         </div>
       </header>
 
-      {overviewQuery.isLoading ? (
+      {overviewQuery.isError ? (
+        <QueryErrorState
+          title="Gaïa could not be loaded"
+          description="Your notes are safe. Check your connection and try again."
+          onRetry={() => void overviewQuery.refetch()}
+        />
+      ) : overviewQuery.isLoading ? (
         <div className="space-y-3">
           <Skeleton className="h-24 w-full" />
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

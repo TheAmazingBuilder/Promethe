@@ -18,6 +18,20 @@
  *  - A connection token NEVER writes outside its bound account: the
  *    accountId comes from the connection row, never from the payload.
  *
+ * Event state machine (Lot 2 — see gateEvent / settleEvent):
+ *  - PROCESSING: reserved, handler running, lease held (leaseExpiresAt).
+ *  - PROCESSED:  terminal success. Replays are DUPLICATE.
+ *  - REJECTED:   terminal definitive failure (known business error, or
+ *    retryable failures exhausted). Replays are DUPLICATE.
+ *  - FAILED:     retryable failure (unexpected / infrastructure error).
+ *    A later attempt may reclaim the event; attempts are bounded by
+ *    SYNC_EVENT_MAX_ATTEMPTS, then the failure becomes REJECTED.
+ *  Reservation is the atomic insert (unique constraint admits exactly one
+ *  concurrent claimant); reclaim after a crash or a retryable failure is an
+ *  atomic conditional update, so two concurrent requests can never both
+ *  own the same event. The lease timestamp is the claim token: settleEvent
+ *  only settles a row still PROCESSING under the lease this attempt owns.
+ *
  * Pure helpers live in normalize.ts / status.ts (unit-tested separately);
  * this module owns the DB orchestration and is covered by the integration
  * tests in tests/integration/sync-engine.test.ts.
@@ -35,7 +49,7 @@ import { classifyResult, priceDiff, stopDistance, toPips, toPoints } from "@/lib
 import { detectSessionForUser } from "@/server/tools";
 import { findPreset } from "@/lib/trading/instruments";
 import type { InstrumentSpec } from "@/lib/trading/types";
-import { notifyInApp } from "@/server/notifications";
+import { notifyUser } from "@/server/notifications";
 import type { InferredSpec } from "./normalize";
 import {
   balanceOperationType,
@@ -850,51 +864,211 @@ async function handleHistoryBatch(
 
 // ── Event gating (atomic idempotency) ───────────────────────────────────────
 
+/**
+ * Sync-event state machine (Lot 2).
+ *
+ * States (SyncEventLog.status):
+ *  - PROCESSING: reserved, handler running, lease held (leaseExpiresAt).
+ *  - PROCESSED:  terminal success. Replays are DUPLICATE.
+ *  - REJECTED:   terminal definitive failure (known business error, or
+ *    retryable failures exhausted). Replays are DUPLICATE.
+ *  - FAILED:     retryable failure (unexpected / infrastructure error).
+ *    A later attempt may reclaim the event; attempts are bounded.
+ *
+ * Transitions:
+ *  - (none) --atomic insert--> PROCESSING (unique (userId, eventId) is the gate)
+ *  - PROCESSING --handler ok--> PROCESSED
+ *  - PROCESSING --IngestError (definitive)--> REJECTED
+ *  - PROCESSING --unexpected error--> FAILED (lease released)
+ *  - PROCESSING --lease expired (crash)--> reclaimable --> PROCESSING
+ *  - FAILED --reclaim, attempts < MAX--> PROCESSING
+ *  - FAILED / PROCESSING --attempts exhausted--> REJECTED (RETRY_EXHAUSTED)
+ *  - PROCESSED / REJECTED --replay--> DUPLICATE (no state change)
+ *
+ * Ownership: the lease timestamp (leaseExpiresAt) is the claim token.
+ * settleEvent() only settles a row still PROCESSING under the lease this
+ * attempt owns, so a slow owner can never overwrite a reclaimer's outcome.
+ */
+
+/** Lease for a PROCESSING reservation. A single event (incl. a 100-trade
+ *  HISTORY_BATCH) finishes in seconds; 5 minutes bounds crash recovery
+ *  while leaving ample margin. */
+export const SYNC_EVENT_LEASE_MS = 5 * 60 * 1000;
+
+/** Bounded retries for retryable (FAILED) events; then the failure is
+ *  definitive (REJECTED / RETRY_EXHAUSTED). */
+export const SYNC_EVENT_MAX_ATTEMPTS = 5;
+
+export type SyncEventOutcome = "NEW" | "DUPLICATE";
+
+interface GateClaim {
+  outcome: SyncEventOutcome;
+  /** Lease this attempt owns (null when DUPLICATE — nothing to settle). */
+  leaseExpiresAt: Date | null;
+  /** Attempts claimed so far for this event (including this one). */
+  attempts: number;
+}
+
+/**
+ * Classifies a handler failure:
+ *  - IngestError (known, coded business error) -> definitive REJECTED.
+ *  - Anything else (unexpected / infrastructure) -> retryable FAILED.
+ * The response to the EA stays REJECTED in both cases (contract unchanged);
+ * the distinction lives in the stored state, which controls server-side retry.
+ */
+export function classifyIngestFailure(error: unknown): {
+  terminal: "REJECTED" | "FAILED";
+  code: string;
+} {
+  if (error instanceof IngestError) {
+    return { terminal: "REJECTED", code: error.code };
+  }
+  return { terminal: "FAILED", code: "EVENT_FAILED" };
+}
+
 async function gateEvent(
   userId: string,
   connectionId: string,
   event: MtEvent
-): Promise<"NEW" | "DUPLICATE"> {
-  try {
-    await db.syncEventLog.create({
+): Promise<GateClaim> {
+  const lease = new Date(Date.now() + SYNC_EVENT_LEASE_MS);
+  // Reservation is the atomic insert: the unique (userId, eventId)
+  // constraint admits exactly one concurrent claimant.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await db.syncEventLog.create({
+        data: {
+          userId,
+          connectionId,
+          eventId: event.eventId,
+          type: event.type,
+          status: "PROCESSING",
+          leaseExpiresAt: lease,
+          attempts: 1,
+        },
+      });
+      return { outcome: "NEW", leaseExpiresAt: lease, attempts: 1 };
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        const claim = await claimExistingEvent(userId, event.eventId, lease);
+        if (claim) return claim;
+        // Row vanished between the conflict and the read (cascade delete);
+        // retry the reservation once.
+        continue;
+      }
+      throw error;
+    }
+  }
+  // Extremely defensive: if the row keeps vanishing, report a duplicate
+  // rather than risk processing the same event twice.
+  return { outcome: "DUPLICATE", leaseExpiresAt: null, attempts: 0 };
+}
+
+/**
+ * Decides what a conflicting (already-reserved) event means. Returns null
+ * only when the row vanished between the unique violation and the read.
+ */
+async function claimExistingEvent(
+  userId: string,
+  eventId: string,
+  lease: Date
+): Promise<GateClaim | null> {
+  const now = new Date();
+  const prior = await db.syncEventLog.findUnique({
+    where: { userId_eventId: { userId, eventId } },
+  });
+  if (!prior) return null;
+
+  // Terminal states: replays are duplicates, no state change.
+  if (prior.status === "PROCESSED" || prior.status === "REJECTED") {
+    return { outcome: "DUPLICATE", leaseExpiresAt: null, attempts: prior.attempts };
+  }
+
+  // Still in progress under a live lease: never reprocess.
+  if (
+    prior.status === "PROCESSING" &&
+    prior.leaseExpiresAt &&
+    prior.leaseExpiresAt.getTime() > now.getTime()
+  ) {
+    return { outcome: "DUPLICATE", leaseExpiresAt: null, attempts: prior.attempts };
+  }
+
+  // From here: FAILED, or PROCESSING with an expired (or missing) lease —
+  // i.e. abandoned after a crash. No longer owned by anyone.
+  if (prior.attempts >= SYNC_EVENT_MAX_ATTEMPTS) {
+    // Retry budget spent: the failure becomes definitive. Atomic: only
+    // escalate if the row is still in the state we read.
+    await db.syncEventLog.updateMany({
+      where: { id: prior.id, status: prior.status, attempts: prior.attempts },
       data: {
-        userId,
-        connectionId,
-        eventId: event.eventId,
-        type: event.type,
-        status: "FAILED", // placeholder until the handler finishes
+        status: "REJECTED",
+        errorCode: "RETRY_EXHAUSTED",
+        leaseExpiresAt: null,
+        processedAt: now,
       },
     });
-    return "NEW";
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
-      // A previous FAILED row (crashed mid-processing) is retryable.
-      const prior = await db.syncEventLog.findUnique({
-        where: { userId_eventId: { userId, eventId: event.eventId } },
-      });
-      if (prior && prior.status === "FAILED") {
-        await db.syncEventLog.delete({ where: { id: prior.id } });
-        return gateEvent(userId, connectionId, event);
-      }
-      return "DUPLICATE";
-    }
-    throw error;
+    return { outcome: "DUPLICATE", leaseExpiresAt: null, attempts: prior.attempts };
   }
+
+  // Atomic reclaim: exactly one concurrent claimant flips the row (the
+  // attempts predicate guards against a racing claim).
+  const claimed = await db.syncEventLog.updateMany({
+    where: {
+      id: prior.id,
+      status: prior.status,
+      attempts: prior.attempts,
+      ...(prior.status === "PROCESSING"
+        ? { OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lte: now } }] }
+        : {}),
+    },
+    data: {
+      status: "PROCESSING",
+      leaseExpiresAt: lease,
+      attempts: { increment: 1 },
+    },
+  });
+  if (claimed.count === 1) {
+    return { outcome: "NEW", leaseExpiresAt: lease, attempts: prior.attempts + 1 };
+  }
+  return { outcome: "DUPLICATE", leaseExpiresAt: null, attempts: prior.attempts };
 }
 
 async function settleEvent(
   userId: string,
   eventId: string,
-  status: "PROCESSED" | "REJECTED",
+  leaseExpiresAt: Date | null,
+  status: "PROCESSED" | "REJECTED" | "FAILED",
   errorCode?: string
 ): Promise<void> {
-  await db.syncEventLog.update({
-    where: { userId_eventId: { userId, eventId } },
-    data: { status, errorCode: errorCode ?? null, processedAt: new Date() },
-  });
+  const data = {
+    status,
+    errorCode: errorCode ?? null,
+    processedAt: new Date(),
+    // Terminal or retryable: no lease is held anymore.
+    leaseExpiresAt: null,
+  };
+  if (leaseExpiresAt) {
+    // Only the lease owner settles: if the lease expired and another
+    // attempt reclaimed the event, this update matches nothing and the
+    // reclaimer's outcome is preserved.
+    await db.syncEventLog.updateMany({
+      where: {
+        userId,
+        eventId,
+        status: "PROCESSING",
+        leaseExpiresAt,
+      },
+      data,
+    });
+  } else {
+    await db.syncEventLog.update({
+      where: { userId_eventId: { userId, eventId } },
+      data,
+    });
+  }
 }
 
 // ── Payload orchestrator ─────────────────────────────────────────────────────
@@ -910,6 +1084,11 @@ export async function processIngestPayload(
 ): Promise<IngestResponse> {
   if (connection.status === "REVOKED") {
     throw new IngestError("CONNECTION_REVOKED", 403);
+  }
+  // MISMATCH is a sticky safety state. Only an explicit owner-initiated
+  // reset/rotation may clear the binding and allow another terminal to bind.
+  if (connection.status === "MISMATCH") {
+    throw new IngestError("CONNECTION_MISMATCH", 403);
   }
 
   // Replay protection: reject payloads with excessive clock skew.
@@ -941,12 +1120,13 @@ export async function processIngestPayload(
       where: { id: connection.id },
       data: { status: "MISMATCH" },
     });
-    await notifyInApp({
+    await notifyUser({
       userId: connection.userId,
       type: "SYNC_MISMATCH",
       title: "MT connection conflict",
       body: `The terminal “${connection.label}” is sending data from another account (${payload.server} / ${payload.login}). Events are rejected – check the token.`,
       url: "/broker-sync",
+      dedupeKey: connection.id,
       dedupeWithinMs: 24 * 60 * 60 * 1000,
     });
     throw new IngestError("LOGIN_MISMATCH", 403);
@@ -967,7 +1147,7 @@ export async function processIngestPayload(
 
   for (const event of ordered) {
     const gate = await gateEvent(connection.userId, connection.id, event);
-    if (gate === "DUPLICATE") {
+    if (gate.outcome === "DUPLICATE") {
       results.push({ eventId: event.eventId, status: "DUPLICATE" });
       continue;
     }
@@ -1000,12 +1180,22 @@ export async function processIngestPayload(
           // Pending orders: acknowledged, not persisted (v1 has no order model).
           break;
       }
-      await settleEvent(connection.userId, event.eventId, "PROCESSED");
+      await settleEvent(connection.userId, event.eventId, gate.leaseExpiresAt, "PROCESSED");
       results.push({ eventId: event.eventId, status: "ACCEPTED" });
     } catch (error) {
-      const code = error instanceof IngestError ? error.code : "EVENT_FAILED";
-      await settleEvent(connection.userId, event.eventId, "REJECTED", code);
-      results.push({ eventId: event.eventId, status: "REJECTED", reason: code });
+      const { terminal, code } = classifyIngestFailure(error);
+      const exhausted = gate.attempts >= SYNC_EVENT_MAX_ATTEMPTS;
+      const rejected = terminal === "REJECTED" || exhausted;
+      const settleCode =
+        rejected && terminal !== "REJECTED" ? "RETRY_EXHAUSTED" : code;
+      await settleEvent(
+        connection.userId,
+        event.eventId,
+        gate.leaseExpiresAt,
+        rejected ? "REJECTED" : "FAILED",
+        settleCode
+      );
+      results.push({ eventId: event.eventId, status: "REJECTED", reason: settleCode });
       console.error(`[sync] event ${event.eventId} failed:`, error);
     }
   }
@@ -1036,12 +1226,13 @@ export async function sweepStaleConnections(now: Date = new Date()): Promise<Sta
       });
       if (life === "STALE") {
         staleCount += 1;
-        await notifyInApp({
+        await notifyUser({
           userId: connection.userId,
           type: "SYNC_STALE",
           title: "Synchronisation interrompue",
           body: `No heartbeat from “${connection.label}” for over 30 minutes – is MetaTrader open?`,
           url: "/broker-sync",
+          dedupeKey: connection.id,
           dedupeWithinMs: 6 * 60 * 60 * 1000,
         });
       }

@@ -32,7 +32,6 @@ describe("parsePathname — clean English routes", () => {
     expect(parsePathname("/broker-sync").view).toBe("broker-sync");
     expect(parsePathname("/reconciliation").view).toBe("reconciliation");
     expect(parsePathname("/settings").view).toBe("settings");
-    expect(parsePathname("/mentor").view).toBe("mentor");
     expect(parsePathname("/search").view).toBe("search");
     expect(parsePathname("/history").view).toBe("history");
     expect(parsePathname("/trash").view).toBe("trash");
@@ -83,23 +82,10 @@ describe("parsePathname — clean English routes", () => {
     expect(parsePathname("/legal/cookies").legalPage).toBe("cookies");
   });
 
-  it("parses journal dates, mentor space, invitations and Gaïa deep links", () => {
+  it("parses journal dates and Gaïa deep links", () => {
     expect(parsePathname("/journal/2026-11-17")).toMatchObject({
       view: "journal",
       journalDate: "2026-11-17",
-    });
-    expect(parsePathname("/mentor/o1")).toMatchObject({
-      view: "mentor-owner",
-      ownerId: "o1",
-    });
-    expect(parsePathname("/mentor/o1/trades/t9")).toMatchObject({
-      view: "mentor-trade",
-      ownerId: "o1",
-      id: "t9",
-    });
-    expect(parsePathname("/invitation/tok")).toMatchObject({
-      view: "invitation",
-      token: "tok",
     });
     expect(
       parsePathname("/gaia", new URLSearchParams("tab=notes&note=abc")).query
@@ -111,6 +97,11 @@ describe("parsePathname — clean English routes", () => {
 
   it("falls back to the dashboard for unknown paths", () => {
     expect(parsePathname("/nope").view).toBe("dashboard");
+    // Removed routes (Mentors module, deleted 25 Nov 2026) fall back too.
+    expect(parsePathname("/mentor").view).toBe("dashboard");
+    expect(parsePathname("/mentor/o1/trades/t9").view).toBe("dashboard");
+    expect(parsePathname("/invitation/tok").view).toBe("dashboard");
+    expect(parsePathname("/settings/mentors").view).toBe("settings");
   });
 });
 
@@ -155,7 +146,6 @@ describe("parseHash — legacy URLs keep working", () => {
       note: "x",
       tab: "notes",
     });
-    expect(parseHash("#/invitation/tok").token).toBe("tok");
   });
 });
 
@@ -179,8 +169,6 @@ describe("routeToPath — canonical clean URLs only", () => {
       ["#/trades/abc/edit", "/trades/abc/edit"],
       ["#/trades/quick", "/trades/quick"],
       ["#/journal/2026-11-17", "/journal/2026-11-17"],
-      ["#/mentor/o1/trades/t9", "/mentor/o1/trades/t9"],
-      ["#/invitation/tok", "/invitation/tok"],
       ["#/", "/"],
     ];
     for (const [legacy, clean] of cases) {

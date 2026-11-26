@@ -1,6 +1,5 @@
 /**
- * v3 — Redaction engine (PURE — shared by share links, mentor views with
- * canViewAmounts = false, and image export).
+ * v3 - Redaction engine (PURE - shared by share links and image export).
  *
  * Non-negotiable rules (v3 §4.4):
  *  - Redaction is applied on the SERVER, before data reaches the client or
@@ -28,7 +27,7 @@ export interface RedactionPolicy {
   hideStrategyName: boolean;
   /** Replaces exact timestamps with their date (YYYY-MM-DD) only. */
   hideExactTimes: boolean;
-  /** Hides psychology fields (emotions, ratings, checklist) - mentor journal scope off. */
+  /** Hides psychology fields (emotions, ratings, checklist). */
   hidePsychology: boolean;
 }
 
@@ -135,15 +134,23 @@ const AMOUNT_KEYS = [
 const ACCOUNT_KEYS = [
   "accountId", "accountName", "accountCurrency", "accountInitialBalance",
   "broker", "brokerServer", "brokerLogin", "accountType",
+  // Pasted TradingView URL - it can carry the owner's TradingView identity.
+  "tradingViewUrl",
 ];
 const NOTE_KEYS = ["notes", "preTradeAnalysis", "postTradeReview", "lessonLearned"];
-const STRATEGY_KEYS = ["strategyId", "strategyName"];
+const STRATEGY_KEYS = [
+  "strategyId", "strategyName",
+  // Frozen-checklist verdict - its "missing" labels are strategy rule text.
+  "checklistStatus",
+];
 const PSYCH_KEYS = [
   "emotionBefore", "emotionDuring", "emotionAfter", "confidence",
-  "setupQualityRating", "executionRating", "followedPlan", "checklistResults",
+  "setupQualityRating", "executionRating", "followedPlan", "checklistResults", "review",
+  // Frozen-checklist verdict - a review-time verdict, like the review itself.
+  "checklistStatus",
 ];
 
-// Keys that are ALWAYS stripped from anything going to a public/mentor view —
+// Keys that are ALWAYS stripped from anything going to a public/share view -
 // internal identifiers and server-side bookkeeping.
 const ALWAYS_STRIPPED = [
   "userId", "clientMutationId", "storagePath", "tokenHash", "tokenPrefix",
@@ -170,9 +177,23 @@ export function redactTrade(
 
   if (policy.hideAmounts) out = omit(out, AMOUNT_KEYS);
   if (policy.hideAccountInfo) out = omit(out, ACCOUNT_KEYS);
-  if (policy.hideNotes) out = omit(out, NOTE_KEYS);
+  if (policy.hideNotes) {
+    out = omit(out, NOTE_KEYS);
+    if (isPlainObject(out.review)) {
+      // Free-text review answers are notes too - the question text comes
+      // from the owner's custom review questions, the answers are free text.
+      out.review = omit(out.review, ["mainLesson", "whatWentWell", "whatToImprove", "customAnswers"]);
+    }
+  }
   if (policy.hideStrategyName) out = omit(out, STRATEGY_KEYS);
   if (policy.hidePsychology) out = omit(out, PSYCH_KEYS);
+
+  // Custom fields are user-defined key/values with unbounded content - they
+  // cannot be redacted by key, so they leave the payload as soon as ANY
+  // hiding is requested. With no redaction they are shared as-is (explicit
+  // full share). The snapshot allowlist drops them from public payloads
+  // regardless (they are never rendered there).
+  if (hasAnyRedaction(policy)) out = omit(out, ["customFields"]);
 
   // Executions: drop per-execution money when amounts are hidden.
   if (Array.isArray(out.executions)) {
@@ -306,6 +327,12 @@ export function findLeaks(payload: unknown, forbidden: (string | number)[]): str
       return;
     }
     if (typeof value === "string") {
+      // ISO timestamps are metadata, not monetary values. Their fractional
+      // seconds can coincidentally contain a forbidden money probe (e.g.
+      // "...:50.000Z" matching "50.00"), so scan them as structured dates.
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
+        return;
+      }
       for (const probe of numberProbes) {
         // Exact string form, quoted form, or NUMERIC equality (parses
         // "610.750" — never a substring match, which would flag prices

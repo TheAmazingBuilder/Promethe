@@ -182,12 +182,16 @@ export interface PeriodComparison {
 export interface ComparisonResult {
   /** Both curves normalized to 100 at the common start. */
   points: ComparisonPoint[];
+  /** One entry per benchmark period fully inside the comparable window
+   * (both sides observed at both ends) - `beaten` is never null here. */
   periods: PeriodComparison[];
   /** Share of comparable periods where the equity beat the benchmark (0-100). */
   beatRate: number | null;
   /** equityIndex − benchmarkIndex at the last common date (points). */
   gapAtEnd: number | null;
+  /** First date of the comparable window (later of the two starts). */
   firstDate: string | null;
+  /** Last date of the comparable window (earlier of the two ends). */
   lastDate: string | null;
 }
 
@@ -218,15 +222,42 @@ export function compareEquityToBenchmark(
   }
   const timezone = options?.timezone ?? "UTC";
 
-  // Normalize property names: equity points carry `equity`, benchmarks `value`.
-  const eqSeries = equity.map((p) => ({ date: p.date, value: p.equity }));
+  // Normalize property names: equity points carry `equity`, benchmarks
+  // `value`. Both series are sorted here so the comparison never depends
+  // on the caller's order (valueAt walks each series in order).
+  const eqSeries = equity
+    .map((p) => ({ date: p.date, value: p.equity }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const bmSeries = [...benchmark].sort((a, b) =>
+    a.date.localeCompare(b.date)
+  );
 
-  // Common window: start at the later of the two starts.
+  // Common window: start at the later of the two starts, and end at the
+  // earlier of the two ends. Past the last observed point of either side
+  // there is no data - carrying a flat value forward would compare the
+  // benchmark against an equity that simply stopped being observed (a
+  // custom series that runs past the last trade, or an equity curve that
+  // runs past the end of an imported series). Only the overlap is
+  // comparable, so the window is clamped to it on both sides.
   const start =
-    equity[0].date > benchmark[0].date ? equity[0].date : benchmark[0].date;
+    eqSeries[0].date > bmSeries[0].date ? eqSeries[0].date : bmSeries[0].date;
   const eqBase = valueAt(eqSeries, start);
-  const bmBase = valueAt(benchmark, start);
+  const bmBase = valueAt(bmSeries, start);
   if (eqBase == null || bmBase == null || eqBase === 0 || bmBase === 0) {
+    return {
+      points: [],
+      periods: [],
+      beatRate: null,
+      gapAtEnd: null,
+      firstDate: null,
+      lastDate: null,
+    };
+  }
+  const eqLast = eqSeries[eqSeries.length - 1].date;
+  const bmLast = bmSeries[bmSeries.length - 1].date;
+  const lastDate = eqLast < bmLast ? eqLast : bmLast;
+  if (lastDate < start) {
+    // No overlap at all (one series ends before the other starts).
     return {
       points: [],
       periods: [],
@@ -242,14 +273,14 @@ export function compareEquityToBenchmark(
     new Set(
       [
         ...eqSeries.map((p) => p.date),
-        ...benchmark.map((p) => p.date),
-      ].filter((d) => d >= start)
+        ...bmSeries.map((p) => p.date),
+      ].filter((d) => d >= start && d <= lastDate)
     )
   ).sort();
 
   const points: ComparisonPoint[] = dates.map((date) => {
     const eq = valueAt(eqSeries, date);
-    const bm = valueAt(benchmark, date);
+    const bm = valueAt(bmSeries, date);
     return {
       date,
       equityIndex: eq != null ? (eq / eqBase) * 100 : null,
@@ -257,16 +288,20 @@ export function compareEquityToBenchmark(
     };
   });
 
-  // Period-by-period comparison over benchmark boundaries.
+  // Period-by-period comparison over benchmark boundaries inside the
+  // window (every period here has both sides observed, so `beaten` is
+  // never null - periods.length is the comparable period count).
   const periods: PeriodComparison[] = [];
-  const boundaries = benchmark.map((p) => p.date).filter((d) => d >= start);
+  const boundaries = bmSeries
+    .map((p) => p.date)
+    .filter((d) => d >= start && d <= lastDate);
   for (let i = 1; i < boundaries.length; i += 1) {
     const pStart = boundaries[i - 1];
     const pEnd = boundaries[i];
     const eqA = valueAt(eqSeries, pStart);
     const eqB = valueAt(eqSeries, pEnd);
-    const bmA = valueAt(benchmark, pStart);
-    const bmB = valueAt(benchmark, pEnd);
+    const bmA = valueAt(bmSeries, pStart);
+    const bmB = valueAt(bmSeries, pEnd);
     const eqReturn =
       eqA != null && eqB != null && eqA !== 0 ? ((eqB - eqA) / eqA) * 100 : null;
     const bmReturn =
@@ -299,7 +334,7 @@ export function compareEquityToBenchmark(
     beatRate,
     gapAtEnd,
     firstDate: start,
-    lastDate: dates[dates.length - 1] ?? null,
+    lastDate,
   };
 }
 

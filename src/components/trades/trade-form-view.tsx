@@ -63,6 +63,7 @@ import {
   useCreateTag,
   useCreateTrade,
   useInstruments,
+  usePreTradeWarnings,
   useRecordTemplateUse,
   useStrategies,
   useTags,
@@ -71,6 +72,7 @@ import {
   useUpdateTrade,
   type MutationResult,
 } from "@/hooks/use-trading";
+import type { PreTradeWarningDTO } from "@/lib/trading/dto";
 import {
   CONFLUENCE_CUSTOM_COLOR,
   CONFLUENCE_PRESETS,
@@ -382,6 +384,10 @@ export function TradeFormView({
   const createTrade = useCreateTrade();
   const updateTrade = useUpdateTrade();
   const recordTemplateUse = useRecordTemplateUse();
+  // Lot 11 (roadmap §14): advisory pre-trade warnings, shown inline and
+  // never blocking - the user confirms explicitly with "Save anyway".
+  const checkWarnings = usePreTradeWarnings();
+  const [pendingWarnings, setPendingWarnings] = React.useState<PreTradeWarningDTO[] | null>(null);
 
   // ── Edit prefill (once per loaded trade) ──
   React.useEffect(() => {
@@ -419,7 +425,11 @@ export function TradeFormView({
       swap: trade.swap,
       fees: trade.fees,
       pnlSource: trade.pnlSource === "MANUAL" ? "MANUAL" : "CALCULATED",
-      manualNetPnl: "",
+      // Prefill the stored manual value (MD §3.3): for a MANUAL trade
+      // the stored netPnl IS the manual value (no separate column), and
+      // saving the form with an empty field would otherwise clear it.
+      manualNetPnl:
+        trade.pnlSource === "MANUAL" && trade.netPnl != null ? trade.netPnl : "",
       exitReason: trade.exitReason ?? "",
       emotionBefore: trade.emotionBefore ?? "",
       emotionDuring: trade.emotionDuring ?? "",
@@ -528,15 +538,27 @@ export function TradeFormView({
     return form.direction === "LONG" ? s.gte(e) : s.lte(e);
   }, [form.stopLoss, form.entryPrice, form.direction]);
 
+  /** TP on the wrong side of the entry for the chosen direction (MD §3.2).
+   * Mirrors slInvalid: a wrong-side TP used to be stored silently with a
+   * null plannedRR; it is now flagged here and rejected by the schema. */
+  const tpInvalid = React.useMemo(() => {
+    const tp = nul(form.takeProfit);
+    const entry = nul(form.entryPrice);
+    if (!tp || !entry) return false;
+    const p = toD(tp);
+    const e = toD(entry);
+    return form.direction === "LONG" ? p.lte(e) : p.gte(e);
+  }, [form.takeProfit, form.entryPrice, form.direction]);
+
   const slPipsText = React.useMemo(() => {
     if (!spec || !form.entryPrice.trim() || !form.stopLoss.trim()) return null;
-    return `${fmtNum(pipsFromPrices(form.entryPrice.trim(), form.stopLoss.trim(), spec), 1)} ${tc("pips")}`;
-  }, [spec, form.entryPrice, form.stopLoss, tc]);
+    return `${fmtNum(pipsFromPrices(form.entryPrice.trim(), form.stopLoss.trim(), spec, form.direction, "STOP"), 1)} ${tc("pips")}`;
+  }, [spec, form.entryPrice, form.stopLoss, form.direction, tc]);
 
   const tpPipsText = React.useMemo(() => {
     if (!spec || !form.entryPrice.trim() || !form.takeProfit.trim()) return null;
-    return `${fmtNum(pipsFromPrices(form.entryPrice.trim(), form.takeProfit.trim(), spec), 1)} ${tc("pips")}`;
-  }, [spec, form.entryPrice, form.takeProfit, tc]);
+    return `${fmtNum(pipsFromPrices(form.entryPrice.trim(), form.takeProfit.trim(), spec, form.direction, "TAKE_PROFIT"), 1)} ${tc("pips")}`;
+  }, [spec, form.entryPrice, form.takeProfit, form.direction, tc]);
 
   // ── Handlers ──
   const set = <K extends keyof TradeFormState>(key: K, value: TradeFormState[K]) =>
@@ -702,7 +724,7 @@ export function TradeFormView({
     };
   }
 
-  async function onSubmit(draft: boolean) {
+  async function onSubmit(draft: boolean, confirmed = false) {
     let payload: TradeInput;
     if (draft) {
       // Drafts: only the core identifying fields are required.
@@ -726,6 +748,30 @@ export function TradeFormView({
       }
       setFieldErrors(null);
       payload = parsed.data as TradeInput;
+      // Lot 11 (roadmap §14): advisory warnings for a non-draft save.
+      // Drafts skip them; a confirmed save skips the re-check. Offline
+      // the check is skipped too (§25.5): it needs the network, and the
+      // server still validates on replay.
+      if (!confirmed && navigator.onLine) {
+        try {
+          const { warnings } = await checkWarnings.mutateAsync({
+            strategyId: form.strategyId || null,
+            riskAmount: form.riskAmount.trim() || null,
+            plannedRR: preview?.plannedRR?.toString() ?? null,
+            entryTime: form.entryTime || null,
+            checklistResults: form.checklistResults,
+          });
+          if (warnings.length > 0) {
+            setPendingWarnings(warnings);
+            scrollToTop();
+            return;
+          }
+        } catch {
+          // Warnings are advisory only: a failed check never blocks the save.
+          setPendingWarnings(null);
+        }
+      }
+      setPendingWarnings(null);
     }
 
     setSubmitting(draft ? "draft" : "full");
@@ -756,14 +802,21 @@ export function TradeFormView({
           clientMutationId: mutationIdRef.current,
         });
         mutationIdRef.current = `tf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        if (result.deduplicated) {
+        // Offline (§25.5): the trade is queued, not created yet. The
+        // queue panel shows it until the replay lands it server-side.
+        if (result.queued) {
+          toast({ title: t("queuedToast") });
+          navigate("/trades");
+        } else if (result.deduplicated) {
           toast({ title: t("deduplicatedToast") });
+          navigate(`/trades/${result.trade.id}`);
         } else if (draft) {
           toast({ title: t("draftSavedToast") });
+          navigate(`/trades/${result.trade.id}`);
         } else {
           toast({ title: t("createdToast") });
+          navigate(`/trades/${result.trade.id}`);
         }
-        navigate(`/trades/${result.trade.id}`);
       }
     } catch (error) {
       const err = error instanceof ApiClientError ? error : null;
@@ -883,6 +936,44 @@ export function TradeFormView({
               </AlertDescription>
             </Alert>
           )}
+
+          {/* Lot 11 (roadmap §14): advisory pre-trade warnings. Never
+              blocking - the user reviews them and saves anyway, or goes
+              back to fix the trade. */}
+          {pendingWarnings != null && pendingWarnings.length > 0 ? (
+            <Alert>
+              <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+              <AlertTitle>{t("warningsTitle")}</AlertTitle>
+              <AlertDescription>
+                <ul className="list-disc space-y-1 pl-4">
+                  {pendingWarnings.map((w) => (
+                    <li key={w.code}>
+                      {w.message}
+                      {w.detail ? ` (${w.detail})` : null}
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => void onSubmit(false, true)}
+                  >
+                    {t("warningsSaveAnyway")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPendingWarnings(null)}
+                  >
+                    {t("warningsReview")}
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
+          ) : null}
 
           {/* Context */}
           <Card>
@@ -1159,6 +1250,7 @@ export function TradeFormView({
                   value={form.takeProfit}
                   onChange={(e) => set("takeProfit", e.target.value)}
                   className="tabular-nums"
+                  aria-invalid={tpInvalid || undefined}
                 />
               </Field>
               <Field label={t("mfe")} htmlFor="tf-mfe">
@@ -1825,6 +1917,11 @@ export function TradeFormView({
                   {slInvalid && (
                     <p className="rounded-md border border-loss-subtle bg-loss-subtle p-2 text-xs font-medium text-loss">
                       {t("previewInvalidSide")}
+                    </p>
+                  )}
+                  {tpInvalid && (
+                    <p className="rounded-md border border-loss-subtle bg-loss-subtle p-2 text-xs font-medium text-loss">
+                      {t("previewInvalidTpSide")}
                     </p>
                   )}
                   <dl className="space-y-2 text-sm">

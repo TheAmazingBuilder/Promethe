@@ -214,6 +214,10 @@ export function InstrumentsBrowser() {
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" aria-hidden="true" />
             {t("xauPipNote")}{" "}{t("xauPipSuffix")}
           </p>
+          <p className="flex items-start gap-2 rounded-lg border p-3 text-xs text-muted-foreground">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            {t("instrumentsStaticNote")}
+          </p>
         </>
       )}
     </div>

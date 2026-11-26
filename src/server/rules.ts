@@ -6,7 +6,10 @@
  * Rule edits trigger a BULK re-evaluation so history reflects the new
  * limits: one full pass over the user's non-draft trades (day aggregation
  * in JS, SQLite has no TZ support), then a single transaction rewrites
- * every violation row.
+ * every violation row. A violation that survives a re-evaluation keeps
+ * its first-seen date (Lot 11) - only the measured limit follows the
+ * current rule; the date a breach first appeared is history, not
+ * something a rule edit should rewrite.
  *
  * Violation `note` carries a machine-readable JSON detail
  * { kind, measured, limit } — i18n happens at display time.
@@ -227,12 +230,26 @@ async function dayContext(
   };
 }
 
-/** Rewrite the violations of one trade in a transaction. */
+/**
+ * Rewrite the violations of one trade in a transaction.
+ *
+ * Lot 11 (roadmap §14): a violation that survives re-evaluation keeps
+ * its FIRST-SEEN date. Bulk re-evaluation used to delete and recreate
+ * every row, so an old violation looked "recent" again after any rule
+ * edit and the "recent violations" widget lied about its age. The
+ * measured limit in `note` is still the current one (history follows
+ * the current limits by design); only the first-seen date is preserved.
+ */
 async function writeViolations(
   userId: string,
   tradeId: string,
   violations: RuleViolationResult[]
 ): Promise<void> {
+  const existing = await db.tradeRuleViolation.findMany({
+    where: { tradeId },
+    select: { ruleId: true, createdAt: true },
+  });
+  const firstSeen = new Map(existing.map((r) => [r.ruleId, r.createdAt]));
   await db.$transaction(async (tx) => {
     await tx.tradeRuleViolation.deleteMany({ where: { tradeId } });
     if (violations.length === 0) return;
@@ -245,6 +262,7 @@ async function writeViolations(
           measured: v.measured,
           limit: v.limit,
         }),
+        createdAt: firstSeen.get(v.ruleId) ?? new Date(),
       })),
     });
   });
@@ -325,11 +343,28 @@ export async function reevaluateViolations(userId: string): Promise<void> {
   }
 
   await db.$transaction(async (tx) => {
+    // Lot 11 (roadmap §14): keep the first-seen date of violations that
+    // survive the re-evaluation (see writeViolations). A violation that
+    // disappears and later reappears gets a fresh date - it is a new
+    // breach, not the old one.
+    const existing = await tx.tradeRuleViolation.findMany({
+      where: { trade: { userId } },
+      select: { tradeId: true, ruleId: true, createdAt: true },
+    });
+    const firstSeen = new Map(
+      existing.map((r) => [`${r.tradeId}|${r.ruleId}`, r.createdAt]),
+    );
     await tx.tradeRuleViolation.deleteMany({
       where: { trade: { userId } },
     });
     if (toWrite.length > 0) {
-      await tx.tradeRuleViolation.createMany({ data: toWrite });
+      await tx.tradeRuleViolation.createMany({
+        data: toWrite.map((row) => ({
+          ...row,
+          createdAt:
+            firstSeen.get(`${row.tradeId}|${row.ruleId}`) ?? new Date(),
+        })),
+      });
     }
   });
 }

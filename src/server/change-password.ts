@@ -11,6 +11,7 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import { hashSessionToken } from "@/lib/auth/session-token";
 
 export const changePasswordSchema = z
   .object({
@@ -36,7 +37,8 @@ export type ChangePasswordResult =
 /** Verifies the current password, then stores the new hash. */
 export async function changePassword(
   userId: string,
-  input: ChangePasswordInput
+  input: ChangePasswordInput,
+  currentSessionToken: string
 ): Promise<ChangePasswordResult> {
   const user = await db.user.findUnique({
     where: { id: userId },
@@ -46,9 +48,17 @@ export async function changePassword(
   if (!verifyPassword(input.currentPassword, user.passwordHash)) {
     return { ok: false, code: "BAD_PASSWORD" };
   }
-  await db.user.update({
-    where: { id: userId },
-    data: { passwordHash: hashPassword(input.newPassword) },
+  const currentSessionId = hashSessionToken(currentSessionToken);
+  await db.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: userId },
+      data: { passwordHash: hashPassword(input.newPassword) },
+    });
+    // Keep the session performing the change; revoke every other session so
+    // a previously stolen cookie cannot survive a password reset.
+    await tx.authSession.deleteMany({
+      where: { userId, id: { not: currentSessionId } },
+    });
   });
   return { ok: true };
 }

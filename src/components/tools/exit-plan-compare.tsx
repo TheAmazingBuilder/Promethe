@@ -36,6 +36,14 @@ export function ExitPlanCompare({ trade }: { trade: TradeDetailDTO }) {
   const [manual, setManual] = React.useState<Record<number, string>>({});
 
   const planId = trade.exitPlanId ?? "";
+  React.useEffect(() => {
+    setManual({});
+  }, [trade.id, planId]);
+  const manualInvalid = Object.values(manual).some((value) => {
+    const trimmed = value.trim();
+    return trimmed !== "" && !/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(trimmed) ||
+      (trimmed !== "" && Number(trimmed) > 100);
+  });
   const plan = plans.find((p) => p.id === planId) ?? null;
 
   const comparison = React.useMemo(() => {
@@ -128,6 +136,11 @@ export function ExitPlanCompare({ trade }: { trade: TradeDetailDTO }) {
                           className="ml-auto w-20 text-right tabular-nums"
                           placeholder={fmtNum(row.realizedPct, 0)}
                           value={manual[row.index] ?? ""}
+                          aria-invalid={
+                            (manual[row.index] ?? "").trim() !== "" &&
+                            (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test((manual[row.index] ?? "").trim()) ||
+                              Number(manual[row.index]) > 100)
+                          }
                           onChange={(e) =>
                             setManual((prev) => ({ ...prev, [row.index]: e.target.value }))
                           }
@@ -147,6 +160,12 @@ export function ExitPlanCompare({ trade }: { trade: TradeDetailDTO }) {
               </tbody>
             </table>
           </div>
+          {manualInvalid ? (
+            <p className="text-xs text-red-600 dark:text-red-400">{t("exitPlanManualPctInvalid")}</p>
+          ) : null}
+          {comparison.totalRealizedPct.gt(100) ? (
+            <p className="text-xs text-amber-600 dark:text-amber-400">{t("exitPlanRealizedOver100")}</p>
+          ) : null}
           <p className="text-sm text-muted-foreground">
             {t("exitPlanTotalRealized", {
               realized: fmtNum(comparison.totalRealizedPct, 0),

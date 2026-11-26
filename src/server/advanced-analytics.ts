@@ -8,9 +8,13 @@
  *
  * Trader score (Phase 2 perf): the headline score is served from
  * today's TraderScoreSnapshot when present (frozen daily value, one
- * indexed read) and recomputed only when it is missing; the history is
- * built from the snapshots (last one of each month) instead of the
- * O(months x N) monthly replay.
+ * indexed read) — but ONLY when the request asks for exactly the
+ * snapshot's scope (all-time, all accounts). Any other period or an
+ * account filter is always recomputed from the trades in scope, so a
+ * 30-day / 90-day / YTD score can never be a global value in disguise;
+ * the history follows the same rule (snapshots for the global scope,
+ * month-end replay over the scoped trades otherwise). The daily cron
+ * freezes the global snapshot for every user instead.
  *
  * Persistence (idempotent, user-scoped, Phase 2 perf): the GET handler
  * only writes when the stored rows actually differ — a read-only visit
@@ -26,11 +30,13 @@ import { db } from "@/lib/db";
 import {
   computeAdvancedAnalytics,
   computeAdvancedAnalyticsModules,
+  computeScoreHistory,
   computeTraderScore,
   isAlmostTp,
   scoreGrade,
   type AdvancedAnalytics,
   type AdvancedTrade,
+  type CustomReviewAnswer,
   type ScoreHistoryPoint,
 } from "@/lib/analytics/advanced";
 import { ADVANCED_MODULES } from "@/lib/validations/analytics";
@@ -46,22 +52,52 @@ import type { AnalyticsQuery } from "@/lib/validations/analytics";
 import type { AdvancedAnalyticsPayload } from "@/lib/trading/dto";
 import type { Prisma } from "@prisma/client";
 import { parseCustomFields } from "@/lib/custom-fields/validate";
+import {
+  evaluateChecklist,
+  resolveFrozenChecklistItems,
+} from "@/lib/playbook/checklist";
+import { loadFrozenChecklistMap } from "@/server/strategy-versions";
 import { getDisplayPreferences } from "@/server/display-preferences";
-import { getTradingDay, tradingDayOfTrade } from "@/lib/time/trading-day";
+import { calendarYearStartUtc, getTradingDay, tradingDayOfTrade } from "@/lib/time/trading-day";
+import { scopeTradesToCurrency } from "@/lib/analytics/currency-scope";
+import { resolveOwnedAccount } from "@/server/account-errors";
 import { unstable_cache } from "next/cache";
 
 const TRADE_INCLUDE = {
   instrument: true,
   account: true,
-  strategy: true,
+  strategy: {
+    include: {
+      checklistItems: {
+        select: { id: true, label: true, isRequired: true },
+      },
+    },
+  },
   tags: { include: { tag: true } },
   ruleViolations: { select: { ruleId: true } },
-  review: { select: { playbookMatch: true } },
+  review: {
+    select: {
+      playbookMatch: true,
+      followedPlan: true,
+      planAdherenceScore: true,
+      executionQuality: true,
+      entryQuality: true,
+      exitQuality: true,
+      riskManagementScore: true,
+      emotionalControlScore: true,
+      wouldTakeAgain: true,
+      mistakeTagIds: true,
+      customAnswers: true,
+    },
+  },
 } as const;
 
 type Row = Prisma.TradeGetPayload<{ include: typeof TRADE_INCLUDE }>;
 
-function periodCutoff(period: AnalyticsQuery["period"]): Date | null {
+function periodCutoff(
+  period: AnalyticsQuery["period"],
+  timezone = "UTC"
+): Date | null {
   const now = new Date();
   switch (period) {
     case "30d":
@@ -69,7 +105,7 @@ function periodCutoff(period: AnalyticsQuery["period"]): Date | null {
     case "90d":
       return new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
     case "ytd":
-      return new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+      return calendarYearStartUtc(timezone, now);
     default:
       return null;
   }
@@ -87,6 +123,7 @@ interface LoadedTrades {
   timezone: string;
   currency: string;
   tradingDay: Parameters<typeof getTradingDay>[2];
+  excludedTradeCount: number;
 }
 
 /** Closed trades mapped to the advanced engine shape (no persistence). */
@@ -100,10 +137,8 @@ export async function loadAdvancedTrades(
     db.account.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
     getDisplayPreferences(userId),
   ]);
-  const accountFilter =
-    accountId != null
-      ? (accounts.find((a) => a.id === accountId) ?? null)
-      : null;
+  const accountFilter = resolveOwnedAccount(accounts, accountId);
+  const timezone = profile?.timezone ?? "UTC";
   const where: Prisma.TradeWhereInput = {
     userId,
     status: "CLOSED",
@@ -111,7 +146,7 @@ export async function loadAdvancedTrades(
     ...(accountFilter ? { accountId: accountFilter.id } : {}),
   };
   if (period) {
-    const cutoff = periodCutoff(period);
+    const cutoff = periodCutoff(period, timezone);
     if (cutoff != null) where.exitTime = { gte: cutoff };
   }
   const rows = await db.trade.findMany({
@@ -119,14 +154,62 @@ export async function loadAdvancedTrades(
     include: TRADE_INCLUDE,
     orderBy: { entryTime: "asc" },
   });
-  const timezone = profile?.timezone ?? "UTC";
   const currency = accountFilter?.currency ?? profile?.baseCurrency ?? "USD";
 
-  const timeMap = await computeTimeInProfit(rows);
-  const trades: AdvancedTrade[] = rows.map((t) =>
-    toAdvancedTrade(t, timezone, prefs.tradingDay, timeMap.get(t.id))
+  // Historical P&L keeps the currency recorded on each trade. An account
+  // may have changed its display currency since those trades were closed.
+  const scoped = scopeTradesToCurrency(rows, currency);
+  const timeMap = await computeTimeInProfit(scoped.trades);
+  const mistakeTagIds = [...new Set(scoped.trades.flatMap((trade) => {
+    if (!trade.review?.mistakeTagIds) return [];
+    try {
+      const parsed: unknown = JSON.parse(trade.review.mistakeTagIds);
+      return Array.isArray(parsed)
+        ? parsed.filter((id): id is string => typeof id === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  }))];
+  const mistakeTags = mistakeTagIds.length > 0
+    ? await db.tag.findMany({
+        where: {
+          id: { in: mistakeTagIds },
+          kind: "MISTAKE",
+          deletedAt: null,
+          OR: [{ userId }, { userId: null }],
+        },
+        select: { id: true, name: true },
+      })
+    : [];
+  const mistakeTagNames = new Map(mistakeTags.map((tag) => [tag.id, tag.name]));
+  // §25.7 - frozen checklists in bulk (one query, never one per trade):
+  // only when at least one trade froze a strategy version. Trades
+  // without a matching snapshot fall back to the live checklist in
+  // toAdvancedTrade, exactly like the trade detail view.
+  const needsFrozen = scoped.trades.some(
+    (trade) => trade.strategyId != null && trade.strategyVersion != null
   );
-  return { trades, timezone, currency, tradingDay: prefs.tradingDay };
+  const frozenChecklists = needsFrozen
+    ? await loadFrozenChecklistMap(userId)
+    : new Map<string, Array<{ id?: string; label: string; isRequired: boolean }>>();
+  const trades: AdvancedTrade[] = scoped.trades.map((t) =>
+    toAdvancedTrade(
+      t,
+      timezone,
+      prefs.tradingDay,
+      timeMap.get(t.id),
+      mistakeTagNames,
+      frozenChecklists
+    )
+  );
+  return {
+    trades,
+    timezone,
+    currency,
+    tradingDay: prefs.tradingDay,
+    excludedTradeCount: scoped.excludedTradeCount,
+  };
 }
 
 /**
@@ -171,11 +254,39 @@ const EMPTY_ADVANCED: AdvancedAnalytics = (() => {
   return computeAdvancedAnalytics([], stats, computeAdvancedStats([], stats));
 })();
 
+function parseCustomReviewAnalyticsAnswers(value: string | null): CustomReviewAnswer[] {
+  if (!value) return [];
+  let parsed: unknown;
+  try { parsed = JSON.parse(value); } catch { return []; }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.flatMap((entry): CustomReviewAnswer[] => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return [];
+    const record = entry as Record<string, unknown>;
+    if (typeof record.questionId !== "string" || typeof record.question !== "string") return [];
+    if (record.type === "SCALE" && typeof record.answer === "number" &&
+        Number.isInteger(record.answer) && record.answer >= 1 && record.answer <= 5) {
+      return [{ questionId: record.questionId, question: record.question, type: "SCALE", answer: record.answer }];
+    }
+    if (record.type === "BOOLEAN" && typeof record.answer === "boolean") {
+      return [{ questionId: record.questionId, question: record.question, type: "BOOLEAN", answer: record.answer }];
+    }
+    if (record.type === "TEXT" && typeof record.answer === "string" && record.answer.trim().length > 0) {
+      return [{ questionId: record.questionId, question: record.question, type: "TEXT", answer: record.answer }];
+    }
+    return [];
+  });
+}
+
 function toAdvancedTrade(
   t: Row,
   timezone: string,
   tradingDay: Parameters<typeof getTradingDay>[2],
-  time?: { profitMin: number | null; lossMin: number | null }
+  time?: { profitMin: number | null; lossMin: number | null },
+  mistakeTagNames: ReadonlyMap<string, string> = new Map(),
+  frozenChecklists: ReadonlyMap<
+    string,
+    Array<{ id?: string; label: string; isRequired: boolean }>
+  > = new Map()
 ): AdvancedTrade {
   const exit = t.exitTime ?? t.entryTime;
   // Daily attribution follows the user's TRADING day (default MIDNIGHT_LOCAL
@@ -200,6 +311,37 @@ function toAdvancedTrade(
     t.stopLoss?.toString() ?? null
   );
   const liveStrategy = t.strategy?.deletedAt == null ? t.strategy : null;
+  // §25.7 - mandatory-checklist verdict (same rule as the trade detail
+  // view, Lot 11): the frozen snapshot when one matches the trade's
+  // frozen version, else the live checklist. Null when there is no
+  // checklist to judge (no live strategy, or no required items) - a
+  // trade is never counted as compliant or non-compliant by default.
+  const checklistComplete = (() => {
+    if (liveStrategy == null || t.strategyId == null) return null;
+    let results: Record<string, boolean> | null = null;
+    if (t.checklistResults) {
+      try {
+        results = JSON.parse(t.checklistResults) as Record<string, boolean>;
+      } catch {
+        results = null;
+      }
+    }
+    const liveItems = (liveStrategy.checklistItems ?? []).map((item) => ({
+      id: item.id,
+      label: item.label,
+      isRequired: item.isRequired,
+    }));
+    const frozen =
+      t.strategyVersion != null
+        ? frozenChecklists.get(`${t.strategyId}:${t.strategyVersion}`)
+        : undefined;
+    const items =
+      frozen != null
+        ? resolveFrozenChecklistItems(frozen, liveItems)
+        : liveItems;
+    const status = evaluateChecklist(items, results);
+    return status.requiredTotal === 0 ? null : status.complete;
+  })();
   return {
     id: t.id,
     exitTime: exit.toISOString(),
@@ -245,7 +387,34 @@ function toAdvancedTrade(
       .filter((tt) => tt.tag.kind === "CONFLUENCE" && tt.tag.deletedAt == null)
       .map((tt) => ({ id: tt.tag.id, name: tt.tag.name, color: tt.tag.color })),
     violationCount: t.ruleViolations.length,
+    strategyVersion: t.strategyVersion,
+    checklistComplete,
     playbookMatch: t.review?.playbookMatch ?? null,
+    review: t.review == null ? null : {
+      followedPlan: t.review.followedPlan,
+      planAdherenceScore: t.review.planAdherenceScore,
+      executionQuality: t.review.executionQuality,
+      entryQuality: t.review.entryQuality,
+      exitQuality: t.review.exitQuality,
+      riskManagementScore: t.review.riskManagementScore,
+      emotionalControlScore: t.review.emotionalControlScore,
+      wouldTakeAgain: t.review.wouldTakeAgain,
+      mistakeTags: (() => {
+        if (!t.review?.mistakeTagIds) return [];
+        try {
+          const parsed: unknown = JSON.parse(t.review.mistakeTagIds);
+          return Array.isArray(parsed)
+            ? parsed
+                .filter((id): id is string => typeof id === "string")
+                .map((id) => mistakeTagNames.get(id))
+                .filter((name): name is string => name != null)
+            : [];
+        } catch {
+          return [];
+        }
+      })(),
+      customAnswers: parseCustomReviewAnalyticsAnswers(t.review.customAnswers),
+    },
     riskPercent: t.riskPercent?.toString() ?? null,
     setupQualityRating: t.setupQualityRating,
     localYear: entryLocal != null ? Number(entryLocal.date.slice(0, 4)) : null,
@@ -354,7 +523,8 @@ async function persistAdvanced(
   userId: string,
   trades: AdvancedTrade[],
   computed: Partial<AdvancedAnalytics>,
-  now: Date
+  now: Date,
+  persistGlobalScore: boolean
 ): Promise<void> {
   // Lifecycle rows (only trades with MFE/MAE or candle time data).
   const withData = trades.filter(
@@ -401,7 +571,7 @@ async function persistAdvanced(
   }
 
   // Today's score snapshot (only when the score module was computed).
-  if (computed.score != null && trades.length > 0) {
+  if (persistGlobalScore && computed.score != null && trades.length > 0) {
     const day = utcDay(now);
     const s = computed.score;
     const components = {
@@ -482,7 +652,7 @@ export async function getAdvancedAnalytics(
   query: AnalyticsQuery
 ): Promise<AdvancedAnalyticsPayload> {
   const modules = query.module != null ? [query.module] : [...ADVANCED_MODULES];
-  const { trades, timezone, currency, tradingDay } =
+  const { trades, timezone, currency, tradingDay, excludedTradeCount } =
     await loadAdvancedTradesCached(
       userId,
       query.account ?? undefined,
@@ -499,52 +669,62 @@ export async function getAdvancedAnalytics(
     modules
   );
   const now = new Date();
-  // Phase 2 perf — trader score from the daily snapshot: the headline
-  // score is the frozen value of the day (one indexed read), recomputed
-  // only when today's snapshot is missing. The details below the score
-  // still describe the currently loaded trades. History comes from the
-  // snapshots (last one of each month) instead of the O(months x N)
-  // monthly replay; when today's snapshot is missing, the current
-  // month's point is the freshly computed score (same >= 3 trades bar
-  // as the replay).
+  // Phase 2 perf — trader score from the daily snapshot, global scope
+  // only: the snapshot is the frozen all-time, all-accounts value, so it
+  // may stand in for the score only when the request asks for exactly
+  // that scope (period "all", no account filter). Any other period or an
+  // account filter keeps the freshly computed score from the trades in
+  // scope, and the history is the month-end replay over those same
+  // trades — a global value is never presented as a period score.
+  // The score's `source` field records which one was served, and the
+  // quality tab displays the real period of the score.
+  const isGlobalScope = query.account == null && query.period === "all";
   if (modules.includes("score") && computed.score != null) {
-    const [history, today] = await Promise.all([
-      loadScoreHistoryFromSnapshots(userId),
-      db.traderScoreSnapshot.findUnique({
-        where: { userId_date: { userId, date: utcDay(now) } },
-      }),
-    ]);
-    if (today != null) {
-      computed.score = {
-        ...computed.score,
-        total: today.score,
-        grade: scoreGrade(today.score),
-        components: {
-          discipline: today.discipline,
-          edge: today.edge,
-          consistency: today.consistency,
-          risk: today.risk,
-        },
-        trades: today.tradeCount,
-      };
+    if (isGlobalScope) {
+      const [history, today] = await Promise.all([
+        loadScoreHistoryFromSnapshots(userId),
+        db.traderScoreSnapshot.findUnique({
+          where: { userId_date: { userId, date: utcDay(now) } },
+        }),
+      ]);
+      if (today != null) {
+        computed.score = {
+          ...computed.score,
+          total: today.score,
+          grade: scoreGrade(today.score),
+          components: {
+            discipline: today.discipline,
+            edge: today.edge,
+            consistency: today.consistency,
+            risk: today.risk,
+          },
+          trades: today.tradeCount,
+          source: "snapshot",
+        };
+      }
+      const currentMonth = now.toISOString().slice(0, 7);
+      if (
+        today == null &&
+        computed.score.trades >= 3 &&
+        !history.some((p) => p.month === currentMonth)
+      ) {
+        history.push({
+          month: currentMonth,
+          score: computed.score.total,
+          trades: computed.score.trades,
+        });
+        history.sort((a, b) => a.month.localeCompare(b.month));
+      }
+      computed.scoreHistory = history;
+    } else {
+      computed.scoreHistory = computeScoreHistory(trades);
     }
-    const currentMonth = now.toISOString().slice(0, 7);
-    if (
-      today == null &&
-      computed.score.trades >= 3 &&
-      !history.some((p) => p.month === currentMonth)
-    ) {
-      history.push({
-        month: currentMonth,
-        score: computed.score.total,
-        trades: computed.score.trades,
-      });
-      history.sort((a, b) => a.month.localeCompare(b.month));
-    }
-    computed.scoreHistory = history;
   }
   try {
-    await persistAdvanced(userId, trades, computed, now);
+    // Only a global-scope score may (re)write today's global snapshot:
+    // persisting a period- or account-scoped score here would freeze a
+    // partial value as the all-time snapshot for every later reader.
+    await persistAdvanced(userId, trades, computed, now, isGlobalScope);
   } catch (error) {
     // Persistence must never break the read path.
     console.error("[advanced-analytics] persist failed", error);
@@ -554,6 +734,7 @@ export async function getAdvancedAnalytics(
     accountId: query.account ?? null,
     currency,
     timezone,
+    excludedTradeCount,
     advanced: { ...EMPTY_ADVANCED, ...computed },
   };
 }

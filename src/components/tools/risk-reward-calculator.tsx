@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * Risk / Reward calculator — /tools, tab "Risk / Reward".
+ * Risk / Reward calculator - /tools, tab "Risk / Reward".
  *
  * - Interactive R:R × win-rate table (1:1–5:1 × 20–60%), coloured
  *   Profitable / Break Even / Not Profitable like the reference image,
  *   with the break-even cell outlined and the user's own stats overlaid
- *   ("You" marker, with the sample size n — real trades only, never
+ *   ("You" marker, with the sample size n - real trades only, never
  *   invented numbers; no closed trades → an honest empty state).
  * - Required win rate for a chosen R:R: 1 / (1 + RR).
  * - Expectancy in R and in $ for a given win rate / R:R / risk per
@@ -17,7 +17,7 @@
  *   as a projection, not a promise.
  *
  * All math goes through the pure decimal engine in
- * src/lib/trading/calculate.ts — never JS floats.
+ * src/lib/trading/calculate.ts - never JS floats.
  */
 import * as React from "react";
 import { useTranslations } from "next-intl";
@@ -45,6 +45,7 @@ import {
   useDeleteToolScenario,
   useToolScenarios,
 } from "@/hooks/use-tools";
+import { parseRiskRewardScenario } from "@/lib/tools/scenario-payloads";
 import {
   useRiskRewardSummary,
   useSetDailyRiskBudget,
@@ -69,7 +70,11 @@ export function RiskRewardCalculator() {
   const fmt = useFormat();
   const summaryQuery = useRiskRewardSummary();
   const summary = summaryQuery.data ?? null;
-  const currency = summary?.currency ?? "USD";
+  // Currency of a loaded scenario: the summary currency is the default,
+  // but a saved scenario carries its own currency and loading it must
+  // restore that currency (MD §3.5, 6c - it used to be dropped).
+  const [currencyOverride, setCurrencyOverride] = React.useState<string | null>(null);
+  const currency = currencyOverride ?? summary?.currency ?? "USD";
 
   const scenariosQuery = useToolScenarios("RISK_REWARD");
   const scenarios = scenariosQuery.data ?? [];
@@ -191,13 +196,15 @@ export function RiskRewardCalculator() {
   };
 
   const loadScenario = (payload: Record<string, unknown>) => {
-    if (typeof payload.winRate === "string") {
-      setWinRatePct(String(Math.round(Number(payload.winRate) * 100)));
+    const p = parseRiskRewardScenario(payload);
+    if (p.winRate !== undefined) {
+      setWinRatePct(String(Math.round(Number(p.winRate) * 100)));
     }
-    if (typeof payload.rr === "string") setRr(payload.rr);
-    if (typeof payload.riskPerTrade === "string") {
-      setRiskPerTrade(payload.riskPerTrade);
+    if (p.rr !== undefined) setRr(p.rr);
+    if (p.riskPerTrade !== undefined) {
+      setRiskPerTrade(p.riskPerTrade);
     }
+    if (p.currency !== undefined) setCurrencyOverride(p.currency);
   };
 
   const saveBudget = () => {
@@ -213,6 +220,16 @@ export function RiskRewardCalculator() {
       {summaryQuery.isError ? (
         <p className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
           {t("rrLoadError")}
+        </p>
+      ) : null}
+      {summary &&
+      (summary.excludedTradeCount > 0 || summary.excludedOpenTradeCount > 0) ? (
+        <p className="rounded-lg border p-3 text-sm text-muted-foreground">
+          {t("rrCurrencyScopeNote", {
+            currency,
+            closed: summary.excludedTradeCount,
+            open: summary.excludedOpenTradeCount,
+          })}
         </p>
       ) : null}
 
@@ -284,7 +301,7 @@ export function RiskRewardCalculator() {
                           <span className="block text-xs tabular-nums opacity-80">
                             {e != null
                               ? `${e.gt(0) ? "+" : ""}${fmtNum(e.toNumber(), 2)} R`
-                              : "—"}
+                              : "-"}
                           </span>
                           {isYou ? (
                             <Badge variant="secondary" className="mt-1">
@@ -306,9 +323,9 @@ export function RiskRewardCalculator() {
               winRate:
                 realWinRate != null
                   ? fmtNum(Number(realWinRate) * 100, 1)
-                  : "—",
+                  : "-",
               avgRR:
-                realAvgRR != null ? fmtNum(Number(realAvgRR), 2) : "—",
+                realAvgRR != null ? fmtNum(Number(realAvgRR), 2) : "-",
               n: closedN,
             })}
           </p>
@@ -361,19 +378,19 @@ export function RiskRewardCalculator() {
             value={
               required != null
                 ? `${fmtNum(required.times(100).toNumber(), 1)}%`
-                : "—"
+                : "-"
             }
-            hint={t("rrRequiredHint", { rr: rrNum ?? "—" })}
+            hint={t("rrRequiredHint", { rr: rrNum ?? "-" })}
           />
           <Stat
             label={t("rrExpectancyR")}
-            value={expR != null ? `${fmtNum(expR.toNumber(), 2)} R` : "—"}
+            value={expR != null ? `${fmtNum(expR.toNumber(), 2)} R` : "-"}
             hint={t("rrPerTrade")}
           />
           <Stat
             label={t("rrExpectancyMoney")}
             value={
-              expMoney != null ? fmt.money(expMoney.toString(), currency) : "—"
+              expMoney != null ? fmt.money(expMoney.toString(), currency) : "-"
             }
             hint={
               expMoney != null
@@ -447,13 +464,18 @@ export function RiskRewardCalculator() {
                 <span className="text-xs text-muted-foreground tabular-nums">
                   {typeof s.payload.winRate === "string"
                     ? `${fmtNum(Number(s.payload.winRate) * 100, 0)}%`
-                    : "—"}
+                    : "-"}
                   {" · "}
-                  {typeof s.payload.rr === "string" ? `${s.payload.rr}:1` : "—"}
+                  {typeof s.payload.rr === "string" ? `${s.payload.rr}:1` : "-"}
                   {" · "}
                   {typeof s.payload.riskPerTrade === "string"
-                    ? fmt.money(s.payload.riskPerTrade, currency)
-                    : "—"}
+                    ? fmt.money(
+                        s.payload.riskPerTrade,
+                        typeof s.payload.currency === "string"
+                          ? s.payload.currency
+                          : currency
+                      )
+                    : "-"}
                 </span>
                 <Button
                   variant="ghost"
@@ -488,7 +510,7 @@ export function RiskRewardCalculator() {
                 value={
                   summary.budget.amount != null
                     ? fmt.money(summary.budget.amount, currency)
-                    : "—"
+                    : "-"
                 }
                 hint={
                   summary.budget.percent != null
@@ -509,7 +531,7 @@ export function RiskRewardCalculator() {
                 value={
                   summary.today.remaining != null
                     ? fmt.money(summary.today.remaining, currency)
-                    : "—"
+                    : "-"
                 }
                 hint={
                   summary.today.usedPercent != null

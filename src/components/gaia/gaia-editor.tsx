@@ -11,6 +11,7 @@
  */
 import * as React from "react";
 import {
+  CandlestickChart,
   Download,
   FileDown,
   History,
@@ -45,6 +46,7 @@ import {
   gaiaErrorMessage,
   gaiaRelativeTime,
   newBlockId,
+  useCreateGaiaNote,
   useCreateGaiaTag,
   useCreateGaiaTemplate,
   useDuplicateGaiaNote,
@@ -69,8 +71,21 @@ import {
 } from "./gaia-blocks";
 import { IconPicker, RefPickerDialog, VersionsDialog } from "./gaia-editor-dialogs";
 import { NotePrintDialog } from "./gaia-print";
+import { GaiaLinkedNotesSection } from "./gaia-linked-notes";
+import { GaiaPatternLibrary } from "./gaia-pattern-library";
+import { getCandlestickPattern, isCandlestickPatternId } from "@/lib/gaia/patterns/catalog";
+import {
+  clearLocalGaiaDraft,
+  gaiaSaveRetryDelay,
+  isLocalDraftNewer,
+  loadLocalGaiaDraft,
+  saveLocalGaiaDraft,
+} from "@/lib/gaia/draft-recovery";
+import { isNetworkError } from "@/lib/offline/replay";
+import { isProvisionalNoteId } from "@/lib/offline/types";
+import { queueGaiaNoteUpdateOffline } from "./gaia-shared";
 
-export type SaveStatus = "saved" | "dirty" | "saving" | "error";
+export type SaveStatus = "saved" | "dirty" | "saving" | "error" | "queued";
 
 interface DraftState {
   title: string;
@@ -160,6 +175,7 @@ export function blocksToMarkdown(
         }
         break;
       }
+      case "pattern": { const pattern = block.patternId ? getCandlestickPattern(block.patternId) : null; if (pattern) lines.push(`**${pattern.name}**`, `*${pattern.description}*`, ""); break; }
       case "ref": {
         if (block.ref) {
           const kindLabel = refLabel(block.ref.kind);
@@ -223,12 +239,14 @@ export function GaiaEditor({
   const createTag = useCreateGaiaTag();
   const createTemplate = useCreateGaiaTemplate();
   const restoreVersion = useRestoreGaiaVersion();
+  const createGaiaNote = useCreateGaiaNote();
 
   const [draft, setDraft] = React.useState<DraftState | null>(null);
   const [status, setStatus] = React.useState<SaveStatus>("saved");
   const [savedAt, setSavedAt] = React.useState<string | null>(null);
   const [versionsOpen, setVersionsOpen] = React.useState(false);
   const [printOpen, setPrintOpen] = React.useState(false);
+  const [patternLibraryOpen, setPatternLibraryOpen] = React.useState(false);
   const [refPicker, setRefPicker] = React.useState<{
     open: boolean;
     kind: GaiaRefKind | "";
@@ -250,7 +268,14 @@ export function GaiaEditor({
 
   const draftRef = React.useRef<DraftState | null>(null);
   const dirtyRef = React.useRef(false);
+  const saveInFlightRef = React.useRef(false);
+  const draftRevisionRef = React.useRef(0);
   const saveTimerRef = React.useRef<number | null>(null);
+  // Lot 11 (roadmap §15): consecutive failed autosaves; drives the
+  // backoff retry effect below (first failure toasts, later ones stay
+  // quiet until they succeed or the user hits Retry).
+  const retryCountRef = React.useRef(0);
+  const [retryPending, setRetryPending] = React.useState(0);
   const textAreasRef = React.useRef(new Map<string, HTMLTextAreaElement>());
   const pendingFocusRef = React.useRef<{ id: string; at: "start" | "end" } | null>(null);
   const slashAnchorRef = React.useRef<HTMLElement | null>(null);
@@ -269,7 +294,10 @@ export function GaiaEditor({
       saveTimerRef.current = null;
     }
     const current = draftRef.current;
-    if (!current || !dirtyRef.current) return;
+    if (!current || !dirtyRef.current || saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
+    const savingRevision = draftRevisionRef.current;
+    let needsImmediateFlush = false;
     setStatus("saving");
     try {
       const res = await updateNote.mutateAsync({
@@ -281,21 +309,74 @@ export function GaiaEditor({
           tagIds: current.tagIds,
           favorite: current.favorite,
           blocks: current.blocks,
+          // Offline conflict base (§25.5): the server row the user last
+          // saved from. A stale base becomes a 409 on replay, never a
+          // silent overwrite.
+          expectedUpdatedAt: lastAdoptedUpdatedAtRef.current ?? undefined,
         },
       });
-      dirtyRef.current = false;
+      retryCountRef.current = 0;
+      setRetryPending(0);
       lastAdoptedUpdatedAtRef.current = res.note.updatedAt;
       setSavedAt(res.note.updatedAt);
-      setStatus("saved");
+      if (draftRevisionRef.current === savingRevision) {
+        dirtyRef.current = false;
+        clearLocalGaiaDraft(noteId);
+        // A provisional note has no server row yet: the edit is queued,
+        // not saved. The queue panel shows it until the create replays.
+        setStatus(isProvisionalNoteId(noteId) ? "queued" : "saved");
+      } else {
+        dirtyRef.current = true;
+        setStatus("dirty");
+        needsImmediateFlush = true;
+      }
     } catch (err) {
+      // Offline (§25.5): a network failure mid-save queues the draft
+      // instead of retrying forever. The queue owns the retry from here;
+      // the local draft backup stays until the replay succeeds.
+      if (isNetworkError(err)) {
+        const queued = await queueGaiaNoteUpdateOffline(
+          noteId,
+          {
+            title: current.title,
+            icon: current.icon,
+            folderId: current.folderId,
+            tagIds: current.tagIds,
+            favorite: current.favorite,
+            blocks: current.blocks,
+          },
+          lastAdoptedUpdatedAtRef.current,
+        );
+        if (queued) {
+          retryCountRef.current = 0;
+          setRetryPending(0);
+          dirtyRef.current = false;
+          setStatus("queued");
+          return;
+        }
+      }
       dirtyRef.current = true;
       setStatus("error");
-      toast({ variant: "destructive", title: gaiaErrorMessage(err) });
+      // Lot 11 (roadmap §15): a failed autosave retries on its own with
+      // backoff (see the retry effect below) instead of silently losing
+      // the edits. Only the first failure toasts; retries stay quiet
+      // until they succeed or the user hits Retry.
+      if (retryCountRef.current === 0) {
+        toast({ variant: "destructive", title: gaiaErrorMessage(err) });
+      }
+      retryCountRef.current += 1;
+      setRetryPending(retryCountRef.current);
+    } finally {
+      saveInFlightRef.current = false;
+      if (needsImmediateFlush && dirtyRef.current && saveTimerRef.current === null) {
+        saveTimerRef.current = window.setTimeout(() => void flushSaveRef.current(), 0);
+      }
     }
   }, [noteId, toast, updateNote]);
 
   const flushSaveRef = React.useRef(flushSave);
   React.useEffect(() => {
+    // Keep scheduled autosaves pointed at the latest note mutation callback.
     flushSaveRef.current = flushSave;
   });
 
@@ -309,12 +390,25 @@ export function GaiaEditor({
       const current = draftRef.current;
       if (!current) return;
       const next = updater(current);
+      draftRevisionRef.current += 1;
       setDraftState(next);
       dirtyRef.current = true;
+      // Lot 11 (roadmap §15): keep a local backup of the unsaved edits so
+      // a closed tab or a crash does not lose them. Cleared on save.
+      saveLocalGaiaDraft({
+        noteId,
+        title: next.title,
+        icon: next.icon,
+        folderId: next.folderId,
+        tagIds: next.tagIds,
+        favorite: next.favorite,
+        blocksJson: JSON.stringify(next.blocks),
+        savedAtMs: Date.now(),
+      });
       setStatus((s) => (s === "saving" ? s : "dirty"));
       scheduleSave();
     },
-    [scheduleSave, setDraftState],
+    [noteId, scheduleSave, setDraftState],
   );
 
   // Adopt the server note into the local draft — never while edits are pending.
@@ -322,6 +416,37 @@ export function GaiaEditor({
     if (!serverNote) return;
     if (dirtyRef.current) return;
     if (lastAdoptedUpdatedAtRef.current === serverNote.updatedAt && draftRef.current) return;
+    // Lot 11 (roadmap §15): a local backup newer than the server copy
+    // means edits never reached the server (closed tab, network loss).
+    // Adopt the backup and push it instead of silently dropping it.
+    const local = loadLocalGaiaDraft(noteId);
+    if (local && isLocalDraftNewer(local, serverNote.updatedAt)) {
+      let localBlocks: GaiaBlock[] = [];
+      try {
+        const parsed: unknown = JSON.parse(local.blocksJson);
+        if (Array.isArray(parsed)) localBlocks = parsed as GaiaBlock[];
+      } catch {
+        localBlocks = [];
+      }
+      lastAdoptedUpdatedAtRef.current = serverNote.updatedAt;
+      const next: DraftState = {
+        title: local.title,
+        icon: local.icon,
+        folderId: local.folderId,
+        tagIds: [...local.tagIds],
+        favorite: local.favorite,
+        blocks:
+          localBlocks.length > 0
+            ? localBlocks
+            : [{ id: newBlockId(), type: "paragraph", text: "" }],
+      };
+      setDraftState(next);
+      dirtyRef.current = true;
+      setStatus("dirty");
+      toast({ title: t("gaia.editor.draftRecovered") });
+      scheduleSave();
+      return;
+    }
     lastAdoptedUpdatedAtRef.current = serverNote.updatedAt;
     const next: DraftState = {
       title: serverNote.title,
@@ -337,7 +462,7 @@ export function GaiaEditor({
     setDraftState(next);
     setSavedAt(serverNote.updatedAt);
     setStatus("saved");
-  }, [serverNote, setDraftState]);
+  }, [serverNote, setDraftState, noteId, toast, scheduleSave, t]);
 
   // Flush pending edits on unmount or when switching notes.
   React.useEffect(() => {
@@ -345,6 +470,34 @@ export function GaiaEditor({
       void flushSaveRef.current();
     };
   }, [noteId]);
+
+  // Lot 11 (roadmap §15): retry the pending save when the network comes
+  // back, and warn before closing the tab with unsaved edits.
+  React.useEffect(() => {
+    const onOnline = () => {
+      if (dirtyRef.current) void flushSaveRef.current();
+    };
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (dirtyRef.current) e.preventDefault();
+    };
+    window.addEventListener("online", onOnline);
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
+  }, []);
+
+  // Lot 11 (roadmap §15): backoff retry after a failed autosave (5s,
+  // 15s, 30s, then stop). A successful save resets retryPending to 0,
+  // which clears any pending retry.
+  React.useEffect(() => {
+    if (retryPending === 0) return;
+    const delay = gaiaSaveRetryDelay(retryPending - 1);
+    if (delay == null) return;
+    const id = window.setTimeout(() => void flushSaveRef.current(), delay);
+    return () => window.clearTimeout(id);
+  }, [retryPending]);
 
   // Pending focus (after split / insert / duplicate).
   React.useEffect(() => {
@@ -639,9 +792,32 @@ export function GaiaEditor({
     );
   }, [slash, tr]);
 
-  const folders = foldersQuery.data?.folders ?? [];
-  const allTags = tagsQuery.data?.tags ?? [];
+  const folders = foldersQuery.data ?? [];
+  const allTags = tagsQuery.data ?? [];
   const wordCount = draft ? countWords(draft.blocks) : 0;
+
+  // Lot 11 (roadmap §15): create a note that links back to this one, so
+  // the backlink appears in the linked-notes section below the editor.
+  const handleCreateLinkedNote = () => {
+    void createGaiaNote
+      .mutateAsync({
+        title: `Note - ${draft?.title?.trim() ? draft.title : "Untitled note"}`,
+        blocks: [
+          {
+            id: newBlockId(),
+            type: "ref",
+            text: "",
+            ref: { kind: "NOTE", id: noteId },
+          },
+          { id: newBlockId(), type: "paragraph", text: "" },
+        ],
+      })
+      .then(
+        (res) => navigate(`/gaia?tab=notes&note=${res.note.id}`),
+        (err: unknown) =>
+          toast({ title: gaiaErrorMessage(err), variant: "destructive" }),
+      );
+  };
 
   const handleKeyDownCapture = (e: React.KeyboardEvent) => {
     if (slash) {
@@ -737,7 +913,9 @@ export function GaiaEditor({
         ? "bg-amber-400"
         : status === "saving"
           ? "animate-pulse bg-emerald-500"
-          : "bg-loss";
+          : status === "queued"
+            ? "bg-sky-400"
+            : "bg-loss";
   const statusLabel =
     status === "saved"
       ? `${t("gaia.time.savedPrefix")} ${savedAt ? gaiaRelativeTime(savedAt, tr) : ""}`.trim()
@@ -745,7 +923,9 @@ export function GaiaEditor({
         ? t("gaia.editor.statusDirty")
         : status === "saving"
           ? t("gaia.editor.statusSaving")
-          : t("gaia.editor.statusError");
+          : status === "queued"
+            ? t("gaia.editor.statusQueued")
+            : t("gaia.editor.statusError");
 
   const addBlock = () => {
     const block: GaiaBlock = { id: newBlockId(), type: "paragraph", text: "" };
@@ -939,6 +1119,17 @@ export function GaiaEditor({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2.5 sm:px-6">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            data-testid="gaia-open-pattern-library"
+            onClick={() => setPatternLibraryOpen(true)}
+          >
+            <CandlestickChart className="size-3.5" aria-hidden="true" />
+            Pattern library
+          </Button>
           <Select
             value={draft.folderId ?? "none"}
             onValueChange={(v) =>
@@ -1086,8 +1277,17 @@ export function GaiaEditor({
                 );
               }}
               onDragEnd={() => setDragState({ dragId: null, overId: null, position: null })}
-              onDrop={(id) => {
-                if (dragState.dragId) {
+              onDrop={(id, patternId, position) => {
+                if (patternId && isCandlestickPatternId(patternId)) {
+                  applyDraft((current) => {
+                    const index = current.blocks.findIndex((block) => block.id === id);
+                    const insertionIndex = Math.max(0, index + (position === "below" ? 1 : 0));
+                    const blocks = [...current.blocks];
+                    blocks.splice(insertionIndex, 0, { id: newBlockId(), type: "pattern", text: "", patternId });
+                    return { ...current, blocks };
+                  });
+                }
+                else if (dragState.dragId) {
                   ops.reorder(dragState.dragId, id, dragState.position ?? "below");
                 }
                 setDragState({ dragId: null, overId: null, position: null });
@@ -1098,12 +1298,33 @@ export function GaiaEditor({
           <button
             type="button"
             onClick={addBlock}
+            onDragOver={(event) => {
+              if (event.dataTransfer.types.includes("application/x-promethe-gaia-pattern")) event.preventDefault();
+            }}
+            onDrop={(event) => {
+              const patternId = event.dataTransfer.getData("application/x-promethe-gaia-pattern");
+              if (!isCandlestickPatternId(patternId)) return;
+              event.preventDefault();
+              applyDraft((current) => ({ ...current, blocks: [...current.blocks, { id: newBlockId(), type: "pattern", text: "", patternId }] }));
+            }}
             aria-label={t("gaia.editor.addBlockLabel")}
             className="h-10 w-full rounded-md pl-7 text-left text-sm text-muted-foreground hover:bg-muted/50"
           >
             {t("gaia.editor.addBlockHint")}
           </button>
         </div>
+      </div>
+
+      {/* Lot 11 (roadmap §15): notes that reference this note (backlinks),
+          and a shortcut to start a linked note. */}
+      <div className="mt-4">
+        <GaiaLinkedNotesSection
+          kind="NOTE"
+          id={noteId}
+          testidPrefix="gaia-editor"
+          creating={createGaiaNote.isPending}
+          onCreateNote={handleCreateLinkedNote}
+        />
       </div>
 
       {slash ? (
@@ -1118,6 +1339,7 @@ export function GaiaEditor({
         />
       ) : null}
 
+      <GaiaPatternLibrary open={patternLibraryOpen} onOpenChange={setPatternLibraryOpen} onInsert={(patternId) => { if (isCandlestickPatternId(patternId)) applyDraft((current) => ({ ...current, blocks: [...current.blocks, { id: newBlockId(), type: "pattern", text: "", patternId }] })); }} />
       <RefPickerDialog
         open={refPicker.open}
         onOpenChange={(open) => setRefPicker((prev) => ({ ...prev, open }))}
@@ -1129,6 +1351,7 @@ export function GaiaEditor({
         open={versionsOpen}
         onOpenChange={setVersionsOpen}
         noteId={noteId}
+        currentBlocks={draft.blocks}
         restoringId={restoringId}
         onRestore={(versionId) => {
           setRestoringId(versionId);

@@ -6,8 +6,8 @@ import { saveUpload } from "@/server/uploads";
 /**
  * POST /api/uploads — multipart (file, tradeId, label?, caption?).
  * The client compresses to WebP ≤ 1600px q0.8 before sending; the server
- * enforces type + 5 MB as defense in depth. Files land in
- * uploads/{userId}/{tradeId}/ and are served ONLY via /api/uploads/[id].
+ * enforces type + 5 MB as defense in depth. Files land in the private
+ * Supabase Storage bucket and are served ONLY via /api/uploads/[id].
  */
 export async function POST(req: Request) {
   try {

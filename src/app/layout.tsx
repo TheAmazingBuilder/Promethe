@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
-import { PwaRegister } from "@/components/app/pwa-register";
+import { PwaRoot } from "@/components/pwa/pwa-root";
 import { LegacyHashRedirect } from "@/components/app/legacy-hash-redirect";
 import { ThemeProvider } from "@/components/theme-provider";
 import { I18nProvider } from "@/i18n/i18n-provider";
@@ -25,7 +25,9 @@ export const metadata: Metadata = {
     "Promethe, a multi-user trading journal for XAUUSD and Forex: pips, lots, contract sizes, strategy statistics and insights.",
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
     apple: "/icon-180.png",
   },
   appleWebApp: {
@@ -71,7 +73,7 @@ export default async function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
-            <PwaRegister />
+            <PwaRoot />
             <LegacyHashRedirect />
             {children}
             <Toaster />

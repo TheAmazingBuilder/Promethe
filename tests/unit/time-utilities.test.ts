@@ -8,6 +8,7 @@
  * week-start variations.
  */
 import { describe, expect, it } from "vitest";
+import type { TradingDaySettings } from "@/lib/time/trading-day";
 import {
   formatClock,
   formatOffsetLabel,
@@ -205,7 +206,7 @@ describe("getTradingDay — rollover modes", () => {
   });
 
   it("CUSTOM rollover at a chosen time and zone", () => {
-    const settings = {
+    const settings: TradingDaySettings = {
       mode: "CUSTOM",
       rolloverTime: "06:00",
       rolloverTimezone: "Asia/Tokyo",

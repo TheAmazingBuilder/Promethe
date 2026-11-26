@@ -362,6 +362,7 @@ describe("checkEdge", () => {
     const edge = checkEdge(trades, input.stats, input.advanced);
     expect(edge.verdict).toBe("yes");
     expect(edge.sampleSize).toBe(30);
+    expect(edge.rSampleSize).toBe(30);
     expect(edge.expectancyR).toBe(1);
   });
 
@@ -372,6 +373,22 @@ describe("checkEdge", () => {
     const input = buildInput(trades);
     const edge = checkEdge(trades, input.stats, input.advanced);
     expect(edge.verdict).toBe("not-yet");
+  });
+
+  it("does not judge an edge when total trades are high but valid R data is sparse", () => {
+    const trades = Array.from({ length: 30 }, (_, i) =>
+      makeTrade({
+        resultType: i < 5 ? "WIN" : "BREAKEVEN",
+        netPnl: i < 5 ? "100" : "0",
+        rMultiple: i < 5 ? "1" : null,
+      })
+    );
+    const input = buildInput(trades);
+    const edge = checkEdge(trades, input.stats, input.advanced);
+    expect(edge.verdict).toBe("not-yet");
+    expect(edge.sampleSize).toBe(30);
+    expect(edge.rSampleSize).toBe(5);
+    expect(edge.reason).toContain("5 of 30");
   });
 
   it("says no with negative expectancy", () => {

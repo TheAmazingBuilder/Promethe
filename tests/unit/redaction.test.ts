@@ -52,6 +52,7 @@ const TRADE = {
   postTradeReview: "Managed well, moved SL to BE",
   lessonLearned: "Patience pays",
   notesTag: "gold",
+  review: { id: "review_1", planAdherenceScore: 4, mainLesson: "Wait for confirmation", whatWentWell: "Respected the stop", whatToImprove: "Avoid early entries" },
   screenshots: [
     {
       id: "shot_1",
@@ -142,18 +143,24 @@ describe("redactTrade — full anonymous export", () => {
     expect(executions[0].time).toBe("2025-01-15");
   });
 
+  it("removes free-text review notes when note redaction is enabled", () => {
+    const { trade } = redactTrade(TRADE, { ...NO_REDACTION, hideNotes: true });
+    expect(trade.review).toEqual({ id: "review_1", planAdherenceScore: 4 });
+  });
+
   it("keeps strategy name (allowed by the preset)", () => {
     expect(trade.strategyName).toBe("London Open Gold");
   });
 });
 
-describe("redactTrade — hidePsychology (mentor journal scope off)", () => {
+describe("redactTrade - hidePsychology", () => {
   it("removes psychology fields but keeps notes", () => {
     const { trade } = redactTrade(TRADE, { ...NO_REDACTION, hidePsychology: true });
     for (const key of ["emotionBefore", "confidence", "followedPlan", "checklistResults", "setupQualityRating"]) {
       expect(trade).not.toHaveProperty(key);
     }
     expect(trade.notes).toBe("Perfect A+ setup at the London open");
+    expect(trade).not.toHaveProperty("review");
   });
 });
 
@@ -280,6 +287,10 @@ describe("findLeaks", () => {
     expect(findLeaks(payload, ["nothing"])).toHaveLength(0);
   });
 
+  it("does not mistake fractional seconds in ISO timestamps for money", () => {
+    expect(findLeaks({ capturedAt: "2026-11-23T15:56:50.000Z" }, ["50.00"])).toEqual([]);
+    expect(findLeaks({ amount: "50.00" }, ["50.00"])).toHaveLength(1);
+  });
   it("detects leaks via key names", () => {
     const payload = { accountNumber: "hidden" };
     expect(findLeaks(payload, ["accountNumber"])).toHaveLength(1);
@@ -344,5 +355,71 @@ describe("tradeLeakProbes — sondes numériques strictes", () => {
     // La valeur exacte l'est.
     expect(findLeaks({ secret: "610.75" }, probes)).toHaveLength(1);
     expect(findLeaks({ secret: "610.750" }, probes)).toHaveLength(1);
+  });
+});
+
+describe("redactTrade - Lot 14 Sharing: unbounded user content", () => {
+  const RICH_TRADE = {
+    ...TRADE,
+    // Arbitrary user-defined custom fields (JSONB) - unbounded content.
+    customFields: {
+      brokerLogin: "trader-007-secret",
+      accountNumber: "ACC-998877",
+      session: "London",
+    },
+    tradingViewUrl: "https://www.tradingview.com/chart/xyz/user-secret-name/",
+    checklistStatus: {
+      requiredTotal: 3,
+      requiredChecked: 1,
+      missing: ["Wait for London sweep", "Confirm HTF bias"],
+      complete: false,
+    },
+    review: {
+      ...(TRADE.review as Record<string, unknown>),
+      customAnswers: [
+        { questionId: "q1", question: "What did you feel?", type: "TEXT", answer: "Felt rushed after the news - note secrete-99" },
+        { questionId: "q2", question: "Score it", type: "SCALE", answer: 4 },
+      ],
+    },
+  };
+
+  it("strips custom fields as soon as ANY hiding is requested", () => {
+    const { trade } = redactTrade(RICH_TRADE, PIPS_R_ONLY_PRESET);
+    expect(trade).not.toHaveProperty("customFields");
+    const serialized = JSON.stringify(trade);
+    expect(serialized).not.toContain("trader-007-secret");
+    expect(serialized).not.toContain("ACC-998877");
+  });
+
+  it("keeps custom fields only on an explicit full share (no redaction)", () => {
+    const { trade } = redactTrade(RICH_TRADE, NO_REDACTION);
+    expect(trade.customFields).toEqual(RICH_TRADE.customFields);
+  });
+
+  it("strips free-text review answers when notes are hidden", () => {
+    const { trade } = redactTrade(RICH_TRADE, { ...NO_REDACTION, hideNotes: true });
+    const review = trade.review as Record<string, unknown>;
+    expect(review).not.toHaveProperty("customAnswers");
+    expect(JSON.stringify(trade)).not.toContain("note secrete-99");
+    // Scores survive (not free text).
+    expect(review.planAdherenceScore).toBe(4);
+  });
+
+  it("strips the checklist verdict when psychology is hidden", () => {
+    const { trade } = redactTrade(RICH_TRADE, { ...NO_REDACTION, hidePsychology: true });
+    expect(trade).not.toHaveProperty("checklistStatus");
+    expect(JSON.stringify(trade)).not.toContain("Wait for London sweep");
+  });
+
+  it("strips the checklist verdict when the strategy name is hidden", () => {
+    const { trade } = redactTrade(RICH_TRADE, { ...NO_REDACTION, hideStrategyName: true });
+    expect(trade).not.toHaveProperty("checklistStatus");
+    expect(trade).not.toHaveProperty("strategyName");
+  });
+
+  it("strips the TradingView URL when account info is hidden", () => {
+    const { trade } = redactTrade(RICH_TRADE, { ...NO_REDACTION, hideAccountInfo: true });
+    expect(trade).not.toHaveProperty("tradingViewUrl");
+    expect(JSON.stringify(trade)).not.toContain("user-secret-name");
   });
 });

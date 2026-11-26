@@ -206,6 +206,8 @@ export interface DashboardWidgetDTO {
   layouts: WidgetLayouts;
   periodOverride: PeriodOverride | null;
   accountOverride: string | null;
+  /** Optimistic-concurrency version (lot 12) - echo it as expectedVersion on PATCH. */
+  version: number;
 }
 
 export interface DashboardDTO {

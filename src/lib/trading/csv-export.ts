@@ -37,12 +37,27 @@ const HEADERS: string[] = [
   "Draft",
 ];
 
-/** RFC 4180 field escaping. */
-function csvField(value: string | null | undefined): string {
+/**
+ * Spreadsheet formula neutralization + RFC 4180 field escaping.
+ *
+ * Untrusted text beginning (possibly after whitespace/control characters)
+ * with =, +, - or @ is prefixed with an apostrophe so spreadsheet software
+ * treats it as text. Numeric DTO fields opt into strict decimal validation,
+ * preserving legitimate negative amounts without allowing "-1+..." payloads.
+ */
+const NUMERIC_VALUE = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+const FORMULA_PREFIX = /^[\s\u0000-\u001F\uFEFF]*[=+\-@]/;
+
+function csvField(
+  value: string | null | undefined,
+  numeric = false,
+): string {
   if (value == null) return "";
-  const s = String(value);
-  if (/[",\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
+  const raw = String(value);
+  const isValidNumber = numeric && NUMERIC_VALUE.test(raw);
+  const safe = !isValidNumber && FORMULA_PREFIX.test(raw) ? `'${raw}` : raw;
+  if (/[",\\r\\n]/.test(safe)) return `"${safe.replace(/"/g, '""')}"`;
+  return safe;
 }
 
 function yn(v: boolean | null | undefined): string {
@@ -52,7 +67,7 @@ function yn(v: boolean | null | undefined): string {
 
 /** Full CSV document for the given rows. */
 export function tradesToCsv(rows: TradeListItemDTO[]): string {
-  const lines: string[] = [HEADERS.map(csvField).join(",")];
+  const lines: string[] = [HEADERS.map((header) => csvField(header)).join(",")];
   for (const t of rows) {
     lines.push(
       [
@@ -84,7 +99,9 @@ export function tradesToCsv(rows: TradeListItemDTO[]): string {
         t.followedPlan == null ? null : yn(t.followedPlan),
         yn(t.isDraft),
       ]
-        .map(csvField)
+        .map((value, index) =>
+          csvField(value, [12, 13, 14, 15, 16, 17, 18, 19, 21].includes(index))
+        )
         .join(",")
     );
   }

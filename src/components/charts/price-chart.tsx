@@ -81,6 +81,9 @@ interface CandleWindowPayload {
   from: string;
   to: string;
   candles: CandleDTO[];
+  /** True when the window held more than 6,000 bars and only the most
+   * recent ones were returned. */
+  truncated: boolean;
 }
 
 const PADDING_OPTIONS = [10, 30, 100] as const;
@@ -431,6 +434,21 @@ export function PriceChartSection({ trade }: { trade: TradeDetailDTO }) {
                 })}
               </p>
             )}
+            {data?.truncated && (
+              <p className="rounded-md border px-3 py-1.5 text-xs text-muted-foreground">
+                {t("truncatedBanner")}
+              </p>
+            )}
+            {/* Candles come only from the user's own CSV imports - never a
+                live feed. The range below is the imported data actually
+                shown, so a short or stale import is visible, not implied. */}
+            <p className="text-xs text-muted-foreground">
+              {t("sourceLabel", {
+                from: fmtTime(cov?.first ?? null),
+                to: fmtTime(cov?.last ?? null),
+                count: displayCandles.length,
+              })}
+            </p>
             {data?.timeframe && data.timeframe !== timeframe && (
               <p className="text-xs text-muted-foreground">
                 {t("resampledFrom", { tf: data.timeframe })}
@@ -581,7 +599,12 @@ function CandleImportDialog({
     if (!csv.trim()) return;
     setBusy(true);
     try {
-      const res = await apiFetch<{ imported: number; skipped: number; pruned: number }>(
+      const res = await apiFetch<{
+        imported: number;
+        skipped: number;
+        invalid: number;
+        pruned: number;
+      }>(
         "/api/v1/charts/candles/import",
         {
           method: "POST",
@@ -598,6 +621,7 @@ function CandleImportDialog({
         description: t("importStats", {
           imported: res.imported,
           skipped: res.skipped,
+          invalid: res.invalid,
           pruned: res.pruned,
         }),
       });

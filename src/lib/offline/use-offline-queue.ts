@@ -1,0 +1,276 @@
+/**
+ * Offline queue hook (§25.5) - live queue state plus replay triggers.
+ *
+ * Two hooks share one module-level controller:
+ * - useOfflineQueueState(): live queue state + actions, no global
+ *   listeners. The queue panel uses this one.
+ * - useOfflineQueue(): the state hook plus the global listeners
+ *   (`online` events, service-worker sync messages, replay on mount,
+ *   Background Sync registration). Exactly one instance exists, in
+ *   PwaRoot (mounted once in the root layout) - the listeners must
+ *   never be registered twice.
+ */
+"use client";
+
+import * as React from "react";
+import { getBrowserStore, isOfflineQueueSupported } from "./store";
+import { getOfflineUserId, onOfflineUserIdChange } from "./session";
+import {
+  countActionableItems,
+  discardItem,
+  expireStaleItems,
+  listQueueItems,
+  onQueueChange,
+} from "./queue";
+import {
+  createApiReplaySender,
+  onNoteSynced,
+  replayQueue,
+  resolveOfflineConflict,
+  type ReplaySummary,
+} from "./replay";
+import type { OfflineQueueItem } from "./types";
+
+export const OFFLINE_SYNC_TAG = "promethe-offline-replay";
+
+export interface OfflineQueueState {
+  supported: boolean;
+  userId: string | null;
+  items: OfflineQueueItem[];
+  actionableCount: number;
+  conflictCount: number;
+  failedCount: number;
+  isOnline: boolean;
+  isReplaying: boolean;
+  replayNow: () => Promise<ReplaySummary | null>;
+  retryItem: (id: string) => Promise<void>;
+  discard: (id: string) => Promise<void>;
+  resolveConflict: (id: string, choice: "mine" | "server") => Promise<void>;
+}
+
+// Module-level connectivity + replay state, shared by every hook
+// instance so the panel (no listeners of its own) stays in sync with
+// the single listener-owning instance in PwaRoot.
+let onlineState: boolean =
+  typeof navigator !== "undefined" ? navigator.onLine : true;
+const onlineSubscribers = new Set<(online: boolean) => void>();
+
+function publishOnline(value: boolean): void {
+  if (value === onlineState) return;
+  onlineState = value;
+  onlineSubscribers.forEach((cb) => cb(value));
+}
+
+function subscribeOnline(cb: (online: boolean) => void): () => void {
+  onlineSubscribers.add(cb);
+  return () => {
+    onlineSubscribers.delete(cb);
+  };
+}
+
+let replayingState = false;
+const replayingSubscribers = new Set<(replaying: boolean) => void>();
+
+function publishReplaying(value: boolean): void {
+  if (value === replayingState) return;
+  replayingState = value;
+  replayingSubscribers.forEach((cb) => cb(value));
+}
+
+function subscribeReplaying(cb: (replaying: boolean) => void): () => void {
+  replayingSubscribers.add(cb);
+  return () => {
+    replayingSubscribers.delete(cb);
+  };
+}
+
+// Single-flight replay across hook instances: a replay started by
+// PwaRoot and one started from the panel are the same pass.
+let replayInFlight: Promise<ReplaySummary | null> | null = null;
+
+async function runReplay(userId: string): Promise<ReplaySummary | null> {
+  if (replayInFlight) return replayInFlight;
+  if (typeof navigator !== "undefined" && !navigator.onLine) return null;
+  publishReplaying(true);
+  replayInFlight = (async () => {
+    try {
+      const store = getBrowserStore();
+      const sender = await createApiReplaySender();
+      return await replayQueue(store, userId, sender);
+    } catch {
+      return null;
+    }
+  })();
+  try {
+    return await replayInFlight;
+  } finally {
+    replayInFlight = null;
+    publishReplaying(false);
+  }
+}
+
+async function registerBackgroundSync(): Promise<void> {
+  try {
+    if (!("serviceWorker" in navigator) || !("SyncManager" in window)) return;
+    const reg = await navigator.serviceWorker.ready;
+    const syncReg = reg as ServiceWorkerRegistration & {
+      sync?: { register: (tag: string) => Promise<void> };
+    };
+    await syncReg.sync?.register(OFFLINE_SYNC_TAG);
+  } catch {
+    // Background Sync is best-effort: the `online` event covers the rest.
+  }
+}
+
+/** Queue state + actions, without any global listener. */
+export function useOfflineQueueState(): OfflineQueueState {
+  // PwaRoot renders outside the SessionProvider, so the user id comes
+  // from the offline session module (published by SessionProvider).
+  const [userId, setUserId] = React.useState<string | null>(() =>
+    getOfflineUserId(),
+  );
+  const [items, setItems] = React.useState<OfflineQueueItem[]>([]);
+  const [isOnline, setIsOnline] = React.useState(() => onlineState);
+  const [isReplaying, setIsReplaying] = React.useState(() => replayingState);
+
+  const load = React.useCallback(async () => {
+    if (!userId || !isOfflineQueueSupported()) {
+      setItems([]);
+      return;
+    }
+    try {
+      const store = getBrowserStore();
+      await expireStaleItems(store, userId);
+      setItems(await listQueueItems(store, userId));
+    } catch {
+      setItems([]);
+    }
+  }, [userId]);
+
+  React.useEffect(() => {
+    setUserId(getOfflineUserId());
+    return onOfflineUserIdChange((id) => setUserId(id));
+  }, []);
+
+  React.useEffect(() => {
+    void load();
+    return onQueueChange(() => void load());
+  }, [load]);
+
+  React.useEffect(() => subscribeOnline(setIsOnline), []);
+  React.useEffect(() => subscribeReplaying(setIsReplaying), []);
+
+  const replayNow = React.useCallback(async (): Promise<ReplaySummary | null> => {
+    if (!userId || !isOfflineQueueSupported()) return null;
+    const summary = await runReplay(userId);
+    await load();
+    return summary;
+  }, [userId, load]);
+
+  const retryItem = React.useCallback(
+    async (id: string) => {
+      if (!userId || !isOfflineQueueSupported()) return;
+      const store = getBrowserStore();
+      const item = await store.getItem(id);
+      if (!item) return;
+      await store.putItem({
+        ...item,
+        status: "PENDING",
+        attempts: 0,
+        retryable: true,
+        lastError: null,
+      });
+      await load();
+      await replayNow();
+    },
+    [userId, load, replayNow],
+  );
+
+  const discard = React.useCallback(
+    async (id: string) => {
+      if (!userId || !isOfflineQueueSupported()) return;
+      await discardItem(getBrowserStore(), id);
+      await load();
+    },
+    [userId, load],
+  );
+
+  const resolve = React.useCallback(
+    async (id: string, choice: "mine" | "server") => {
+      if (!userId || !isOfflineQueueSupported()) return;
+      await resolveOfflineConflict(getBrowserStore(), id, choice);
+      await load();
+      if (choice === "mine") await replayNow();
+    },
+    [userId, load, replayNow],
+  );
+
+  const actionableCount = countActionableItems(items);
+  const conflictCount = items.filter((item) => item.status === "CONFLICT").length;
+  const failedCount = items.filter((item) => item.status === "FAILED").length;
+
+  return {
+    supported: isOfflineQueueSupported(),
+    userId,
+    items,
+    actionableCount,
+    conflictCount,
+    failedCount,
+    isOnline,
+    isReplaying,
+    replayNow,
+    retryItem,
+    discard,
+    resolveConflict: resolve,
+  };
+}
+
+/**
+ * The full hook: queue state plus the global listeners. Call it exactly
+ * once, in PwaRoot (mounted once in the root layout).
+ */
+export function useOfflineQueue(): OfflineQueueState {
+  const state = useOfflineQueueState();
+  const { replayNow } = state;
+
+  // Replay when the connection returns.
+  React.useEffect(() => {
+    // Re-sync from the browser on every mount: the module state may be
+    // stale from a previous mount (or a previous test).
+    publishOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
+    const handleOnline = () => {
+      publishOnline(true);
+      void replayNow();
+    };
+    const handleOffline = () => publishOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, [replayNow]);
+
+  React.useEffect(() => {
+    if (onlineState) void replayNow();
+    // Once on mount (and when connectivity is first known online).
+  }, []);
+
+  // Background Sync: the service worker relays its `sync` event to every
+  // open client, which replays in-page (session auth lives in the page).
+  React.useEffect(() => {
+    void registerBackgroundSync();
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === "promethe-offline-replay") void replayNow();
+    };
+    navigator.serviceWorker?.addEventListener?.("message", handleMessage);
+    return () => {
+      navigator.serviceWorker?.removeEventListener?.("message", handleMessage);
+    };
+  }, [replayNow]);
+
+  return state;
+}
+
+/** Re-exported for the Gaïa view: remap a provisional note id after sync. */
+export { onNoteSynced };

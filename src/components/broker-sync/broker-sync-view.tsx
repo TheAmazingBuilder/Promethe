@@ -72,6 +72,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { QueryErrorState } from "@/components/ui/query-error-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { useAccounts, useStrategies } from "@/hooks/use-trading";
@@ -464,12 +465,20 @@ function CreateConnectionDialog({
 
 function SymbolMappingsSection() {
   const t = useTranslations("brokerSync.mappings");
-  const { data: mappings, isLoading } = useSymbolMappings();
+  const { data: mappings, isLoading, isError, refetch } = useSymbolMappings();
   const upsert = useUpsertSymbolMapping();
   const { toast } = useToast();
 
   if (isLoading) {
     return <Skeleton className="h-24 w-full" />;
+  }
+  if (isError) {
+    return (
+      <QueryErrorState
+        title="Symbol mappings could not be loaded"
+        onRetry={() => void refetch()}
+      />
+    );
   }
   if (!mappings || mappings.length === 0) {
     return (
@@ -528,13 +537,32 @@ function SymbolMappingsSection() {
 
 function MagicMappingsSection() {
   const t = useTranslations("brokerSync.magic");
-  const { data: mappings } = useMagicMappings();
-  const { data: strategies } = useStrategies();
+  const {
+    data: mappings,
+    isError: mappingsError,
+    refetch: refetchMappings,
+  } = useMagicMappings();
+  const {
+    data: strategies,
+    isError: strategiesError,
+    refetch: refetchStrategies,
+  } = useStrategies();
   const create = useCreateMagicMapping();
   const remove = useDeleteMagicMapping();
   const { toast } = useToast();
   const [magic, setMagic] = React.useState("");
   const [strategyId, setStrategyId] = React.useState("");
+
+  if (mappingsError || strategiesError) {
+    return (
+      <QueryErrorState
+        title="Magic mappings could not be loaded"
+        onRetry={() => {
+          void Promise.all([refetchMappings(), refetchStrategies()]);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -622,7 +650,7 @@ function MagicMappingsSection() {
 
 function ActivitySection() {
   const t = useTranslations("brokerSync.activity");
-  const { data: overview, isLoading } = useSyncOverview();
+  const { data: overview, isLoading, isError, refetch } = useSyncOverview();
 
   const relative = (iso: string) => {
     const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -637,6 +665,7 @@ function ActivitySection() {
     DUPLICATE: "border-border text-muted-foreground",
     REJECTED: "border-red-500/40 text-red-700 dark:text-red-400",
     FAILED: "border-red-500/40 text-red-700 dark:text-red-400",
+    PROCESSING: "border-amber-500/40 text-amber-700 dark:text-amber-400",
   };
 
   return (
@@ -646,7 +675,12 @@ function ActivitySection() {
         <CardDescription>{t("description")}</CardDescription>
       </CardHeader>
       <CardContent>
-        {isLoading ? (
+        {isError ? (
+          <QueryErrorState
+            title="Recent sync activity could not be loaded"
+            onRetry={() => void refetch()}
+          />
+        ) : isLoading ? (
           <Skeleton className="h-24 w-full" />
         ) : !overview || overview.recentEvents.length === 0 ? (
           <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
@@ -684,7 +718,13 @@ function ActivitySection() {
 
 export function BrokerSyncView() {
   const t = useTranslations("brokerSync");
-  const { data: connections, isLoading, refetch, isRefetching } = useBrokerConnections();
+  const {
+    data: connections,
+    isLoading,
+    isError,
+    refetch,
+    isRefetching,
+  } = useBrokerConnections();
   const [createOpen, setCreateOpen] = React.useState(false);
   const [created, setCreated] = React.useState<CreatedConnection | null>(null);
 
@@ -730,7 +770,12 @@ export function BrokerSyncView() {
       </Card>
 
       {/* Connections */}
-      {isLoading ? (
+      {isError ? (
+        <QueryErrorState
+          title="Broker connections could not be loaded"
+          onRetry={() => void refetch()}
+        />
+      ) : isLoading ? (
         <div className="space-y-3">
           <Skeleton className="h-36 w-full" />
           <Skeleton className="h-36 w-full" />

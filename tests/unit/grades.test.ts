@@ -24,6 +24,7 @@ import {
 import {
   tradeInputSchema,
   tradeListQuerySchema,
+  tradePatchSchema,
 } from "@/lib/validations/trade";
 
 let seq = 0;
@@ -132,6 +133,8 @@ describe("computeGrades — win rate and P&L per grade", () => {
     const row = result.rows[0];
     expect(row.grade).toBe("A+");
     expect(row.count).toBe(4);
+    expect(row.rSampleSize).toBe(4);
+    expect(row.decidedSampleSize).toBe(3);
     expect(row.wins).toBe(2);
     expect(row.losses).toBe(1);
     expect(row.breakevens).toBe(1);
@@ -210,10 +213,10 @@ describe("trade schemas — grade", () => {
     expect(
       tradeInputSchema.safeParse({ ...baseInput, grade: "D" }).success
     ).toBe(false);
-    // PATCH is partial: a grade-only patch parses.
-    expect(
-      tradeInputSchema.partial().safeParse({ grade: "A" }).success
-    ).toBe(true);
+    // PATCH is partial: a grade-only patch parses. (Uses the exported
+    // tradePatchSchema: Zod v4 forbids .partial() on the refined create
+    // schema, and the patch schema is its canonical partial form.)
+    expect(tradePatchSchema.safeParse({ grade: "A" }).success).toBe(true);
   });
 
   it("accepts a grade filter and UNGRADED, and rejects D", () => {

@@ -56,10 +56,9 @@ describe("privacy store", () => {
   it("loadPrivacyState normalizes invalid values", () => {
     loadPrivacyState(
       {
-        ...DEFAULT_PRIVACY_PREFERENCES,
-        mode: "WAT" as never,
-        scope: { ...DEFAULT_PRIVACY_PREFERENCES.scope, hidePercentages: true },
-        auto: { ...DEFAULT_PRIVACY_PREFERENCES.auto, onInactivitySeconds: 99999 },
+        mode: "WAT",
+        scope: { hidePercentages: true },
+        auto: { onInactivitySeconds: 99999 },
         shortcut: "",
       },
       { adopt: false }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/server/session";
 import { apiError } from "@/server/api";
-import { deleteUpload, readUpload } from "@/server/uploads";
+import { deleteUpload, readUpload, updateUpload } from "@/server/uploads";
 
 /**
  * GET    /api/uploads/[id] — streams the screenshot to its OWNER only.
@@ -24,9 +24,25 @@ export async function GET(_req: Request, ctx: Ctx) {
       status: 200,
       headers: {
         "Content-Type": file.contentType,
-        "Cache-Control": "private, max-age=3600",
+        "Cache-Control": "private, no-store",
       },
     });
+  } catch (error) {
+    return apiError(error, "uploads/[id]");
+  }
+}
+
+export async function PATCH(req: Request, ctx: Ctx) {
+  try {
+    const session = await requireUser();
+    const { id } = await ctx.params;
+    const body = (await req.json().catch(() => null)) as { label?: unknown; caption?: unknown } | null;
+    if (!body || !(body.label === null || typeof body.label === "string") || !(body.caption === null || typeof body.caption === "string")) {
+      return NextResponse.json({ error: "VALIDATION", message: "Invalid screenshot details." }, { status: 422 });
+    }
+    const upload = await updateUpload(session.user.id, id, { label: body.label, caption: body.caption });
+    if (!upload) return NextResponse.json({ error: "NOT_FOUND", message: "Screenshot not found." }, { status: 404 });
+    return NextResponse.json({ upload });
   } catch (error) {
     return apiError(error, "uploads/[id]");
   }

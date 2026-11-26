@@ -202,3 +202,43 @@ export async function deleteTemplate(userId: string, id: string): Promise<boolea
   const deleted = await db.tradeTemplate.deleteMany({ where: { id, userId } });
   return deleted.count > 0;
 }
+
+/**
+ * Duplicate a template - the copy starts unused (usageCount 0, no
+ * lastUsedAt) with " (copy)" appended to the name, capped at the 80
+ * characters the create validation allows.
+ */
+export async function duplicateTemplate(
+  userId: string,
+  id: string
+): Promise<TemplateDTO | null> {
+  const existing = await db.tradeTemplate.findFirst({
+    where: { id, userId },
+    include: INCLUDE,
+  });
+  if (!existing) return null;
+  const base =
+    existing.name.length > 72 ? existing.name.slice(0, 72) : existing.name;
+  const created = await db.tradeTemplate.create({
+    data: {
+      userId,
+      name: `${base} (copy)`,
+      strategyId: existing.strategyId,
+      instrumentId: existing.instrumentId,
+      direction: existing.direction,
+      timeframe: existing.timeframe,
+      session: existing.session,
+      orderType: existing.orderType,
+      defaultRiskPercent: existing.defaultRiskPercent,
+      defaultRiskAmount: existing.defaultRiskAmount,
+      defaultLots: existing.defaultLots,
+      defaultStopLossPips: existing.defaultStopLossPips,
+      defaultTakeProfitPips: existing.defaultTakeProfitPips,
+      defaultTagIds: existing.defaultTagIds,
+      defaultChecklistItemIds: existing.defaultChecklistItemIds,
+      prefilledNotes: existing.prefilledNotes,
+    },
+    include: INCLUDE,
+  });
+  return toTemplateDTO(created);
+}

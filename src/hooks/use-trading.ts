@@ -12,8 +12,10 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
+import { invalidateTradeDerivedQueries } from "@/lib/query/invalidation";
 import type {
   AccountDTO,
+  PreTradeWarningDTO,
   SavedViewDTO,
   StrategyDTO,
   TagDTO,
@@ -44,6 +46,11 @@ import type {
   TradeListQuery,
   TradePatch,
 } from "@/lib/validations/trade";
+import { getBrowserStore, isOfflineQueueSupported } from "@/lib/offline/store";
+import { getOfflineUserId } from "@/lib/offline/session";
+import { enqueueOperation } from "@/lib/offline/queue";
+import { fetchReferenceWithFallback } from "@/lib/offline/reference-data";
+import { newOfflineId } from "@/lib/offline/types";
 
 // ── Reference data ───────────────────────────────────────────────────────────
 
@@ -70,8 +77,13 @@ export function useInstruments() {
   return useQuery({
     queryKey: ["instruments"],
     queryFn: async () =>
-      (await apiFetch<{ instruments: InstrumentApiDTO[] }>("/api/v1/instruments"))
-        .instruments,
+      fetchReferenceWithFallback(
+        isOfflineQueueSupported() ? getBrowserStore() : null,
+        "instruments",
+        async () =>
+          (await apiFetch<{ instruments: InstrumentApiDTO[] }>("/api/v1/instruments"))
+            .instruments,
+      ),
     staleTime: 10 * 60 * 1000,
   });
 }
@@ -80,7 +92,12 @@ export function useAccounts() {
   return useQuery({
     queryKey: ["accounts"],
     queryFn: async () =>
-      (await apiFetch<{ accounts: AccountDTO[] }>("/api/v1/accounts")).accounts,
+      fetchReferenceWithFallback(
+        isOfflineQueueSupported() ? getBrowserStore() : null,
+        "accounts",
+        async () =>
+          (await apiFetch<{ accounts: AccountDTO[] }>("/api/v1/accounts")).accounts,
+      ),
     staleTime: 60 * 1000,
   });
 }
@@ -101,8 +118,13 @@ export function useStrategies() {
   return useQuery({
     queryKey: ["strategies"],
     queryFn: async () =>
-      (await apiFetch<{ strategies: StrategyDTO[] }>("/api/v1/strategies"))
-        .strategies,
+      fetchReferenceWithFallback(
+        isOfflineQueueSupported() ? getBrowserStore() : null,
+        "strategies",
+        async () =>
+          (await apiFetch<{ strategies: StrategyDTO[] }>("/api/v1/strategies"))
+            .strategies,
+      ),
     staleTime: 60 * 1000,
   });
 }
@@ -110,7 +132,13 @@ export function useStrategies() {
 export function useTags() {
   return useQuery({
     queryKey: ["tags"],
-    queryFn: async () => (await apiFetch<{ tags: TagDTO[] }>("/api/v1/tags")).tags,
+    queryFn: async () =>
+      fetchReferenceWithFallback(
+        isOfflineQueueSupported() ? getBrowserStore() : null,
+        "tags",
+        async () =>
+          (await apiFetch<{ tags: TagDTO[] }>("/api/v1/tags")).tags,
+      ),
     staleTime: 60 * 1000,
   });
 }
@@ -183,6 +211,20 @@ export function useDeleteTemplate() {
   });
 }
 
+export function useDuplicateTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (
+        await apiFetch<{ template: TemplateDTO }>(
+          `/api/v1/templates/${id}/duplicate`,
+          { method: "POST" }
+        )
+      ).template,
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["templates"] }),
+  });
+}
+
 // ── Trades ───────────────────────────────────────────────────────────────────
 
 export function tradesQueryKey(query: TradeListQuery) {
@@ -228,32 +270,71 @@ export interface MutationResult {
   trade: TradeDetailDTO;
   deduplicated?: boolean;
   conflict?: { baseUpdatedAt: string; serverUpdatedAt: string } | null;
+  /** True when the trade was queued offline instead of created (§25.5). */
+  queued?: boolean;
 }
 
 function useInvalidateTrades() {
   const qc = useQueryClient();
-  return () => {
-    void qc.invalidateQueries({ queryKey: ["trades"] });
-    void qc.invalidateQueries({ queryKey: ["dashboard"] });
-    // Phase 2 perf (item 6) — the heavy analytics queries below run with
-    // a 5 min staleTime and no refetch on focus, so a trade mutation must
-    // invalidate them explicitly; otherwise an edit would leave the tabs
-    // stale for up to 5 min (today the gap is 60 s).
-    void qc.invalidateQueries({ queryKey: ["analytics-advanced"] });
-    void qc.invalidateQueries({ queryKey: ["weekly-plan"] });
-    void qc.invalidateQueries({ queryKey: ["performance-report"] });
-  };
+  return () => invalidateTradeDerivedQueries(qc);
 }
 
 export function useCreateTrade() {
   const invalidate = useInvalidateTrades();
   return useMutation({
-    mutationFn: async (input: TradeInput) =>
-      apiFetch<MutationResult>("/api/v1/trades", {
+    mutationFn: async (input: TradeInput) => {
+      // Offline (§25.5): queue the create instead of failing. The replay
+      // sends the same payload (same clientMutationId) against the same
+      // route, so a retried replay never creates a duplicate.
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        const userId = getOfflineUserId();
+        if (userId && isOfflineQueueSupported()) {
+          const idempotencyKey = input.clientMutationId ?? newOfflineId();
+          const payload = { ...input, clientMutationId: idempotencyKey };
+          await enqueueOperation(getBrowserStore(), {
+            userId,
+            kind: "TRADE_CREATE",
+            entityKey: idempotencyKey,
+            idempotencyKey,
+            payload: payload as unknown as Record<string, unknown>,
+          });
+          return {
+            trade: { id: idempotencyKey } as TradeDetailDTO,
+            deduplicated: false,
+            queued: true,
+          } satisfies MutationResult;
+        }
+      }
+      return apiFetch<MutationResult>("/api/v1/trades", {
         method: "POST",
         body: JSON.stringify(input),
-      }),
+      });
+    },
     onSuccess: invalidate,
+  });
+}
+
+// ── Pre-trade warnings (Lot 11, roadmap §14) ──────────────────────────────
+
+/**
+ * Advisory warnings for a trade draft (unchecked required checklist
+ * items, risk above the per-trade limit, planned R:R below the minimum,
+ * day-trade count above the daily limit). Warnings never block the save;
+ * the form shows them and the user confirms explicitly.
+ */
+export function usePreTradeWarnings() {
+  return useMutation({
+    mutationFn: async (input: {
+      strategyId?: string | null;
+      riskAmount?: string | null;
+      plannedRR?: string | null;
+      entryTime?: string | null;
+      checklistResults?: Record<string, boolean> | null;
+    }) =>
+      apiFetch<{ warnings: PreTradeWarningDTO[] }>(
+        "/api/v1/trades/pre-trade-warnings",
+        { method: "POST", body: JSON.stringify(input) },
+      ),
   });
 }
 
@@ -463,6 +544,20 @@ export function useUploadScreenshot() {
       return res.json() as Promise<{
         upload: { id: string; url: string };
       }>;
+    },
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateScreenshot() {
+  const invalidate = useInvalidateTrades();
+  return useMutation({
+    mutationFn: async (input: { id: string; label: string | null; caption: string | null }) => {
+      const result = await apiFetch<{ upload: { id: string } }>(
+        `/api/v1/uploads/${input.id}`,
+        { method: "PATCH", body: JSON.stringify({ label: input.label, caption: input.caption }) }
+      );
+      return result.upload;
     },
     onSuccess: invalidate,
   });

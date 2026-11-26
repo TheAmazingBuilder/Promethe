@@ -57,6 +57,7 @@ import {
   useTemplates,
   type MutationResult,
 } from "@/hooks/use-trading";
+import { useFxRates } from "@/hooks/use-tools";
 import type { TemplateDTO } from "@/lib/trading/dto";
 import { useToast } from "@/hooks/use-toast";
 import { useSession } from "@/components/app/session-context";
@@ -185,6 +186,11 @@ export function QuickTradeView() {
   const { data: instruments } = useInstruments();
   const { data: strategies } = useStrategies();
   const { data: templates } = useTemplates();
+  // Stored FxRate table for cross-currency sizing (best-effort: a failed
+  // fetch just leaves fxRates empty, and cross-currency sizing then blocks
+  // honestly with MISSING_CONVERSION_RATE instead of guessing a rate).
+  const fxRatesQuery = useFxRates();
+  const fxRates = fxRatesQuery.data ?? [];
 
   const createTrade = useCreateTrade();
   const recordTemplateUse = useRecordTemplateUse();
@@ -248,6 +254,11 @@ export function QuickTradeView() {
 
     let sizing: PositionSizeResult | null = null;
     if (form.riskMode !== "lots" && account) {
+      // Lot 1 fix: the account currency is required (a missing currency
+      // made % risk sizing always fail with MISSING_ACCOUNT_CURRENCY),
+      // and cross-currency trades resolve their rate from the stored
+      // FxRate table — the same fallback the position-size calculator
+      // uses — instead of silently sizing as if the rate were 1.
       sizing = calcPositionSize({
         accountBalance: account.initialBalance,
         riskPercent: form.riskMode === "percent" ? form.riskPercent.trim() || null : null,
@@ -256,6 +267,14 @@ export function QuickTradeView() {
         stopLoss,
         instrument: s,
         direction: form.direction,
+        accountCurrency,
+        fxRates: fxRates.map((r) => ({
+          base: r.base,
+          quote: r.quote,
+          rate: r.rate,
+          date: r.date,
+          source: r.source,
+        })),
       });
     }
     const lots =
@@ -265,7 +284,7 @@ export function QuickTradeView() {
           ? sizing.lots.toString()
           : "";
     return { spec: s, stopLoss, takeProfit, sizing, lots };
-  }, [spec, entry, stop, form.tpPips, form.direction, form.riskMode, form.riskPercent, form.riskAmount, form.lots, account]);
+  }, [spec, entry, stop, form.tpPips, form.direction, form.riskMode, form.riskPercent, form.riskAmount, form.lots, account, accountCurrency, fxRates]);
 
   const effectiveLots = derived?.lots ?? "";
   const sizingError =

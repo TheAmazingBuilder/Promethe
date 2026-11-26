@@ -103,6 +103,42 @@ export interface ExecutionDTO {
   pnl: string | null;
 }
 
+export interface TradeReviewAnswerDTO {
+  questionId: string;
+  question: string;
+  type: "SCALE" | "BOOLEAN" | "TEXT";
+  answer: number | boolean | string;
+}
+
+export interface ReviewQuestionTemplateDTO {
+  id: string;
+  question: string;
+  type: "SCALE" | "BOOLEAN" | "TEXT";
+  order: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface TradeReviewDTO {
+  id: string;
+  customAnswers?: TradeReviewAnswerDTO[];
+  playbookMatch: string | null;
+  followedPlan: boolean | null;
+  planAdherenceScore: number | null;
+  executionQuality: number | null;
+  entryQuality: number | null;
+  exitQuality: number | null;
+  riskManagementScore: number | null;
+  emotionalControlScore: number | null;
+  wouldTakeAgain: string | null;
+  mainLesson: string | null;
+  whatWentWell: string | null;
+  whatToImprove: string | null;
+  mistakeTagIds: string[];
+  reviewedAt: string;
+  updatedAt: string;
+}
+
 export interface TradeDetailDTO extends TradeListItemDTO {
   marketCondition: string | null;
   mfePrice: string | null;
@@ -128,12 +164,27 @@ export interface TradeDetailDTO extends TradeListItemDTO {
   notes: string | null;
   tradingViewUrl: string | null;
   checklistResults: Record<string, boolean> | null;
+  /**
+   * Mandatory-checklist verdict at review time (Lot 11, roadmap §14):
+   * evaluated against the checklist frozen in the strategy snapshot the
+   * trade executed under, falling back to the live checklist when no
+   * snapshot matches. Null when the trade has no strategy or no
+   * checklist to evaluate against.
+   */
+  checklistStatus: {
+    requiredTotal: number;
+    requiredChecked: number;
+    missing: string[];
+    complete: boolean;
+  } | null;
   accountCurrency: string;
   accountInitialBalance: string;
   /** Attached partial exit plan (null = none). */
   exitPlanId: string | null;
   /** Playbook match declared at review time (null = not declared). */
   playbookMatch: string | null;
+  /** Structured review details; null until a review row exists. */
+  review: TradeReviewDTO | null;
   /** Current price override (exposure dashboard), null = entry price. */
   currentPrice: string | null;
   screenshots: ScreenshotDTO[];
@@ -468,7 +519,7 @@ export interface AccountsHealthPayload {
 export interface ToolScenarioDTO {
   id: string;
   name: string;
-  /** MULTI_TP | MARGIN | RISK_REWARD */
+  /** MULTI_TP | MARGIN | RISK_REWARD | POSITION_SIZE | PNL_SIMULATOR */
   kind: string;
   payload: Record<string, unknown>;
   createdAt: string;
@@ -501,6 +552,10 @@ export interface RiskRewardRealStats {
 
 export interface RiskRewardSummaryDTO {
   currency: string;
+  /** Closed trades excluded because their stored P&L currency differs. */
+  excludedTradeCount: number;
+  /** Open trades excluded because their stored P&L currency differs. */
+  excludedOpenTradeCount: number;
   /** Trading day (YYYY-MM-DD) the budget figures refer to. */
   tradingDay: string;
   /** Current balance = starting balances + realized P&L + cash flows. */
@@ -652,7 +707,11 @@ export interface SearchPayload {
   trades: SearchResultItemDTO[];
   strategies: SearchResultItemDTO[];
   journal: SearchResultItemDTO[];
+  /** Real match counts (all pages), not just the returned rows. */
   total: number;
+  totalTrades: number;
+  totalStrategies: number;
+  totalJournal: number;
 }
 
 /** One undoable action = one ChangeLog group (bulk edit or bulk delete). */
@@ -727,6 +786,8 @@ export interface OpenPositionDTO {
 
 export interface DashboardPayload {
   currency: string;
+  /** Closed trades excluded because their stored P&L currency differs from currency. */
+  excludedTradeCount: number;
   accounts: AccountDTO[];
   kpis30d: TradeStatsDTO | null;
   kpisAllTime: TradeStatsDTO | null;
@@ -767,6 +828,8 @@ export interface AnalyticsPayload {
   accountId: string | null;
   currency: string;
   timezone: string;
+  /** Closed trades excluded because their account currency differs from currency. */
+  excludedTradeCount: number;
   stats: TradeStatsDTO | null;
   advanced: AdvancedStats | null;
   equityInitialBalance: string;
@@ -786,6 +849,8 @@ export interface AdvancedAnalyticsPayload {
   accountId: string | null;
   currency: string;
   timezone: string;
+  /** Closed trades omitted because their stored P&L currency differs. */
+  excludedTradeCount: number;
   advanced: AdvancedAnalytics;
 }
 
@@ -818,6 +883,8 @@ export interface WeeklyPlanPayload {
   accountId: string | null;
   currency: string;
   timezone: string;
+  /** Closed trades omitted because their stored P&L currency differs. */
+  excludedTradeCount: number;
   plan: WeeklyPlan;
 }
 
@@ -828,6 +895,8 @@ export interface PerformanceReportPayload {
   accountId: string | null;
   currency: string;
   timezone: string;
+  /** Closed trades omitted because their stored P&L currency differs. */
+  excludedTradeCount: number;
   report: PerformanceReport;
   /**
    * Phase 2 perf — the standard 30d weekly plan, embedded so the page
@@ -844,11 +913,20 @@ export interface JournalEntryDTO {
   date: string;
   preMarketPlan: string | null;
   postMarketReview: string | null;
+  keyLevels: string | null;
+  primaryScenario: string | null;
+  alternateScenario: string | null;
+  invalidationConditions: string | null;
+  maxRiskPercent: string | null;
   mood: number | null;
   sleepQuality: number | null;
   disciplineScore: number | null;
+  stressLevel: number | null;
+  energyLevel: number | null;
+  focusLevel: number | null;
   keyLesson: string | null;
   marketBias: string | null;
+  nextSessionCommitment: string | null;
   updatedAt: string;
 }
 
@@ -891,6 +969,22 @@ export interface CalendarPayload {
  * `date` — the same bucketing as the month grid, so the panel totals match
  * the grid cell. The journal entry is fetched separately (useJournalEntry).
  */
+export interface JournalDayScreenshotDTO {
+  id: string;
+  tradeId: string;
+  symbol: string;
+  label: string | null;
+  caption: string | null;
+  createdAt: string;
+}
+
+export interface JournalDayMistakeDTO {
+  id: string;
+  name: string;
+  color: string;
+  count: number;
+}
+
 export interface CalendarDayPayload {
   /** Trading day YYYY-MM-DD. */
   date: string;
@@ -900,6 +994,10 @@ export interface CalendarDayPayload {
   timezone: string;
   /** Closed trades of the day, newest exit first. */
   trades: TradeListItemDTO[];
+  /** Existing private trade screenshots, surfaced in the daily Journal gallery. */
+  screenshots?: JournalDayScreenshotDTO[];
+  /** Aggregated from existing TradeReview mistake tags; no duplicate Journal input. */
+  behavioralMistakes?: JournalDayMistakeDTO[];
   /** Day totals over `trades` (same math as the month grid). */
   netPnl: string;
   tradeCount: number;
@@ -930,7 +1028,18 @@ export interface StrategyVersionDTO {
     entryRules: string | null;
     exitRules: string | null;
     riskRules: string | null;
+    /** Extended definition (Lot 11): absent on snapshots taken before. */
+    detailedDescription?: string | null;
+    marketConditions?: unknown[];
+    entryConditions?: unknown[];
+    confirmations?: unknown[];
+    invalidations?: string[];
+    risk?: Record<string, unknown> | null;
+    tradeManagement?: unknown[];
+    exitPlan?: unknown[];
     checklistItems: Array<{
+      /** Present on snapshots taken after Lot 11. */
+      id?: string;
       label: string;
       category: string;
       order: number;
@@ -939,6 +1048,36 @@ export interface StrategyVersionDTO {
     /** Strategy definition version frozen in this snapshot. */
     strategyVersion: number;
   };
+}
+
+export interface StrategyVersionPerformanceDTO {
+  /** Frozen definition version; null = trades that predate versioning. */
+  version: number | null;
+  trades: number;
+  totalR: number | null;
+  expectancyR: number | null;
+  winRatePct: number | null;
+}
+
+/**
+ * Advisory pre-trade warning (Lot 11, roadmap §14). The server message
+ * is display-ready English (numbers included); `detail` carries the
+ * missing required checklist labels when the code is CHECKLIST_INCOMPLETE.
+ */
+export interface PreTradeWarningDTO {
+  code:
+    | "CHECKLIST_INCOMPLETE"
+    | "MAX_RISK_PER_TRADE"
+    | "MIN_PLANNED_RR"
+    | "MAX_TRADES_PER_DAY";
+  message: string;
+  detail?: string;
+}
+
+export interface StrategyVersionCompareDTO {
+  a: StrategyVersionDTO;
+  b: StrategyVersionDTO;
+  changes: Array<{ field: string; label: string; from: string; to: string }>;
 }
 
 export interface StrategyStatsDTO {

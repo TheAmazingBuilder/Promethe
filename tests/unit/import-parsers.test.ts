@@ -10,11 +10,15 @@ import { describe, expect, it } from "vitest";
 import { parseImportFile } from "@/lib/import";
 import { detectFormat } from "@/lib/import/detect";
 import {
+  MAX_IMPORT_FILE_BYTES,
+  assertImportFileSize,
   cleanText,
+  decodeImportText,
   naiveToUtc,
   parseDateTime,
   parseNumber,
 } from "@/lib/import/primitives";
+import { buildErrorReportCsv } from "@/hooks/use-import";
 
 const fixtures = path.resolve(__dirname, "../fixtures/imports");
 const read = (name: string) => readFileSync(path.join(fixtures, name), "utf8");
@@ -270,5 +274,65 @@ describe("failure modes", () => {
     expect(() =>
       parseImportFile({ fileName: "e.csv", extension: "csv", text: "a,b,c\n1,2,3\n" })
     ).toThrow();
+  });
+});
+
+// ── §20 - file size cap, encoding fallback, BOM'd error report ─────────────
+
+describe("decodeImportText - strict UTF-8 with Windows-1252 fallback", () => {
+  it("decodes valid UTF-8 unchanged", () => {
+    const bytes = new TextEncoder().encode("Trade clôturée, café €");
+    expect(decodeImportText(bytes)).toBe("Trade clôturée, café €");
+  });
+
+  it("falls back to Windows-1252 when the bytes are not valid UTF-8", () => {
+    // cp1252 bytes for "Trade clôturée" - 0xF4/0xE9 are lone continuation
+    // bytes in UTF-8, so the strict decoder rejects them.
+    const bytes = new Uint8Array([
+      0x54, 0x72, 0x61, 0x64, 0x65, 0x20, 0x63, 0x6c, 0xf4, 0x74, 0x75,
+      0x72, 0xe9, 0x65,
+    ]);
+    expect(decodeImportText(bytes)).toBe("Trade clôturée");
+  });
+
+  it("strips a UTF-8 BOM", () => {
+    const bytes = new Uint8Array([0xef, 0xbb, 0xbf, 0x61, 0x2c, 0x62]);
+    expect(decodeImportText(bytes)).toBe("a,b");
+  });
+});
+
+describe("assertImportFileSize - 25 MB cap", () => {
+  it("accepts a file at the cap", () => {
+    expect(() =>
+      assertImportFileSize({ size: MAX_IMPORT_FILE_BYTES, name: "ok.csv" })
+    ).not.toThrow();
+  });
+
+  it("rejects a file over the cap with a coded error", () => {
+    expect(() =>
+      assertImportFileSize({
+        size: MAX_IMPORT_FILE_BYTES + 1,
+        name: "big.csv",
+      })
+    ).toThrow(/File too large/);
+    try {
+      assertImportFileSize({ size: MAX_IMPORT_FILE_BYTES + 1, name: "big.csv" });
+      expect.unreachable();
+    } catch (error) {
+      expect((error as { code?: string }).code).toBe("FILE_TOO_LARGE");
+    }
+  });
+});
+
+describe("buildErrorReportCsv - UTF-8 BOM for Excel on Windows", () => {
+  it("starts with a BOM and lists the failed rows", () => {
+    const csv = buildErrorReportCsv([
+      { row: 3, code: "MISSING_ENTRY_PRICE", detail: "Missing entry price" },
+      { row: 7, code: "BAD_DATE", detail: "Bad date" },
+    ]);
+    expect(csv.charCodeAt(0)).toBe(0xfeff);
+    expect(csv).toContain('"row","externalId","code","detail"');
+    expect(csv).toContain('"3","","MISSING_ENTRY_PRICE","Missing entry price"');
+    expect(csv).toContain('"7","","BAD_DATE","Bad date"');
   });
 });

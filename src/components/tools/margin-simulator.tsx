@@ -23,11 +23,12 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useAccounts, useUpdateAccount } from "@/hooks/use-trading";
+import { isToolsTablesMissing, useFxRates } from "@/hooks/use-tools";
 import { calcMargin } from "@/lib/tools/margin";
 import { D0 } from "@/lib/trading/dec";
 import { PRESET_INSTRUMENTS } from "@/lib/trading/instruments";
 import { fmtNum } from "@/lib/format";
-import { InstrumentSelect, Stat } from "./shared";
+import { InstrumentSelect, Stat, ToolsUnavailable } from "./shared";
 
 interface MarginRow {
   symbol: string;
@@ -40,6 +41,8 @@ export function MarginSimulator() {
   const t = useTranslations("tools");
   const { data: accounts } = useAccounts();
   const updateAccount = useUpdateAccount();
+  const fxRatesQuery = useFxRates();
+  const fxRates = fxRatesQuery.data ?? [];
 
   const [accountId, setAccountId] = React.useState("");
   const [equity, setEquity] = React.useState("10000");
@@ -76,6 +79,8 @@ export function MarginSimulator() {
       leverage: leverage === "" ? "1" : leverage,
       marginCallLevel: marginCall === "" ? null : marginCall,
       stopOutLevel: stopOut === "" ? null : stopOut,
+      accountCurrency: currency,
+      fxRates: fxRates.map((r) => ({ base: r.base, quote: r.quote, rate: r.rate })),
       positions: rows
         .filter((r) => r.lots !== "" && r.entry !== "")
         .map((r) => {
@@ -90,7 +95,7 @@ export function MarginSimulator() {
           };
         }),
     });
-  }, [equity, leverage, marginCall, stopOut, rows]);
+  }, [equity, leverage, marginCall, stopOut, rows, currency, fxRates]);
 
   const setRow = (index: number, patch: Partial<MarginRow>) => {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
@@ -98,6 +103,7 @@ export function MarginSimulator() {
 
   return (
     <div className="space-y-6">
+      {isToolsTablesMissing(fxRatesQuery.error) && <ToolsUnavailable />}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="space-y-2">
           <Label htmlFor="mg-account">{t("marginAccount")}</Label>
@@ -121,6 +127,7 @@ export function MarginSimulator() {
           <Label htmlFor="mg-equity">{t("marginEquity")}</Label>
           <Input id="mg-equity" type="number" inputMode="decimal" min="0" step="any"
             value={equity} onChange={(e) => setEquity(e.target.value)} className="tabular-nums" />
+          <p className="text-xs text-muted-foreground">{t("marginEquityHint")}</p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="mg-leverage">{t("marginLeverage")}</Label>
@@ -190,30 +197,38 @@ export function MarginSimulator() {
       </div>
 
       {/* ── Results ── */}
-      {(result.marginCall || result.stopOut) && (
+      {!result.valid && (
+        <p className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          {result.reason === "MISSING_CONVERSION_RATE"
+            ? t("marginMissingFx", { symbols: result.missingFxSymbols.join(", ") })
+            : t("marginInvalidInput")}
+        </p>
+      )}
+      {result.valid && (result.marginCall || result.stopOut) && (
         <p className="flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-600 dark:text-red-400">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           {result.stopOut ? t("marginStopOutAlert") : t("marginCallAlert")}
         </p>
       )}
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <Stat label={t("marginUsed")} value={`${fmtNum(result.usedMargin, 2)} ${currency}`} />
-        <Stat label={t("marginFree")} value={`${fmtNum(result.freeMargin, 2)} ${currency}`} />
+        <Stat label={t("marginUsed")} value={result.valid && result.usedMargin !== null ? `${fmtNum(result.usedMargin, 2)} ${currency}` : "—"} />
+        <Stat label={t("marginFree")} value={result.valid && result.freeMargin !== null ? `${fmtNum(result.freeMargin, 2)} ${currency}` : "—"} />
         <Stat
           label={t("marginLevel")}
-          value={result.marginLevel ? `${fmtNum(result.marginLevel, 0)} %` : "-"}
+          value={result.marginLevel !== null ? `${fmtNum(result.marginLevel, 0)} %` : "-"}
         />
         <Stat
           label={t("marginDistanceCall")}
-          value={result.distanceToMarginCall ? `${fmtNum(result.distanceToMarginCall, 2)} ${currency}` : "-"}
+          value={result.distanceToMarginCall !== null ? `${fmtNum(result.distanceToMarginCall, 2)} ${currency}` : "-"}
         />
         <Stat
           label={t("marginDistanceStopOut")}
-          value={result.distanceToStopOut ? `${fmtNum(result.distanceToStopOut, 2)} ${currency}` : "-"}
+          value={result.distanceToStopOut !== null ? `${fmtNum(result.distanceToStopOut, 2)} ${currency}` : "-"}
         />
         <Stat
           label={t("marginNotional")}
-          value={`${fmtNum(result.positions.reduce((acc, p) => acc.plus(p.notional), D0), 2)} ${currency}`}
+          value={result.valid ? `${fmtNum(result.positions.reduce((acc, p) => acc.plus(p.notional ?? D0), D0), 2)} ${currency}` : "—"}
         />
       </dl>
 
@@ -234,8 +249,8 @@ export function MarginSimulator() {
                 <tr key={i} className="border-b last:border-0">
                   <td className="px-3 py-2 font-medium tabular-nums">{p.symbol}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmtNum(p.lots, 2)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtNum(p.notional, 2)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{fmtNum(p.requiredMargin, 2)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{p.notional !== null ? fmtNum(p.notional, 2) : "—"}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{p.requiredMargin !== null ? fmtNum(p.requiredMargin, 2) : "—"}</td>
                   <td className="px-3 py-2 text-right">{p.hypothetical ? t("yes") : "-"}</td>
                 </tr>
               ))}

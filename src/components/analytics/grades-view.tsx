@@ -95,7 +95,11 @@ export function GradesView() {
   const best = React.useMemo(
     () =>
       rows
-        .filter((r) => r.count >= MIN_SAMPLE_GRADE)
+        .filter(
+          (r) =>
+            r.rSampleSize >= MIN_SAMPLE_GRADE &&
+            r.expectancy != null
+        )
         .sort(
           (a, b) =>
             (b.expectancy ?? -Infinity) - (a.expectancy ?? -Infinity)
@@ -246,6 +250,9 @@ export function GradesView() {
                           <span className="text-muted-foreground">
                             {" "}
                             ({t("winsLosses", { wins: row.wins, losses: row.losses })})
+                          </span>
+                          <span className="block text-xs text-muted-foreground">
+                            {row.rSampleSize} R
                           </span>
                         </TableCell>
                         <TableCell className="text-right">

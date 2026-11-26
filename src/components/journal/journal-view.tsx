@@ -1,12 +1,28 @@
 "use client";
 
 /**
- * Journal view (v1 phase 5) — one entry per trading day: pre-market plan,
- * post-market review, mood/sleep/discipline scores (1-5), market bias and
- * key lesson. Deep-linkable (/journal/{date}) from the calendar.
+ * Journal — a focused trading-day workspace.
+ * Keeps the existing JournalEntry contract and API mutations unchanged.
  */
 import * as React from "react";
-import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import Image from "next/image";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  BookOpen,
+  CalendarDays,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  Compass,
+  Moon,
+  Save,
+  Sparkles,
+  Sun,
+  Target,
+  Trash2,
+} from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,15 +35,21 @@ import {
 import { Input } from "@/components/ui/input";
 import { DateField } from "@/components/ui/date-field";
 import { Skeleton } from "@/components/ui/skeleton";
+import { QueryErrorState } from "@/components/ui/query-error-state";
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/ui/page-header";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
   useCalendar,
+  useCalendarDay,
   useDeleteJournalEntry,
   useJournalEntry,
   useSaveJournalEntry,
 } from "@/hooks/use-journal";
+import { JournalPeriodReviewPanel } from "./journal-period-review";
+import { JournalTemplateControls } from "./journal-template-controls";
+import { JournalHistorySection } from "./journal-history-section";
 import { ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import { fmtDateInTz, pnlClass } from "@/lib/format";
@@ -36,8 +58,7 @@ import { navigate } from "@/lib/router";
 import { toD } from "@/lib/trading/dec";
 import { useTimePrefs } from "@/components/time/time-provider";
 import type { JournalEntryInput } from "@/lib/validations/journal";
-
-const SCORES = [1, 2, 3, 4, 5] as const;
+import { ScorePicker, ScalePicker, SectionHeading } from "./journal-fields";
 
 function shiftDay(isoDay: string, delta: number): string {
   const d = new Date(`${isoDay}T12:00:00Z`);
@@ -45,54 +66,10 @@ function shiftDay(isoDay: string, delta: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** Star-less 1-5 score picker - buttons with an active state. */
-function ScorePicker({
-  label,
-  value,
-  onChange,
-  noScoreLabel,
-}: {
-  label: string;
-  value: number | null;
-  onChange: (v: number | null) => void;
-  noScoreLabel: string;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      {/* a11y (M8 Phase 5): wraps at 200 % text / narrow viewports (WCAG 1.4.10). */}
-      <div className="flex flex-wrap gap-1" role="group" aria-label={label}>
-        {SCORES.map((n) => (
-          <button
-            key={n}
-            type="button"
-            aria-pressed={value === n}
-            onClick={() => onChange(value === n ? null : n)}
-            className={[
-              "h-8 w-8 rounded-md border text-sm font-semibold tabular-nums transition-colors",
-              value === n
-                ? "border-primary bg-primary text-primary-foreground"
-                : "hover:bg-muted",
-            ].join(" ")}
-          >
-            {n}
-          </button>
-        ))}
-      </div>
-      {value == null ? (
-        <span className="text-[10px] text-muted-foreground">{noScoreLabel}</span>
-      ) : null}
-    </div>
-  );
-}
-
 export function JournalView({ date }: { date?: string }) {
   const t = useTranslations("journalView");
   const tRoot = useTranslations();
   const { toast } = useToast();
-  // "Today" is the current TRADING day (user setting, default MIDNIGHT_LOCAL
-  // = the local calendar day) — the entry is keyed by that day, matching
-  // the calendar buckets and the daily P&L shown above the form.
   const { tradingDayOf, loaded: timeLoaded } = useTimePrefs();
   const today = React.useMemo(
     () => tradingDayOf(),
@@ -100,50 +77,83 @@ export function JournalView({ date }: { date?: string }) {
   );
   const day = date ?? today;
 
-  const { data: entry, isLoading } = useJournalEntry(day);
-  // Day P&L — reuses the calendar month payload (cached, shared with /calendar).
+  const {
+    data: entry,
+    isLoading,
+    isError,
+    refetch,
+  } = useJournalEntry(day);
   const { data: calendarData } = useCalendar(
     Number(day.slice(0, 4)),
     Number(day.slice(5, 7)),
   );
   const dayPnl = calendarData?.days?.[day] ?? null;
+  const {
+    data: dayActivity,
+    isLoading: tradesLoading,
+    isError: tradesError,
+    refetch: refetchTrades,
+  } = useCalendarDay(day);
   const save = useSaveJournalEntry();
   const del = useDeleteJournalEntry();
 
-  // Local form state — hydrated ONCE per day (server resolution first, so
-  // an existing entry pre-fills the form; later refetches never clobber
-  // in-progress edits).
   const [form, setForm] = React.useState<JournalEntryInput>({
     date: "",
     preMarketPlan: "",
     postMarketReview: "",
+    keyLevels: "",
+    primaryScenario: "",
+    alternateScenario: "",
+    invalidationConditions: "",
+    maxRiskPercent: null,
     mood: null,
     sleepQuality: null,
     disciplineScore: null,
+    stressLevel: null,
+    energyLevel: null,
+    focusLevel: null,
     keyLesson: "",
     marketBias: "",
+    nextSessionCommitment: "",
   });
   const [hydratedFor, setHydratedFor] = React.useState<string | null>(null);
+  const [savedSignature, setSavedSignature] = React.useState<string | null>(null);
+  const [periodReviewDirty, setPeriodReviewDirty] = React.useState(false);
+  const onPeriodReviewDirtyChange = React.useCallback(
+    (value: boolean) => setPeriodReviewDirty(value),
+    [],
+  );
 
   React.useEffect(() => {
     if (isLoading || hydratedFor === day) return;
-    setForm({
+    const initialForm: JournalEntryInput = {
       date: day,
       preMarketPlan: entry?.preMarketPlan ?? "",
       postMarketReview: entry?.postMarketReview ?? "",
+      keyLevels: entry?.keyLevels ?? "",
+      primaryScenario: entry?.primaryScenario ?? "",
+      alternateScenario: entry?.alternateScenario ?? "",
+      invalidationConditions: entry?.invalidationConditions ?? "",
+      maxRiskPercent: entry?.maxRiskPercent ?? null,
       mood: entry?.mood ?? null,
       sleepQuality: entry?.sleepQuality ?? null,
       disciplineScore: entry?.disciplineScore ?? null,
+      stressLevel: entry?.stressLevel ?? null,
+      energyLevel: entry?.energyLevel ?? null,
+      focusLevel: entry?.focusLevel ?? null,
       keyLesson: entry?.keyLesson ?? "",
       marketBias: entry?.marketBias ?? "",
-    });
+      nextSessionCommitment: entry?.nextSessionCommitment ?? "",
+    };
+    setForm(initialForm);
+    setSavedSignature(JSON.stringify(initialForm));
     setHydratedFor(day);
   }, [day, entry, isLoading, hydratedFor]);
 
   const set = <K extends keyof JournalEntryInput>(
     key: K,
     value: JournalEntryInput[K],
-  ) => setForm((f) => ({ ...f, [key]: value }));
+  ) => setForm((current) => ({ ...current, [key]: value }));
 
   const dirty = React.useMemo(() => {
     if (entry == null) {
@@ -152,9 +162,18 @@ export function JournalView({ date }: { date?: string }) {
           form.postMarketReview ||
           form.keyLesson ||
           form.marketBias ||
+          form.keyLevels ||
+          form.primaryScenario ||
+          form.alternateScenario ||
+          form.invalidationConditions ||
+          form.maxRiskPercent ||
+          form.nextSessionCommitment ||
           form.mood != null ||
           form.sleepQuality != null ||
-          form.disciplineScore != null,
+          form.disciplineScore != null ||
+          form.stressLevel != null ||
+          form.energyLevel != null ||
+          form.focusLevel != null,
       );
     }
     return (
@@ -162,16 +181,50 @@ export function JournalView({ date }: { date?: string }) {
       (form.postMarketReview ?? "") !== (entry.postMarketReview ?? "") ||
       (form.keyLesson ?? "") !== (entry.keyLesson ?? "") ||
       (form.marketBias ?? "") !== (entry.marketBias ?? "") ||
+      (form.keyLevels ?? "") !== (entry.keyLevels ?? "") ||
+      (form.primaryScenario ?? "") !== (entry.primaryScenario ?? "") ||
+      (form.alternateScenario ?? "") !== (entry.alternateScenario ?? "") ||
+      (form.invalidationConditions ?? "") !== (entry.invalidationConditions ?? "") ||
+      (form.maxRiskPercent ?? "") !== (entry.maxRiskPercent ?? "") ||
+      (form.nextSessionCommitment ?? "") !== (entry.nextSessionCommitment ?? "") ||
       form.mood !== entry.mood ||
       form.sleepQuality !== entry.sleepQuality ||
-      form.disciplineScore !== entry.disciplineScore
+      form.disciplineScore !== entry.disciplineScore ||
+      form.stressLevel !== entry.stressLevel ||
+      form.energyLevel !== entry.energyLevel ||
+      form.focusLevel !== entry.focusLevel
     );
   }, [form, entry]);
 
+  const dailyUnsavedChanges = hydratedFor === day && dirty && savedSignature !== JSON.stringify(form);
+  const hasUnsavedChanges = dailyUnsavedChanges || periodReviewDirty;
+
+  React.useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  const navigateSafely = React.useCallback((path: string) => {
+    if (hasUnsavedChanges && !window.confirm("You have unsaved Journal changes. Leave without saving?")) return;
+    navigate(path);
+  }, [hasUnsavedChanges]);
+
   const onSave = async () => {
     try {
-      await save.mutateAsync(form);
-      toast({ title: t("saved") });
+      const result = await save.mutateAsync(form);
+      setSavedSignature(JSON.stringify(form));
+      // Offline (§25.5): the entry is queued, not saved yet. The form
+      // keeps its local state and the queue replays it on reconnect.
+      if (result && typeof result === "object" && "queued" in result) {
+        toast({ title: t("savedOffline") });
+      } else {
+        toast({ title: t("saved") });
+      }
     } catch (error) {
       const err = error instanceof ApiClientError ? error : null;
       toast({
@@ -189,16 +242,27 @@ export function JournalView({ date }: { date?: string }) {
     if (!window.confirm(t("deleteConfirm", { date: day }))) return;
     try {
       await del.mutateAsync(day);
-      setForm({
+      const clearedForm: JournalEntryInput = {
         date: day,
         preMarketPlan: "",
         postMarketReview: "",
+        keyLevels: "",
+        primaryScenario: "",
+        alternateScenario: "",
+        invalidationConditions: "",
+        maxRiskPercent: null,
         mood: null,
         sleepQuality: null,
         disciplineScore: null,
+        stressLevel: null,
+        energyLevel: null,
+        focusLevel: null,
         keyLesson: "",
         marketBias: "",
-      });
+        nextSessionCommitment: "",
+      };
+      setForm(clearedForm);
+      setSavedSignature(JSON.stringify(clearedForm));
       toast({ title: t("deleted") });
     } catch (error) {
       const err = error instanceof ApiClientError ? error : null;
@@ -214,203 +278,672 @@ export function JournalView({ date }: { date?: string }) {
   };
 
   const isToday = day === today;
+  const completedSections = [
+    Boolean(form.preMarketPlan?.trim()),
+    Boolean(form.keyLevels?.trim() || form.primaryScenario?.trim() || form.alternateScenario?.trim()),
+    form.maxRiskPercent != null && form.maxRiskPercent !== "",
+    form.mood != null && form.sleepQuality != null && form.disciplineScore != null,
+    form.stressLevel != null && form.energyLevel != null && form.focusLevel != null,
+    Boolean(form.postMarketReview?.trim()),
+    Boolean(form.keyLesson?.trim()),
+    Boolean(form.nextSessionCommitment?.trim()),
+  ].filter(Boolean).length;
+  const completion = Math.round((completedSections / 8) * 100);
 
   return (
     <section
       aria-labelledby="journal-title"
       data-tour="journal"
-      className="flex flex-col gap-6"
+      className="flex flex-col gap-5"
     >
-      {/* Header + day navigation */}
       <PageHeader
         id="journal-title"
         title={t("title")}
         description={t("subtitle")}
-        className="flex-wrap sm:items-end"
+        className="flex-wrap gap-y-3 sm:items-end"
         actions={
-          <>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => navigate(`/journal/${shiftDay(day, -1)}`)}
-            aria-label={t("prevDay")}
-          >
-            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-          </Button>
-          <DateField
-            id="journal-day"
-            ariaLabel={t("dateLabel")}
-            className="h-9 w-[170px]"
-            value={day}
-            onChange={(v) => {
-              if (v) navigate(`/journal/${v}`);
-            }}
-          />
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => navigate(`/journal/${shiftDay(day, 1)}`)}
-            aria-label={t("nextDay")}
-          >
-            <ChevronRight className="h-4 w-4" aria-hidden="true" />
-          </Button>
-          {!isToday ? (
-            <Button variant="outline" size="sm" onClick={() => navigate("/journal")}>
-              {t("today")}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9"
+              onClick={() => navigateSafely(`/journal/${shiftDay(day, -1)}`)}
+              aria-label={t("prevDay")}
+            >
+              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
             </Button>
+            <DateField
+              id="journal-day"
+              ariaLabel={t("dateLabel")}
+              className="h-9 w-[170px]"
+              value={day}
+              onChange={(value) => {
+                if (value && value !== day) navigateSafely(`/journal/${value}`);
+              }}
+            />
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9"
+              onClick={() => navigateSafely(`/journal/${shiftDay(day, 1)}`)}
+              aria-label={t("nextDay")}
+            >
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </Button>
+            {!isToday ? (
+              <Button variant="secondary" size="sm" onClick={() => navigateSafely("/journal")}>
+                {t("today")}
+              </Button>
             ) : null}
-          </>
+          </div>
         }
       />
 
-      {/* Scores + save bar */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">{t("scores.title")}</CardTitle>
-          <CardDescription>
-            {isLoading ? (
-              <Skeleton className="h-4 w-32" />
-            ) : (
-              fmtDateInTz(`${day}T12:00:00Z`, "UTC")
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex flex-wrap gap-6">
-            <ScorePicker
-              label={t("scores.mood")}
-              value={form.mood ?? null}
-              onChange={(v) => set("mood", v)}
-              noScoreLabel={t("scores.noScore")}
-            />
-            <ScorePicker
-              label={t("scores.sleepQuality")}
-              value={form.sleepQuality ?? null}
-              onChange={(v) => set("sleepQuality", v)}
-              noScoreLabel={t("scores.noScore")}
-            />
-            <ScorePicker
-              label={t("scores.disciplineScore")}
-              value={form.disciplineScore ?? null}
-              onChange={(v) => set("disciplineScore", v)}
-              noScoreLabel={t("scores.noScore")}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            {entry != null ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void onDelete()}
-                disabled={del.isPending}
-                aria-label={t("delete")}
-              >
-                <Trash2 className="h-4 w-4" aria-hidden="true" />
-              </Button>
-            ) : null}
-            <Button size="sm" onClick={() => void onSave()} disabled={save.isPending || !dirty}>
-              {save.isPending ? t("saving") : t("save")}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <nav aria-label="Journal sections" className="sticky top-20 z-20 -mx-1 flex gap-1 overflow-x-auto rounded-xl border border-border/70 bg-background/90 p-1.5 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/75 sm:top-16">
+        {[
+          ["journal-overview", "Overview"],
+          ["journal-activity", "Activity"],
+          ["journal-plan", "Plan"],
+          ["journal-charts", "Charts"],
+          ["journal-behavior", "Behavior"],
+          ["journal-state", "Mindset"],
+          ["journal-preparation", "Preparation"],
+          ["journal-reflection", "Reflection"],
+          ["journal-reviews", "Reviews"],
+          ["journal-history", "History"],
+        ].map(([target, label]) => (
+          <a
+            key={target}
+            href={`#${target}`}
+            className="shrink-0 rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {label}
+          </a>
+        ))}
+      </nav>
 
-      {/* Day P&L */}
-      {dayPnl && dayPnl.tradeCount > 0 ? (
-        <Card>
-          <CardContent className="flex flex-wrap items-baseline justify-between gap-3 p-4">
-            <div>
-              <p className="text-xs font-medium text-muted-foreground">
-                {t("dayPnl.title")}
-              </p>
-              <p
-                className={`text-xl font-bold tabular-nums ${pnlClass(dayPnl.netPnl)}`}
-              >
-                <Money
-                  signed
-                  value={dayPnl.netPnl}
-                  currency={calendarData?.currency ?? "USD"}
-                />
-              </p>
-            </div>
-            <div className="text-right text-xs text-muted-foreground">
-              <p className="tabular-nums">
-                {t("dayPnl.trades", { count: dayPnl.tradeCount })}
-              </p>
-              {dayPnl.totalR != null ? (
-                <p className="tabular-nums">
-                  {t("dayPnl.totalR", {
-                    r: toD(dayPnl.totalR).toFixed(1),
-                  })}
-                </p>
-              ) : null}
-            </div>
-          </CardContent>
-        </Card>
+      {isError ? (
+        <QueryErrorState
+          title="Journal entry could not be loaded"
+          description="Your saved journal data is safe. Check your connection and try again."
+          onRetry={() => void refetch()}
+        />
       ) : (
-        <p className="text-sm text-muted-foreground">{t("dayPnl.none")}</p>
+        <>
+          <Card id="journal-overview" className="scroll-mt-24 overflow-hidden border-border/70 bg-gradient-to-br from-card via-card to-muted/40 shadow-sm">
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className="gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider">
+                      <CalendarDays className="h-3 w-3" aria-hidden="true" />
+                      {isToday ? t("today") : "Trading day"}
+                    </Badge>
+                    {entry ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
+                        Saved entry
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground">New journal entry</span>
+                    )}
+                  </div>
+                  <h2 className="text-base font-semibold tracking-tight">
+                    {isLoading ? <Skeleton className="h-7 w-48" /> : fmtDateInTz(`${day}T12:00:00Z`, "UTC")}
+                  </h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {entry?.updatedAt
+                      ? `Last saved ${fmtDateInTz(entry.updatedAt, "UTC")}`
+                      : "Capture the decisions behind today's trades."}
+                  </p>
+                </div>
+                <div className="flex min-w-[180px] flex-col gap-2 sm:items-end">
+                  <div className="flex w-full items-center justify-between gap-3 sm:justify-end">
+                    <span className="text-[11px] text-muted-foreground">Journal completion</span>
+                    <span className="text-xs font-semibold tabular-nums">{completion}%</span>
+                  </div>
+                  <div
+                    className="h-1.5 w-full overflow-hidden rounded-full bg-muted sm:w-44"
+                    role="progressbar"
+                    aria-label="Journal completion"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={completion}
+                  >
+                    <div
+                      className="h-full rounded-full bg-primary transition-[width]"
+                      style={{ width: `${completion}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    {dailyUnsavedChanges ? (
+                      <>
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                        Unsaved changes
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
+                        Up to date
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-2 sm:grid-cols-3">
+                <div className="rounded-xl border border-border/60 bg-background/70 p-3">
+                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                    <Target className="h-3.5 w-3.5" aria-hidden="true" />
+                    Day result
+                  </div>
+                  {dayPnl && dayPnl.tradeCount > 0 ? (
+                    <div className={`mt-1 text-lg font-semibold tabular-nums ${pnlClass(dayPnl.netPnl)}`}>
+                      <Money signed value={dayPnl.netPnl} currency={calendarData?.currency ?? "USD"} />
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-sm font-medium text-muted-foreground">—</p>
+                  )}
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">{t("dayPnl.title")}</p>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-background/70 p-3">
+                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                    <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
+                    Closed trades
+                  </div>
+                  <p className="mt-1 text-lg font-semibold tabular-nums">
+                    {dayPnl?.tradeCount ?? 0}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    {dayPnl?.tradeCount ? t("dayPnl.trades", { count: dayPnl.tradeCount }) : t("dayPnl.none")}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-background/70 p-3">
+                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                    {dayPnl?.totalR != null && Number(dayPnl.totalR) > 0 ? (
+                      <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    ) : dayPnl?.totalR != null && Number(dayPnl.totalR) < 0 ? (
+                      <ArrowDownRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    ) : (
+                      <Compass className="h-3.5 w-3.5" aria-hidden="true" />
+                    )}
+                    Net performance
+                  </div>
+                  <p className="mt-1 text-lg font-semibold tabular-nums">
+                    {dayPnl?.totalR != null ? `${toD(dayPnl.totalR).toFixed(1)}R` : "—"}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">Total R multiple</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card id="journal-activity" className="scroll-mt-24 border-border/70 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">Trading activity</CardTitle>
+                  <CardDescription className="mt-1 text-xs">
+                    Closed trades attributed to this trading day. Open positions remain in the Trades workspace.
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="rounded-full">
+                  {tradesLoading ? "Loading…" : tradesError ? "Unavailable" : <>{dayActivity?.tradeCount ?? dayPnl?.tradeCount ?? 0} trades</>}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {tradesLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-14 w-full" />
+                  <Skeleton className="h-14 w-full" />
+                </div>
+              ) : tradesError ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed p-4">
+                  <p className="text-sm text-muted-foreground">Trading activity could not be loaded.</p>
+                  <Button variant="outline" size="sm" onClick={() => void refetchTrades()}>Retry</Button>
+                </div>
+              ) : (dayActivity?.trades.length ?? 0) === 0 ? (
+                <p className="rounded-lg border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
+                  No closed trades recorded for this trading day.
+                </p>
+              ) : (
+                <div className="divide-y divide-border/60">
+                  {dayActivity?.trades.map((trade) => (
+                    <button
+                      key={trade.id}
+                      type="button"
+                      onClick={() => navigateSafely(`/trades/${trade.id}`)}
+                      className="flex w-full flex-wrap items-center justify-between gap-3 rounded-lg px-2.5 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span className="flex min-w-0 flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold">{trade.symbol}</span>
+                        <Badge variant="outline" className={trade.direction === "LONG" ? "border-gain/30 text-gain" : "border-loss/30 text-loss"}>
+                          {trade.direction === "LONG" ? "BUY" : "SELL"}
+                        </Badge>
+                        <span className="max-w-[220px] truncate text-xs text-muted-foreground">
+                          {trade.strategyName ?? trade.setupType ?? "No strategy"}
+                        </span>
+                        <Badge variant={trade.reviewStatus === "REVIEWED" ? "secondary" : "outline"}>
+                          {trade.reviewStatus === "REVIEWED" ? "Reviewed" : "Review pending"}
+                        </Badge>
+                      </span>
+                      <span className="flex items-center gap-3">
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {trade.rMultiple != null ? `${toD(trade.rMultiple).toFixed(2)}R` : "—"}
+                        </span>
+                        <Money signed value={trade.netPnl} currency={trade.pnlCurrency} className={`text-sm font-semibold tabular-nums ${pnlClass(trade.netPnl)}`} />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card id="journal-plan" className="scroll-mt-24 border-border/70 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Plan vs execution</CardTitle>
+              <CardDescription className="mt-1 text-xs">
+                Compare what you intended to do with the trades actually closed during this trading day.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 pt-0 md:grid-cols-2">
+              <div className="space-y-3 rounded-xl border border-border/70 bg-muted/15 p-4">
+                <Badge variant="outline">Planned</Badge>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Market bias</p>
+                  <p className="mt-1 text-sm font-medium">{form.marketBias || "No market bias recorded"}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Primary scenario</p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm">{form.primaryScenario || form.preMarketPlan || "No scenario recorded"}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Maximum planned risk</p>
+                  <p className="mt-1 text-sm font-medium">{form.maxRiskPercent ? `${form.maxRiskPercent}%` : "Not specified"}</p>
+                </div>
+              </div>
+              <div className="space-y-3 rounded-xl border border-border/70 bg-muted/15 p-4">
+                <Badge variant="outline">Actual</Badge>
+                {tradesLoading ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                ) : tradesError ? (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed p-4" role="alert">
+                    <p className="text-sm text-muted-foreground">Execution statistics could not be loaded.</p>
+                    <Button variant="outline" size="sm" onClick={() => void refetchTrades()}>Retry</Button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Closed trades</p>
+                      <p className="mt-1 text-lg font-semibold tabular-nums">{dayActivity?.tradeCount ?? 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Win / loss</p>
+                      <p className="mt-1 text-lg font-semibold tabular-nums">{dayActivity?.wins ?? 0} / {dayActivity?.losses ?? 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Net P&amp;L</p>
+                      <Money signed value={dayActivity?.netPnl ?? null} currency={dayActivity?.currency ?? "USD"} className="mt-1 block text-lg font-semibold tabular-nums" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total R</p>
+                      <p className="mt-1 text-lg font-semibold tabular-nums">{dayActivity?.totalR ?? "—"}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs leading-relaxed text-muted-foreground md:col-span-2">
+                Use the post-market reflection below to explain whether you followed the plan, what changed, and why. Trade-level adherence remains documented in Trade Review.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card id="journal-charts" className="scroll-mt-24 border-border/70 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">Chart gallery</CardTitle>
+                  <CardDescription className="mt-1 text-xs">
+                    Private chart screenshots already attached to this day&apos;s trades.
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="rounded-full">
+                  {tradesLoading ? "Loading…" : tradesError ? "Unavailable" : <>{dayActivity?.screenshots?.length ?? 0} charts</>}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {tradesLoading ? (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <Skeleton className="aspect-[16/9] w-full" />
+                  <Skeleton className="aspect-[16/9] w-full" />
+                  <Skeleton className="aspect-[16/9] w-full" />
+                </div>
+              ) : tradesError ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed p-4" role="alert">
+                  <p className="text-sm text-muted-foreground">Chart screenshots could not be loaded.</p>
+                  <Button variant="outline" size="sm" onClick={() => void refetchTrades()}>Retry</Button>
+                </div>
+              ) : (dayActivity?.screenshots?.length ?? 0) === 0 ? (
+                <p className="rounded-lg border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
+                  No chart screenshots attached to this day&apos;s trades yet.
+                </p>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {dayActivity?.screenshots?.map((screenshot) => (
+                    <a
+                      key={screenshot.id}
+                      href={`/api/v1/uploads/${screenshot.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="group overflow-hidden rounded-xl border border-border/70 bg-muted/20 transition-colors hover:border-primary/40"
+                    >
+                      <div className="relative aspect-[16/9] overflow-hidden bg-muted">
+                        <Image
+                          src={`/api/v1/uploads/${screenshot.id}`}
+                          alt={`${screenshot.symbol} chart screenshot`}
+                          fill
+                          unoptimized
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                          className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                        />
+                      </div>
+                      <div className="flex items-start justify-between gap-2 p-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{screenshot.symbol}</p>
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                            {screenshot.caption ?? screenshot.label ?? "Trade screenshot"}
+                          </p>
+                        </div>
+                        <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card id="journal-behavior" className="scroll-mt-24 border-border/70 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">Behavioral patterns</CardTitle>
+                  <CardDescription className="mt-1 text-xs">
+                    Mistakes already tagged in Trade Review for this day&apos;s closed trades.
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="rounded-full">
+                  {tradesLoading ? "Loading…" : tradesError ? "Unavailable" : <>{(dayActivity?.behavioralMistakes ?? []).reduce((total, item) => total + item.count, 0)} tags</>}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {tradesLoading ? (
+                <div className="flex flex-wrap gap-2">
+                  <Skeleton className="h-9 w-28" />
+                  <Skeleton className="h-9 w-32" />
+                  <Skeleton className="h-9 w-24" />
+                </div>
+              ) : tradesError ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed p-4" role="alert">
+                  <p className="text-sm text-muted-foreground">Behavioral tags could not be loaded.</p>
+                  <Button variant="outline" size="sm" onClick={() => void refetchTrades()}>Retry</Button>
+                </div>
+              ) : (dayActivity?.behavioralMistakes?.length ?? 0) === 0 ? (
+                <p className="rounded-lg border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
+                  No mistake tags recorded in Trade Review for this day.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {dayActivity?.behavioralMistakes?.map((mistake) => (
+                    <Badge key={mistake.id} variant="outline" className="gap-2 rounded-lg px-3 py-2">
+                      <span>{mistake.name}</span>
+                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">{mistake.count}</span>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card id="journal-state" className="scroll-mt-24 border-border/70 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">{t("scores.title")}</CardTitle>
+                  <CardDescription className="mt-1 text-xs">
+                    Your condition shapes your decisions. Track it consistently.
+                  </CardDescription>
+                </div>
+                <Badge variant="secondary" className="rounded-full text-[10px]">
+                  1–5 scale
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-3 pt-0 md:grid-cols-3">
+              <ScorePicker
+                label={t("scores.mood")}
+                value={form.mood ?? null}
+                onChange={(value) => set("mood", value)}
+                noScoreLabel={t("scores.noScore")}
+                kind="mood"
+                icon={Sun}
+              />
+              <ScorePicker
+                label={t("scores.sleepQuality")}
+                value={form.sleepQuality ?? null}
+                onChange={(value) => set("sleepQuality", value)}
+                noScoreLabel={t("scores.noScore")}
+                kind="sleep"
+                icon={Moon}
+              />
+              <ScorePicker
+                label={t("scores.disciplineScore")}
+                value={form.disciplineScore ?? null}
+                onChange={(value) => set("disciplineScore", value)}
+                noScoreLabel={t("scores.noScore")}
+                kind="discipline"
+                icon={Target}
+              />
+              <ScalePicker label="Stress" value={form.stressLevel ?? null} onChange={(value) => set("stressLevel", value)} />
+              <ScalePicker label="Energy" value={form.energyLevel ?? null} onChange={(value) => set("energyLevel", value)} />
+              <ScalePicker label="Focus" value={form.focusLevel ?? null} onChange={(value) => set("focusLevel", value)} />
+            </CardContent>
+          </Card>
+
+          <Card id="journal-preparation" className="scroll-mt-24 border-border/70 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Execution plan</CardTitle>
+              <CardDescription className="text-xs">Turn your market view into scenarios, invalidation rules and a defined risk limit.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 pt-0 md:grid-cols-2">
+              <div className="space-y-2">
+                <label htmlFor="journal-key-levels" className="text-sm font-medium">Key levels</label>
+                <Textarea id="journal-key-levels" value={form.keyLevels ?? ""} onChange={(event) => set("keyLevels", event.target.value || null)} placeholder="Support, resistance, liquidity zones..." rows={3} maxLength={4000} />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="journal-primary-scenario" className="text-sm font-medium">Primary scenario</label>
+                <Textarea id="journal-primary-scenario" value={form.primaryScenario ?? ""} onChange={(event) => set("primaryScenario", event.target.value || null)} placeholder="What needs to happen for your preferred setup?" rows={3} maxLength={4000} />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="journal-alternate-scenario" className="text-sm font-medium">Alternative scenario</label>
+                <Textarea id="journal-alternate-scenario" value={form.alternateScenario ?? ""} onChange={(event) => set("alternateScenario", event.target.value || null)} placeholder="What is your plan if the main scenario fails?" rows={3} maxLength={4000} />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="journal-invalidation" className="text-sm font-medium">Invalidation conditions</label>
+                <Textarea id="journal-invalidation" value={form.invalidationConditions ?? ""} onChange={(event) => set("invalidationConditions", event.target.value || null)} placeholder="What would make you stop looking for this setup?" rows={3} maxLength={4000} />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <label htmlFor="journal-max-risk" className="text-sm font-medium">Maximum planned risk (%)</label>
+                <Input id="journal-max-risk" inputMode="decimal" value={form.maxRiskPercent ?? ""} onChange={(event) => set("maxRiskPercent", event.target.value || null)} placeholder="e.g. 1" maxLength={6} className="h-10 max-w-40" />
+                <p className="text-xs text-muted-foreground">Set a daily ceiling before trading. This does not change account or trade risk settings.</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <JournalTemplateControls
+            values={{
+              marketBias: form.marketBias,
+              preMarketPlan: form.preMarketPlan,
+              keyLevels: form.keyLevels,
+              primaryScenario: form.primaryScenario,
+              alternateScenario: form.alternateScenario,
+              invalidationConditions: form.invalidationConditions,
+              maxRiskPercent: form.maxRiskPercent,
+            }}
+            onApply={(template) => {
+              set("marketBias", template.marketBias ?? "");
+              set("preMarketPlan", template.preMarketPlan ?? "");
+              set("keyLevels", template.keyLevels ?? "");
+              set("primaryScenario", template.primaryScenario ?? "");
+              set("alternateScenario", template.alternateScenario ?? "");
+              set("invalidationConditions", template.invalidationConditions ?? "");
+              set("maxRiskPercent", template.maxRiskPercent ?? null);
+            }}
+          />
+
+          <div id="journal-reflection" className="scroll-mt-24 grid gap-4 xl:grid-cols-2">
+            <Card className="border-border/70 shadow-sm">
+              <CardContent className="p-4 sm:p-5">
+                <SectionHeading
+                  icon={Sun}
+                  eyebrow="Before the session"
+                  title={t("preMarketPlan")}
+                  description="Capture the broader backdrop that may influence price action. Keep directional bias, key levels and scenarios in Execution plan."
+                />
+                <Textarea
+                  value={form.preMarketPlan ?? ""}
+                  onChange={(event) => set("preMarketPlan", event.target.value || null)}
+                  placeholder={t("preMarketHint")}
+                  rows={9}
+                  className="min-h-52 resize-y border-border/70 bg-muted/20 text-sm leading-relaxed focus-visible:bg-background"
+                />
+                <p className="mt-2 text-[10px] text-muted-foreground">
+                  Focus on catalysts, liquidity and session conditions rather than repeating your levels or setup scenarios.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/70 shadow-sm">
+              <CardContent className="p-4 sm:p-5">
+                <SectionHeading
+                  icon={Clock3}
+                  eyebrow="After the session"
+                  title={t("postMarketReview")}
+                  description="Review what actually happened and how well you executed your plan."
+                />
+                <Textarea
+                  value={form.postMarketReview ?? ""}
+                  onChange={(event) => set("postMarketReview", event.target.value || null)}
+                  placeholder={t("postMarketHint")}
+                  rows={9}
+                  className="min-h-52 resize-y border-border/70 bg-muted/20 text-sm leading-relaxed focus-visible:bg-background"
+                />
+                <p className="mt-2 text-[10px] text-muted-foreground">
+                  Separate market conditions, execution quality and emotional decisions.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
+            <Card className="border-border/70 shadow-sm">
+              <CardContent className="p-4 sm:p-5">
+                <SectionHeading
+                  icon={Compass}
+                  eyebrow="Market context"
+                  title={t("marketBias")}
+                  description="What was your directional view for this trading day?"
+                />
+                <Input
+                  value={form.marketBias ?? ""}
+                  onChange={(event) => set("marketBias", event.target.value || null)}
+                  placeholder={t("marketBiasHint")}
+                  maxLength={500}
+                  className="h-10 border-border/70 bg-muted/20 focus-visible:bg-background"
+                />
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/70 shadow-sm">
+              <CardContent className="p-4 sm:p-5">
+                <SectionHeading
+                  icon={Sparkles}
+                  eyebrow="Takeaway"
+                  title={t("keyLesson")}
+                  description="Keep one clear lesson that can improve your next trading session."
+                />
+                <Input
+                  value={form.keyLesson ?? ""}
+                  onChange={(event) => set("keyLesson", event.target.value || null)}
+                  placeholder={t("keyLessonHint")}
+                  maxLength={2000}
+                  className="h-10 border-border/70 bg-muted/20 focus-visible:bg-background"
+                />
+                <div className="mt-4 space-y-2">
+                  <label htmlFor="journal-next-commitment" className="text-sm font-medium">Next-session commitment</label>
+                  <Textarea id="journal-next-commitment" value={form.nextSessionCommitment ?? ""} onChange={(event) => set("nextSessionCommitment", event.target.value || null)} placeholder="One specific behavior you will apply next session..." rows={3} maxLength={2000} />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="sticky bottom-3 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-background/95 p-3 shadow-lg shadow-background/30 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+            <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+              {dailyUnsavedChanges ? (
+                <>
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+                  <span>Changes are not saved yet</span>
+                </>
+              ) : periodReviewDirty ? (
+                <>
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+                  <span>Period review has unsaved changes — save it in Reviews</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" aria-hidden="true" />
+                  <span>{entry ? "Your journal is up to date" : "Start writing to create this entry"}</span>
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {entry != null ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-destructive"
+                  onClick={() => void onDelete()}
+                  disabled={del.isPending}
+                  aria-label={t("delete")}
+                >
+                  <Trash2 className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  <span className="hidden sm:inline">{t("delete")}</span>
+                </Button>
+              ) : null}
+              <Button size="sm" onClick={() => void onSave()} disabled={save.isPending || !dailyUnsavedChanges}>
+                <Save className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                {save.isPending ? t("saving") : t("save")}
+              </Button>
+            </div>
+          </div>
+
+          <div id="journal-reviews" className="scroll-mt-24">
+            <JournalPeriodReviewPanel selectedDay={day} onDirtyChange={onPeriodReviewDirtyChange} />
+          </div>
+
+          <JournalHistorySection selectedDay={day} onSelectDay={(selectedDate) => navigateSafely(`/journal/${selectedDate}`)} />
+        </>
       )}
-
-      {/* Free-text fields */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">{t("preMarketPlan")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              value={form.preMarketPlan ?? ""}
-              onChange={(e) => set("preMarketPlan", e.target.value || null)}
-              placeholder={t("preMarketHint")}
-              rows={6}
-              className="resize-y"
-            />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">{t("postMarketReview")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              value={form.postMarketReview ?? ""}
-              onChange={(e) => set("postMarketReview", e.target.value || null)}
-              placeholder={t("postMarketHint")}
-              rows={6}
-              className="resize-y"
-            />
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">{t("marketBias")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Input
-              value={form.marketBias ?? ""}
-              onChange={(e) => set("marketBias", e.target.value || null)}
-              placeholder={t("marketBiasHint")}
-              maxLength={500}
-            />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">{t("keyLesson")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Input
-              value={form.keyLesson ?? ""}
-              onChange={(e) => set("keyLesson", e.target.value || null)}
-              placeholder={t("keyLessonHint")}
-              maxLength={2000}
-            />
-          </CardContent>
-        </Card>
-      </div>
     </section>
   );
 }

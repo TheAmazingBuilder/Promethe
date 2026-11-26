@@ -248,3 +248,40 @@ describe("replay — play / speed / time in trade", () => {
     expect(() => createReplayEngine([], trade, { pipSize })).toThrow("NO_CANDLES");
   });
 });
+
+describe("replay — wrong-side stop (Lot 1, MD §3.2)", () => {
+  it("a LONG stop above entry yields no risk unit and no position panel", () => {
+    // Regression: Math.abs(entry − SL) used to turn a wrong-side stop
+    // into a positive risk unit, so R multiples were reported off it.
+    const wrongSide = {
+      ...trade,
+      stopLoss: "110",
+      initialStopLoss: "110",
+    };
+    const engine = createReplayEngine(candles, wrongSide, { pipSize });
+    const snap = engine.snapshot(engine.seek(engine.initialState(), 6));
+    expect(snap.inTrade).toBe(true);
+    expect(snap.position).toBeNull();
+    expect(engine.mfeIdx).toBeNull();
+    expect(engine.maeIdx).toBeNull();
+  });
+
+  it("a SHORT stop below entry yields no risk unit either", () => {
+    const wrongSide = {
+      ...trade,
+      direction: "SHORT" as const,
+      stopLoss: "99",
+      initialStopLoss: "99",
+    };
+    const engine = createReplayEngine(candles, wrongSide, { pipSize });
+    const snap = engine.snapshot(engine.seek(engine.initialState(), 6));
+    expect(snap.position).toBeNull();
+  });
+
+  it("a stop equal to entry yields no risk unit", () => {
+    const equal = { ...trade, stopLoss: "104", initialStopLoss: "104" };
+    const engine = createReplayEngine(candles, equal, { pipSize });
+    const snap = engine.snapshot(engine.seek(engine.initialState(), 6));
+    expect(snap.position).toBeNull();
+  });
+});

@@ -89,7 +89,11 @@ export function ExitPlansManager() {
       targetType: tier.targetType,
       target: tier.target.trim(),
     }));
-    const problem = validateExitPlan(tiers);
+    const problem = validateExitPlan(
+      tiers,
+      draft.breakeven === "" ? null : Number(draft.breakeven),
+      draft.trailing === "" ? null : Number(draft.trailing)
+    );
     if (draft.name.trim() === "") {
       setError(t("exitPlanNameRequired"));
       return;

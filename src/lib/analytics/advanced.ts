@@ -31,6 +31,7 @@ import {
   type AnalyticsTrade,
 } from "./insights";
 import {
+  benjaminiHochberg,
   binomialTwoSidedP,
   mad,
   mean,
@@ -83,9 +84,33 @@ export interface AdvancedTrade extends AnalyticsTrade {
   confluenceTags?: Array<{ id: string; name: string; color: string }>;
   /** Rule violations attached to the trade. */
   violationCount: number;
+  /** Frozen strategy definition version at entry (`Trade.strategyVersion`),
+   * null when the trade predates versioning or has no strategy. Optional
+   * for callers that only carry tag dimensions. */
+  strategyVersion?: number | null;
+  /** Mandatory-checklist verdict for this trade (Lot 11 semantics:
+   * evaluated against the frozen snapshot when one matches the frozen
+   * version, else the live checklist). True = every required item was
+   * checked, false = at least one required item unchecked, null = no
+   * checklist to judge (no strategy, or no required items). Optional for
+   * callers that only carry tag dimensions. */
+  checklistComplete?: boolean | null;
   /** Declared playbook match at review time (MATCHED | PARTIAL |
    * OFF_PLAYBOOK), null when the trade was never reviewed. */
   playbookMatch?: string | null;
+  /** Structured post-trade review, distinct from entry-time trade fields. */
+  review?: {
+    followedPlan: boolean | null;
+    planAdherenceScore: number | null;
+    executionQuality: number | null;
+    entryQuality: number | null;
+    exitQuality: number | null;
+    riskManagementScore: number | null;
+    emotionalControlScore: number | null;
+    wouldTakeAgain: string | null;
+    mistakeTags: string[];
+    customAnswers?: CustomReviewAnswer[];
+  } | null;
   riskPercent: string | null;
   setupQualityRating: number | null;
   /** Local calendar parts of the ENTRY (user timezone, server-computed). */
@@ -129,8 +154,10 @@ export interface LifecycleBucket {
 
 export interface LifecycleResult {
   total: number;
-  /** Trades with MFE/MAE data (mfePrice + SL recorded). */
+  /** Trades with MFE data. */
   withMfe: number;
+  /** Trades with MAE data. */
+  withMae: number;
   avgMfeR: number | null;
   avgMaeR: number | null;
   medianMfeR: number | null;
@@ -219,16 +246,16 @@ export function computeLifecycle(trades: AdvancedTrade[]): LifecycleResult {
     };
   });
   const withMfe = rows.filter((r) => r.mfeR != null);
+  const withMae = rows.filter((r) => r.maeR != null);
   const mfeValues = withMfe.map((r) => r.mfeR as number);
-  const maeValues = withMfe
-    .map((r) => r.maeR)
-    .filter((v): v is number => v != null);
+  const maeValues = withMae.map((r) => r.maeR as number);
   const almostTp = rows.filter((r) => r.almostTp);
   const withTime = rows.filter((r) => r.timeInProfitPct != null);
   const timePcts = withTime.map((r) => r.timeInProfitPct as number);
   return {
     total: rows.length,
     withMfe: withMfe.length,
+    withMae: withMae.length,
     avgMfeR: round(mean(mfeValues), 2),
     avgMaeR: round(mean(maeValues), 2),
     medianMfeR: round(median(mfeValues), 2),
@@ -425,6 +452,7 @@ export interface TraderScore {
     sqn: number | null;
     profitableMonths: number;
     months: number;
+    /** Standard deviation of monthly mean R, across months with valid R data. */
     monthlyRStd: number | null;
     riskCompliantRate: number | null;
     maxDrawdown: string | null;
@@ -432,6 +460,13 @@ export interface TraderScore {
   };
   /** Trades the score is based on. */
   trades: number;
+  /**
+   * Where the served score came from: the frozen daily snapshot (all-time,
+   * all accounts) or a fresh recompute from the trades in scope. The server
+   * only serves the snapshot when the request asks for exactly that scope
+   * (see src/server/advanced-analytics.ts); every other scope is recomputed.
+   */
+  source: "snapshot" | "computed";
 }
 
 export interface ScoreHistoryPoint {
@@ -486,13 +521,26 @@ export function computeTraderScore(
   }
   const months = [...monthly.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   const profitableMonths = months.filter(([, pnl]) => pnl.gt(0)).length;
-  const monthlyRs = months.map(([, pnl]) => pnl.toNumber());
-  const monthlyRStd = stdDev(monthlyRs);
+  const monthlyRByMonth = new Map<string, { sum: Decimal; count: number }>();
+  for (const trade of ordered) {
+    if (trade.rMultiple == null) continue;
+    const month = (trade.localDate ?? trade.exitTime.slice(0, 10)).slice(0, 7);
+    const current = monthlyRByMonth.get(month) ?? { sum: D0, count: 0 };
+    current.sum = current.sum.plus(toD(trade.rMultiple));
+    current.count += 1;
+    monthlyRByMonth.set(month, current);
+  }
+  // Compare monthly average R, not monetary P&L, so account size/currency
+  // cannot distort the consistency component.
+  const monthlyRAverages = [...monthlyRByMonth.values()].map((v) =>
+    v.sum.div(v.count).toNumber()
+  );
+  const monthlyRStd = stdDev(monthlyRAverages);
   const consistency =
     (months.length === 0
       ? 0
       : 12.5 * (profitableMonths / months.length)) +
-    (months.length < 2
+    (monthlyRAverages.length < 2
       ? 6.25
       : 12.5 * clamp01(1 - (monthlyRStd ?? 0) / 2));
 
@@ -540,6 +588,7 @@ export function computeTraderScore(
       grossWin: stats.grossWin,
     },
     trades: n,
+    source: "computed",
   };
 }
 
@@ -572,7 +621,12 @@ export type SetupCategory = "proven" | "promising" | "unproven" | "losing";
 
 export interface SetupRank {
   key: string;
+  /** All trades assigned to this setup. */
   count: number;
+  /** Trades with a finite R multiple; used for expectancy thresholds. */
+  rSampleSize: number;
+  /** WIN/LOSS trades; used for the Wilson confidence interval. */
+  decidedSampleSize: number;
   expectancy: number | null;
   winRate: number | null;
   wilsonLower: number | null;
@@ -586,21 +640,32 @@ export interface SetupRank {
 }
 
 export function setupCategory(rank: {
-  count: number;
+  rSampleSize: number;
+  decidedSampleSize: number;
   expectancy: number | null;
   wilsonLower: number | null;
 }): SetupCategory {
-  if (rank.count >= MIN_SAMPLE_SETUP && (rank.expectancy ?? 0) < 0) {
+  if (
+    rank.rSampleSize >= MIN_SAMPLE_SETUP &&
+    rank.expectancy != null &&
+    rank.expectancy < 0
+  ) {
     return "losing";
   }
   if (
-    rank.count >= MIN_SAMPLE_PROVEN &&
-    (rank.expectancy ?? 0) >= 0.2 &&
+    rank.rSampleSize >= MIN_SAMPLE_PROVEN &&
+    rank.decidedSampleSize >= MIN_SAMPLE_PROVEN &&
+    rank.expectancy != null &&
+    rank.expectancy >= 0.2 &&
     (rank.wilsonLower ?? 0) >= 0.35
   ) {
     return "proven";
   }
-  if (rank.count >= MIN_SAMPLE_SETUP && (rank.expectancy ?? 0) > 0) {
+  if (
+    rank.rSampleSize >= MIN_SAMPLE_SETUP &&
+    rank.expectancy != null &&
+    rank.expectancy > 0
+  ) {
     return "promising";
   }
   return "unproven";
@@ -637,6 +702,8 @@ export function computeSetupRanking(trades: AdvancedTrade[]): SetupRank[] {
     const rank: SetupRank = {
       key,
       count: list.length,
+      rSampleSize: rs.length,
+      decidedSampleSize: decided,
       expectancy: expectancy != null ? round(expectancy, 2) : null,
       winRate:
         decided > 0 ? round((wins / decided) * 100, 1) : null,
@@ -685,7 +752,12 @@ export interface ConfluenceRow {
   tagId: string;
   name: string;
   color: string;
+  /** All trades carrying this confluence. */
   count: number;
+  /** Trades with a finite R multiple. */
+  rSampleSize: number;
+  /** WIN/LOSS trades used for the Wilson interval. */
+  decidedSampleSize: number;
   wins: number;
   losses: number;
   breakevens: number;
@@ -748,6 +820,8 @@ export function computeConfluences(trades: AdvancedTrade[]): ConfluencesResult {
       name: group.name,
       color: group.color,
       count: list.length,
+      rSampleSize: rs.length,
+      decidedSampleSize: decided,
       wins,
       losses,
       breakevens,
@@ -787,7 +861,12 @@ export const MIN_SAMPLE_GRADE = 10;
 
 export interface GradeRow {
   grade: string;
+  /** All trades carrying this grade. */
   count: number;
+  /** Trades with a finite R multiple. */
+  rSampleSize: number;
+  /** WIN/LOSS trades used for the Wilson interval. */
+  decidedSampleSize: number;
   wins: number;
   losses: number;
   breakevens: number;
@@ -838,6 +917,8 @@ export function computeGrades(trades: AdvancedTrade[]): GradesResult {
     return {
       grade,
       count: list.length,
+      rSampleSize: rs.length,
+      decidedSampleSize: decided,
       wins,
       losses,
       breakevens,
@@ -864,6 +945,304 @@ export function computeGrades(trades: AdvancedTrade[]): GradesResult {
   };
 }
 
+// ── (d4) Cross-analysis: review / playbook / performance (§25.7) ──────────
+// One place that relates the dimensions the app already records - review
+// quality, rule compliance (checklist), strategy version used - to the
+// financial result, without confusing association and causation.
+//
+// What this is NOT: a verdict. Every comparison below is an observed
+// association between two groups of the user's own trades. Groups can
+// differ in strategy mix, market conditions or period, so a gap between
+// two groups never proves that one thing causes the other. The UI says
+// so in plain words, and a comparison is only drawn when both groups
+// meet the sample bar (same bar as grades / setups: 10 trades).
+//
+// Reuse, not rebuild: per-grade outcomes already live in computeGrades,
+// average R per playbook-match category in computeTradeReviewAnalytics,
+// per-version performance in src/lib/playbook/version-performance.ts.
+// This module adds only the genuinely missing cross-dimension groups:
+// checklist-complete vs incomplete, reviewed vs not reviewed (with
+// review completeness), and the app-wide (strategy, frozen version)
+// table. No new data is collected; every number comes from the closed
+// trades in scope.
+
+/** Minimum sample per group before a comparison is drawn (same bar as
+ * grades / setups / confluences). */
+export const MIN_SAMPLE_CROSS = 10;
+
+/** Minimum closed trades before the cross-analysis tab shows its
+ * tables at all (honest empty state below that). */
+export const MIN_TRADES_CROSS = 5;
+
+/** Review completeness slots: the nine declared/scored review fields
+ * carried on AdvancedTrade.review. Mistake tags are not counted - an
+ * empty mistake list is normal for a good trade. */
+export const REVIEW_COMPLETENESS_SLOTS = 9;
+
+export interface CrossGradeMix {
+  plus: number;
+  a: number;
+  b: number;
+  c: number;
+  ungraded: number;
+}
+
+/** One group of trades with its outcome metrics. Groups never invent
+ * data: a trade without an R multiple still counts for win rate and
+ * net P&L, and a metric is null when its sample is empty. */
+export interface CrossGroupRow {
+  /** Stable group id, e.g. "complete", "reviewed", "not-reviewed". */
+  id: string;
+  /** All trades in the group. */
+  count: number;
+  /** Trades with a finite R multiple. */
+  rSampleSize: number;
+  /** WIN/LOSS trades used for the Wilson interval. */
+  decidedSampleSize: number;
+  wins: number;
+  losses: number;
+  breakevens: number;
+  winRate: number | null;
+  wilsonLower: number | null;
+  wilsonUpper: number | null;
+  /** Mean R per trade, null when no trade in the group carries an R. */
+  expectancy: number | null;
+  avgR: number | null;
+  totalR: number | null;
+  netPnl: string;
+  /** Grade mix inside the group (counts, never a verdict). */
+  gradeMix: CrossGradeMix;
+}
+
+export interface CrossComparison {
+  /** True when both compared groups meet MIN_SAMPLE_CROSS. */
+  comparable: boolean;
+  /** First group avg R minus second group avg R, null unless comparable
+   * and both groups carry an R sample. */
+  avgRDiff: number | null;
+  /** First group win rate minus second group win rate (points), null
+   * unless comparable and both groups carry a decided sample. */
+  winRateDiff: number | null;
+}
+
+export interface CrossChecklistSection extends CrossComparison {
+  complete: CrossGroupRow;
+  incomplete: CrossGroupRow;
+  /** Trades with no checklist to judge (no strategy, or no required
+   * items). Counted, never compared. */
+  noChecklist: CrossGroupRow;
+}
+
+export interface CrossReviewSection extends CrossComparison {
+  reviewed: CrossGroupRow;
+  notReviewed: CrossGroupRow;
+  /** Reviewed trades with every review slot filled. */
+  reviewedFull: CrossGroupRow;
+  /** Reviewed trades with at least one review slot empty. */
+  reviewedPartial: CrossGroupRow;
+  /** Mean review completeness (0-1) among reviewed trades, null when
+   * no trade was reviewed. */
+  avgCompleteness: number | null;
+}
+
+export interface CrossVersionRow extends CrossGroupRow {
+  strategyId: string | null;
+  strategyName: string | null;
+  /** Frozen definition version, null for the pre-versioning bucket
+   * (and for trades with no strategy). */
+  version: number | null;
+}
+
+export interface CrossAnalysisResult {
+  /** Closed trades in scope (all, grouped or not). */
+  total: number;
+  checklist: CrossChecklistSection;
+  review: CrossReviewSection;
+  /** One row per (strategy, frozen version) present in the data,
+   * strategy name then newest version first. */
+  versions: CrossVersionRow[];
+}
+
+/** Share of the nine review slots filled, 0-1; null when the trade was
+ * never reviewed. */
+export function reviewCompletenessOf(trade: AdvancedTrade): number | null {
+  const review = trade.review;
+  if (review == null) return null;
+  let filled = 0;
+  if (review.followedPlan != null) filled += 1;
+  if (review.planAdherenceScore != null) filled += 1;
+  if (review.executionQuality != null) filled += 1;
+  if (review.entryQuality != null) filled += 1;
+  if (review.exitQuality != null) filled += 1;
+  if (review.riskManagementScore != null) filled += 1;
+  if (review.emotionalControlScore != null) filled += 1;
+  if (review.wouldTakeAgain != null) filled += 1;
+  if (review.customAnswers != null && review.customAnswers.length > 0) {
+    filled += 1;
+  }
+  return filled / REVIEW_COMPLETENESS_SLOTS;
+}
+
+function summarizeCrossGroup(
+  id: string,
+  list: AdvancedTrade[]
+): CrossGroupRow {
+  const rs = list
+    .map((t) => (t.rMultiple == null ? null : Number(t.rMultiple)))
+    .filter((v): v is number => v != null && Number.isFinite(v));
+  const wins = list.filter((t) => t.resultType === "WIN").length;
+  const losses = list.filter((t) => t.resultType === "LOSS").length;
+  const breakevens = list.filter((t) => t.resultType === "BREAKEVEN").length;
+  const decided = wins + losses;
+  const wilson = decided > 0 ? wilsonInterval(wins, decided) : null;
+  const expectancy = rs.length > 0 ? mean(rs) : null;
+  const gradeMix: CrossGradeMix = {
+    plus: 0,
+    a: 0,
+    b: 0,
+    c: 0,
+    ungraded: 0,
+  };
+  for (const t of list) {
+    if (t.grade === "A+") gradeMix.plus += 1;
+    else if (t.grade === "A") gradeMix.a += 1;
+    else if (t.grade === "B") gradeMix.b += 1;
+    else if (t.grade === "C") gradeMix.c += 1;
+    else gradeMix.ungraded += 1;
+  }
+  return {
+    id,
+    count: list.length,
+    rSampleSize: rs.length,
+    decidedSampleSize: decided,
+    wins,
+    losses,
+    breakevens,
+    winRate: decided > 0 ? round((wins / decided) * 100, 1) : null,
+    wilsonLower: wilson != null ? round(wilson.lower * 100, 1) : null,
+    wilsonUpper: wilson != null ? round(wilson.upper * 100, 1) : null,
+    expectancy: expectancy != null ? round(expectancy, 2) : null,
+    avgR: expectancy != null ? round(expectancy, 2) : null,
+    totalR:
+      rs.length > 0 ? round(rs.reduce((a, b) => a + b, 0), 2) : null,
+    netPnl: list
+      .reduce((acc, t) => acc.plus(toD(t.netPnl ?? 0)), D0)
+      .toString(),
+    gradeMix,
+  };
+}
+
+function crossComparisonOf(
+  first: CrossGroupRow,
+  second: CrossGroupRow
+): CrossComparison {
+  const comparable =
+    first.count >= MIN_SAMPLE_CROSS && second.count >= MIN_SAMPLE_CROSS;
+  return {
+    comparable,
+    avgRDiff:
+      comparable && first.avgR != null && second.avgR != null
+        ? round(first.avgR - second.avgR, 2)
+        : null,
+    winRateDiff:
+      comparable && first.winRate != null && second.winRate != null
+        ? round(first.winRate - second.winRate, 1)
+        : null,
+  };
+}
+
+export function computeCrossAnalysis(
+  trades: AdvancedTrade[]
+): CrossAnalysisResult {
+  const complete = summarizeCrossGroup(
+    "complete",
+    trades.filter((t) => t.checklistComplete === true)
+  );
+  const incomplete = summarizeCrossGroup(
+    "incomplete",
+    trades.filter((t) => t.checklistComplete === false)
+  );
+  const noChecklist = summarizeCrossGroup(
+    "no-checklist",
+    trades.filter((t) => t.checklistComplete == null)
+  );
+  const reviewedList = trades.filter((t) => t.review != null);
+  const reviewed = summarizeCrossGroup("reviewed", reviewedList);
+  const notReviewed = summarizeCrossGroup(
+    "not-reviewed",
+    trades.filter((t) => t.review == null)
+  );
+  const reviewedFull = summarizeCrossGroup(
+    "reviewed-full",
+    reviewedList.filter((t) => reviewCompletenessOf(t) === 1)
+  );
+  const reviewedPartial = summarizeCrossGroup(
+    "reviewed-partial",
+    reviewedList.filter((t) => {
+      const c = reviewCompletenessOf(t);
+      return c != null && c < 1;
+    })
+  );
+  const completenessValues = reviewedList
+    .map((t) => reviewCompletenessOf(t))
+    .filter((c): c is number => c != null);
+  const versionsByKey = new Map<string, AdvancedTrade[]>();
+  for (const t of trades) {
+    const key = `${t.strategyId ?? ""}|${t.strategyVersion ?? ""}`;
+    const list = versionsByKey.get(key) ?? [];
+    list.push(t);
+    versionsByKey.set(key, list);
+  }
+  const versions: CrossVersionRow[] = [...versionsByKey.entries()].map(
+    ([, list]) => {
+      const first = list[0];
+      const row = summarizeCrossGroup(
+        `version-${first?.strategyId ?? "none"}-${first?.strategyVersion ?? "none"}`,
+        list
+      );
+      return {
+        ...row,
+        strategyId: first?.strategyId ?? null,
+        strategyName: first?.strategyName ?? null,
+        version: first?.strategyVersion ?? null,
+      };
+    }
+  );
+  // Strategy name (A-Z, no-strategy last), newest version first.
+  versions.sort((a, b) => {
+    if (a.strategyName == null && b.strategyName != null) return 1;
+    if (a.strategyName != null && b.strategyName == null) return -1;
+    const byName = (a.strategyName ?? "").localeCompare(
+      b.strategyName ?? ""
+    );
+    if (byName !== 0) return byName;
+    if (a.version == null && b.version != null) return 1;
+    if (a.version != null && b.version == null) return -1;
+    return (b.version ?? 0) - (a.version ?? 0);
+  });
+  return {
+    total: trades.length,
+    checklist: {
+      ...crossComparisonOf(complete, incomplete),
+      complete,
+      incomplete,
+      noChecklist,
+    },
+    review: {
+      ...crossComparisonOf(reviewed, notReviewed),
+      reviewed,
+      notReviewed,
+      reviewedFull,
+      reviewedPartial,
+      avgCompleteness:
+        completenessValues.length > 0
+          ? round(mean(completenessValues), 2)
+          : null,
+    },
+    versions,
+  };
+}
+
 // ── (e) Sequence analysis ────────────────────────────────────────────────────
 
 export interface AfterStreakRow {
@@ -873,8 +1252,11 @@ export interface AfterStreakRow {
   wins: number;
   winRate: number | null;
   avgR: number | null;
-  /** Two-sided binomial p-value vs the overall win rate. */
+  /** Raw two-sided binomial p-value vs the overall win rate. */
   pValue: number | null;
+  /** Benjamini-Hochberg adjusted p-value across available after-streak tests. */
+  adjustedPValue: number | null;
+  /** True only when the adjusted p-value is below 0.05. */
   significant: boolean;
 }
 
@@ -909,6 +1291,7 @@ export function computeSequences(trades: AdvancedTrade[]): SequencesResult {
     decided.length === 0 ? null : wins / decided.length;
 
   const after: AfterStreakRow[] = [];
+  const rawPValues: Array<{ index: number; value: number }> = [];
   for (const side of ["WIN", "LOSS"] as const) {
     for (const streak of [1, 2, 3]) {
       const nexts: AdvancedTrade[] = [];
@@ -929,6 +1312,8 @@ export function computeSequences(trades: AdvancedTrade[]): SequencesResult {
         baselineWinRate != null && nexts.length >= MIN_SAMPLE_SEQUENCE
           ? binomialTwoSidedP(nextWins, nexts.length, baselineWinRate)
           : null;
+      const rowIndex = after.length;
+      if (pValue != null) rawPValues.push({ index: rowIndex, value: pValue });
       after.push({
         side,
         streak,
@@ -940,10 +1325,23 @@ export function computeSequences(trades: AdvancedTrade[]): SequencesResult {
             : round((nextWins / nexts.length) * 100, 1),
         avgR: round(mean(rs), 2),
         pValue: pValue != null ? round(pValue, 3) : null,
-        significant: pValue != null && pValue < 0.05,
+        adjustedPValue: null,
+        significant: false,
       });
     }
   }
+
+  // Correct the family of available after-streak comparisons before marking
+  // any row significant. Cells below the sample threshold are not tests.
+  const adjustedPValues = benjaminiHochberg(rawPValues.map((row) => row.value));
+  rawPValues.forEach(({ index }, i) => {
+    const adjusted = adjustedPValues[i];
+    after[index] = {
+      ...after[index],
+      adjustedPValue: round(adjusted, 3),
+      significant: adjusted < 0.05,
+    };
+  });
 
   let ww = 0;
   let wl = 0;
@@ -983,7 +1381,12 @@ export type SeasonVerdict = "positive" | "negative" | "neutral" | "insufficient"
 export interface SeasonCell {
   key: string;
   label: string;
+  /** All trades in the cell. */
   count: number;
+  /** Trades with a finite R multiple. */
+  rSampleSize: number;
+  /** WIN/LOSS trades used for the Wilson interval. */
+  decidedSampleSize: number;
   winRate: number | null;
   wilsonLower: number | null;
   wilsonUpper: number | null;
@@ -1013,11 +1416,15 @@ export interface SeasonalityResult {
 }
 
 function seasonVerdict(
-  count: number,
+  rSampleSize: number,
+  decidedSampleSize: number,
   avgR: number | null,
   wilson: { lower: number; upper: number } | null
 ): SeasonVerdict {
-  if (count < MIN_SAMPLE_SEASON_CELL) return "insufficient";
+  if (
+    rSampleSize < MIN_SAMPLE_SEASON_CELL ||
+    decidedSampleSize < MIN_SAMPLE_SEASON_CELL
+  ) return "insufficient";
   if (
     wilson != null &&
     wilson.lower > 0.5 &&
@@ -1057,6 +1464,8 @@ function seasonCells(
         key,
         label: g.label,
         count: list.length,
+        rSampleSize: rs.length,
+        decidedSampleSize: decided,
         winRate:
           decided > 0 ? round((wins / decided) * 100, 1) : null,
         wilsonLower:
@@ -1067,7 +1476,7 @@ function seasonCells(
         netPnl: list
           .reduce((acc, t) => acc.plus(toD(t.netPnl ?? 0)), D0)
           .toString(),
-        verdict: seasonVerdict(list.length, avgR, wilson),
+        verdict: seasonVerdict(rs.length, decided, avgR, wilson),
       };
     });
 }
@@ -1267,14 +1676,204 @@ export function computeAnomalies(trades: AdvancedTrade[]): AnomaliesResult {
 
 // ── Whole payload ────────────────────────────────────────────────────────────
 
+export interface ReviewScoreMetric {
+  average: number | null;
+  count: number;
+}
+
+export interface CustomReviewAnswer {
+  questionId: string;
+  question: string;
+  type: "SCALE" | "BOOLEAN" | "TEXT";
+  answer: string | number | boolean;
+}
+export interface CustomQuestionReviewMetric {
+  questionId: string;
+  question: string;
+  type: CustomReviewAnswer["type"];
+  answered: number;
+  average: number | null;
+  scaleDistribution: [number, number, number, number, number];
+  booleanYes: number;
+  booleanNo: number;
+}
+export interface TradeReviewAnalytics {
+  closedTrades: number;
+  reviewedTrades: number;
+  coveragePct: number | null;
+  plan: { followed: number; notFollowed: number; unanswered: number; ratePct: number | null };
+  scores: {
+    planAdherence: ReviewScoreMetric;
+    execution: ReviewScoreMetric;
+    entry: ReviewScoreMetric;
+    exit: ReviewScoreMetric;
+    riskManagement: ReviewScoreMetric;
+    emotionalControl: ReviewScoreMetric;
+  };
+  wouldTakeAgain: { yes: number; no: number; maybe: number; unanswered: number };
+  playbookMatch: { matched: number; partial: number; offPlaybook: number; unclassified: number };
+  /**
+   * Average R per playbook-match category (Lot 11, roadmap §14): does
+   * following the playbook actually pay? Null when a category has no
+   * trade with a known R. Counts and money stay separate - a category
+   * with one lucky trade does not become "the edge".
+   */
+  playbookMatchR: {
+    matched: number | null;
+    partial: number | null;
+    offPlaybook: number | null;
+    unclassified: number | null;
+  };
+  topMistakes: Array<{ label: string; count: number }>;
+  customQuestions: CustomQuestionReviewMetric[];
+}
+
+function reviewScore(values: Array<number | null>): ReviewScoreMetric {
+  const valid = values.filter((value): value is number =>
+    value != null && Number.isInteger(value) && value >= 1 && value <= 5
+  );
+  return {
+    average: valid.length === 0 ? null : round(mean(valid), 2),
+    count: valid.length,
+  };
+}
+
+/** Aggregate only explicit review answers; missing answers stay unanswered. */
+export function computeTradeReviewAnalytics(trades: AdvancedTrade[]): TradeReviewAnalytics {
+  const reviewed = trades.filter((trade) => trade.review != null);
+  const followed = reviewed.filter((trade) => trade.review?.followedPlan === true).length;
+  const notFollowed = reviewed.filter((trade) => trade.review?.followedPlan === false).length;
+  const planAnswered = followed + notFollowed;
+  const would = { yes: 0, no: 0, maybe: 0, unanswered: 0 };
+  const playbook = { matched: 0, partial: 0, offPlaybook: 0, unclassified: 0 };
+  const playbookRSum = { matched: 0, partial: 0, offPlaybook: 0, unclassified: 0 };
+  const playbookRCount = { matched: 0, partial: 0, offPlaybook: 0, unclassified: 0 };
+  const mistakes = new Map<string, number>();
+  const customGroups = new Map<string, {
+    questionId: string; question: string; type: CustomReviewAnswer["type"];
+    answered: number; scaleTotal: number;
+    scaleDistribution: [number, number, number, number, number];
+    booleanYes: number; booleanNo: number;
+  }>();
+
+  for (const trade of reviewed) {
+    const answer = trade.review?.wouldTakeAgain;
+    if (answer === "YES") would.yes += 1;
+    else if (answer === "NO") would.no += 1;
+    else if (answer === "MAYBE") would.maybe += 1;
+    else would.unanswered += 1;
+
+    const match = trade.playbookMatch;
+    if (match === "MATCHED") playbook.matched += 1;
+    else if (match === "PARTIAL") playbook.partial += 1;
+    else if (match === "OFF_PLAYBOOK") playbook.offPlaybook += 1;
+    else playbook.unclassified += 1;
+    // Average R per match category (Lot 11): only trades with a known R.
+    const r =
+      trade.rMultiple != null && Number.isFinite(Number(trade.rMultiple))
+        ? Number(trade.rMultiple)
+        : null;
+    if (r !== null) {
+      const key =
+        match === "MATCHED"
+          ? "matched"
+          : match === "PARTIAL"
+            ? "partial"
+            : match === "OFF_PLAYBOOK"
+              ? "offPlaybook"
+              : "unclassified";
+      playbookRSum[key] += r;
+      playbookRCount[key] += 1;
+    }
+
+    for (const label of new Set(trade.review?.mistakeTags ?? [])) {
+      mistakes.set(label, (mistakes.get(label) ?? 0) + 1);
+    }
+    for (const answer of trade.review?.customAnswers ?? []) {
+      const key = JSON.stringify([answer.questionId, answer.question, answer.type]);
+      const metric = customGroups.get(key) ?? {
+        questionId: answer.questionId, question: answer.question, type: answer.type,
+        answered: 0, scaleTotal: 0,
+        scaleDistribution: [0, 0, 0, 0, 0] as [number, number, number, number, number],
+        booleanYes: 0, booleanNo: 0,
+      };
+      if (answer.type === "SCALE" && typeof answer.answer === "number" &&
+          Number.isInteger(answer.answer) && answer.answer >= 1 && answer.answer <= 5) {
+        metric.answered++;
+        metric.scaleTotal += answer.answer;
+        metric.scaleDistribution[answer.answer - 1]++;
+      } else if (answer.type === "BOOLEAN" && typeof answer.answer === "boolean") {
+        metric.answered++;
+        if (answer.answer) metric.booleanYes++;
+        else metric.booleanNo++;
+      } else if (answer.type === "TEXT" && typeof answer.answer === "string" && answer.answer.trim()) {
+        metric.answered++;
+      }
+      customGroups.set(key, metric);
+    }
+  }
+
+  return {
+    closedTrades: trades.length,
+    reviewedTrades: reviewed.length,
+    coveragePct: trades.length === 0 ? null : round((reviewed.length / trades.length) * 100, 1),
+    plan: {
+      followed,
+      notFollowed,
+      unanswered: reviewed.length - planAnswered,
+      ratePct: planAnswered === 0 ? null : round((followed / planAnswered) * 100, 1),
+    },
+    scores: {
+      planAdherence: reviewScore(reviewed.map((trade) => trade.review?.planAdherenceScore ?? null)),
+      execution: reviewScore(reviewed.map((trade) => trade.review?.executionQuality ?? null)),
+      entry: reviewScore(reviewed.map((trade) => trade.review?.entryQuality ?? null)),
+      exit: reviewScore(reviewed.map((trade) => trade.review?.exitQuality ?? null)),
+      riskManagement: reviewScore(reviewed.map((trade) => trade.review?.riskManagementScore ?? null)),
+      emotionalControl: reviewScore(reviewed.map((trade) => trade.review?.emotionalControlScore ?? null)),
+    },
+    wouldTakeAgain: would,
+    playbookMatch: playbook,
+    playbookMatchR: {
+      matched:
+        playbookRCount.matched === 0
+          ? null
+          : round(playbookRSum.matched / playbookRCount.matched, 2),
+      partial:
+        playbookRCount.partial === 0
+          ? null
+          : round(playbookRSum.partial / playbookRCount.partial, 2),
+      offPlaybook:
+        playbookRCount.offPlaybook === 0
+          ? null
+          : round(playbookRSum.offPlaybook / playbookRCount.offPlaybook, 2),
+      unclassified:
+        playbookRCount.unclassified === 0
+          ? null
+          : round(playbookRSum.unclassified / playbookRCount.unclassified, 2),
+    },
+    topMistakes: [...mistakes.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+      .slice(0, 8),
+    customQuestions: [...customGroups.values()]
+      .map(({ scaleTotal, ...metric }) => ({
+        ...metric,
+        average: metric.type === "SCALE" && metric.answered > 0 ? round(scaleTotal / metric.answered, 2) : null,
+      }))
+      .sort((a, b) => b.answered - a.answered || a.question.localeCompare(b.question)),
+  };
+}
+
 export interface AdvancedAnalytics {
   lifecycle: LifecycleResult;
   exits: ExitsResult;
   score: TraderScore;
   scoreHistory: ScoreHistoryPoint[];
+  reviews: TradeReviewAnalytics;
   setups: SetupRank[];
   confluences: ConfluencesResult;
   grades: GradesResult;
+  crossAnalysis: CrossAnalysisResult;
   sequences: SequencesResult;
   seasonality: SeasonalityResult;
   anomalies: AnomaliesResult;
@@ -1302,10 +1901,14 @@ export function computeAdvancedAnalyticsModules(
   // the replayed history for pure callers and tests.
   if (want.has("score")) {
     out.score = computeTraderScore(trades, stats, advanced);
+    out.reviews = computeTradeReviewAnalytics(trades);
   }
   if (want.has("setups")) out.setups = computeSetupRanking(trades);
   if (want.has("confluences")) out.confluences = computeConfluences(trades);
   if (want.has("grades")) out.grades = computeGrades(trades);
+  if (want.has("cross-analysis")) {
+    out.crossAnalysis = computeCrossAnalysis(trades);
+  }
   if (want.has("sequences")) out.sequences = computeSequences(trades);
   if (want.has("seasonality")) out.seasonality = computeSeasonality(trades);
   if (want.has("anomalies")) out.anomalies = computeAnomalies(trades);

@@ -9,6 +9,7 @@
  * 200 { report } · 401 BAD_TOKEN · 503 CRON_SECRET_UNSET
  */
 import { NextResponse } from "next/server";
+import { constantTimeEqual } from "@/lib/tokens";
 import { runDailyMaintenance } from "@/server/maintenance";
 
 function authorized(req: Request): boolean {
@@ -16,7 +17,7 @@ function authorized(req: Request): boolean {
   if (!secret || secret.length < 16) return false;
   const header = req.headers.get("authorization") ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : "";
-  return token.length === secret.length && token === secret;
+  return constantTimeEqual(token, secret);
 }
 
 async function handle(req: Request) {

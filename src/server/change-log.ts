@@ -198,6 +198,44 @@ export async function undoChangeLogGroup(
   // default reads): the whole restore runs inside withDeleted.
   await withDeleted(async () => {
     await db.$transaction(async (tx) => {
+      // BEFORE snapshots can reference a strategy or tags that were
+      // permanently deleted since (Trade.strategy is SetNull and
+      // TradeTag is Cascade on delete). Restoring a dead id would fail
+      // the whole transaction with a foreign-key error, so resolve the
+      // live ids once and fall back to null / drop dead tags. A
+      // soft-deleted (trashed) strategy or tag still exists as a row,
+      // so it stays restorable.
+      const befores = entries.map((e) => parseSnapshot(e.beforeJson));
+      const wantedStrategyIds = [
+        ...new Set(
+          befores
+            .map((b) => b?.strategyId)
+            .filter((id): id is string => id != null)
+        ),
+      ];
+      const wantedTagIds = [
+        ...new Set(befores.flatMap((b) => b?.tagIds ?? [])),
+      ];
+      const [liveStrategies, liveTags] = await Promise.all([
+        wantedStrategyIds.length > 0
+          ? tx.strategy.findMany({
+              where: { id: { in: wantedStrategyIds }, userId },
+              select: { id: true },
+            })
+          : Promise.resolve([] as Array<{ id: string }>),
+        wantedTagIds.length > 0
+          ? tx.tag.findMany({
+              where: {
+                id: { in: wantedTagIds },
+                OR: [{ userId: null }, { userId }],
+              },
+              select: { id: true },
+            })
+          : Promise.resolve([] as Array<{ id: string }>),
+      ]);
+      const liveStrategyIds = new Set(liveStrategies.map((s) => s.id));
+      const liveTagIds = new Set(liveTags.map((t) => t.id));
+
       for (const entry of entries) {
         const before = parseSnapshot(entry.beforeJson);
         if (!before) continue;
@@ -208,10 +246,15 @@ export async function undoChangeLogGroup(
         if (!exists) continue;
         // Never resurrect a trade trashed after the logged action.
         if (exists.deletedAt && !before.deletedAt) continue;
+        const strategyId =
+          before.strategyId && liveStrategyIds.has(before.strategyId)
+            ? before.strategyId
+            : null;
+        const tagIds = before.tagIds.filter((id) => liveTagIds.has(id));
         await tx.trade.update({
           where: { id: entry.entityId },
           data: {
-            strategyId: before.strategyId,
+            strategyId,
             accountId: before.accountId,
             deletedAt: before.deletedAt ? new Date(before.deletedAt) : null,
             deletedBy: before.deletedAt ? userId : null,
@@ -223,9 +266,9 @@ export async function undoChangeLogGroup(
         });
         // Restore the exact tag set (bulk edits may have added/removed tags).
         await tx.tradeTag.deleteMany({ where: { tradeId: entry.entityId } });
-        if (before.tagIds.length > 0) {
+        if (tagIds.length > 0) {
           await tx.tradeTag.createMany({
-            data: before.tagIds.map((tagId) => ({ tradeId: entry.entityId, tagId })),
+            data: tagIds.map((tagId) => ({ tradeId: entry.entityId, tagId })),
             skipDuplicates: true,
           });
         }

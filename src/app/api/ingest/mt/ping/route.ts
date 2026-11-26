@@ -9,6 +9,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { hashIp, hashToken, clientIpFrom } from "@/lib/tokens";
 import { consumeRateLimit } from "@/lib/rate-limit";
+import { isRevokedConnection } from "@/lib/sync/status";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,12 +40,15 @@ export async function GET(req: Request) {
     IP_WINDOW_MS
   );
   if (!ipBucket.allowed) {
-    return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
+    return NextResponse.json(
+      { error: "RATE_LIMITED", message: "Too many requests, please wait." },
+      { status: 429 }
+    );
   }
 
   const tokenHash = hashToken(rawToken);
   const connection = await db.brokerConnection.findUnique({ where: { tokenHash } });
-  if (!connection) {
+  if (!connection || isRevokedConnection(connection)) {
     return NextResponse.json(
       { error: "UNAUTHORIZED", message: "Unknown or revoked token." },
       { status: 401 }

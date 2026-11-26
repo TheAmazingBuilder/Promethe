@@ -31,6 +31,7 @@ import {
   buildTradeSnapshot,
   parseStoredSnapshot,
   redactReportPayload,
+  sanitizeStoredSnapshot,
   snapshotPolicy,
   toPublicPayload,
   type ReportSnapshotStored,
@@ -249,8 +250,11 @@ export async function resolveShareLink(
 
   // ── SNAPSHOT: serve the frozen payload ──
   if (row.mode === "SNAPSHOT") {
-    const snapshot = parseStoredSnapshot(row.snapshotJson);
-    if (!snapshot) return { ok: false, reason: "GONE" };
+    const stored = parseStoredSnapshot(row.snapshotJson);
+    if (!stored) return { ok: false, reason: "GONE" };
+    // Stored before the current rules? Re-apply them (captions, strategy
+    // names, field allowlist) - the stored JSON is never served as-is.
+    const snapshot = sanitizeStoredSnapshot(stored);
     return { ok: true, payload: toPublicPayload(snapshot, rawToken) };
   }
 
@@ -333,22 +337,3 @@ export async function peekShareForOg(
   return result.ok ? result.payload : null;
 }
 
-/**
- * Counts one page view for a raw token — called ONCE per HTML navigation by
- * the public page (metadata resolution uses countView: false so the view is
- * not double-counted). Race-safe: refuses when the cap is already reached.
- */
-export async function countShareViewByRawToken(rawToken: string): Promise<void> {
-  if (!looksLikeToken(rawToken)) return;
-  const row = await db.shareLink.findUnique({ where: { tokenHash: hashToken(rawToken) } });
-  if (!row || !isShareLinkUsable(row)) return;
-  await db.shareLink.updateMany({
-    where: {
-      id: row.id,
-      revokedAt: null,
-      expiresAt: { gt: new Date() },
-      ...(row.maxViews !== null ? { viewCount: { lt: row.maxViews } } : {}),
-    },
-    data: { viewCount: { increment: 1 }, lastViewedAt: new Date() },
-  });
-}

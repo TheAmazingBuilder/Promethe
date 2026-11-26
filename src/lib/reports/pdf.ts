@@ -139,8 +139,10 @@ export class ReportPdf {
     this.doc.setFontSize(10);
     this.doc.setFont("helvetica", "normal");
     const lines = this.doc.splitTextToSize(text, this.contentWidth);
-    this.ensureSpace(lines.length * 5 + 2, footerLabel);
     for (const line of lines) {
+      // A paragraph may span several pages. Check space per line so long
+      // Journal reflections cannot overflow past the page footer.
+      this.ensureSpace(7, footerLabel);
       this.doc.text(line, this.margin, this.y);
       this.y += 5;
     }
@@ -151,7 +153,7 @@ export class ReportPdf {
   bullet(text: string, footerLabel: string): void {
     this.doc.setFontSize(10);
     this.doc.setFont("helvetica", "normal");
-    const lines = this.doc.splitTextToSize(text, this.contentWidth - 5);
+    const lines = this.doc.splitTextToSize(text, this.contentWidth - 5) as string[];
     this.ensureSpace(lines.length * 5 + 2, footerLabel);
     lines.forEach((line, i) => {
       this.doc.text(i === 0 ? "•  " : "    ", this.margin, this.y);
@@ -194,10 +196,10 @@ export class ReportPdf {
     this.y += 4;
   }
 
-  /** Mini equity curve (cumulative net P&L, chronological). */
+  /** Mini cumulative P&L curve (not an equity curve: the points plot cumPnl, see below). */
   equityChart(points: EquityPoint[], footerLabel: string): void {
     if (points.length < 2) return;
-    this.section("Equity curve", footerLabel);
+    this.section("Cumulative P&L curve", footerLabel);
     const boxH = 42;
     this.ensureSpace(boxH + 4, footerLabel);
     const boxY = this.y;

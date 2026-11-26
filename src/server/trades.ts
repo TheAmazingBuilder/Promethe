@@ -11,7 +11,9 @@ import { db } from "@/lib/db";
 import { Decimal, toD } from "@/lib/trading/dec";
 import {
   previewTrade,
+  calcPlannedRR,
   classifyResult,
+  tradeLevelIssues,
   type TradePreview,
 } from "@/lib/trading/calculate";
 import { detectSessionSafe } from "@/lib/trading/session";
@@ -45,6 +47,12 @@ import {
   type GridStats,
 } from "@/lib/trades/grid-stats";
 import { evaluateTradeViolations } from "@/server/rules";
+import {
+  evaluateChecklist,
+  resolveFrozenChecklistItems,
+} from "@/lib/playbook/checklist";
+import { getFrozenChecklistItems } from "@/server/strategy-versions";
+import { autoLinkEventsForTrade } from "@/server/economic-calendar";
 import { checkDrawdownAlerts } from "@/server/integrations/delivery";
 import { refreshTradeSearchText } from "@/server/search-index";
 import { foldText } from "@/lib/search/text";
@@ -108,11 +116,11 @@ type TradeFullRow = Prisma.TradeGetPayload<{
   include: {
     instrument: true;
     account: true;
-    strategy: true;
+    strategy: { include: { checklistItems: { orderBy: { order: "asc" } } } };
     tags: { include: { tag: true } };
     screenshots: true;
     executions: { orderBy: { time: "asc" } };
-    review: { select: { id: true } };
+    review: { select: { id: true, playbookMatch: true, followedPlan: true, planAdherenceScore: true, executionQuality: true, entryQuality: true, exitQuality: true, riskManagementScore: true, emotionalControlScore: true, wouldTakeAgain: true, mainLesson: true, whatWentWell: true, whatToImprove: true, mistakeTagIds: true, customAnswers: true, reviewedAt: true, createdAt: true, updatedAt: true } };
     // v2.5 M2 — price chart overlay sources
     modifications: { orderBy: { time: "asc" } };
     eventLinks: { include: { event: true } };
@@ -121,7 +129,7 @@ type TradeFullRow = Prisma.TradeGetPayload<{
 
 /**
  * Lighter row shape accepted by toTradeDetail — modifications / eventLinks
- * are OPTIONAL (mentor views omit them; the mapper defaults both to []) and
+ * are OPTIONAL (the mapper defaults both to []) and
  * only the review id is needed (hasReview flag).
  */
 type TradeDetailRow = Omit<
@@ -130,18 +138,18 @@ type TradeDetailRow = Omit<
 > & {
   modifications?: TradeFullRow["modifications"];
   eventLinks?: TradeFullRow["eventLinks"];
-  review: { id: string; playbookMatch: string | null } | null;
+  review: TradeFullRow["review"];
 };
 
 /** Shared include for every TradeDetailDTO mapper call site. */
 const DETAIL_INCLUDE = {
   instrument: true,
   account: true,
-  strategy: true,
+  strategy: { include: { checklistItems: { orderBy: { order: "asc" } } } },
   tags: { include: { tag: true } },
   screenshots: { orderBy: { createdAt: "asc" } },
   executions: { orderBy: { time: "asc" } },
-  review: { select: { id: true, playbookMatch: true } },
+  review: { select: { id: true, playbookMatch: true, followedPlan: true, planAdherenceScore: true, executionQuality: true, entryQuality: true, exitQuality: true, riskManagementScore: true, emotionalControlScore: true, wouldTakeAgain: true, mainLesson: true, whatWentWell: true, whatToImprove: true, mistakeTagIds: true, customAnswers: true, reviewedAt: true, createdAt: true, updatedAt: true } },
   // v2.5 M2 — price chart overlay sources
   modifications: { orderBy: { time: "asc" } },
   eventLinks: { include: { event: true } },
@@ -260,10 +268,43 @@ export function toTradeDetail(t: TradeDetailRow): TradeDetailDTO {
     notes: t.notes,
     tradingViewUrl: t.tradingViewUrl,
     checklistResults: checklist,
+    // Mandatory-checklist verdict (Lot 11, roadmap §14): evaluated here
+    // against the LIVE checklist; getTradeDetail re-evaluates it against
+    // the frozen snapshot when one matches the trade's frozen version.
+    checklistStatus:
+      t.strategy?.deletedAt == null && t.strategyId != null
+        ? evaluateChecklist(
+            (t.strategy?.checklistItems ?? []).map((item) => ({
+              id: item.id,
+              label: item.label,
+              isRequired: item.isRequired,
+            })),
+            checklist,
+          )
+        : null,
     accountCurrency: t.account.currency,
     accountInitialBalance: t.account.initialBalance.toString(),
     exitPlanId: t.exitPlanId,
     playbookMatch: t.review?.playbookMatch ?? null,
+    review: t.review ? {
+      id: t.review.id,
+      playbookMatch: t.review.playbookMatch,
+      followedPlan: t.review.followedPlan,
+      planAdherenceScore: t.review.planAdherenceScore,
+      executionQuality: t.review.executionQuality,
+      entryQuality: t.review.entryQuality,
+      exitQuality: t.review.exitQuality,
+      riskManagementScore: t.review.riskManagementScore,
+      emotionalControlScore: t.review.emotionalControlScore,
+      wouldTakeAgain: t.review.wouldTakeAgain,
+      mainLesson: t.review.mainLesson,
+      whatWentWell: t.review.whatWentWell,
+      whatToImprove: t.review.whatToImprove,
+      mistakeTagIds: parseReviewTagIds(t.review.mistakeTagIds),
+      customAnswers: parseCustomReviewAnswers(t.review.customAnswers),
+      reviewedAt: t.review.reviewedAt.toISOString(),
+      updatedAt: t.review.updatedAt.toISOString(),
+    } : null,
     currentPrice: s(t.currentPrice),
     screenshots: t.screenshots.map((sc) => ({
       id: sc.id,
@@ -281,7 +322,7 @@ export function toTradeDetail(t: TradeDetailRow): TradeDetailDTO {
       commission: e.commission.toString(),
       pnl: s(e.pnl),
     })),
-    hasReview: t.review !== null,
+    hasReview: Boolean(t.review && (t.review.followedPlan !== null || t.review.planAdherenceScore !== null || t.review.executionQuality !== null || t.review.entryQuality !== null || t.review.exitQuality !== null || t.review.riskManagementScore !== null || t.review.emotionalControlScore !== null || t.review.wouldTakeAgain !== null || t.review.mainLesson || t.review.whatWentWell || t.review.whatToImprove || t.review.mistakeTagIds || (t.review.customAnswers && t.review.customAnswers !== "[]"))),
     // v2.5 M2 — price chart overlay sources (defensive: call sites with a
     // lighter include still work)
     modifications: (t.modifications ?? []).map((m) => ({
@@ -296,9 +337,20 @@ export function toTradeDetail(t: TradeDetailRow): TradeDetailDTO {
       id: l.event.id,
       title: l.event.title,
       time: l.event.scheduledAt.toISOString(),
-      importance: l.event.impact,
+      // Impact is nullable since lot 10 (FRED rates nothing).
+      importance: l.event.impact ?? "UNKNOWN",
     })),
   };
+}
+
+function parseReviewTagIds(value: string | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
 }
 
 // ── Ownership resolution ─────────────────────────────────────────────────────
@@ -439,36 +491,39 @@ export function computeDerived(p: ComputeParams) {
         : toD(p.stopLoss).minus(toD(p.entryPrice))
       : null;
   if (stopDist && stopDist.gt(0)) {
-    // Manual rate wins; otherwise the stored FxRate table converts the
-    // risk into account currency (1 when no rate is known).
-    const effectiveRate = p.quoteToAccountRate
-      ? toD(p.quoteToAccountRate)
-      : (resolveConversionRate(
-          p.instrument.quoteCurrency ?? "",
-          p.account.currency,
-          p.fxRates ?? [],
-          null
-        ) ?? toD(1));
-    riskAmount = stopDist
-      .times(toD(p.lots))
-      .times(toD(p.instrument.contractSize))
-      .times(effectiveRate);
-    if (p.balanceAtEntry && p.balanceAtEntry.gt(0)) {
-      // 6 dp: SQLite NUMERIC affinity truncates longer decimals to float64
-      // on storage (e.g. "0.21983288304231124") — round to keep values exact.
-      riskPercent = riskAmount
-        .div(p.balanceAtEntry)
-        .times(100)
-        .toDecimalPlaces(6);
+    // Manual rate wins; otherwise use the stored FX table. Without a valid
+    // quote→account rate, account-currency risk is unknown and must stay null.
+    const effectiveRate = resolveConversionRate(
+      p.instrument.quoteCurrency ?? "",
+      p.account.currency,
+      p.fxRates ?? [],
+      p.quoteToAccountRate ?? null
+    );
+    if (effectiveRate && effectiveRate.isFinite() && effectiveRate.gt(0)) {
+      riskAmount = stopDist
+        .times(toD(p.lots))
+        .times(toD(p.instrument.contractSize))
+        .times(effectiveRate);
+      if (p.balanceAtEntry && p.balanceAtEntry.gt(0)) {
+        // 6 dp: SQLite NUMERIC affinity truncates longer decimals to float64
+        // on storage (e.g. "0.21983288304231124") — round to keep values exact.
+        riskPercent = riskAmount
+          .div(p.balanceAtEntry)
+          .times(100)
+          .toDecimalPlaces(6);
+      }
     }
   }
 
-  // Planned RR
-  let plannedRR: Decimal | null = null;
-  if (stopDist && stopDist.gt(0) && p.takeProfit != null) {
-    const reward = toD(p.takeProfit).minus(toD(p.entryPrice)).abs();
-    if (reward.gt(0)) plannedRR = reward.div(stopDist).toDecimalPlaces(6);
-  }
+  // Keep the server-side planned ratio aligned with the direction-aware
+  // calculation used by the client and trade preview.
+  const planned = calcPlannedRR(
+    direction,
+    p.entryPrice,
+    p.stopLoss,
+    p.takeProfit
+  );
+  const plannedRR = planned?.toDecimalPlaces(6) ?? null;
 
   const netPnl =
     p.pnlSource !== "CALCULATED" && p.manualNetPnl != null
@@ -476,10 +531,16 @@ export function computeDerived(p: ComputeParams) {
       : preview
         ? preview.netPnl
         : null;
+  // grossPnl semantics for MANUAL / BROKER lines (MD §3.3, see
+  // docs/financial-conventions.md §1): grossPnl above
+  // is ALWAYS the price-derived calculated gross, even when netPnl is
+  // the manual/broker value. For those lines gross − net is NOT the
+  // costs and must never be presented as such; commission/swap/fees are
+  // the user-entered cost fields, not reconciled against the manual net.
 
   const rMultiple =
-    preview && riskAmount && riskAmount.gt(0)
-      ? preview.netPnl.div(riskAmount).toDecimalPlaces(6)
+    netPnl !== null && riskAmount && riskAmount.gt(0)
+      ? netPnl.div(riskAmount).toDecimalPlaces(6)
       : null;
 
   const resultType = closed
@@ -780,7 +841,38 @@ export async function getTradeDetail(
     where: { id, userId },
     include: DETAIL_INCLUDE,
   });
-  return trade ? toTradeDetail(trade) : null;
+  if (!trade) return null;
+  const detail = toTradeDetail(trade);
+  // Frozen-checklist verdict (Lot 11, roadmap §14): when the trade froze
+  // a strategy version and a snapshot carries it, the checklist is the
+  // one the trade executed under - not the live list, which may have
+  // changed since. No matching snapshot → keep the live evaluation.
+  if (trade.strategyId && trade.strategyVersion != null) {
+    const frozen = await getFrozenChecklistItems(
+      userId,
+      trade.strategyId,
+      trade.strategyVersion,
+    );
+    if (frozen) {
+      const liveItems = (trade.strategy?.checklistItems ?? []).map((item) => ({
+        id: item.id,
+        label: item.label,
+      }));
+      let checklist: Record<string, boolean> | null = null;
+      if (trade.checklistResults) {
+        try {
+          checklist = JSON.parse(trade.checklistResults) as Record<string, boolean>;
+        } catch {
+          checklist = null;
+        }
+      }
+      detail.checklistStatus = evaluateChecklist(
+        resolveFrozenChecklistItems(frozen, liveItems),
+        checklist,
+      );
+    }
+  }
+  return detail;
 }
 
 // ── Create (idempotent by clientMutationId — v2 §4.2) ──────────────────────
@@ -820,7 +912,11 @@ export async function createTrade(
       where: { userId, clientMutationId: input.clientMutationId },
       include: DETAIL_INCLUDE,
     });
-    if (existing) return { trade: toTradeDetail(existing), deduplicated: true };
+    if (existing) {
+      const detail = await getTradeDetail(userId, existing.id);
+      if (detail) return { trade: detail, deduplicated: true };
+      return { trade: toTradeDetail(existing), deduplicated: true };
+    }
   }
 
   const [account, instrument, strategy] = await Promise.all([
@@ -841,6 +937,17 @@ export async function createTrade(
   const entryTime = new Date(input.entryTime);
   if (Number.isNaN(entryTime.getTime())) {
     throw new TradeValidationError("INVALID_DATE");
+  }
+  // Directional TP/SL (MD §3.2) — defense in depth behind the zod schema:
+  // a wrong-side level is rejected, never stored with a null plannedRR.
+  const levelIssues = tradeLevelIssues(
+    input.direction,
+    input.entryPrice,
+    input.stopLoss ?? null,
+    input.takeProfit ?? null
+  );
+  if (levelIssues.length > 0) {
+    throw new TradeValidationError(levelIssues[0]);
   }
   const closed = input.status === "CLOSED";
   if (closed && !input.exitPrice) {
@@ -993,6 +1100,8 @@ export async function createTrade(
   await refreshTradeSearchText(created.id);
   // Phase 6 — rule violation detection (best-effort, never fails the write).
   await evaluateTradeViolations(userId, created.id);
+  // Lot 10 — link nearby economic events (best-effort, never fails the write).
+  await autoLinkEventsForTrade(userId, created.id);
   return { trade: detail, deduplicated: false };
 }
 
@@ -1041,12 +1150,36 @@ export async function updateTrade(
   const swap = patch.swap ?? current.swap.toString();
   const fees = patch.fees ?? current.fees.toString();
   const pnlSource = patch.pnlSource ?? current.pnlSource;
+  // Carry the stored manual/broker value when the patch does not supply
+  // one (MD §3.3): there is no manualNetPnl column — for a MANUAL (or
+  // BROKER-synced) trade the stored netPnl IS the manual value, and an
+  // edit of unrelated fields must not silently revert it to calculated.
+  // The carry only applies when the CURRENT source is already
+  // non-CALCULATED: switching CALCULATED → MANUAL must not launder the
+  // calculated netPnl into a "manual" value — that switch requires an
+  // explicit value (see the check below).
   const manualNetPnl =
     patch.manualNetPnl !== undefined
       ? patch.manualNetPnl
-      : current.netPnl && current.pnlSource === "MANUAL"
+      : current.pnlSource !== "CALCULATED" && current.netPnl != null
         ? current.netPnl.toString()
         : null;
+
+  // Manual P&L (MD §3.3): a MANUAL trade must always carry its manual
+  // value. Enforced when the patch touches the source/value (a switch to
+  // MANUAL, or clearing the value) or when the patch closes the trade —
+  // the moments a P&L is (re)realized. Historical trades are NOT
+  // re-validated when unrelated fields are edited.
+  const becomesClosed = status === "CLOSED" && current.status !== "CLOSED";
+  if (
+    (patch.pnlSource !== undefined ||
+      patch.manualNetPnl !== undefined ||
+      becomesClosed) &&
+    pnlSource === "MANUAL" &&
+    manualNetPnl == null
+  ) {
+    throw new TradeValidationError("MANUAL_PNL_REQUIRED");
+  }
   const entryTime = patch.entryTime ? new Date(patch.entryTime) : current.entryTime;
   const exitTime =
     patch.exitTime !== undefined
@@ -1057,6 +1190,27 @@ export async function updateTrade(
 
   if (status === "CLOSED" && !exitPrice) {
     throw new TradeValidationError("EXIT_PRICE_REQUIRED");
+  }
+
+  // Directional TP/SL (MD §3.2) on the MERGED values — but only when the
+  // patch actually touches direction/entry/SL/TP. Trades already stored
+  // with a wrong-side level are preserved untouched (no migration, no
+  // re-validation of historical data when editing unrelated fields).
+  if (
+    patch.direction !== undefined ||
+    patch.entryPrice !== undefined ||
+    patch.stopLoss !== undefined ||
+    patch.takeProfit !== undefined
+  ) {
+    const mergedIssues = tradeLevelIssues(
+      direction,
+      entryPrice,
+      stopLoss,
+      takeProfit
+    );
+    if (mergedIssues.length > 0) {
+      throw new TradeValidationError(mergedIssues[0]);
+    }
   }
 
   // Ownership of any changed relation.
@@ -1230,6 +1384,8 @@ export async function updateTrade(
   await refreshTradeSearchText(current.id);
   // Phase 6 — re-run rule detection (risk / P&L / day may have changed).
   await evaluateTradeViolations(userId, current.id);
+  // Lot 10 — re-link nearby economic events (entry may have moved).
+  await autoLinkEventsForTrade(userId, current.id);
   return { trade, conflict };
 }
 
@@ -1254,6 +1410,23 @@ export async function closeTrade(
   const swap = input.swap ?? current.swap.toString();
   const fees = input.fees ?? current.fees.toString();
   const pnlSource = input.pnlSource ?? current.pnlSource;
+  // Manual P&L (MD §3.3): carry the stored manual/broker value through
+  // the close when no new value is supplied — closing used to reset it
+  // to the calculated P&L while the label stayed MANUAL. The stored
+  // netPnl IS the manual value for a MANUAL (or BROKER-synced) trade:
+  // there is no manualNetPnl column. A MANUAL close with neither a new
+  // nor a stored value is rejected instead of silently falling back to
+  // the calculation. A BROKER trade with no stored value keeps the
+  // historical calculated fallback (the broker sync supplies the real
+  // broker P&L afterwards); that case is out of scope for this lot.
+  const manualNetPnl =
+    input.manualNetPnl ??
+    (current.pnlSource !== "CALCULATED" && current.netPnl != null
+      ? current.netPnl.toString()
+      : null);
+  if (pnlSource === "MANUAL" && manualNetPnl == null) {
+    throw new TradeValidationError("MANUAL_PNL_REQUIRED");
+  }
 
   const balanceAtEntry = current.accountBalanceAtEntry
     ? new Decimal(current.accountBalanceAtEntry)
@@ -1280,7 +1453,7 @@ export async function closeTrade(
     fxRates,
     detectionSettings,
     pnlSource,
-    manualNetPnl: input.manualNetPnl ?? null,
+    manualNetPnl,
     entryTime: current.entryTime,
     balanceAtEntry,
   });
@@ -1329,6 +1502,8 @@ export async function closeTrade(
   // v2.5 Module 9 — drawdown / prop alerts (best effort: a failure here
   // must never fail the close; checkDrawdownAlerts never throws).
   await checkDrawdownAlerts(userId, current.accountId);
+  // Lot 10 — link nearby economic events (exit may have moved the window).
+  await autoLinkEventsForTrade(userId, current.id);
   return trade;
 }
 
@@ -1379,4 +1554,128 @@ export async function deleteTrade(userId: string, id: string): Promise<boolean> 
     });
   });
   return true;
+}
+
+
+// ── Structured post-trade review ──────────────────────────────────────────────
+
+export type TradeReviewInput = {
+  customAnswers?: Array<{ questionId: string; answer: string | number | boolean | null }>
+  playbookMatch?: "MATCHED" | "PARTIAL" | "OFF_PLAYBOOK" | null;
+  followedPlan?: boolean | null;
+  planAdherenceScore?: number | null;
+  executionQuality?: number | null;
+  entryQuality?: number | null;
+  exitQuality?: number | null;
+  riskManagementScore?: number | null;
+  emotionalControlScore?: number | null;
+  wouldTakeAgain?: "YES" | "NO" | "MAYBE" | null;
+  mainLesson?: string | null;
+  whatWentWell?: string | null;
+  whatToImprove?: string | null;
+  mistakeTagIds?: string[];
+};
+
+function parseCustomReviewAnswers(raw: string | null): Array<{ questionId: string; question: string; type: "SCALE" | "BOOLEAN" | "TEXT"; answer: string | number | boolean }> {
+  if (!raw) return [];
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (!Array.isArray(value)) return [];
+    return value.filter((item): item is { questionId: string; question: string; type: "SCALE" | "BOOLEAN" | "TEXT"; answer: string | number | boolean } => {
+      if (typeof item !== "object" || item === null) return false;
+      const entry = item as Record<string, unknown>;
+      return typeof entry.questionId === "string" && typeof entry.question === "string" && ["SCALE", "BOOLEAN", "TEXT"].includes(String(entry.type)) && (typeof entry.answer === "string" || typeof entry.answer === "number" || typeof entry.answer === "boolean");
+    });
+  } catch { return []; }
+}
+
+export async function saveTradeReview(
+  userId: string,
+  tradeId: string,
+  input: TradeReviewInput
+) {
+  const trade = await db.trade.findFirst({
+    where: { id: tradeId, userId },
+    select: { id: true },
+  });
+  if (!trade) return null;
+
+  const mistakeTagIds = await filterOwnTags(userId, input.mistakeTagIds ?? []);
+  const data = {
+    ...(input.playbookMatch !== undefined ? { playbookMatch: input.playbookMatch } : {}),
+    ...(input.followedPlan !== undefined ? { followedPlan: input.followedPlan } : {}),
+    ...(input.planAdherenceScore !== undefined ? { planAdherenceScore: input.planAdherenceScore } : {}),
+    ...(input.executionQuality !== undefined ? { executionQuality: input.executionQuality } : {}),
+    ...(input.entryQuality !== undefined ? { entryQuality: input.entryQuality } : {}),
+    ...(input.exitQuality !== undefined ? { exitQuality: input.exitQuality } : {}),
+    ...(input.riskManagementScore !== undefined ? { riskManagementScore: input.riskManagementScore } : {}),
+    ...(input.emotionalControlScore !== undefined ? { emotionalControlScore: input.emotionalControlScore } : {}),
+    ...(input.wouldTakeAgain !== undefined ? { wouldTakeAgain: input.wouldTakeAgain } : {}),
+    ...(input.mainLesson !== undefined ? { mainLesson: input.mainLesson } : {}),
+    ...(input.whatWentWell !== undefined ? { whatWentWell: input.whatWentWell } : {}),
+    ...(input.whatToImprove !== undefined ? { whatToImprove: input.whatToImprove } : {}),
+    ...(input.mistakeTagIds !== undefined ? { mistakeTagIds: JSON.stringify(mistakeTagIds) } : {}),
+  };
+
+  return db.$transaction(async (tx) => {
+    let customAnswersJson: string | undefined;
+    if (input.customAnswers !== undefined) {
+      const previous = await tx.tradeReview.findUnique({ where: { tradeId }, select: { customAnswers: true } });
+      const previousSnapshots = parseCustomReviewAnswers(previous?.customAnswers ?? null);
+      const requestedIds = input.customAnswers.map((answer) => answer.questionId);
+      const templates = requestedIds.length ? await tx.reviewQuestionTemplate.findMany({ where: { userId, id: { in: requestedIds }, isActive: true } }) : [];
+      if (templates.length !== new Set(requestedIds).size) throw new TradeValidationError("INVALID_REVIEW_QUESTION");
+      const submittedIds = new Set(requestedIds);
+      const snapshots = input.customAnswers.flatMap((entry) => {
+        const template = templates.find((item) => item.id === entry.questionId);
+        if (!template) throw new TradeValidationError("INVALID_REVIEW_QUESTION");
+        const previousSnapshot = previousSnapshots.find((snapshot) => snapshot.questionId === entry.questionId);
+        if (entry.answer === null) {
+          // A changed template must not erase an older answer merely because
+          // its previous value no longer matches the new answer control.
+          return previousSnapshot && (previousSnapshot.question !== template.question || previousSnapshot.type !== template.type)
+            ? [previousSnapshot]
+            : [];
+        }
+        const valid = template.type === "SCALE" ? typeof entry.answer === "number" && Number.isInteger(entry.answer) && entry.answer >= 1 && entry.answer <= 5 : template.type === "BOOLEAN" ? typeof entry.answer === "boolean" : template.type === "TEXT" && typeof entry.answer === "string" && entry.answer.trim().length > 0 && entry.answer.length <= 2000;
+        if (!valid) throw new TradeValidationError("INVALID_REVIEW_ANSWER");
+        // Keep the original question snapshot when the answer itself did not
+        // change. A new answer records the edited question wording/type.
+        if (previousSnapshot && Object.is(previousSnapshot.answer, entry.answer)) return [previousSnapshot];
+        return [{ questionId: template.id, question: template.question, type: template.type as "SCALE" | "BOOLEAN" | "TEXT", answer: entry.answer }];
+      });
+      const archivedSnapshots = previousSnapshots.filter((snapshot) => !submittedIds.has(snapshot.questionId));
+      customAnswersJson = JSON.stringify([...archivedSnapshots, ...snapshots]);
+    }
+    const review = await tx.tradeReview.upsert({
+      where: { tradeId },
+      create: {
+        tradeId,
+        userId,
+        playbookMatch: input.playbookMatch ?? null,
+        followedPlan: input.followedPlan ?? null,
+        planAdherenceScore: input.planAdherenceScore ?? null,
+        executionQuality: input.executionQuality ?? null,
+        entryQuality: input.entryQuality ?? null,
+        exitQuality: input.exitQuality ?? null,
+        riskManagementScore: input.riskManagementScore ?? null,
+        emotionalControlScore: input.emotionalControlScore ?? null,
+        wouldTakeAgain: input.wouldTakeAgain ?? null,
+        mainLesson: input.mainLesson ?? null,
+        whatWentWell: input.whatWentWell ?? null,
+        whatToImprove: input.whatToImprove ?? null,
+        mistakeTagIds: input.mistakeTagIds !== undefined ? JSON.stringify(mistakeTagIds) : null,
+        customAnswers: customAnswersJson ?? null,
+      },
+      update: { ...data, ...(customAnswersJson !== undefined ? { customAnswers: customAnswersJson } : {}) },
+    });
+    await tx.trade.update({
+      where: { id: tradeId },
+      data: {
+        reviewStatus: "REVIEWED",
+        ...(input.followedPlan !== undefined ? { followedPlan: input.followedPlan } : {}),
+      },
+    });
+    return review;
+  });
 }

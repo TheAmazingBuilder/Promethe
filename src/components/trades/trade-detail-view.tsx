@@ -16,6 +16,8 @@ import {
   Share2,
   Trash2,
   X,
+  Save,
+  Shapes,
   XCircle,
 } from "lucide-react";
 import {
@@ -40,6 +42,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
 import {
@@ -65,6 +68,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useSession } from "@/components/app/session-context";
+import { useReviewQuestions, useSaveTradeReview } from "@/hooks/use-trade-review";
+import type { TradeReviewInput } from "@/lib/validations/review";
 import { Money, Sensitive } from "@/components/privacy/money";
 import { PrivateImage } from "@/components/privacy/private-image";
 import { useFormat } from "@/lib/format/use-format";
@@ -92,6 +97,7 @@ const LazyReplayPlayer = dynamic(
   { ssr: false, loading: () => <Skeleton className="h-[640px] w-full" /> }
 );
 import { TradeViolationsSection } from "@/components/rules/trade-violations-section";
+import { TradeEventContextCard } from "@/components/economic-calendar/trade-event-context-card";
 import { GaiaLinkedNotesSection } from "@/components/gaia/gaia-linked-notes";
 import {
   gaiaErrorMessage,
@@ -99,6 +105,7 @@ import {
   useCreateGaiaNote,
 } from "@/components/gaia/gaia-shared";
 import { ExitPlanCompare } from "@/components/tools/exit-plan-compare";
+import { ScreenshotAnnotationEditor } from "@/components/trades/screenshot-annotation-editor";
 
 import {
   DirectionBadge,
@@ -119,6 +126,7 @@ import {
   useDeleteTrade,
   useInstruments,
   useTrade,
+  useUpdateScreenshot,
   useUpdateTrade,
   useUploadScreenshot,
 } from "@/hooks/use-trading";
@@ -166,10 +174,27 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
   const instruments = useInstruments();
   const updateTrade = useUpdateTrade();
   const setPlaybookMatch = useSetPlaybookMatch();
+  const saveTradeReview = useSaveTradeReview();
+  const reviewQuestions = useReviewQuestions();
+  const [reviewDraft, setReviewDraft] = React.useState<TradeReviewInput>({
+    followedPlan: null,
+    planAdherenceScore: null,
+    executionQuality: null,
+    entryQuality: null,
+    exitQuality: null,
+    riskManagementScore: null,
+    emotionalControlScore: null,
+    wouldTakeAgain: null,
+    mainLesson: "",
+    whatWentWell: "",
+    whatToImprove: "",
+    customAnswers: [],
+  });
   const deleteTrade = useDeleteTrade();
   const closeTrade = useCloseTrade();
   const uploadScreenshot = useUploadScreenshot();
   const deleteScreenshot = useDeleteScreenshot();
+  const updateScreenshot = useUpdateScreenshot();
   const createGaiaNote = useCreateGaiaNote();
 
   const [deleteOpen, setDeleteOpen] = React.useState(false);
@@ -186,6 +211,15 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
   const [useManual, setUseManual] = React.useState(false);
   const [manualPnl, setManualPnl] = React.useState("");
   const [uploading, setUploading] = React.useState(0);
+  const [editingScreenshot, setEditingScreenshot] = React.useState<string | null>(null);
+  const [annotationScreenshot, setAnnotationScreenshot] = React.useState<{
+    id: string;
+    url: string;
+    label: string | null;
+    caption: string | null;
+  } | null>(null);
+  const [screenshotLabel, setScreenshotLabel] = React.useState("none");
+  const [screenshotCaption, setScreenshotCaption] = React.useState("");
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -198,6 +232,51 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
   const isEstimate =
     trade != null && spec != null && spec.quoteCurrency !== trade.accountCurrency;
 
+  React.useEffect(() => {
+    if (!trade) return;
+    setReviewDraft({
+      followedPlan: trade.review?.followedPlan ?? trade.followedPlan ?? null,
+      planAdherenceScore: trade.review?.planAdherenceScore ?? null,
+      executionQuality: trade.review?.executionQuality ?? null,
+      entryQuality: trade.review?.entryQuality ?? null,
+      exitQuality: trade.review?.exitQuality ?? null,
+      riskManagementScore: trade.review?.riskManagementScore ?? null,
+      emotionalControlScore: trade.review?.emotionalControlScore ?? null,
+      wouldTakeAgain: (trade.review?.wouldTakeAgain as "YES" | "NO" | "MAYBE" | null) ?? null,
+      mainLesson: trade.review?.mainLesson ?? "",
+      whatWentWell: trade.review?.whatWentWell ?? "",
+      whatToImprove: trade.review?.whatToImprove ?? "",
+      customAnswers: trade.review?.customAnswers?.map(({ questionId, answer }) => ({ questionId, answer })) ?? [],
+    });
+  }, [trade]);
+
+  const setReviewField = <K extends keyof TradeReviewInput,>(
+    key: K,
+    value: TradeReviewInput[K],
+  ) => setReviewDraft((current) => ({ ...current, [key]: value }));
+
+  const setCustomReviewAnswer = (questionId: string, answer: string | number | boolean | null) => {
+    setReviewDraft((current) => ({ ...current, customAnswers: [ ...(current.customAnswers ?? []).filter((item) => item.questionId !== questionId), ...(answer === null || answer === "" ? [] : [{ questionId, answer }]) ] }));
+  };
+  const submitReview = () => {
+    if (!trade) return;
+    const customAnswers = (reviewQuestions.data ?? []).map((question) => {
+      const answer = reviewDraft.customAnswers?.find((item) => item.questionId === question.id)?.answer;
+      let normalizedAnswer: string | number | boolean | null = null;
+      if (question.type === "SCALE" && typeof answer === "number" && Number.isInteger(answer) && answer >= 1 && answer <= 5) normalizedAnswer = answer;
+      else if (question.type === "BOOLEAN" && typeof answer === "boolean") normalizedAnswer = answer;
+      else if (question.type === "TEXT" && typeof answer === "string" && answer.trim().length > 0) normalizedAnswer = answer;
+      return { questionId: question.id, answer: normalizedAnswer };
+    });
+    saveTradeReview.mutate(
+      { tradeId: trade.id, review: { ...reviewDraft, customAnswers } },
+      {
+        onSuccess: () => toast({ title: "Trade review saved" }),
+        onError: mutationErrorToast,
+      },
+    );
+  };
+
   // Reset the close form each time the dialog opens.
   React.useEffect(() => {
     if (!closeOpen || !trade) return;
@@ -209,7 +288,13 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
     setFees(trade.fees);
     setRate("");
     setUseManual(trade.pnlSource === "MANUAL");
-    setManualPnl("");
+    // Prefill the stored manual value (MD §3.3): for a MANUAL trade the
+    // stored netPnl IS the manual value (no separate column). The dialog
+    // used to reset this field to "" on every open, so closing lost the
+    // manual P&L while the label stayed MANUAL.
+    setManualPnl(
+      trade.pnlSource === "MANUAL" && trade.netPnl != null ? trade.netPnl : ""
+    );
   }, [closeOpen, trade]);
 
   const mutationErrorToast = (err: unknown) => {
@@ -251,6 +336,20 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
       });
       setUploading((n) => Math.max(0, n - 1));
     }
+  };
+
+  const openScreenshotEditor = (shot: { id: string; label: string | null; caption: string | null }) => {
+    setEditingScreenshot(shot.id);
+    setScreenshotLabel(shot.label ?? "none");
+    setScreenshotCaption(shot.caption ?? "");
+  };
+
+  const saveScreenshotDetails = () => {
+    if (!editingScreenshot) return;
+    updateScreenshot.mutate({ id: editingScreenshot, label: screenshotLabel === "none" ? null : screenshotLabel, caption: screenshotCaption.trim() || null }, {
+      onSuccess: () => { toast({ title: t("screensDetailsSaved") }); setEditingScreenshot(null); },
+      onError: mutationErrorToast,
+    });
   };
 
   const onFiles = (files: FileList | null) => {
@@ -802,6 +901,9 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
         </CardContent>
       </Card>
 
+      {/* ── Economic events around this trade (lot 10) ── */}
+      <TradeEventContextCard tradeId={tradeId} />
+
       {/* ── Executions ── */}
       <Card>
         <CardHeader>
@@ -884,6 +986,19 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
         </CardContent>
       </Card>
 
+      <Dialog open={editingScreenshot !== null} onOpenChange={(open) => { if (!open) setEditingScreenshot(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{t("screensEditDetails")}</DialogTitle><DialogDescription>{t("screensEditDescription")}</DialogDescription></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2"><Label>{t("screensLabel")}</Label><Select value={screenshotLabel} onValueChange={setScreenshotLabel}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>
+              <SelectItem value="none">{t("screensNoLabel")}</SelectItem>
+              <SelectItem value="BEFORE">{labels.screenshotLabel("BEFORE")}</SelectItem><SelectItem value="ENTRY">{labels.screenshotLabel("ENTRY")}</SelectItem><SelectItem value="EXIT">{labels.screenshotLabel("EXIT")}</SelectItem><SelectItem value="AFTER">{labels.screenshotLabel("AFTER")}</SelectItem>
+            </SelectContent></Select></div>
+            <div className="space-y-2"><Label htmlFor="screenshot-caption">{t("screensCaption")}</Label><Textarea id="screenshot-caption" value={screenshotCaption} onChange={(event) => setScreenshotCaption(event.target.value)} maxLength={500} placeholder={t("screensCaptionPlaceholder")} /><p className="text-xs text-muted-foreground text-right">{screenshotCaption.length}/500</p></div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setEditingScreenshot(null)}>{tCommon("cancel")}</Button><Button onClick={saveScreenshotDetails} disabled={updateScreenshot.isPending || screenshotCaption.length > 500}>{updateScreenshot.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{tCommon("save")}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* ── Screenshots ── */}
       <Card onPaste={onPasteScreens}>
         <CardHeader>
@@ -904,6 +1019,12 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
                   alt={shot.caption ?? shot.label ?? trade.symbol}
                   className="h-40 w-full bg-muted object-cover object-top"
                 />
+                <Button variant="ghost" size="icon" className="absolute right-[4.5rem] top-1.5 h-7 w-7 bg-background/80" aria-label={t("screensAnnotate")} onClick={() => setAnnotationScreenshot(shot)}>
+                  <Shapes className="h-4 w-4" aria-hidden="true" />
+                </Button>
+                <Button variant="ghost" size="icon" className="absolute right-10 top-1.5 h-7 w-7 bg-background/80" aria-label={t("screensEditDetails")} onClick={() => openScreenshotEditor(shot)}>
+                  <Pencil className="h-4 w-4" aria-hidden="true" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -961,6 +1082,70 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
             }}
           />
           <p className="text-xs text-muted-foreground">{t("screensFileHint")}</p>
+        </CardContent>
+      </Card>
+
+      <ScreenshotAnnotationEditor
+        screenshot={annotationScreenshot}
+        open={annotationScreenshot !== null}
+        onOpenChange={(open) => { if (!open) setAnnotationScreenshot(null); }}
+      />
+
+      {/* ── Structured post-trade review ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Post-trade review</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Rate the decisions and execution separately from the financial result. Leave any score unanswered when it does not apply.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <ReviewScoreField label="Plan adherence" value={reviewDraft.planAdherenceScore ?? null} onChange={(value) => setReviewField("planAdherenceScore", value)} />
+            <ReviewScoreField label="Execution quality" value={reviewDraft.executionQuality ?? null} onChange={(value) => setReviewField("executionQuality", value)} />
+            <ReviewScoreField label="Entry quality" value={reviewDraft.entryQuality ?? null} onChange={(value) => setReviewField("entryQuality", value)} />
+            <ReviewScoreField label="Exit quality" value={reviewDraft.exitQuality ?? null} onChange={(value) => setReviewField("exitQuality", value)} />
+            <ReviewScoreField label="Risk management" value={reviewDraft.riskManagementScore ?? null} onChange={(value) => setReviewField("riskManagementScore", value)} />
+            <ReviewScoreField label="Emotional control" value={reviewDraft.emotionalControlScore ?? null} onChange={(value) => setReviewField("emotionalControlScore", value)} />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <ReviewChoiceField
+              label="Did you follow your plan?"
+              value={reviewDraft.followedPlan == null ? "none" : reviewDraft.followedPlan ? "yes" : "no"}
+              options={[["none", "Not answered"], ["yes", "Yes"], ["no", "No"]]}
+              onChange={(value) => setReviewField("followedPlan", value === "none" ? null : value === "yes")}
+            />
+            <ReviewChoiceField
+              label="Would you take this trade again?"
+              value={reviewDraft.wouldTakeAgain ?? "none"}
+              options={[["none", "Not answered"], ["YES", "Yes"], ["NO", "No"], ["MAYBE", "Maybe"]]}
+              onChange={(value) => setReviewField("wouldTakeAgain", value === "none" ? null : value as "YES" | "NO" | "MAYBE")}
+            />
+          </div>
+          <div className="grid gap-3">
+            <ReviewTextField label="What went well?" value={reviewDraft.whatWentWell ?? ""} onChange={(value) => setReviewField("whatWentWell", value)} />
+            <ReviewTextField label="What would you improve?" value={reviewDraft.whatToImprove ?? ""} onChange={(value) => setReviewField("whatToImprove", value)} />
+            <ReviewTextField label="Main lesson" value={reviewDraft.mainLesson ?? ""} onChange={(value) => setReviewField("mainLesson", value)} />
+          </div>
+          {reviewQuestions.data && reviewQuestions.data.length > 0 && (
+            <div className="space-y-3 border-t pt-4">
+              <div><h3 className="text-sm font-semibold">Your review questions</h3><p className="text-xs text-muted-foreground">Personal prompts configured in Settings.</p></div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {reviewQuestions.data.map((question) => {
+                  const current = reviewDraft.customAnswers?.find((item) => item.questionId === question.id)?.answer;
+                  if (question.type === "SCALE") return <ReviewScoreField key={question.id} label={question.question} value={typeof current === "number" ? current : null} onChange={(value) => setCustomReviewAnswer(question.id, value)} />;
+                  if (question.type === "BOOLEAN") return <ReviewChoiceField key={question.id} label={question.question} value={typeof current === "boolean" ? (current ? "yes" : "no") : "none"} options={[["none", "Not answered"], ["yes", "Yes"], ["no", "No"]]} onChange={(value) => setCustomReviewAnswer(question.id, value === "none" ? null : value === "yes")} />;
+                  return <ReviewTextField key={question.id} label={question.question} value={typeof current === "string" ? current : ""} onChange={(value) => setCustomReviewAnswer(question.id, value)} />;
+                })}
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end">
+            <Button onClick={submitReview} disabled={saveTradeReview.isPending || reviewQuestions.isLoading}>
+              {saveTradeReview.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+              Save review
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -1041,6 +1226,20 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
               <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {t("checklistTitle")}
               </h4>
+              {/* Lot 11 (roadmap §14): evaluated against the checklist
+                  frozen at entry when a snapshot exists, the live list
+                  otherwise. */}
+              {trade.checklistStatus ? (
+                <p className="text-xs tabular-nums text-muted-foreground">
+                  {t("checklistStatus", {
+                    checked: trade.checklistStatus.requiredChecked,
+                    required: trade.checklistStatus.requiredTotal,
+                  })}
+                  {trade.checklistStatus.missing.length > 0
+                    ? ` - ${t("checklistMissing")}: ${trade.checklistStatus.missing.join(", ")}`
+                    : ""}
+                </p>
+              ) : null}
               {checklistEntries.some(([, checked]) => checked) ? (
                 <ul className="max-h-48 space-y-1 overflow-y-auto">
                   {checklistEntries.map(([id, checked]) => (
@@ -1090,12 +1289,11 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
         onCreateNote={handleCreateGaiaNote}
       />
 
-      {/* ── v3 Phase 5 — comment thread (owner + scoped mentors) ── */}
+      {/* ── Comment thread (owner-only notes on this trade) ── */}
       {session && (
         <CommentThread
           tradeId={trade.id}
           viewerId={session.user.id}
-          ownerView
         />
       )}
 
@@ -1308,6 +1506,76 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
 }
 
 // ── Local helpers ────────────────────────────────────────────────────────────
+
+function ReviewScoreField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number | null;
+  onChange: (value: number | null) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <Select value={value == null ? "none" : String(value)} onValueChange={(v) => onChange(v === "none" ? null : Number(v))}>
+        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">Not rated</SelectItem>
+          {[1, 2, 3, 4, 5].map((score) => <SelectItem key={score} value={String(score)}>{score} / 5</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function ReviewChoiceField({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: Array<[string, string]>;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {options.map(([option, title]) => <SelectItem key={option} value={option}>{title}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function ReviewTextField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        maxLength={4000}
+        rows={3}
+        className="flex min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+      />
+    </div>
+  );
+}
 
 /** KPI tile (dashboard-style bordered card, big tabular number). */
 function KpiCell({

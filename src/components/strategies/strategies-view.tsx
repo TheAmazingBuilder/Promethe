@@ -18,6 +18,7 @@ import {
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   Card,
   CardAction,
@@ -431,6 +432,21 @@ function StrategyEditor({
               {t("checklist.add")}
             </Button>
           </div>
+          {editing ? (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground" htmlFor="strategy-change-note">
+                {t("changeNote")}
+              </label>
+              <Input
+                id="strategy-change-note"
+                value={form.changeNote ?? ""}
+                onChange={(e) => set("changeNote", e.target.value || undefined)}
+                placeholder={t("changeNotePlaceholder")}
+                maxLength={280}
+              />
+              <p className="text-[11px] text-muted-foreground">{t("changeNoteHint")}</p>
+            </div>
+          ) : null}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -670,13 +686,22 @@ export function StrategiesView() {
         </div>
       ) : strategies.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
-            <p className="font-semibold">{t("emptyTitle")}</p>
-            <p className="max-w-md text-sm text-muted-foreground">{t("emptyDesc")}</p>
-            <Button size="sm" onClick={onNew}>
-              <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
-              {t("newStrategy")}
-            </Button>
+          <CardContent className="p-8">
+            <EmptyState
+              className="py-0"
+              title={<p className="font-semibold">{t("emptyTitle")}</p>}
+              description={
+                <p className="max-w-md text-sm text-muted-foreground">
+                  {t("emptyDesc")}
+                </p>
+              }
+              actions={
+                <Button size="sm" onClick={onNew}>
+                  <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
+                  {t("newStrategy")}
+                </Button>
+              }
+            />
           </CardContent>
         </Card>
       ) : (

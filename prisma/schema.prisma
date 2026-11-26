@@ -1,10 +1,10 @@
-// TradeJournal — Prisma schema (SQLite in sandbox / designed for Postgres parity)
+// Promethe — Prisma schema for PostgreSQL / Supabase.
 // Conventions:
 //  - snake_case DB columns via @map, camelCase in TS
 //  - Decimal for ALL money / price / lots / pip values (never floats)
-//  - SQLite has no enums: status-like columns are String, validated by Zod at the edge
+//  - Status-like columns are String, validated by Zod at the edge
 //  - Lists (timeframes, sessions, checklist results) are JSON-encoded strings
-//    (SQLite has no scalar lists / native JSON type in this Prisma version)
+//    for predictable PostgreSQL compatibility.
 
 generator client {
   provider = "prisma-client-js"
@@ -39,14 +39,17 @@ model User {
   trades           Trade[]
   tags             Tag[]
   screenshots      TradeScreenshot[]
-  journalEntries   JournalEntry[]
-  tradingRules     TradingRule[]
+  journalEntries       JournalEntry[]
+  journalPeriodReviews JournalPeriodReview[]
+  journalTemplates     JournalTemplate[]
+  tradingRules         TradingRule[]
   goals            Goal[]
   savedViews       SavedView[]
 
   // ── v2 ──
   templates               TradeTemplate[]
   pushSubscriptions       PushSubscription[]
+  pushOutbox              PushOutbox[]
   reminderSettings        ReminderSetting[]
   notificationLogs        NotificationLog[]
   offlineSyncLogs         OfflineSyncLog[]
@@ -63,6 +66,7 @@ model User {
   propChallenges          PropChallenge[]
   propPayouts             PropPayout[]
   propExpenses            PropExpense[]
+  propFinanceAudits       PropFinanceAudit[]
 
   // ── v3 ──
   brokerConnections        BrokerConnection[]
@@ -75,9 +79,6 @@ model User {
   reconciliationCandidates ReconciliationCandidate[]
   tradeMergeLogs           TradeMergeLog[]
   shareLinks               ShareLink[]
-  mentorInvitationsSent    MentorInvitation[]        @relation("InvitationOwner")
-  mentorAccessesGranted    MentorAccess[]            @relation("MentorAccessOwner")
-  mentorAccessesReceived   MentorAccess[]            @relation("MentorAccessMentor")
   tradeCommentsAuthored    TradeComment[]            @relation("CommentAuthor")
   consentRecords           ConsentRecord[]
   accountDeletionRequest   AccountDeletionRequest?
@@ -132,7 +133,7 @@ model User {
   @@map("users")
 }
 
-/// Server-side session store; the httpOnly cookie only holds the opaque session id.
+/// Server-side session store; id is a versioned SHA-256 digest of the opaque cookie token.
 model AuthSession {
   id        String   @id
   userId    String   @map("user_id")
@@ -157,11 +158,6 @@ model Profile {
   /// v2 — quick-entry smart defaults (JSON): lastAccountId, lastInstrumentId,
   /// lastTimeframe, rememberedLots {symbol: lots}, favoriteInstrumentIds []
   preferencesJson   String   @default("{}") @map("preferences_json")
-  /// v3 — mentoring/mention handle: unique, lowercase, [a-z0-9_], 3-24 chars.
-  /// Required before inviting mentors or being mentioned.
-  handle            String?  @unique
-  /// v3 — name shown to mentors/share viewers (falls back to displayName)
-  publicDisplayName String?  @map("public_display_name")
   createdAt         DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [id], references: [id], onDelete: Cascade)
@@ -218,6 +214,7 @@ model Account {
   equitySnapshots          AccountEquitySnapshot[]
   importBatches            ImportBatch[]
   reconciliationCandidates ReconciliationCandidate[]
+  weeklyPlanActions        WeeklyPlanAction[]
 
   @@index([userId])
   @@map("accounts")
@@ -429,7 +426,7 @@ model StrategyChecklistItem {
 }
 
 /// Immutable snapshot of a strategy at version N (addendum §11.3).
-/// Snapshots are JSON strings (SQLite parity), never mutated after creation.
+/// Snapshots are JSON strings, never mutated after creation.
 /// origin MANUAL = saved by hand from the versions dialog; AUTO = frozen by
 /// the server before a definition edit (Euforia §17). AUTO snapshots are
 /// never deletable.
@@ -601,7 +598,7 @@ model Trade {
   /// by a dynamic Zod schema on every write (Module 4 §4.7).
   customFields String?  @map("custom_fields")
   /// Accent-folded lowercase concat of searchable text fields, maintained on
-  /// every write — the SQLite-friendly equivalent of a tsvector column
+  /// every write — the application-maintained equivalent of a tsvector column
   /// (Postgres upgrade path: pg_trgm GIN index, documented in README).
   searchText  String?  @map("search_text")
 
@@ -639,6 +636,8 @@ model Trade {
   @@index([userId, setupId])
   @@index([userId, instrumentId])
   @@index([userId, status])
+  @@index([userId, status, exitTime])
+  @@index([userId, status, entryTime])
   @@index([userId, isDraft])
   @@index([userId, reviewStatus])
   @@index([userId, grade])
@@ -731,11 +730,21 @@ model JournalEntry {
   date             String
   preMarketPlan    String?  @map("pre_market_plan") // markdown
   postMarketReview String?  @map("post_market_review") // markdown
-  mood             Int? // 1-5
-  sleepQuality     Int?     @map("sleep_quality") // 1-5
-  disciplineScore  Int?     @map("discipline_score") // 1-5
-  keyLesson        String?  @map("key_lesson")
-  marketBias       String?  @map("market_bias")
+  // Structured daily preparation (nullable for backwards compatibility).
+  keyLevels              String?  @map("key_levels")
+  primaryScenario        String?  @map("primary_scenario")
+  alternateScenario      String?  @map("alternate_scenario")
+  invalidationConditions String?  @map("invalidation_conditions")
+  maxRiskPercent         String?  @map("max_risk_percent")
+  mood                   Int? // 1-5
+  sleepQuality           Int?     @map("sleep_quality") // 1-5
+  disciplineScore        Int?     @map("discipline_score") // 1-5
+  stressLevel            Int?     @map("stress_level") // 1-5
+  energyLevel            Int?     @map("energy_level") // 1-5
+  focusLevel             Int?     @map("focus_level") // 1-5
+  keyLesson              String?  @map("key_lesson")
+  marketBias             String?  @map("market_bias")
+  nextSessionCommitment  String?  @map("next_session_commitment")
   // ── v2.5 Module 4 — soft delete (trash) + global search ──
   deletedAt  DateTime? @map("deleted_at")
   deletedBy  String?   @map("deleted_by")
@@ -748,6 +757,51 @@ model JournalEntry {
   @@unique([userId, date])
   @@index([userId])
   @@map("journal_entries")
+}
+
+/// Qualitative weekly/monthly Journal reflection. Quantitative reports stay in Analytics.
+model JournalPeriodReview {
+  id                    String   @id @default(cuid())
+  userId                String   @map("user_id")
+  periodType            String   @map("period_type") // WEEKLY | MONTHLY
+  periodStart           String   @map("period_start") // YYYY-MM-DD
+  periodEnd             String   @map("period_end") // YYYY-MM-DD
+  whatWentWell          String?  @map("what_went_well")
+  whatToImprove         String?  @map("what_to_improve")
+  keyLesson             String?  @map("key_lesson")
+  nextCommitment        String?  @map("next_commitment")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, periodType, periodStart])
+  @@index([userId, periodType])
+  @@map("journal_period_reviews")
+}
+
+/// Reusable daily preparation presets. Trade templates remain in TradeTemplate.
+model JournalTemplate {
+  id                     String   @id @default(cuid())
+  userId                 String   @map("user_id")
+  name                   String
+  description            String?
+  marketBias             String?  @map("market_bias")
+  preMarketPlan          String?  @map("pre_market_plan")
+  keyLevels              String?  @map("key_levels")
+  primaryScenario        String?  @map("primary_scenario")
+  alternateScenario      String?  @map("alternate_scenario")
+  invalidationConditions String?  @map("invalidation_conditions")
+  maxRiskPercent         String?  @map("max_risk_percent")
+  isDefault              Boolean  @default(false) @map("is_default")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId, isDefault])
+  @@map("journal_templates")
 }
 
 /// Personal trading rules (max trades/day, max daily loss, …) — phase 6 violation detection.
@@ -861,9 +915,44 @@ model PushSubscription {
   lastSeenAt DateTime @default(now()) @map("last_seen_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pushOutbox PushOutbox[]
 
   @@index([userId])
   @@map("push_subscriptions")
+}
+
+/// Durable Web Push delivery queue (mirrors the integrations outbox in
+/// shape: claim, retry with backoff, DEAD after N attempts). One row per
+/// (alert instance, device): dedupeKey is the in-app notification row id,
+/// unique per subscription, so a re-enqueue of the same alert is a no-op
+/// while a later alert instance always gets a fresh row.
+model PushOutbox {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  subscriptionId String   @map("subscription_id")
+  /// SYNC_STALE | SYNC_MISMATCH | ECONOMIC_EVENT_SOON | DELETION_SCHEDULED | DELETION_CANCELLED | TEST
+  type           String
+  title          String
+  body           String
+  url            String?
+  /// In-app notification row id (the alert instance).
+  dedupeKey      String   @map("dedupe_key")
+  /// PENDING | PROCESSING | SENT | FAILED | DEAD
+  status         String   @default("PENDING")
+  attempts       Int      @default(0)
+  nextAttemptAt  DateTime @default(now()) @map("next_attempt_at")
+  lastError      String?  @map("last_error")
+  sentAt         DateTime? @map("sent_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription PushSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, dedupeKey])
+  @@index([status, nextAttemptAt])
+  @@index([userId, createdAt])
+  @@map("push_outbox")
 }
 
 /// Per-type reminder settings, evaluated in the USER's timezone (v2 §4.3).
@@ -902,6 +991,10 @@ model NotificationLog {
   title     String
   body      String
   url       String?
+  /// Optional dedupe key segment (lot 9): distinguishes alerts that share
+  /// (type, url), e.g. one broker connection per SYNC_STALE alert. Null
+  /// means "no extra segment" and matches only other null keys.
+  dedupeKey String?   @map("dedupe_key")
   sentAt    DateTime  @default(now()) @map("sent_at")
   readAt    DateTime? @map("read_at")
   /// SENT | FAILED | SKIPPED
@@ -933,7 +1026,7 @@ model OfflineSyncLog {
 
 // ── 4.4 Guided trade review ─────────────────────────────────────────────────
 
-/// Structured post-trade review — one per trade. Exists ⇒ Trade.reviewStatus = REVIEWED.
+/// Structured post-trade review — one per trade. A row may also hold only a Playbook match; reviewStatus tracks completion of the structured workflow.
 model TradeReview {
   id                    String   @id @default(cuid())
   tradeId               String   @unique @map("trade_id")
@@ -958,6 +1051,8 @@ model TradeReview {
   whatToImprove         String?  @map("what_to_improve")
   /// JSON string[] of tag ids (mistake tags)
   mistakeTagIds         String?  @map("mistake_tag_ids")
+  /// JSON snapshots of custom review answers.
+  customAnswers         String?  @map("custom_answers")
   reviewedAt            DateTime @default(now()) @map("reviewed_at")
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
@@ -1069,14 +1164,15 @@ model MonteCarloRun {
 model EconomicEvent {
   id          String   @id @default(cuid())
   userId      String?  @map("user_id")
-  /// MANUAL | CSV | PROVIDER
+  /// FRED | FOREXFACTORY | MANUAL
   source      String   @default("MANUAL")
   externalId  String?  @map("external_id")
   title       String
   currency    String // USD | EUR | GBP | …
   country     String?
-  /// LOW | MEDIUM | HIGH
-  impact      String
+  /// LOW | MEDIUM | HIGH — null when the source rates nothing (FRED has no
+  /// impact rating, and an unknown ForexFactory value maps to null).
+  impact      String?
   /// NFP | CPI | FOMC | PPI | GDP | PMI | RETAIL_SALES | RATE_DECISION | SPEECH | OTHER
   category    String
   scheduledAt DateTime @map("scheduled_at") // UTC
@@ -1084,7 +1180,15 @@ model EconomicEvent {
   forecast    String?
   previous    String?
   unit        String?
+  /// Cross-source merge key (lot 10): slug(title) | UTC date | currency.
+  /// One row per real-world event; manual rows are never touched by sync.
+  dedupeKey   String?  @unique @map("dedupe_key")
+  /// Per-source last update, JSON: { FRED: { updatedAt, externalId }, ... }.
+  sourceMeta  String?  @map("source_meta")
+  /// Last sync that touched this row (any source).
+  sourceUpdatedAt DateTime? @map("source_updated_at")
   createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   user  User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
   links TradeEventLink[]
@@ -1125,12 +1229,32 @@ model EventWatchlist {
   categories String   @default("[]")
   /// LOW | MEDIUM | HIGH — minimum impact shown
   minImpact  String   @default("MEDIUM") @map("min_impact")
+  /// Pre-event in-app alerts (lot 10): on/off + how many minutes before.
+  alertsEnabled     Boolean @default(true) @map("alerts_enabled")
+  alertMinutesBefore Int    @default(60) @map("alert_minutes_before")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("event_watchlists")
+}
+
+/// Per-source sync health for the economic calendar (lot 10, roadmap §12).
+/// One row per provider source (FRED, FOREXFACTORY). MANUAL needs no sync
+/// row: a manual event is local data, always available. Status is written
+/// by the sync itself: OK (last run succeeded), STALE (no success for over
+/// 24 h), DOWN (last run failed), NOT_CONFIGURED (FRED without a key).
+model EconomicCalendarSyncState {
+  id         String    @id @default(cuid())
+  source     String    @unique // FRED | FOREXFACTORY
+  status     String // OK | STALE | DOWN | NOT_CONFIGURED
+  lastSyncAt DateTime? @map("last_sync_at")
+  lastError  String?   @map("last_error")
+  eventCount Int       @default(0) @map("event_count")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  @@map("economic_calendar_sync_states")
 }
 
 // ── 4.11 Volatility & market regime context ─────────────────────────────────
@@ -1231,6 +1355,12 @@ model PropChallenge {
   notes         String?
   /// JSON copy of the rule set at purchase — later edits never rewrite history
   rulesSnapshot String    @map("rules_snapshot")
+  /// Frozen timezone and daily reset time at purchase (Lot 5) — the firm
+  /// day boundary of a challenge in progress must never move when the
+  /// reusable rule set is edited later. Null on legacy rows: the server
+  /// falls back to the linked rule set, then UTC / "00:00".
+  ruleTimezone      String? @map("rule_timezone")
+  ruleResetTimeLocal String? @map("rule_reset_time_local")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
@@ -1240,6 +1370,7 @@ model PropChallenge {
   phaseResults PropChallengePhaseResult[]
   payouts      PropPayout[]
   expenses     PropExpense[]
+  financeAudits PropFinanceAudit[]
   alertStates  PropAlertState[]
 
   @@index([userId])
@@ -1284,6 +1415,12 @@ model PropPayout {
   /// REQUESTED | RECEIVED | REJECTED
   status             String    @default("REQUESTED")
   note               String?
+  /// §13: audit trail. createdAt/updatedAt track the record itself;
+  /// deletedAt marks a logical delete - the row stays for the audit trail
+  /// and totals always read live (non-deleted) rows only.
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
 
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   challenge PropChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
@@ -1304,6 +1441,10 @@ model PropExpense {
   currency    String   @default("USD")
   date        DateTime @default(now())
   note        String?
+  /// §13: audit trail (see PropPayout).
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
 
   user      User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
   challenge PropChallenge? @relation(fields: [challengeId], references: [id], onDelete: SetNull)
@@ -1311,6 +1452,34 @@ model PropExpense {
   @@index([userId])
   @@index([challengeId])
   @@map("prop_expenses")
+}
+
+/// Audit trail of prop-firm financial movements (§13). Permanent: unlike
+/// ChangeLog (pruned after 30 days), a money movement must stay traceable
+/// for as long as its challenge exists. Rows cascade with the challenge;
+/// snapshots are plain JSON of the movement at the time of the change.
+model PropFinanceAudit {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  /// Null for expenses recorded without a challenge (legacy rows).
+  challengeId String?  @map("challenge_id")
+  /// PAYOUT | EXPENSE
+  kind        String
+  movementId  String   @map("movement_id")
+  /// CREATED | UPDATED | DELETED | RESTORED
+  action      String
+  /// JSON snapshot of the movement before the change (null for CREATE).
+  beforeJson  String?  @map("before_json")
+  /// JSON snapshot of the movement after the change (null for DELETE).
+  afterJson   String?  @map("after_json")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge PropChallenge? @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@index([userId, challengeId, createdAt])
+  @@index([challengeId, createdAt])
+  @@map("prop_finance_audits")
 }
 
 /// Alert dedupe state — the same alert is never sent twice per day/type (v2 §4.12).
@@ -1381,8 +1550,16 @@ model SyncEventLog {
   type         String
   receivedAt   DateTime  @default(now()) @map("received_at")
   processedAt  DateTime? @map("processed_at")
-  /// PROCESSED | DUPLICATE | REJECTED | FAILED
+  /// PROCESSING | PROCESSED | REJECTED | FAILED (see src/lib/sync/process.ts
+  /// state machine; DUPLICATE is a response, never a stored status)
   status       String
+  /// Lease: the PROCESSING reservation expires at this time. A PROCESSING row
+  /// past its lease is abandoned (crash) and may be reclaimed. Null on
+  /// terminal rows (PROCESSED / REJECTED) and on retryable FAILED rows.
+  leaseExpiresAt DateTime? @map("lease_expires_at")
+  /// Attempts to process this event (claims). Bounded by
+  /// SYNC_EVENT_MAX_ATTEMPTS; exhausted retries become REJECTED.
+  attempts       Int       @default(0)
   errorCode    String?   @map("error_code")
   payloadJson  String?   @map("payload_json")
 
@@ -1461,7 +1638,8 @@ model ToolScenario {
   id        String   @id @default(cuid())
   userId    String   @map("user_id")
   name      String
-  /// MULTI_TP | MARGIN | RISK_REWARD
+  /// MULTI_TP | MARGIN | RISK_REWARD | POSITION_SIZE | PNL_SIMULATOR
+  /// (plain String, not an enum: adding a kind needs no migration.)
   kind      String
   /// JSON: calculator inputs (payload shape depends on kind).
   payloadJson String @map("payload_json")
@@ -1687,79 +1865,7 @@ model ShareLink {
   @@map("share_links")
 }
 
-/// Single-use mentor invitation (email must match the invitee's account).
-model MentorInvitation {
-  id              String   @id @default(cuid())
-  ownerId         String   @map("owner_id")
-  inviteeEmail    String   @map("invitee_email")
-  tokenHash       String   @unique @map("token_hash")
-  /// JSON: MentorAccess scope fields (accountScope, strategyScope, flags…)
-  permissionsJson String   @map("permissions_json")
-  /// PENDING | ACCEPTED | DECLINED | EXPIRED | REVOKED
-  status          String   @default("PENDING")
-  expiresAt       DateTime @map("expires_at")
-  createdAt       DateTime @default(now()) @map("created_at")
-
-  owner User @relation("InvitationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-
-  @@index([ownerId])
-  @@index([inviteeEmail])
-  @@map("mentor_invitations")
-}
-
-/// Granted mentor access — scope editable, pausable, revocable at any time
-/// with immediate effect.
-model MentorAccess {
-  id                 String    @id @default(cuid())
-  ownerId            String    @map("owner_id")
-  mentorId           String    @map("mentor_id")
-  /// ACTIVE | PAUSED | REVOKED
-  status             String    @default("ACTIVE")
-  /// ALL | LIST
-  accountScope       String    @default("ALL") @map("account_scope")
-  /// JSON string[] — meaningful when accountScope = LIST
-  accountIdsJson     String    @default("[]") @map("account_ids_json")
-  /// ALL | LIST
-  strategyScope      String    @default("ALL") @map("strategy_scope")
-  strategyIdsJson    String    @default("[]") @map("strategy_ids_json")
-  canViewAmounts     Boolean   @default(true) @map("can_view_amounts")
-  canViewJournal     Boolean   @default(false) @map("can_view_journal")
-  canViewScreenshots Boolean   @default(false) @map("can_view_screenshots")
-  canViewAnalytics   Boolean   @default(true) @map("can_view_analytics")
-  canComment         Boolean   @default(false) @map("can_comment")
-  expiresAt          DateTime? @map("expires_at")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  revokedAt          DateTime? @map("revoked_at")
-  lastViewedAt       DateTime? @map("last_viewed_at")
-
-  owner  User @relation("MentorAccessOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  mentor User @relation("MentorAccessMentor", fields: [mentorId], references: [id], onDelete: Cascade)
-
-  @@unique([ownerId, mentorId])
-  @@index([mentorId])
-  @@index([ownerId, status])
-  @@map("mentor_accesses")
-}
-
-/// Aggregated per-day view counts — privacy transparency for the owner.
-model MentorAccessLog {
-  id           String  @id @default(cuid())
-  ownerId      String  @map("owner_id")
-  mentorId     String  @map("mentor_id")
-  /// TRADES | TRADE_DETAIL | JOURNAL | ANALYTICS | ACCOUNTS
-  resourceType String  @map("resource_type")
-  resourceId   String? @map("resource_id")
-  /// YYYY-MM-DD (UTC)
-  day          String
-  viewCount    Int     @default(0) @map("view_count")
-
-  @@unique([ownerId, mentorId, resourceType, resourceId, day])
-  @@index([ownerId])
-  @@index([mentorId])
-  @@map("mentor_access_logs")
-}
-
-/// Comment thread on a trade (owner + mentors with canComment).
+/// Comment thread on a trade - owner-only notes on their own trades.
 model TradeComment {
   id        String    @id @default(cuid())
   tradeId   String    @map("trade_id")
@@ -1781,27 +1887,6 @@ model TradeComment {
   @@index([ownerId])
   @@index([authorId])
   @@map("trade_comments")
-}
-
-/// Mention rows — only users who currently have access to that trade.
-model CommentMention {
-  commentId       String @map("comment_id")
-  mentionedUserId String @map("mentioned_user_id")
-
-  @@id([commentId, mentionedUserId])
-  @@index([mentionedUserId])
-  @@map("comment_mentions")
-}
-
-/// Unread tracking per user per trade.
-model CommentReadState {
-  userId     String   @map("user_id")
-  tradeId    String   @map("trade_id")
-  lastReadAt DateTime @map("last_read_at")
-
-  @@id([userId, tradeId])
-  @@index([userId])
-  @@map("comment_read_states")
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1834,7 +1919,7 @@ model AccountDeletionRequest {
   userId       String    @unique @map("user_id")
   requestedAt  DateTime  @default(now()) @map("requested_at")
   scheduledFor DateTime  @map("scheduled_for")
-  /// PENDING | CANCELLED | COMPLETED
+  /// PENDING | PROCESSING (completedAt is the lease timestamp) | CANCELLED | COMPLETED
   status       String    @default("PENDING")
   completedAt  DateTime? @map("completed_at")
 
@@ -1868,7 +1953,7 @@ model DataExportLog {
   @@map("data_export_logs")
 }
 
-/// Postgres/SQLite-backed fixed-window rate limiter (no Redis on free tier).
+/// PostgreSQL-backed fixed-window rate limiter (no Redis on free tier).
 /// Keys are already hashed (token / HMAC-of-IP) — no raw identifiers stored.
 model RateLimitBucket {
   key         String   @id
@@ -1923,6 +2008,11 @@ model DashboardWidget {
   periodOverride  String?  @map("period_override")
   /// Account id filter override; null = inherit the global filter.
   accountOverride String?  @map("account_override")
+  /// Optimistic-concurrency version (lot 12, roadmap §16): every widget
+  /// PATCH must send the version it last saw; a stale version is rejected
+  /// with 409 STALE_LAYOUT so an old save can never overwrite a newer
+  /// layout. Starts at 0, incremented on every successful PATCH.
+  version         Int      @default(0)
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
@@ -2286,6 +2376,11 @@ model Note {
   blocks       String    @default("[]")
   lastViewedAt DateTime? @map("last_viewed_at")
   deletedAt    DateTime? @map("deleted_at")
+  /// v2 - offline idempotency (§25.5): dedupe key for offline note creates,
+  /// mirroring Trade.clientMutationId. Replay of the same key returns the
+  /// stored note instead of creating a duplicate. The key is scoped per
+  /// user (composite unique): the same key may exist for another user.
+  clientMutationId String? @map("client_mutation_id")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
@@ -2295,6 +2390,7 @@ model Note {
 
   @@index([userId])
   @@index([userId, folderId])
+  @@unique([userId, clientMutationId])
   @@map("gaia_notes")
 }
 
@@ -2456,6 +2552,9 @@ model TradeAnomaly {
 model WeeklyPlanAction {
   id        String   @id @default(cuid())
   userId    String   @map("user_id")
+  accountId String?  @map("account_id")
+  /// "__all__" for the global plan, otherwise the selected account ID.
+  scopeKey  String   @default("__all__") @map("scope_key")
   /// Monday of the week, UTC midnight.
   weekStart DateTime @map("week_start")
   /// Stable rule key from the engine (worst-session, worst-hour, ...).
@@ -2469,10 +2568,11 @@ model WeeklyPlanAction {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account Account? @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, weekStart, rule])
-  @@index([userId, weekStart])
+  @@unique([userId, weekStart, scopeKey, rule])
+  @@index([userId, weekStart, scopeKey])
   @@map("weekly_plan_actions")
 }
 

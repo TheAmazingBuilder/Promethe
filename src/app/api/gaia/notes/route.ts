@@ -37,7 +37,9 @@ export async function POST(req: Request) {
     const session = await requireUser();
     const body = await req.json().catch(() => null);
     const result = await createNote(session.user.id, body);
-    return NextResponse.json(result, { status: 201 });
+    // Offline idempotency (§25.5): a replayed create returns the stored
+    // note with 200 instead of creating a duplicate (201).
+    return NextResponse.json(result, { status: result.deduplicated ? 200 : 201 });
   } catch (error) {
     return gaiaErrorResponse(error) ?? apiError(error, "gaia/notes");
   }

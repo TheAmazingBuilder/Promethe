@@ -1,21 +1,33 @@
 /**
- * PROP challenge status (v1 phase 5) — powers the breach-risk widget.
+ * PROP challenge status (v1 phase 5, Lot 5 engine) — powers the breach-risk widget.
  *
- * Equity basis (documented): CLOSED non-draft trades of the ONE account,
- * summed in the account currency — the same convention as the equity curve,
- * restricted to a single account so multi-currency aggregation never mixes.
+ * Source of truth, in order:
+ * 1. When the account has a challenge in progress, the Lot 5 engine
+ *    evaluates that challenge's frozen phase rule (its own timezone and
+ *    reset time, cash-flow-adjusted equity, static/trailing drawdown).
+ *    The widget then shows the challenge's real limits.
+ * 2. Historical accounts without any challenge keep the legacy behaviour:
+ *    the old Account PROP fields (maxDailyLossPercent, ...) with the
+ *    user's timezone for the current day. That path is unchanged.
+ *
+ * Legacy equity basis (documented): CLOSED non-draft trades of the ONE
+ * account, summed in the account currency — the same convention as the
+ * equity curve, restricted to a single account so multi-currency
+ * aggregation never mixes.
  *  - currentEquity = initialBalance + Σ netPnl (closed since startDate).
  *  - peakEquity    = running high-water mark over the same series.
  *  - todayPnl      = Σ netPnl of trades closed during the current LOCAL day.
  * Cash transactions are ignored on PROP challenges (deposits/withdrawals are
- * not part of a firm evaluation).
+ * not part of a firm evaluation) - the engine excludes them from P&L and
+ * drawdown while still reporting the real balance.
  */
-import type { Prisma } from "@prisma/client";
+import type { Account, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { toD } from "@/lib/trading/dec";
 import { computePropStatus, localDateInTz } from "@/lib/analytics/calendar";
 import type { PropStatusPayload } from "@/lib/trading/dto";
 import { toAccountDTO } from "@/server/reference";
+import { getPropChallengeEvaluation } from "@/server/prop-evaluation";
 
 const TRADE_SELECT = {
   exitTime: true,
@@ -23,6 +35,47 @@ const TRADE_SELECT = {
 } as const;
 
 type TradeRow = Prisma.TradeGetPayload<{ select: typeof TRADE_SELECT }>;
+
+function mapDrawdownType(
+  ruleType: string,
+): "STATIC" | "TRAILING" {
+  return ruleType === "TRAILING" || ruleType === "EQUITY_BASED"
+    ? "TRAILING"
+    : "STATIC";
+}
+
+async function getChallengeStatus(
+  userId: string,
+  account: Account,
+): Promise<PropStatusPayload | null> {
+  const challenge = await db.propChallenge.findFirst({
+    where: { userId, accountId: account.id, status: "IN_PROGRESS" },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true },
+  });
+  if (!challenge) return null;
+  const evaluation = await getPropChallengeEvaluation(userId, challenge.id);
+  if (!evaluation) return null;
+
+  const targetPercent = toD(evaluation.rule.profitTargetPercent ?? "0");
+  const targetAmount = targetPercent.gt(0)
+    ? targetPercent
+        .div(100)
+        .times(evaluation.phaseStartingBalance)
+        .toString()
+    : null;
+  const status = computePropStatus({
+    initialBalance: evaluation.phaseStartingBalance,
+    currentEquity: evaluation.currentEquity,
+    peakEquity: evaluation.peakEquity,
+    todayPnl: evaluation.todayPnl,
+    maxDailyLossPercent: evaluation.rule.maxDailyLossPercent,
+    maxTotalDrawdownPercent: evaluation.rule.maxTotalDrawdownPercent,
+    profitTarget: targetAmount,
+    drawdownType: mapDrawdownType(evaluation.rule.drawdownType),
+  });
+  return { account: toAccountDTO(account), status };
+}
 
 export async function getPropStatus(
   userId: string,
@@ -43,6 +96,11 @@ export async function getPropStatus(
 
   const timezone = profile?.timezone ?? "UTC";
 
+  // Lot 5: a challenge in progress owns the status of its account.
+  const challengeStatus = await getChallengeStatus(userId, account);
+  if (challengeStatus) return challengeStatus;
+
+  // Legacy fallback: old Account PROP fields, unchanged behaviour.
   const where: Prisma.TradeWhereInput = {
     userId,
     accountId: account.id,

@@ -25,6 +25,10 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { calcMultiTp } from "@/lib/tools/multi-tp";
 import { resolveConversionRate } from "@/lib/tools/fx";
 import {
+  parseMultiTpScenario,
+  type RiskMode,
+} from "@/lib/tools/scenario-payloads";
+import {
   isToolsTablesMissing,
   useCreateToolScenario,
   useDeleteToolScenario,
@@ -47,12 +51,16 @@ interface ShareState {
   symbol?: string;
   balance?: string;
   currency?: string;
+  riskMode?: RiskMode;
   riskPercent?: string;
   riskAmount?: string;
   direction?: Direction;
   entry?: string;
   stopLoss?: string;
   tiers?: TierState[];
+  manualRate?: string;
+  commission?: string;
+  swap?: string;
 }
 
 function readSharedState(): ShareState | null {
@@ -75,14 +83,16 @@ export function MultiTpCalculator() {
   const [symbol, setSymbol] = React.useState(shared?.symbol ?? "XAUUSD");
   const [balance, setBalance] = React.useState(shared?.balance ?? "10000");
   const [currency, setCurrency] = React.useState(shared?.currency ?? "USD");
-  const [riskMode, setRiskMode] = React.useState<"percent" | "amount">("percent");
+  const [riskMode, setRiskMode] = React.useState<RiskMode>(shared?.riskMode ?? "percent");
   const [riskPercent, setRiskPercent] = React.useState(shared?.riskPercent ?? "1");
   const [riskAmount, setRiskAmount] = React.useState(shared?.riskAmount ?? "100");
   const [direction, setDirection] = React.useState<Direction>(shared?.direction ?? "LONG");
   const [entry, setEntry] = React.useState(shared?.entry ?? "2345.00");
   const [stopLoss, setStopLoss] = React.useState(shared?.stopLoss ?? "2340.00");
   const [tiers, setTiers] = React.useState<TierState[]>(shared?.tiers ?? DEFAULT_TIERS);
-  const [manualRate, setManualRate] = React.useState("");
+  const [manualRate, setManualRate] = React.useState(shared?.manualRate ?? "");
+  const [commission, setCommission] = React.useState(shared?.commission ?? "");
+  const [swap, setSwap] = React.useState(shared?.swap ?? "");
   const [scenarioName, setScenarioName] = React.useState("");
   const [copied, setCopied] = React.useState(false);
 
@@ -107,7 +117,7 @@ export function MultiTpCalculator() {
     return resolveConversionRate(
       instrument.quoteCurrency ?? "",
       currency,
-      fxRates.map((r) => ({ base: r.base, quote: r.quote, rate: r.rate }))
+      fxRates.map((r) => ({ base: r.base, quote: r.quote, rate: r.rate, date: r.date, source: r.source }))
     )?.toString() ?? null;
   }, [needsRate, manualRate, instrument.quoteCurrency, currency, fxRates]);
 
@@ -120,19 +130,24 @@ export function MultiTpCalculator() {
       stopLoss,
       instrument,
       direction,
+      accountCurrency: currency,
       quoteToAccountRate: needsRate && resolvedRate ? resolvedRate : null,
+      fxRates: fxRates.map((r) => ({ base: r.base, quote: r.quote, rate: r.rate, date: r.date, source: r.source })),
+      commission: commission.trim() === "" ? null : commission,
+      swap: swap.trim() === "" ? null : swap,
       tiers: tiers.map((tier) => ({
         price: tier.price === "" ? "0" : tier.price,
         allocationPct: tier.allocation === "" ? "0" : tier.allocation,
       })),
     });
-  }, [balance, riskMode, riskPercent, riskAmount, entry, stopLoss, instrument, direction, needsRate, resolvedRate, tiers]);
+  }, [balance, riskMode, riskPercent, riskAmount, entry, stopLoss, instrument, direction, currency, needsRate, resolvedRate, fxRates, commission, swap, tiers]);
 
-  const allocationOk = result.allocationSum.eq(100);
+  const allocationOk = result.allocationValid;
+  const targetsOk = result.targetsValid;
   const multiTpScenarios = scenarios.filter((s) => s.kind === "MULTI_TP");
 
   const shareState: ShareState = {
-    symbol, balance, currency, riskPercent, riskAmount, direction, entry, stopLoss, tiers,
+    symbol, balance, currency, riskMode, riskPercent, riskAmount, direction, entry, stopLoss, tiers, manualRate, commission, swap,
   };
 
   const saveScenario = () => {
@@ -147,9 +162,13 @@ export function MultiTpCalculator() {
   };
 
   const loadScenario = (s: ToolScenario) => {
-    const p = s.payload as unknown as ShareState;
+    // Faithful round-trip (MD §3.5, 6c): the FX rate and the risk mode
+    // used to be dropped on load — both are restored here, via the
+    // shared parse helper (also used for share links).
+    const p = parseMultiTpScenario(s.payload);
     if (p.symbol) setSymbol(p.symbol);
     if (p.balance) setBalance(p.balance);
+    if (p.riskMode) setRiskMode(p.riskMode);
     if (p.currency) setCurrency(p.currency);
     if (p.riskPercent) setRiskPercent(p.riskPercent);
     if (p.riskAmount) setRiskAmount(p.riskAmount);
@@ -157,6 +176,9 @@ export function MultiTpCalculator() {
     if (p.entry) setEntry(p.entry);
     if (p.stopLoss) setStopLoss(p.stopLoss);
     if (p.tiers) setTiers(p.tiers);
+    if (p.manualRate !== undefined) setManualRate(p.manualRate);
+    if (p.commission !== undefined) setCommission(p.commission);
+    if (p.swap !== undefined) setSwap(p.swap);
   };
 
   const copyShareLink = async () => {
@@ -182,7 +204,14 @@ export function MultiTpCalculator() {
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <InstrumentSelect id="mtp-instrument" value={symbol} onChange={setSymbol} />
+              <InstrumentSelect
+                id="mtp-instrument"
+                value={symbol}
+                onChange={(value) => {
+                  setSymbol(value);
+                  setManualRate("");
+                }}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="mtp-balance">{t("balance")}</Label>
@@ -191,7 +220,13 @@ export function MultiTpCalculator() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="mtp-currency">{t("accountCurrency")}</Label>
-              <Select value={currency} onValueChange={setCurrency}>
+              <Select
+                value={currency}
+                onValueChange={(value) => {
+                  setCurrency(value);
+                  setManualRate("");
+                }}
+              >
                 <SelectTrigger id="mtp-currency" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {COMMON_CURRENCIES.map((c) => (
@@ -246,6 +281,18 @@ export function MultiTpCalculator() {
             )}
           </div>
 
+          {/* ── Costs (shared across tiers, pro-rata) ── */}
+          <div className="space-y-2">
+            <Label htmlFor="mtp-commission">{t("multiTpCommission")}</Label>
+            <Input id="mtp-commission" type="number" inputMode="decimal" min="0" step="any"
+              placeholder="0" value={commission} onChange={(e) => setCommission(e.target.value)} className="tabular-nums" />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="mtp-swap">{t("multiTpSwap")}</Label>
+            <Input id="mtp-swap" type="number" inputMode="decimal" min="0" step="any"
+              placeholder="0" value={swap} onChange={(e) => setSwap(e.target.value)} className="tabular-nums" />
+          </div>
+
           {/* ── TP tiers ── */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -276,6 +323,12 @@ export function MultiTpCalculator() {
             <p className={allocationOk ? "text-xs text-muted-foreground" : "text-xs font-medium text-amber-600 dark:text-amber-400"}>
               {t("multiTpAllocationSum", { sum: fmtNum(result.allocationSum, 0) })}
             </p>
+            {!allocationOk ? (
+              <p className="text-xs text-amber-600 dark:text-amber-400">{t("multiTpAllocationInvalid")}</p>
+            ) : null}
+            {!targetsOk ? (
+              <p className="text-xs text-amber-600 dark:text-amber-400">{t("multiTpTargetInvalid")}</p>
+            ) : null}
           </div>
         </div>
 
@@ -292,6 +345,11 @@ export function MultiTpCalculator() {
                 <p className="mt-1 text-sm text-muted-foreground tabular-nums">
                   {t("multiTpBlendedR", { r: result.blendedR ? fmtNum(result.blendedR, 2) : "-" })}
                 </p>
+                {result.sizing.isEstimate ? (
+                  <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                    {t("multiTpRateEstimate")}
+                  </p>
+                ) : null}
               </>
             ) : (
               <div className="mt-4 flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-left">
@@ -303,7 +361,7 @@ export function MultiTpCalculator() {
             )}
           </div>
 
-          {result.sizing.valid && (
+          {result.sizing.valid && allocationOk && targetsOk && (
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full text-sm">
                 <thead>
@@ -333,9 +391,24 @@ export function MultiTpCalculator() {
           )}
 
           <dl className="grid grid-cols-2 gap-3">
-            <Stat label={t("multiTpTotalPnl")} value={`${fmtNum(result.totalGrossPnl, 2)} ${currency}`} />
+            <Stat label={t("multiTpTotalPnl")} value={allocationOk && targetsOk && result.sizing.valid ? `${fmtNum(result.totalGrossPnl, 2)} ${currency}` : "—"} />
             <Stat label={t("multiTpWorstCase")} value={`${fmtNum(result.worstCasePnl, 2)} ${currency}`} />
+            {result.totalCosts.gt(0) && (
+              <>
+                <Stat label={t("multiTpTotalNetPnl")} value={allocationOk && targetsOk && result.sizing.valid ? `${fmtNum(result.totalNetPnl, 2)} ${currency}` : "—"} />
+                <Stat label={t("multiTpWorstCaseNet")} value={`${fmtNum(result.worstCaseNetPnl, 2)} ${currency}`} />
+              </>
+            )}
           </dl>
+          {result.totalCosts.gt(0) && (
+            <p className="text-xs text-muted-foreground">{t("multiTpCostsNote")}</p>
+          )}
+          {result.unallocatedLots.gt(0) && (
+            <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
+              {t("multiTpUnallocated", { lots: fmtNum(result.unallocatedLots, 2) })}
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">{t("multiTpLotsRounded")}</p>
         </div>
       </div>
 

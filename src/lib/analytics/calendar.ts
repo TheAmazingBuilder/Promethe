@@ -178,10 +178,12 @@ export function computeDayStreaks(days: CalendarDay[]): DayStreaks {
 
 // ── PROP challenge status ───────────────────────────────────────────────────
 
-export type PropLimitStatus = "OK" | "WARNING" | "BREACHED";
+export type PropLimitStatus = "OK" | "WARNING" | "IMMINENT" | "BREACHED";
 
 /** ≥ this fraction of a limit consumed → WARNING. */
 export const PROP_WARNING_THRESHOLD = 0.75;
+/** ≥ this fraction of a limit consumed → IMMINENT (breach is close). */
+export const PROP_IMMINENT_THRESHOLD = 0.95;
 
 export interface PropLimit {
   /** Configured limit amount in account currency (null = not configured). */
@@ -258,9 +260,11 @@ function limitOf(
     : used.div(limitAmount).times(100);
   const status: PropLimitStatus = used.gte(limitAmount)
     ? "BREACHED"
-    : usedPercent.gte(new Decimal(PROP_WARNING_THRESHOLD).times(100))
-      ? "WARNING"
-      : "OK";
+    : usedPercent.gte(new Decimal(PROP_IMMINENT_THRESHOLD).times(100))
+      ? "IMMINENT"
+      : usedPercent.gte(new Decimal(PROP_WARNING_THRESHOLD).times(100))
+        ? "WARNING"
+        : "OK";
   return {
     limitAmount: limitAmount.toString(),
     used: used.toString(),
@@ -313,6 +317,8 @@ export function computePropStatus(input: PropStatusInput): PropStatus {
   const overall: PropLimitStatus =
     dailyLoss.status === "BREACHED" || totalDrawdown.status === "BREACHED"
       ? "BREACHED"
+      : dailyLoss.status === "IMMINENT" || totalDrawdown.status === "IMMINENT"
+        ? "IMMINENT"
       : dailyLoss.status === "WARNING" || totalDrawdown.status === "WARNING"
         ? "WARNING"
         : "OK";

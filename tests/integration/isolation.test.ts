@@ -1,7 +1,7 @@
 /**
  * Integration test — USER ISOLATION (addendum §11.8).
  *
- * Proves, against a dedicated test database (db/test.db), that user A can
+ * Proves, against a dedicated PostgreSQL test schema (promethe_test), that user A can
  * never read, update or delete user B's data when the data-access layer
  * scopes by userId — the pattern every /src/server helper must follow:
  *
@@ -273,7 +273,7 @@ describe("trades, executions & screenshots", () => {
       data: {
         tradeId: tradeAId,
         userId: userA.id,
-        storagePath: `uploads/${userA.id}/${tradeAId}/chart.webp`,
+        storagePath: `${userA.id}/${tradeAId}/chart.webp`,
         label: "ENTRY",
       },
     });

@@ -41,6 +41,7 @@ interface BuiltPlan {
   currency: string;
   timezone: string;
   accountId: string | null;
+  excludedTradeCount: number;
 }
 
 async function buildPlan(
@@ -48,7 +49,7 @@ async function buildPlan(
   query: WeeklyPlanQuery
 ): Promise<BuiltPlan> {
   const accountId = query.account ?? undefined;
-  const { trades, timezone, currency, tradingDay } = await loadAdvancedTradesCached(
+  const { trades, timezone, currency, tradingDay, excludedTradeCount } = await loadAdvancedTradesCached(
     userId,
     accountId,
     "30d"
@@ -81,19 +82,26 @@ async function buildPlan(
     weekEnd: weekEndSunday(weekStart),
     currency,
   });
-  return { plan, currency, timezone, accountId: accountId ?? null };
+  return { plan, currency, timezone, accountId: accountId ?? null, excludedTradeCount };
 }
 
-/** Sync the persisted checkboxes with the freshly generated plan. */
+/** Stable scope key: the global plan and every account have independent checkboxes. */
+function weeklyPlanScopeKey(accountId: string | null): string {
+  return accountId ?? "__all__";
+}
+
+/** Sync persisted checkboxes for one account scope with the freshly generated plan. */
 export async function syncWeeklyPlanActions(
   userId: string,
-  plan: WeeklyPlan
+  plan: WeeklyPlan,
+  accountId: string | null = null
 ): Promise<Map<string, boolean>> {
   const doneByRule = new Map<string, boolean>();
   const weekStart = new Date(`${plan.weekStart}T00:00:00.000Z`);
+  const scopeKey = weeklyPlanScopeKey(accountId);
   try {
     const rows = await db.weeklyPlanAction.findMany({
-      where: { userId, weekStart },
+      where: { userId, weekStart, scopeKey },
     });
     for (const row of rows) doneByRule.set(row.rule, row.done);
     const liveRules = new Set(plan.actions.map((a) => a.rule));
@@ -101,11 +109,13 @@ export async function syncWeeklyPlanActions(
       const prev = rows.find((r) => r.rule === action.rule);
       await db.weeklyPlanAction.upsert({
         where: {
-          userId_weekStart_rule: { userId, weekStart, rule: action.rule },
+          userId_weekStart_scopeKey_rule: { userId, weekStart, scopeKey, rule: action.rule },
         },
         update: { title: action.title, target: action.target },
         create: {
           userId,
+          accountId,
+          scopeKey,
           weekStart,
           rule: action.rule,
           title: action.title,
@@ -125,6 +135,7 @@ export async function syncWeeklyPlanActions(
         where: {
           userId,
           weekStart,
+          scopeKey,
           rule: { in: stale.map((r) => r.rule) },
         },
       });
@@ -140,11 +151,11 @@ export async function getWeeklyPlan(
   userId: string,
   query: WeeklyPlanQuery
 ): Promise<WeeklyPlanPayload> {
-  const { plan, currency, timezone, accountId } = await buildPlan(
+  const { plan, currency, timezone, accountId, excludedTradeCount } = await buildPlan(
     userId,
     query
   );
-  const doneByRule = await syncWeeklyPlanActions(userId, plan);
+  const doneByRule = await syncWeeklyPlanActions(userId, plan, accountId);
   const actions = plan.actions.map((a) => ({
     ...a,
     done: doneByRule.get(a.rule) ?? false,
@@ -160,6 +171,7 @@ export async function getWeeklyPlan(
     accountId,
     currency,
     timezone,
+    excludedTradeCount,
     plan: withDone,
   };
 }
@@ -181,14 +193,16 @@ export async function toggleWeeklyPlanAction(
   const weekStart = weekStartMonday(new Date(), timezone);
   const weekStartDate = new Date(`${weekStart}T00:00:00.000Z`);
   const doneAt = body.done ? new Date() : null;
+  const accountId = query.account ?? null;
+  const scopeKey = weeklyPlanScopeKey(accountId);
   const updated = await db.weeklyPlanAction.updateMany({
-    where: { userId, weekStart: weekStartDate, rule: body.rule },
+    where: { userId, weekStart: weekStartDate, scopeKey, rule: body.rule },
     data: { done: body.done, doneAt },
   });
   if (updated.count > 0) {
     const row = await db.weeklyPlanAction.findUnique({
       where: {
-        userId_weekStart_rule: { userId, weekStart: weekStartDate, rule: body.rule },
+        userId_weekStart_scopeKey_rule: { userId, weekStart: weekStartDate, scopeKey, rule: body.rule },
       },
     });
     if (row != null) {
@@ -207,11 +221,13 @@ export async function toggleWeeklyPlanAction(
   const planWeekStart = new Date(`${plan.weekStart}T00:00:00.000Z`);
   await db.weeklyPlanAction.upsert({
     where: {
-      userId_weekStart_rule: { userId, weekStart: planWeekStart, rule: body.rule },
+      userId_weekStart_scopeKey_rule: { userId, weekStart: planWeekStart, scopeKey, rule: body.rule },
     },
     update: { done: body.done, doneAt },
     create: {
       userId,
+      accountId,
+      scopeKey,
       weekStart: planWeekStart,
       rule: body.rule,
       title: action.title,

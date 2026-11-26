@@ -382,7 +382,6 @@ export function AnalyticsView() {
         ? t("kpiWinsLosses", { wins: s.wins, losses: s.losses, be: s.breakevens })
         : null,
       sharpe: advanced?.sharpe != null ? fmtNum(advanced.sharpe) : "-",
-      sortino: advanced?.sortino != null ? fmtNum(advanced.sortino) : "-",
       recovery:
         advanced?.recoveryFactor != null ? fmtNum(advanced.recoveryFactor) : "-",
       payoff: advanced?.payoffRatio != null ? fmtNum(advanced.payoffRatio) : "-",
@@ -475,6 +474,14 @@ export function AnalyticsView() {
           <Button
             variant="outline"
             size="sm"
+            onClick={() => navigate("/analytics/monte-carlo")}
+          >
+            <Target className="h-4 w-4" aria-hidden="true" />
+            {tAdv("tabs.monte-carlo")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => navigate("/analytics/heatmaps")}
           >
             <Grid3x3 className="h-4 w-4" aria-hidden="true" />
@@ -498,6 +505,7 @@ export function AnalyticsView() {
               "quality",
               "setups",
               "grades",
+              "cross-analysis",
               "sequences",
               "seasonality",
               "anomalies",
@@ -517,6 +525,15 @@ export function AnalyticsView() {
           ))}
         </div>
       </div>
+
+      {!isLoading && !isError && data != null && data.excludedTradeCount > 0 ? (
+        <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          {t("currencyScopeNote", {
+            count: data.excludedTradeCount,
+            currency,
+          })}
+        </p>
+      ) : null}
 
       {/* ── Loading ── */}
       {isLoading ? (
@@ -593,7 +610,7 @@ export function AnalyticsView() {
               <KpiCard
                 label={t("kpiWinRate")}
                 value={kpi.winRate}
-                sub={t("kpiTrades", { count: stats.tradeCount })}
+                sub={t("winRateHint", { decided: stats.wins + stats.losses, total: stats.tradeCount })}
               />
               <KpiCard
                 label={t("kpiProfitFactor")}
@@ -619,7 +636,13 @@ export function AnalyticsView() {
                   )
                 }
                 valueClassName={kpi.maxDrawdownTone}
-                sub={t("kpiRecovery", { value: kpi.recovery })}
+                sub={
+                  <>
+                    {t("kpiRecovery", { value: kpi.recovery })}
+                    {" · "}
+                    {t("kpiDrawdownHint")}
+                  </>
+                }
               />
               <KpiCard
                 compact
@@ -632,7 +655,7 @@ export function AnalyticsView() {
                 compact
                 label={t("kpiSharpe")}
                 value={kpi.sharpe}
-                sub={t("kpiSortino", { value: kpi.sortino })}
+                sub={t("riskAdjustedUnavailable")}
               />
               <KpiCard
                 compact
@@ -879,7 +902,7 @@ export function AnalyticsView() {
           </p>
         </div>
       )}
-      <MonthlyReportDialog open={reportOpen} onOpenChange={setReportOpen} />
+      <MonthlyReportDialog open={reportOpen} onOpenChange={setReportOpen} accountId={effectiveAccount} />
     </div>
   );
 }

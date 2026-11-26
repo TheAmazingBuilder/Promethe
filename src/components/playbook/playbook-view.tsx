@@ -49,12 +49,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { QueryErrorState } from "@/components/ui/query-error-state";
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/hooks/use-toast";
 import {
   useDeleteStrategy,
   useDeleteStrategyVersion,
+  useStrategyVersionCompare,
+  useStrategyVersionPerformance,
   useStrategyVersions,
 } from "@/hooks/use-journal";
 import {
@@ -84,7 +87,7 @@ import { ApiClientError } from "@/lib/api-client";
 import { apiErrorMessage } from "@/lib/i18n-errors";
 import { pnlClass } from "@/lib/format";
 import { Money } from "@/components/privacy/money";
-import { navigate, useRoute } from "@/lib/router";
+import { navigate, navigateShallow, useRoute } from "@/lib/router";
 import type {
   ChecklistTemplateDTO,
   PlaybookRuleDTO,
@@ -202,10 +205,22 @@ function VersionsDialog({
   const t = useTranslations("playbook.strategies");
   const tRoot = useTranslations();
   const { toast } = useToast();
-  const { data: versions, isLoading } = useStrategyVersions(
+  const { data: versions, isLoading, isError, refetch } = useStrategyVersions(
     open ? (strategy?.id ?? null) : null,
   );
   const deleteVersion = useDeleteStrategyVersion();
+  // Lot 11 (roadmap §14): compare two snapshots, and show what each
+  // frozen version actually earned.
+  const [compareA, setCompareA] = React.useState<string | null>(null);
+  const [compareB, setCompareB] = React.useState<string | null>(null);
+  const { data: compared, isLoading: isComparing } = useStrategyVersionCompare(
+    open ? (strategy?.id ?? null) : null,
+    compareA,
+    compareB,
+  );
+  const { data: performance } = useStrategyVersionPerformance(
+    open ? (strategy?.id ?? null) : null,
+  );
 
   const onDelete = async (versionId: string, version: number) => {
     if (!strategy) return;
@@ -225,16 +240,33 @@ function VersionsDialog({
     }
   };
 
+  const toggleCompare = (id: string) => {
+    if (compareA === id) setCompareA(null);
+    else if (compareB === id) setCompareB(null);
+    else if (compareA == null) setCompareA(id);
+    else if (compareB == null) setCompareB(id);
+    else setCompareA(id);
+  };
+
+  const perfByVersion = new Map(
+    (performance ?? []).map((p) => [p.version, p]),
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             {t("versionsTitle", { name: strategy?.name ?? "" })}
           </DialogTitle>
           <DialogDescription>{t("versionsDesc")}</DialogDescription>
         </DialogHeader>
-        {isLoading ? (
+        {isError ? (
+          <QueryErrorState
+            title="Strategy versions could not be loaded"
+            onRetry={() => void refetch()}
+          />
+        ) : isLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 2 }).map((_, i) => (
               <Skeleton key={i} className="h-16 w-full" />
@@ -245,48 +277,127 @@ function VersionsDialog({
             {t("versionsEmpty")}
           </p>
         ) : (
-          <ul className="flex flex-col gap-2">
-            {(versions ?? []).map((v) => (
-              <li key={v.id} className="rounded-lg border p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
-                      <Badge variant="secondary" className="tabular-nums">
-                        {t("versionLabel", { version: v.version })}
-                      </Badge>
-                      <Badge
-                        variant="outline"
-                        className="font-normal"
-                        title={t("versionOriginHint")}
-                      >
-                        {v.origin === "AUTO" ? t("versionAuto") : t("versionManual")}
-                      </Badge>
-                      <span className="truncate">{v.snapshot.name}</span>
-                    </p>
-                    {v.note ? (
-                      <p className="mt-1 text-xs text-muted-foreground">{v.note}</p>
-                    ) : null}
-                    <p className="mt-1 text-[11px] tabular-nums text-muted-foreground">
-                      {new Date(v.createdAt).toLocaleString()} ·{" "}
-                      {t("versionChecklistCount", {
-                        count: v.snapshot.checklistItems.length,
-                      })}
-                    </p>
-                  </div>
-                  {v.origin !== "AUTO" ? (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => void onDelete(v.id, v.version)}
-                      aria-label={t("deleteVersion", { version: v.version })}
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                  ) : null}
+          <div className="flex flex-col gap-4">
+            <ul className="flex flex-col gap-2">
+              {(versions ?? []).map((v) => {
+                const perf = perfByVersion.get(v.version);
+                const checked = compareA === v.id || compareB === v.id;
+                return (
+                  <li key={v.id} className="rounded-lg border p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={() => toggleCompare(v.id)}
+                            aria-label={t("compareVersion", { version: v.version })}
+                          />
+                          <Badge variant="secondary" className="tabular-nums">
+                            {t("versionLabel", { version: v.version })}
+                          </Badge>
+                          <Badge
+                            variant="outline"
+                            className="font-normal"
+                            title={t("versionOriginHint")}
+                          >
+                            {v.origin === "AUTO" ? t("versionAuto") : t("versionManual")}
+                          </Badge>
+                          <span className="truncate">{v.snapshot.name}</span>
+                        </p>
+                        {v.note ? (
+                          <p className="mt-1 text-xs text-muted-foreground">{v.note}</p>
+                        ) : null}
+                        <p className="mt-1 text-[11px] tabular-nums text-muted-foreground">
+                          {new Date(v.createdAt).toLocaleString()} ·{" "}
+                          {t("versionChecklistCount", {
+                            count: v.snapshot.checklistItems.length,
+                          })}
+                        </p>
+                        {perf ? (
+                          <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+                            {t("versionPerformance", {
+                              trades: perf.trades,
+                              totalR:
+                                perf.totalR == null ? "-" : perf.totalR.toFixed(2),
+                              winRate:
+                                perf.winRatePct == null
+                                  ? "-"
+                                  : `${perf.winRatePct.toFixed(0)}%`,
+                            })}
+                          </p>
+                        ) : null}
+                      </div>
+                      {v.origin !== "AUTO" ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => void onDelete(v.id, v.version)}
+                          aria-label={t("deleteVersion", { version: v.version })}
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        </Button>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            {perfByVersion.has(null) ? (
+              <p className="text-xs tabular-nums text-muted-foreground">
+                {t("versionPerformanceBefore", {
+                  trades: perfByVersion.get(null)?.trades ?? 0,
+                  totalR:
+                    perfByVersion.get(null)?.totalR == null
+                      ? "-"
+                      : (perfByVersion.get(null)?.totalR ?? 0).toFixed(2),
+                })}
+              </p>
+            ) : null}
+            {compareA != null && compareB != null ? (
+              <div className="rounded-lg border p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold">{t("compareTitle")}</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setCompareA(null);
+                      setCompareB(null);
+                    }}
+                  >
+                    {t("compareClear")}
+                  </Button>
                 </div>
-              </li>
-            ))}
-          </ul>
+                {isComparing ? (
+                  <div className="mt-2 space-y-2">
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-8 w-full" />
+                  </div>
+                ) : compared == null || compared.changes.length === 0 ? (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {t("compareNoChanges")}
+                  </p>
+                ) : (
+                  <ul className="mt-2 flex flex-col gap-2">
+                    {compared.changes.map((change) => (
+                      <li key={change.field} className="text-sm">
+                        <p className="font-medium">{change.label}</p>
+                        <p className="text-muted-foreground">
+                          <span className="line-through decoration-destructive/60">
+                            {change.from}
+                          </span>
+                          {" → "}
+                          <span>{change.to}</span>
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">{t("compareHint")}</p>
+            )}
+          </div>
         )}
       </DialogContent>
     </Dialog>
@@ -368,7 +479,7 @@ function DuplicateDialog({
 function OverviewTab() {
   const t = useTranslations("playbook.overview");
   const tUnder = useTranslations("playbook.underperforming");
-  const { data, isLoading } = usePlaybookOverview();
+  const { data, isLoading, isError, refetch } = usePlaybookOverview();
   const { data: strategies } = usePlaybookStrategies();
   const nameById = React.useMemo(() => {
     const map = new Map<string, string>();
@@ -383,6 +494,15 @@ function OverviewTab() {
           <Skeleton key={i} className="h-44 w-full" />
         ))}
       </div>
+    );
+  }
+  if (isError) {
+    return (
+      <QueryErrorState
+        title="Playbook overview could not be loaded"
+        description="Your strategies and journal data are safe. Try loading the overview again."
+        onRetry={() => void refetch()}
+      />
     );
   }
   if (!data) return null;
@@ -536,9 +656,22 @@ function StrategiesTab() {
   const t = useTranslations("playbook.strategies");
   const tRoot = useTranslations();
   const { toast } = useToast();
-  const { data, isLoading } = usePlaybookStrategies();
-  const { data: statsData } = usePlaybookStats();
-  const { data: overview } = usePlaybookOverview();
+  const {
+    data,
+    isLoading,
+    isError: strategiesError,
+    refetch: refetchStrategies,
+  } = usePlaybookStrategies();
+  const {
+    data: statsData,
+    isError: statsError,
+    refetch: refetchStats,
+  } = usePlaybookStats();
+  const {
+    data: overview,
+    isError: overviewError,
+    refetch: refetchOverview,
+  } = usePlaybookOverview();
   const del = useDeleteStrategy();
 
   const statsById = React.useMemo(() => {
@@ -581,6 +714,20 @@ function StrategiesTab() {
           <Skeleton key={i} className="h-44 w-full" />
         ))}
       </div>
+    );
+  }
+  if (strategiesError || statsError || overviewError) {
+    return (
+      <QueryErrorState
+        title="Playbook strategies could not be loaded"
+        onRetry={() => {
+          void Promise.all([
+            refetchStrategies(),
+            refetchStats(),
+            refetchOverview(),
+          ]);
+        }}
+      />
     );
   }
   if ((data ?? []).length === 0) {
@@ -1060,12 +1207,23 @@ function SetupsTab() {
   const t = useTranslations("playbook.setups");
   const tRoot = useTranslations();
   const { toast } = useToast();
-  const { data: strategies } = usePlaybookStrategies();
+  const {
+    data: strategies,
+    isError: strategiesError,
+    refetch: refetchStrategies,
+  } = usePlaybookStrategies();
   const [filter, setFilter] = React.useState<string>("all");
-  const { data: setups, isLoading } = useSetups(
-    filter === "all" ? null : filter,
-  );
-  const { data: insights } = useSetupInsights(filter === "all" ? null : filter);
+  const {
+    data: setups,
+    isLoading,
+    isError: setupsError,
+    refetch: refetchSetups,
+  } = useSetups(filter === "all" ? null : filter);
+  const {
+    data: insights,
+    isError: insightsError,
+    refetch: refetchInsights,
+  } = useSetupInsights(filter === "all" ? null : filter);
   const del = useDeleteSetup();
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<SetupDTO | null>(null);
@@ -1089,6 +1247,21 @@ function SetupsTab() {
       });
     }
   };
+
+  if (strategiesError || setupsError || insightsError) {
+    return (
+      <QueryErrorState
+        title="Playbook setups could not be loaded"
+        onRetry={() => {
+          void Promise.all([
+            refetchStrategies(),
+            refetchSetups(),
+            refetchInsights(),
+          ]);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -1479,8 +1652,17 @@ function RulesTab() {
   const t = useTranslations("playbook.rules");
   const tRoot = useTranslations();
   const { toast } = useToast();
-  const { data: rules, isLoading } = usePlaybookRules();
-  const { data: strategies } = usePlaybookStrategies();
+  const {
+    data: rules,
+    isLoading,
+    isError: rulesError,
+    refetch: refetchRules,
+  } = usePlaybookRules();
+  const {
+    data: strategies,
+    isError: strategiesError,
+    refetch: refetchStrategies,
+  } = usePlaybookStrategies();
   const del = useDeletePlaybookRule();
   const install = useInstallExampleRules();
   const [dialogOpen, setDialogOpen] = React.useState(false);
@@ -1518,8 +1700,25 @@ function RulesTab() {
     }
   };
 
+  if (rulesError || strategiesError) {
+    return (
+      <QueryErrorState
+        title="Playbook rules could not be loaded"
+        onRetry={() => {
+          void Promise.all([refetchRules(), refetchStrategies()]);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
+      <p className="text-sm text-muted-foreground">
+        {t("tradingRulesHint")}{" "}
+        <Button variant="link" size="sm" className="h-auto p-0 text-sm" onClick={() => navigate("/rules")}>
+          {t("tradingRulesLink")}
+        </Button>
+      </p>
       <div className="flex flex-wrap justify-end gap-2">
         <Button variant="outline" size="sm" onClick={() => void onInstallExamples()} disabled={install.isPending}>
           {t("addExamples")}
@@ -1846,8 +2045,17 @@ function ChecklistsTab() {
   const t = useTranslations("playbook.checklists");
   const tRoot = useTranslations();
   const { toast } = useToast();
-  const { data: checklists, isLoading } = useChecklistTemplates();
-  const { data: strategies } = usePlaybookStrategies();
+  const {
+    data: checklists,
+    isLoading,
+    isError: checklistsError,
+    refetch: refetchChecklists,
+  } = useChecklistTemplates();
+  const {
+    data: strategies,
+    isError: strategiesError,
+    refetch: refetchStrategies,
+  } = usePlaybookStrategies();
   const del = useDeleteChecklistTemplate();
   const install = useInstallGlobalChecklist();
   const [dialogOpen, setDialogOpen] = React.useState(false);
@@ -1879,6 +2087,17 @@ function ChecklistsTab() {
       });
     }
   };
+
+  if (checklistsError || strategiesError) {
+    return (
+      <QueryErrorState
+        title="Playbook checklists could not be loaded"
+        onRetry={() => {
+          void Promise.all([refetchChecklists(), refetchStrategies()]);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -1974,10 +2193,18 @@ function ChecklistsTab() {
 function PerformanceTab() {
   const t = useTranslations("playbook.performance");
   const tStrat = useTranslations("playbook.strategies");
-  const { data, isLoading } = usePlaybookStats();
+  const { data, isLoading, isError, refetch } = usePlaybookStats();
 
   if (isLoading) {
     return <Skeleton className="h-44 w-full" />;
+  }
+  if (isError) {
+    return (
+      <QueryErrorState
+        title="Playbook performance could not be loaded"
+        onRetry={() => void refetch()}
+      />
+    );
   }
   const rows = (data ?? []).filter((s) => s.stats.tradeCount > 0);
   if (rows.length === 0) {
@@ -2184,7 +2411,7 @@ export function PlaybookView() {
               type="button"
               role="tab"
               aria-selected={active}
-              onClick={() => navigate(`/playbook?tab=${id}`)}
+              onClick={() => navigateShallow(`/playbook?tab=${id}`)}
               className={[
                 "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
                 active

@@ -179,7 +179,13 @@ export async function updateStrategy(
     patch as Record<string, unknown>,
   );
   if (definitionTouched) {
-    await createVersion(userId, existing.id, "Edited in the Playbook", "AUTO");
+    // Lot 11 (roadmap §14): the change reason travels on the AUTO
+    // snapshot so the version history says WHY the strategy changed.
+    const note =
+      typeof patch.changeNote === "string" && patch.changeNote.trim().length > 0
+        ? patch.changeNote.trim()
+        : "Edited in the Playbook";
+    await createVersion(userId, existing.id, note, "AUTO");
   }
 
   // Checklist replace-all (v1 phase 5): delete + recreate inside the same

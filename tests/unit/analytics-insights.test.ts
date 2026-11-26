@@ -49,6 +49,7 @@ function trade(over: Partial<AnalyticsTrade> = {}): AnalyticsTrade {
     swap: null,
     fees: null,
     localDate: null,
+    localEntryDate: null,
     localWeekday: null,
     localHour: null,
     durationMin: 240,
@@ -83,6 +84,35 @@ describe("computeAdvancedStats", () => {
     expect(Number(adv.sqn)).toBeCloseTo(5.6568, 3);
   });
 
+  it("uses R-aware outcomes and excludes breakevens from win-rate denominator", () => {
+    const trades = [
+      trade({ netPnl: "25", rMultiple: "0.05", resultType: "BREAKEVEN" }),
+      trade({ netPnl: "-15", rMultiple: "-0.05", resultType: "BREAKEVEN" }),
+      trade({ netPnl: "100", rMultiple: "1", resultType: "WIN" }),
+      trade({ netPnl: "-50", rMultiple: "-1", resultType: "LOSS" }),
+    ];
+    const stats = computeTradeStats(trades);
+    expect(stats.wins).toBe(1);
+    expect(stats.losses).toBe(1);
+    expect(stats.breakevens).toBe(2);
+    expect(stats.winRate).toBe("50");
+    // Cash-based metrics still include the actual P&L of BE-classified trades.
+    expect(stats.grossWin).toBe("125");
+    expect(stats.grossLoss).toBe("65");
+  });
+
+  it("falls back to P&L sign when historical trades have no resultType", () => {
+    const trades = [
+      trade({ netPnl: "10", resultType: null }),
+      trade({ netPnl: "-10", resultType: null }),
+      trade({ netPnl: "0", resultType: null }),
+    ];
+    const stats = computeTradeStats(trades);
+    expect(stats.wins).toBe(1);
+    expect(stats.losses).toBe(1);
+    expect(stats.breakevens).toBe(1);
+    expect(stats.winRate).toBe("50");
+  });
   it("payoff ratio = avgWin / avgLoss", () => {
     const trades = [
       trade({ netPnl: "300", rMultiple: "2", resultType: "WIN" }),
@@ -123,10 +153,7 @@ describe("computeAdvancedStats", () => {
     expect(Number(adv.rCoverage)).toBe(25);
   });
 
-  it("Sharpe/Sortino need ≥ 3 distinct local days", () => {
-    const same = [trade(), trade(), trade()];
-    expect(computeAdvancedStats(same, computeTradeStats(same)).sharpe).toBeNull();
-
+  it("does not derive Sharpe or Sortino from monetary daily P&L", () => {
     const multi = [
       trade({ localDate: "2026-01-01", netPnl: "100" }),
       trade({ localDate: "2026-01-02", netPnl: "-50" }),
@@ -134,10 +161,10 @@ describe("computeAdvancedStats", () => {
       trade({ localDate: "2026-01-04", netPnl: "150" }),
     ];
     const adv = computeAdvancedStats(multi, computeTradeStats(multi));
-    expect(adv.sharpe).not.toBeNull();
-    expect(adv.sortino).not.toBeNull();
-    // Sortino penalizes downside only → ≥ Sharpe here.
-    expect(Number(adv.sortino)).toBeGreaterThanOrEqual(Number(adv.sharpe));
+    // A daily P&L series is not a return series: account size and cash flows
+    // are required before these ratios can be calculated defensibly.
+    expect(adv.sharpe).toBeNull();
+    expect(adv.sortino).toBeNull();
   });
 });
 
@@ -286,24 +313,25 @@ describe("computeInsights", () => {
     expect(insights.find((i) => i.rule === "revenge")).toBeUndefined();
   });
 
-  it("overtrading: busy days underperform light days", () => {
-    const busyDay = "2026-01-05";
+  it("overtrading: busy entry days underperform light entry days", () => {
     const mk = (i: number, day: string) =>
       trade({
         entryTime: `2026-01-${day}T0${i}:00:00.000Z`,
-        exitTime: `2026-01-${day}T1${i}:00:00.000Z`,
-        localDate: `2026-01-${day}`,
+        exitTime: `2026-01-20T1${i}:00:00.000Z`,
+        localEntryDate: `2026-01-${day}`,
+        // Every trade closes on the same day: frequency must still follow entry.
+        localDate: "2026-01-20",
         rMultiple: "-0.2",
         netPnl: "-20",
         resultType: "LOSS",
       });
-    // One busy day (5 trades) + one busy day (5 trades) at -0.2R average…
+    // Two busy ENTRY days (5 trades each) at -0.2R average…
     const trades = [
       ...Array.from({ length: 5 }, (_, i) => mk(i, "05")),
       ...Array.from({ length: 5 }, (_, i) => mk(i, "06")),
-      // …and two light days at +1R.
-      trade({ entryTime: "2026-01-10T08:00:00.000Z", exitTime: "2026-01-10T12:00:00.000Z", localDate: "2026-01-10", rMultiple: "1", netPnl: "100", resultType: "WIN" }),
-      trade({ entryTime: "2026-01-11T08:00:00.000Z", exitTime: "2026-01-11T12:00:00.000Z", localDate: "2026-01-11", rMultiple: "1", netPnl: "100", resultType: "WIN" }),
+      // …and two light entry days at +1R.
+      trade({ entryTime: "2026-01-10T08:00:00.000Z", exitTime: "2026-01-20T12:00:00.000Z", localEntryDate: "2026-01-10", localDate: "2026-01-20", rMultiple: "1", netPnl: "100", resultType: "WIN" }),
+      trade({ entryTime: "2026-01-11T08:00:00.000Z", exitTime: "2026-01-20T13:00:00.000Z", localEntryDate: "2026-01-11", localDate: "2026-01-20", rMultiple: "1", netPnl: "100", resultType: "WIN" }),
     ];
     const { insights } = full(trades);
     const ot = insights.find((i) => i.rule === "overtrading");

@@ -14,6 +14,37 @@ export function cleanText(input: string): string {
 }
 
 /**
+ * Decode statement bytes as text. Broker statements are usually UTF-8,
+ * but some (notably French ones) are Windows-1252: strict UTF-8 decoding
+ * fails on those bytes, so fall back to windows-1252 instead of importing
+ * mojibake (replacement characters) into notes and comments.
+ */
+export function decodeImportText(bytes: Uint8Array): string {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder("windows-1252").decode(bytes);
+  }
+}
+
+/**
+ * Broker statements are kilobytes to a few megabytes: refuse anything
+ * larger instead of loading it whole into the parse worker (memory spike
+ * + a 60 s worker timeout with no clear message).
+ */
+export const MAX_IMPORT_FILE_BYTES = 25 * 1024 * 1024;
+
+export function assertImportFileSize(file: { size: number; name: string }): void {
+  if (file.size > MAX_IMPORT_FILE_BYTES) {
+    const error = new Error(
+      `File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum import size is 25 MB.`
+    );
+    (error as { code?: string }).code = "FILE_TOO_LARGE";
+    throw error;
+  }
+}
+
+/**
  * Parses a number as printed in a statement: handles "1 234,56",
  * "1,234.56", "1 234.56", "-0,70", "(123.45)" (accounting negatives),
  * "" (empty → null), "—" (null). Returns a plain string in canonical

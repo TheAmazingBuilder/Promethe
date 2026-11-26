@@ -7,7 +7,7 @@
  */
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
-import type { ImportFileContent, ParseResult } from "./types";
+import type { ImportFileContent, ImportParseWarning, ParseResult } from "./types";
 import { detectFormat, refineXlsxFormat } from "./detect";
 import { parseMt4Html, parseMt5Html } from "./html-parsers";
 import {
@@ -97,7 +97,7 @@ export function parseImportFile(content: ImportFileContent): ParseResult {
   if (content.bytes && (detected.format === "MT5_XLSX" || detected.format === "CTRADER_XLSX")) {
     const { sheetNames, rows } = xlsxToRows(content.bytes);
     const format = refineXlsxFormat(detected.format, sheetNames);
-    const warnings = [];
+    const warnings: ImportParseWarning[] = [];
     const parsed =
       format === "CTRADER_XLSX"
         ? parseCtraderRows(rows, warnings)
@@ -124,7 +124,7 @@ export function parseImportFile(content: ImportFileContent): ParseResult {
     if (rows.length === 0) {
       throw new ImportParseError("EMPTY_FILE", "The file is empty or unreadable.");
     }
-    const warnings = [];
+    const warnings: ImportParseWarning[] = [];
 
     switch (detected.format) {
       case "MT5_CSV": {

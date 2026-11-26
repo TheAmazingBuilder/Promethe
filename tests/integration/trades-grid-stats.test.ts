@@ -1,6 +1,6 @@
 /**
  * Phase 2 perf item 7 — trades grid: aggregated stats + batched candles
- * (db/test.db).
+ * (PostgreSQL schema promethe_test).
  *
  * getGridStats aggregates in SQL (same numbers as computeGridStats over
  * the same rows); getCandleBatch serves every card window from one
@@ -10,10 +10,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { createUserWithDefaults } from "@/server/users";
-import { getGridStats } from "@/server/trades";
+import { computeDerived, getGridStats } from "@/server/trades";
 import { getCandleBatch } from "@/server/charts";
 import { candleWindowForTrade } from "@/lib/trades/grid-stats";
 import type { TradeListQuery } from "@/lib/validations/trade";
+import { Decimal } from "@/lib/trading/dec";
 
 const BASE_QUERY: TradeListQuery = {
   page: 1,
@@ -24,17 +25,19 @@ const BASE_QUERY: TradeListQuery = {
 };
 
 function instrumentSpec(symbol: string, base: string, quote: string) {
+  const isForex = symbol === "EURUSD" || symbol === "USDJPY";
+  const isJpyPair = quote === "JPY";
   return {
     symbol,
     name: `${base} / ${quote}`,
-    assetClass: "METAL",
+    assetClass: isForex ? "FOREX" : "METAL",
     baseCurrency: base,
     quoteCurrency: quote,
-    digits: 2,
-    pipSize: "0.10",
-    pointSize: "0.01",
-    contractSize: "100",
-    tickSize: "0.01",
+    digits: isForex ? (isJpyPair ? 3 : 5) : 2,
+    pipSize: isForex ? (isJpyPair ? "0.01" : "0.0001") : "0.10",
+    pointSize: isForex ? (isJpyPair ? "0.001" : "0.00001") : "0.01",
+    contractSize: isForex ? "100000" : "100",
+    tickSize: isForex ? (isJpyPair ? "0.001" : "0.00001") : "0.01",
     isActive: true,
   };
 }
@@ -42,6 +45,7 @@ function instrumentSpec(symbol: string, base: string, quote: string) {
 let user: { id: string };
 let xauusdId: string;
 let eurusdId: string;
+let usdjpyId: string;
 let accountId: string;
 
 beforeAll(async () => {
@@ -58,6 +62,8 @@ beforeAll(async () => {
   xauusdId = xauusd.id;
   const eurusd = await findOrCreate("EURUSD", "EUR", "USD");
   eurusdId = eurusd.id;
+  const usdjpy = await findOrCreate("USDJPY", "USD", "JPY");
+  usdjpyId = usdjpy.id;
 
   const created = await createUserWithDefaults({
     email: "grid-stats@test.local",
@@ -291,6 +297,141 @@ describe("getGridStats", () => {
       netPnl: "0",
       currency: "USD",
     });
+  });
+});
+
+
+describe("computeDerived financial fields", () => {
+  it("rejects a planned target on the wrong side for both directions", async () => {
+    const [account, instrument] = await Promise.all([
+      db.account.findUniqueOrThrow({ where: { id: accountId } }),
+      db.instrument.findUniqueOrThrow({ where: { id: xauusdId } }),
+    ]);
+    const common = {
+      instrument,
+      account,
+      entryPrice: "2000",
+      exitPrice: "2010",
+      stopLoss: "1995",
+      lots: "1",
+      commission: "0",
+      swap: "0",
+      fees: "0",
+      quoteToAccountRate: null,
+      pnlSource: "CALCULATED" as const,
+      manualNetPnl: null,
+      entryTime: new Date("2026-11-12T14:00:00.000Z"),
+      balanceAtEntry: new Decimal("10000"),
+      fxRates: [],
+    };
+
+    const invalidLong = computeDerived({
+      ...common,
+      direction: "LONG",
+      takeProfit: "1990",
+    });
+    const invalidShort = computeDerived({
+      ...common,
+      direction: "SHORT",
+      takeProfit: "2010",
+      stopLoss: "2005",
+    });
+
+    expect(invalidLong.plannedRR).toBeNull();
+    expect(invalidShort.plannedRR).toBeNull();
+  });
+
+  it("calculates realized R from the final manual net P&L", async () => {
+    const [account, instrument] = await Promise.all([
+      db.account.findUniqueOrThrow({ where: { id: accountId } }),
+      db.instrument.findUniqueOrThrow({ where: { id: xauusdId } }),
+    ]);
+    const result = computeDerived({
+      instrument,
+      account,
+      direction: "LONG",
+      entryPrice: "2000",
+      exitPrice: "2010",
+      stopLoss: "1995",
+      takeProfit: "2015",
+      lots: "1",
+      commission: "0",
+      swap: "0",
+      fees: "0",
+      quoteToAccountRate: null,
+      pnlSource: "MANUAL",
+      manualNetPnl: "100",
+      entryTime: new Date("2026-11-12T14:00:00.000Z"),
+      balanceAtEntry: new Decimal("10000"),
+      fxRates: [],
+    });
+
+    // Initial risk = 5 price units × 100 contract units = 500 USD.
+    expect(result.netPnl?.toString()).toBe("100");
+    expect(result.riskAmount?.toString()).toBe("500");
+    expect(result.rMultiple?.toString()).toBe("0.2");
+    expect(result.realizedRR?.toString()).toBe("0.2");
+  });
+
+  it("does not invent account-currency risk when the FX rate is unavailable", async () => {
+    const [account, instrument] = await Promise.all([
+      db.account.findUniqueOrThrow({ where: { id: accountId } }),
+      db.instrument.findUniqueOrThrow({ where: { id: usdjpyId } }),
+    ]);
+    const result = computeDerived({
+      instrument,
+      account,
+      direction: "LONG",
+      entryPrice: "149",
+      exitPrice: "150",
+      stopLoss: "148",
+      takeProfit: "152",
+      lots: "1",
+      commission: "0",
+      swap: "0",
+      fees: "0",
+      quoteToAccountRate: null,
+      pnlSource: "MANUAL",
+      manualNetPnl: "600",
+      entryTime: new Date("2026-11-12T14:00:00.000Z"),
+      balanceAtEntry: new Decimal("10000"),
+      fxRates: [],
+    });
+
+    expect(result.riskAmount).toBeNull();
+    expect(result.riskPercent).toBeNull();
+    expect(result.rMultiple).toBeNull();
+  });
+
+  it("converts risk to account currency before calculating realized R", async () => {
+    const [account, instrument] = await Promise.all([
+      db.account.findUniqueOrThrow({ where: { id: accountId } }),
+      db.instrument.findUniqueOrThrow({ where: { id: usdjpyId } }),
+    ]);
+    const result = computeDerived({
+      instrument,
+      account,
+      direction: "LONG",
+      entryPrice: "149",
+      exitPrice: "150",
+      stopLoss: "148",
+      takeProfit: "152",
+      lots: "1",
+      commission: "0",
+      swap: "0",
+      fees: "0",
+      quoteToAccountRate: "0.006",
+      pnlSource: "CALCULATED",
+      manualNetPnl: null,
+      entryTime: new Date("2026-11-12T14:00:00.000Z"),
+      balanceAtEntry: new Decimal("10000"),
+      fxRates: [],
+    });
+
+    // Both reward and initial risk convert from JPY to USD at 0.006.
+    expect(result.netPnl?.toString()).toBe("600");
+    expect(result.riskAmount?.toString()).toBe("600");
+    expect(result.rMultiple?.toString()).toBe("1");
   });
 });
 
