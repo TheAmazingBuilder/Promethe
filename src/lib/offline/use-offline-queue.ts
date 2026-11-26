@@ -63,6 +63,11 @@ function publishOnline(value: boolean): void {
 
 function subscribeOnline(cb: (online: boolean) => void): () => void {
   onlineSubscribers.add(cb);
+  // A subscriber learns the current value on subscribe: a publish that
+  // landed before this subscription (a missed `online` transition, or a
+  // stale listener from a previous mount publishing during the commit)
+  // can never leave it stranded on a stale snapshot.
+  cb(onlineState);
   return () => {
     onlineSubscribers.delete(cb);
   };
@@ -100,6 +105,9 @@ function publishReplaying(value: boolean): void {
 
 function subscribeReplaying(cb: (replaying: boolean) => void): () => void {
   replayingSubscribers.add(cb);
+  // Same self-healing rule as subscribeOnline: a subscriber learns the
+  // current value on subscribe.
+  cb(replayingState);
   return () => {
     replayingSubscribers.delete(cb);
   };
@@ -151,7 +159,23 @@ export function useOfflineQueueState(): OfflineQueueState {
     getOfflineUserId(),
   );
   const [items, setItems] = React.useState<OfflineQueueItem[]>([]);
-  const [isOnline, setIsOnline] = React.useState(() => onlineState);
+  // The rendered online state always derives from the live module store.
+  // The previous `useState(() => onlineState)` + subscribe-in-effect
+  // pattern could strand this component on a stale snapshot: if a publish
+  // landed between the first render and the subscription (a missed
+  // `online` transition, or a stale listener from a previous mount
+  // publishing during the commit), the module flipped to online while the
+  // component still held offline - and every later resync was a no-op,
+  // because publishOnline only notifies on a change. The banner then
+  // stayed forever even though navigator.onLine was true. With
+  // useSyncExternalStore the snapshot is re-read after subscribing and the
+  // component re-renders when it changed, so the stuck state is
+  // impossible. Server snapshot is online (the server has no navigator).
+  const isOnline = React.useSyncExternalStore(
+    subscribeOnline,
+    () => onlineState,
+    () => true,
+  );
   const [isReplaying, setIsReplaying] = React.useState(() => replayingState);
 
   const load = React.useCallback(async () => {
@@ -178,7 +202,6 @@ export function useOfflineQueueState(): OfflineQueueState {
     return onQueueChange(() => void load());
   }, [load]);
 
-  React.useEffect(() => subscribeOnline(setIsOnline), []);
   React.useEffect(() => subscribeReplaying(setIsReplaying), []);
 
   const replayNow = React.useCallback(async (): Promise<ReplaySummary | null> => {
