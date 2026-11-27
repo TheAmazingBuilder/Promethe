@@ -286,13 +286,26 @@ export async function resolveOfflineConflict(
     await discardItem(store, itemId);
     return null;
   }
+  const serverBase = item.conflict?.serverUpdatedAt ?? undefined;
+  const payload =
+    item.kind === "NOTE_UPDATE"
+      ? {
+          ...item.payload,
+          // Gaïa now supports an atomic compare-and-swap. Rebase on the
+          // conflict snapshot without bypassing the version guard: if the
+          // server changes again before replay, the user gets a new 409.
+          expectedUpdatedAt: serverBase,
+          force: undefined,
+        }
+      : {
+          // Journal keeps its existing explicit overwrite semantics.
+          ...item.payload,
+          force: true,
+          expectedUpdatedAt: serverBase,
+        };
   const forced: OfflineQueueItem = {
     ...item,
-    payload: {
-      ...item.payload,
-      force: true,
-      expectedUpdatedAt: item.conflict?.serverUpdatedAt ?? undefined,
-    },
+    payload,
     status: "PENDING",
     attempts: 0,
     retryable: true,
