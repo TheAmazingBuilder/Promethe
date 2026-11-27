@@ -10,6 +10,27 @@
  */
 
 let currentUserId: string | null = null;
+const SESSION_CHANNEL = "promethe-offline-session";
+let sessionChannel: BroadcastChannel | null = null;
+
+function publishUserId(userId: string | null): void {
+  if (currentUserId === userId) return;
+  currentUserId = userId;
+  for (const listener of [...listeners]) listener(userId);
+}
+
+function getSessionChannel(): BroadcastChannel | null {
+  if (typeof window === "undefined" || typeof BroadcastChannel === "undefined") return null;
+  if (!sessionChannel) {
+    sessionChannel = new BroadcastChannel(SESSION_CHANNEL);
+    sessionChannel.addEventListener("message", (event: MessageEvent) => {
+      const value = event.data?.userId;
+      if (value === null || typeof value === "string") publishUserId(value);
+    });
+  }
+  return sessionChannel;
+}
+
 const listeners = new Set<(userId: string | null) => void>();
 
 export function getOfflineUserId(): string | null {
@@ -18,8 +39,8 @@ export function getOfflineUserId(): string | null {
 
 export function setOfflineUserId(userId: string | null): void {
   if (currentUserId === userId) return;
-  currentUserId = userId;
-  for (const listener of [...listeners]) listener(userId);
+  publishUserId(userId);
+  getSessionChannel()?.postMessage({ userId });
 }
 
 export function onOfflineUserIdChange(
