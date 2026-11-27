@@ -143,6 +143,40 @@ describe("session isolation and single-flight", () => {
     expect((await store.getItem(queued.id))?.attempts).toBe(0);
   });
 
+  it("reclaims an abandoned SENDING operation after its lease expires", async () => {
+    const store = new MemoryStore();
+    const queued = await queueTrade(store, "reclaim-after-crash");
+    await store.putItem({
+      ...queued,
+      status: "SENDING",
+      leaseToken: "dead-tab-lease",
+      updatedAt: new Date(Date.now() - 11 * 60 * 1000).toISOString(),
+    });
+    const summary = await replayQueue(store, USER, async () => ({ outcome: "sent", serverId: "recovered" }));
+    expect(summary.sent).toBe(1);
+    expect((await store.getItem(queued.id))?.status).toBe("SENT");
+    expect((await store.getItem(queued.id))?.leaseToken).toBeNull();
+  });
+
+  it("does not reclaim a fresh SENDING lease owned by another tab", async () => {
+    const store = new MemoryStore();
+    const queued = await queueTrade(store, "fresh-lease");
+    await store.putItem({
+      ...queued,
+      status: "SENDING",
+      leaseToken: "active-tab-lease",
+      updatedAt: new Date().toISOString(),
+    });
+    let calls = 0;
+    const summary = await replayQueue(store, USER, async () => {
+      calls += 1;
+      return { outcome: "sent" };
+    });
+    expect(summary.sent).toBe(0);
+    expect(calls).toBe(0);
+    expect((await store.getItem(queued.id))?.leaseToken).toBe("active-tab-lease");
+  });
+
   it("does not share a replay promise between different users in the same store", async () => {
     const store = new MemoryStore();
     await queueTrade(store, "user-one-item");
