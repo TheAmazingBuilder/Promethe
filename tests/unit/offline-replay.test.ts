@@ -119,9 +119,15 @@ describe("session isolation and single-flight", () => {
   it("restores SENDING to PENDING if the session changes during the claim", async () => {
     let activeUser: string | null = USER;
     class SessionSwitchStore extends MemoryStore {
-      override async putItem(item: OfflineQueueItem): Promise<void> {
-        await super.putItem(item);
-        if (item.status === "SENDING") activeUser = "another-user";
+      override async claimItem(
+        id: string,
+        userId: string,
+        claimedAt: string,
+        staleBefore: string,
+      ): Promise<OfflineQueueItem | null> {
+        const claimed = await super.claimItem(id, userId, claimedAt, staleBefore);
+        if (claimed) activeUser = "another-user";
+        return claimed;
       }
     }
     const store = new SessionSwitchStore();
