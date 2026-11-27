@@ -126,6 +126,18 @@ function editText(value: string) {
   fireEvent.change(textarea!, { target: { value } });
 }
 
+function editTitle(value: string) {
+  const input = screen.getByTestId("gaia-title-input") as HTMLInputElement;
+  fireEvent.change(input, { target: { value } });
+}
+
+function patchTitle(callIndex: number): string {
+  const call = mutateAsync.mock.calls[callIndex]?.[0] as
+    | { patch?: { title?: string } }
+    | undefined;
+  return call?.patch?.title ?? "";
+}
+
 function patchBlocksText(callIndex: number): string {
   const call = mutateAsync.mock.calls[callIndex]?.[0] as
     | { patch?: { blocks?: Array<{ text?: string }> } }
@@ -150,6 +162,36 @@ afterEach(() => {
 });
 
 describe("Gaia autosave race", () => {
+  it("debounces rapid title typing and sends the complete latest title", async () => {
+    renderEditor();
+
+    editTitle("F");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    editTitle("Fo");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    editTitle("Formation");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(899);
+    });
+
+    expect(mutateAsync).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect(patchTitle(0)).toBe("Formation");
+
+    await act(async () => {
+      deferred!.resolve(patchResult("2026-11-26T10:00:00.000Z"));
+    });
+    expect(saveStatus()).toBe("saved");
+  });
+
   it("marks the note saved when nothing changes during the request", async () => {
     renderEditor();
     expect(screen.getByDisplayValue("hello")).toBeTruthy();
