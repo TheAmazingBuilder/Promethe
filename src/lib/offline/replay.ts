@@ -29,6 +29,7 @@ import {
 } from "./queue";
 import {
   OFFLINE_QUEUE_MAX_ATTEMPTS,
+  OFFLINE_QUEUE_SENDING_LEASE_MS,
   type OfflineConflict,
   type OfflineQueueItem,
 } from "./types";
@@ -218,6 +219,8 @@ async function runReplay(
     .filter(
       (item) =>
         item.status === "PENDING" ||
+        (item.status === "SENDING" &&
+          new Date(item.updatedAt).getTime() <= Date.now() - OFFLINE_QUEUE_SENDING_LEASE_MS) ||
         (item.status === "FAILED" &&
           item.retryable &&
           item.attempts < OFFLINE_QUEUE_MAX_ATTEMPTS),
@@ -236,19 +239,28 @@ async function runReplay(
     ) {
       continue;
     }
-    await updateItemStatus(store, item.id, { status: "SENDING" });
-    // The session can change while IndexedDB is being updated. Restore the
-    // item to PENDING before exiting; it has not been sent or charged.
+    const claimed = await store.claimItem(
+      item.id,
+      userId,
+      new Date().toISOString(),
+      new Date(Date.now() - OFFLINE_QUEUE_SENDING_LEASE_MS).toISOString(),
+    );
+    if (!claimed?.leaseToken) continue;
+    notifyQueueChange();
+    // The session can change while IndexedDB is being updated. Release only
+    // this tab's claim; a newer edit or another claimant remains untouched.
     if (!shouldContinue()) {
-      await updateItemStatus(store, item.id, { status: "PENDING" });
+      await store.finishClaim(item.id, userId, claimed.leaseToken, { status: "PENDING" });
+      notifyQueueChange();
       break;
     }
     let result: ReplaySendResult;
     try {
-      result = await sender(current);
+      result = await sender(claimed);
     } catch (error) {
       if (isNetworkError(error)) {
-        await updateItemStatus(store, item.id, { status: "PENDING" });
+        await store.finishClaim(item.id, userId, claimed.leaseToken, { status: "PENDING" });
+        notifyQueueChange();
         summary.stoppedOnNetworkError = true;
         break;
       }
@@ -257,15 +269,16 @@ async function runReplay(
         message: error instanceof Error ? error.message : "Replay failed.",
       };
     }
-    const attempts = current.attempts + 1;
+    const attempts = claimed.attempts + 1;
     if (result.outcome === "sent") {
-      await updateItemStatus(store, item.id, {
+      await store.finishClaim(item.id, userId, claimed.leaseToken, {
         status: "SENT",
         attempts,
         serverId: result.serverId ?? null,
         lastError: null,
         conflict: null,
       });
+      notifyQueueChange();
       summary.sent += 1;
       if (item.kind === "NOTE_CREATE" && result.serverId) {
         emitNoteSynced(item.entityKey, result.serverId);
@@ -277,20 +290,22 @@ async function runReplay(
         serverUpdatedAt: result.serverUpdatedAt ?? current.updatedAt,
         serverSnapshot: result.serverSnapshot ?? null,
       };
-      await updateItemStatus(store, item.id, {
+      await store.finishClaim(store, item.id, claimed.leaseToken, {
         status: "CONFLICT",
         attempts,
         lastError: result.message ?? "Edited elsewhere.",
         conflict,
       });
+      notifyQueueChange();
       summary.conflicted += 1;
     } else {
-      await updateItemStatus(store, item.id, {
+      await store.finishClaim(store, item.id, claimed.leaseToken, {
         status: "FAILED",
         attempts,
         lastError: result.message ?? "Replay failed.",
         retryable: result.retryable ?? true,
       });
+      notifyQueueChange();
       summary.failed += 1;
     }
   }
