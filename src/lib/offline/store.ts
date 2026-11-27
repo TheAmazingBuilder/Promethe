@@ -13,6 +13,10 @@ import type { OfflineQueueItem } from "./types";
 export interface OfflineStore {
   getItem(id: string): Promise<OfflineQueueItem | null>;
   putItem(item: OfflineQueueItem): Promise<void>;
+  /** Atomically claim a due item across tabs, reclaiming only stale SENDING leases. */
+  claimItem(id: string, userId: string, claimedAt: string, staleBefore: string): Promise<OfflineQueueItem | null>;
+  /** Complete/release only the claim token that still owns the item. */
+  finishClaim(id: string, userId: string, leaseToken: string, patch: Partial<OfflineQueueItem>): Promise<boolean>;
   deleteItem(id: string): Promise<void>;
   listItems(userId: string): Promise<OfflineQueueItem[]>;
   clearUser(userId: string): Promise<void>;
@@ -37,6 +41,27 @@ export class MemoryStore implements OfflineStore {
 
   async putItem(item: OfflineQueueItem): Promise<void> {
     this.items.set(item.id, { ...item });
+  }
+
+  async claimItem(id: string, userId: string, claimedAt: string, staleBefore: string): Promise<OfflineQueueItem | null> {
+    const item = this.items.get(id);
+    if (!item || item.userId !== userId) return null;
+    const eligible = item.status === "PENDING" || item.status === "FAILED" ||
+      (item.status === "SENDING" && item.updatedAt <= staleBefore);
+    if (!eligible) return null;
+    const leaseToken = typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `lease-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const claimed = { ...item, status: "SENDING" as const, leaseToken, updatedAt: claimedAt };
+    this.items.set(id, claimed);
+    return { ...claimed };
+  }
+
+  async finishClaim(id: string, userId: string, leaseToken: string, patch: Partial<OfflineQueueItem>): Promise<boolean> {
+    const item = this.items.get(id);
+    if (!item || item.userId !== userId || item.status !== "SENDING" || item.leaseToken !== leaseToken) return false;
+    this.items.set(id, { ...item, ...patch, leaseToken: null, updatedAt: new Date().toISOString() });
+    return true;
   }
 
   async deleteItem(id: string): Promise<void> {
@@ -135,6 +160,52 @@ export class IndexedDbStore implements OfflineStore {
   async putItem(item: OfflineQueueItem): Promise<void> {
     const db = await this.db();
     await withStore(db, QUEUE_STORE, "readwrite", (store) => store.put(item));
+  }
+
+  async claimItem(id: string, userId: string, claimedAt: string, staleBefore: string): Promise<OfflineQueueItem | null> {
+    const db = await this.db();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(QUEUE_STORE, "readwrite");
+      const objectStore = tx.objectStore(QUEUE_STORE);
+      let claimed: OfflineQueueItem | null = null;
+      const request = objectStore.get(id);
+      request.onsuccess = () => {
+        const item = request.result as OfflineQueueItem | undefined;
+        if (!item || item.userId !== userId) return;
+        const eligible = item.status === "PENDING" || item.status === "FAILED" ||
+          (item.status === "SENDING" && item.updatedAt <= staleBefore);
+        if (!eligible) return;
+        const leaseToken = typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `lease-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        claimed = { ...item, status: "SENDING", leaseToken, updatedAt: claimedAt };
+        objectStore.put(claimed);
+      };
+      request.onerror = () => reject(request.error ?? new Error("IndexedDB claim read failed."));
+      tx.oncomplete = () => resolve(claimed);
+      tx.onerror = () => reject(tx.error ?? new Error("IndexedDB claim transaction failed."));
+      tx.onabort = () => reject(tx.error ?? new Error("IndexedDB claim transaction aborted."));
+    });
+  }
+
+  async finishClaim(id: string, userId: string, leaseToken: string, patch: Partial<OfflineQueueItem>): Promise<boolean> {
+    const db = await this.db();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(QUEUE_STORE, "readwrite");
+      const objectStore = tx.objectStore(QUEUE_STORE);
+      let finished = false;
+      const request = objectStore.get(id);
+      request.onsuccess = () => {
+        const item = request.result as OfflineQueueItem | undefined;
+        if (!item || item.userId !== userId || item.status !== "SENDING" || item.leaseToken !== leaseToken) return;
+        objectStore.put({ ...item, ...patch, leaseToken: null, updatedAt: new Date().toISOString() });
+        finished = true;
+      };
+      request.onerror = () => reject(request.error ?? new Error("IndexedDB claim completion read failed."));
+      tx.oncomplete = () => resolve(finished);
+      tx.onerror = () => reject(tx.error ?? new Error("IndexedDB claim completion failed."));
+      tx.onabort = () => reject(tx.error ?? new Error("IndexedDB claim completion aborted."));
+    });
   }
 
   async deleteItem(id: string): Promise<void> {
