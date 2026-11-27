@@ -19,6 +19,7 @@
 import type { OfflineStore } from "./store";
 import {
   OFFLINE_QUEUE_SENT_RETENTION_MS,
+  OFFLINE_QUEUE_SENDING_LEASE_MS,
   OFFLINE_QUEUE_TTL_MS,
   isTerminalOfflineStatus,
   newOfflineId,
@@ -204,7 +205,7 @@ export async function expireStaleItems(
       (item.status === "PENDING" || item.status === "FAILED" || item.status === "SENDING") &&
       new Date(item.expiresAt).getTime() <= now.getTime() &&
       (item.status !== "SENDING" ||
-        new Date(item.updatedAt).getTime() + 10 * 60 * 1000 <= now.getTime())
+        new Date(item.updatedAt).getTime() + OFFLINE_QUEUE_SENDING_LEASE_MS <= now.getTime())
     ) {
       const expired: OfflineQueueItem = {
         ...item,
