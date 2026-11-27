@@ -287,23 +287,22 @@ export async function resolveOfflineConflict(
     return null;
   }
   const serverBase = item.conflict?.serverUpdatedAt ?? undefined;
-  const payload =
-    item.kind === "NOTE_UPDATE"
-      ? {
-          ...item.payload,
-          // Gaïa now supports an atomic compare-and-swap. Rebase on the
-          // conflict snapshot without bypassing the version guard: if the
-          // server changes again before replay, the user gets a new 409.
-          expectedUpdatedAt: serverBase,
-          force: undefined,
-        }
-      : {
-          // Journal keeps its existing explicit overwrite semantics.
-          ...item.payload,
-          force: true,
-          expectedUpdatedAt: serverBase,
-        };
-  const forced: OfflineQueueItem = {
+  let payload: Record<string, unknown>;
+  if (item.kind === "NOTE_UPDATE") {
+    const { force: _force, ...notePayload } = item.payload;
+    // Gaïa now supports an atomic compare-and-swap. Rebase on the
+    // conflict snapshot without bypassing the version guard: if the
+    // server changes again before replay, the user gets a new 409.
+    payload = { ...notePayload, expectedUpdatedAt: serverBase };
+  } else {
+    // Journal keeps its existing explicit overwrite semantics.
+    payload = {
+      ...item.payload,
+      force: true,
+      expectedUpdatedAt: serverBase,
+    };
+  }
+  const resolvedItem: OfflineQueueItem = {
     ...item,
     payload,
     status: "PENDING",
@@ -312,7 +311,7 @@ export async function resolveOfflineConflict(
     conflict: null,
     lastError: null,
   };
-  await store.putItem(forced);
+  await store.putItem(resolvedItem);
   notifyQueueChange();
-  return forced;
+  return resolvedItem;
 }
