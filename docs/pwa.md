@@ -134,9 +134,13 @@ silently overwritten:
 - Journal upsert: the replay carries the `expectedUpdatedAt` the
   client last saw. When the server row changed since, the replay is a
   409 CONFLICT carrying the server entry. The queue item keeps both
-  versions; the user chooses "Keep mine" (replays with force, using
-  the server's updatedAt as the new base) or "Keep server version"
-  (discards the queued change).
+  versions; the user chooses "Keep mine" (replays with the existing
+  explicit overwrite behavior) or "Keep server version" (discards the
+  queued change).
+- Gaïa note update: "Keep mine" rebases the queued content on the
+  server version returned by the conflict, but keeps compare-and-swap
+  enabled. If another edit lands before replay, the note conflicts
+  again instead of overwriting that newer edit.
 - Note update: same rule for content edits (title, blocks). A
   metadata-only patch (favorite, folder, icon, tags) touches no
   content field and applies without a base check.
