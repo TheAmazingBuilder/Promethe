@@ -168,28 +168,43 @@ export async function createApiReplaySender(): Promise<ReplaySender> {
   };
 }
 
-let replayInFlight: Promise<ReplaySummary> | null = null;
+const replayFlights = new WeakMap<OfflineStore, Map<string, Promise<ReplaySummary>>>();
 
 /**
- * Replay every due item for a user, oldest first. Concurrent calls share
- * the in-flight pass. Returns a summary of the pass.
+ * Replay due items for one user and one store. Calls for the same pair share
+ * a pass; different users or store instances never block one another.
+ *
+ * shouldContinue is checked at every item boundary and immediately before
+ * the sender starts its request. Returning false pauses the pass without
+ * consuming an attempt or leaving an item in SENDING.
  */
 export function replayQueue(
   store: OfflineStore,
   userId: string,
   sender: ReplaySender,
+  shouldContinue: () => boolean = () => true,
 ): Promise<ReplaySummary> {
-  if (replayInFlight) return replayInFlight;
-  replayInFlight = runReplay(store, userId, sender).finally(() => {
-    replayInFlight = null;
+  let userFlights = replayFlights.get(store);
+  if (!userFlights) {
+    userFlights = new Map();
+    replayFlights.set(store, userFlights);
+  }
+  const existing = userFlights.get(userId);
+  if (existing) return existing;
+
+  const flight = runReplay(store, userId, sender, shouldContinue).finally(() => {
+    if (userFlights?.get(userId) === flight) userFlights.delete(userId);
+    if (userFlights?.size === 0) replayFlights.delete(store);
   });
-  return replayInFlight;
+  userFlights.set(userId, flight);
+  return flight;
 }
 
 async function runReplay(
   store: OfflineStore,
   userId: string,
   sender: ReplaySender,
+  shouldContinue: () => boolean,
 ): Promise<ReplaySummary> {
   const summary: ReplaySummary = {
     sent: 0,
@@ -197,6 +212,7 @@ async function runReplay(
     conflicted: 0,
     stoppedOnNetworkError: false,
   };
+  if (!shouldContinue()) return summary;
   await expireStaleItems(store, userId);
   const items = (await store.listItems(userId))
     .filter(
@@ -209,12 +225,24 @@ async function runReplay(
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
   for (const item of items) {
+    if (!shouldContinue()) break;
     // A newer enqueue may have merged this item away mid-pass.
     const current = await store.getItem(item.id);
-    if (!current || (current.status !== "PENDING" && current.status !== "FAILED")) {
+    if (!shouldContinue()) break;
+    if (
+      !current ||
+      current.userId !== userId ||
+      (current.status !== "PENDING" && current.status !== "FAILED")
+    ) {
       continue;
     }
     await updateItemStatus(store, item.id, { status: "SENDING" });
+    // The session can change while IndexedDB is being updated. Restore the
+    // item to PENDING before exiting; it has not been sent or charged.
+    if (!shouldContinue()) {
+      await updateItemStatus(store, item.id, { status: "PENDING" });
+      break;
+    }
     let result: ReplaySendResult;
     try {
       result = await sender(current);
