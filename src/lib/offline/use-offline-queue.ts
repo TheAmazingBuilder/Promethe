@@ -121,19 +121,27 @@ async function runReplay(userId: string): Promise<ReplaySummary | null> {
   if (typeof navigator !== "undefined" && !navigator.onLine) return null;
   activeReplayCount += 1;
   publishReplaying(true);
+  const controller = new AbortController();
+  const unsubscribeSession = onOfflineUserIdChange((nextUserId) => {
+    if (nextUserId !== userId) controller.abort();
+  });
   try {
     const store = getBrowserStore();
-    const sender = await createApiReplaySender();
-    if (getOfflineUserId() !== userId) return null;
+    const sender = await createApiReplaySender(controller.signal);
+    if (getOfflineUserId() !== userId) {
+      controller.abort();
+      return null;
+    }
     return await replayQueue(
       store,
       userId,
       sender,
-      () => getOfflineUserId() === userId,
+      () => getOfflineUserId() === userId && !controller.signal.aborted,
     );
   } catch {
     return null;
   } finally {
+    unsubscribeSession();
     activeReplayCount = Math.max(0, activeReplayCount - 1);
     publishReplaying(activeReplayCount > 0);
   }
