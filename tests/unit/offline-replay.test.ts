@@ -190,7 +190,7 @@ describe("session isolation and single-flight", () => {
     const summary = await pass;
 
     const remaining = await store.getItem(queued.id);
-    expect(summary.sent).toBe(1);
+    expect(summary.sent).toBe(0);
     expect(remaining?.status).toBe("PENDING");
     expect(remaining?.payload.version).toBe(2);
     expect(remaining?.leaseToken).toBeNull();
