@@ -335,7 +335,7 @@ describe("Gaia autosave race", () => {
     await act(async () => { deferred!.reject(conflict); });
 
     expect(screen.getByTestId("gaia-conflict-resolution")).toBeTruthy();
-    expect(screen.getByTestId("gaia-title-input")).toHaveValue("My local title");
+    expect((screen.getByTestId("gaia-title-input") as HTMLInputElement).value).toBe("My local title");
     expect(saveStatus()).toBe("error");
     await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
     expect(mutateAsync).toHaveBeenCalledTimes(1);
@@ -368,7 +368,7 @@ describe("Gaia autosave race", () => {
     await act(async () => { deferred!.reject(conflict); });
 
     fireEvent.click(screen.getByRole("button", { name: "Use server version" }));
-    expect(screen.getByTestId("gaia-title-input")).toHaveValue("Server title");
+    expect((screen.getByTestId("gaia-title-input") as HTMLInputElement).value).toBe("Server title");
     expect(saveStatus()).toBe("saved");
     expect(screen.queryByTestId("gaia-conflict-resolution")).toBeNull();
     await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
