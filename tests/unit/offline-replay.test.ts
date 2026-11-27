@@ -116,6 +116,35 @@ describe("session isolation and single-flight", () => {
     expect((await store.getItem(second.id))?.attempts).toBe(0);
   });
 
+  it("restores SENDING to PENDING if the session changes during the claim", async () => {
+    let activeUser: string | null = USER;
+    class SessionSwitchStore extends MemoryStore {
+      override async putItem(item: Awaited<ReturnType<MemoryStore["getItem"]>> extends infer T
+        ? Exclude<T, null>
+        : never): Promise<void> {
+        await super.putItem(item);
+        if (item.status === "SENDING") activeUser = "another-user";
+      }
+    }
+    const store = new SessionSwitchStore();
+    const queued = await queueTrade(store, "switch-before-send");
+    let senderCalls = 0;
+    const summary = await replayQueue(
+      store,
+      USER,
+      async () => {
+        senderCalls += 1;
+        return { outcome: "sent" };
+      },
+      () => activeUser === USER,
+    );
+
+    expect(summary.sent).toBe(0);
+    expect(senderCalls).toBe(0);
+    expect((await store.getItem(queued.id))?.status).toBe("PENDING");
+    expect((await store.getItem(queued.id))?.attempts).toBe(0);
+  });
+
   it("does not share a replay promise between different users in the same store", async () => {
     const store = new MemoryStore();
     await queueTrade(store, "user-one-item");
