@@ -91,6 +91,7 @@ export async function enqueueOperation(
         // the server row the user first edited from, not a later draft.
         baseUpdatedAt: existing.baseUpdatedAt ?? input.baseUpdatedAt ?? null,
         status: existing.status === "CONFLICT" ? "CONFLICT" : "PENDING",
+        leaseToken: null,
         // A fresh user edit deserves a fresh chance: the new payload may
         // be valid even when the previous one was refused.
         attempts: 0,
@@ -200,8 +201,10 @@ export async function expireStaleItems(
   const changed: OfflineQueueItem[] = [];
   for (const item of items) {
     if (
-      (item.status === "PENDING" || item.status === "FAILED") &&
-      new Date(item.expiresAt).getTime() <= now.getTime()
+      (item.status === "PENDING" || item.status === "FAILED" || item.status === "SENDING") &&
+      new Date(item.expiresAt).getTime() <= now.getTime() &&
+      (item.status !== "SENDING" ||
+        new Date(item.updatedAt).getTime() + 10 * 60 * 1000 <= now.getTime())
     ) {
       const expired: OfflineQueueItem = {
         ...item,
