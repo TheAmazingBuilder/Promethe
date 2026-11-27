@@ -766,12 +766,16 @@ export async function updateNote(
 
   if (!hasMeaningfulChange) {
     if (parsed.touchViewed === true) {
-      const touched = await db.note.update({
-        where: { id: note.id },
-        data: { lastViewedAt: new Date() },
+      // Viewing metadata must not advance updatedAt: that timestamp is the
+      // optimistic-concurrency token used by the editor's next content save.
+      await db.note.updateMany({
+        where: { userId, id: note.id, updatedAt: note.updatedAt },
+        data: { lastViewedAt: new Date(), updatedAt: note.updatedAt },
       });
+      const current = await findActiveNote(userId, note.id);
+      if (!current) throw NOTE_NOT_FOUND();
       const [folders, tags] = await Promise.all([loadFolders(userId), loadTags(userId)]);
-      return noteResponse(userId, touched, folders, tags);
+      return noteResponse(userId, current, folders, tags);
     }
     const [folders, tags] = await Promise.all([loadFolders(userId), loadTags(userId)]);
     return noteResponse(userId, note, folders, tags);
