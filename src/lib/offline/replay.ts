@@ -84,25 +84,25 @@ function emitNoteSynced(provisionalId: string, serverId: string): void {
 export function isNetworkError(error: unknown): boolean {
   return (
     error instanceof TypeError ||
-    (error instanceof Error && /network|fetch|Failed to fetch/i.test(error.message))
+    (error instanceof Error && (error.name === "AbortError" || /network|fetch|Failed to fetch/i.test(error.message)))
   );
 }
 
 /** The real sender: replays one item against the matching API route. */
-export async function createApiReplaySender(): Promise<ReplaySender> {
+export async function createApiReplaySender(signal?: AbortSignal): Promise<ReplaySender> {
   return async (item: OfflineQueueItem): Promise<ReplaySendResult> => {
     try {
       if (item.kind === "TRADE_CREATE") {
         const res = await apiFetch<{ trade: { id: string } }>(
           "/api/v1/trades",
-          { method: "POST", body: JSON.stringify(item.payload) },
+          { method: "POST", body: JSON.stringify(item.payload), signal },
         );
         return { outcome: "sent", serverId: res.trade.id };
       }
       if (item.kind === "JOURNAL_UPSERT") {
         const res = await apiFetch<{ entry: { id: string } }>(
           "/api/v1/journal",
-          { method: "PUT", body: JSON.stringify(item.payload) },
+          { method: "PUT", body: JSON.stringify(item.payload), signal },
         );
         return { outcome: "sent", serverId: res.entry.id };
       }
@@ -113,6 +113,7 @@ export async function createApiReplaySender(): Promise<ReplaySender> {
         }>("/api/v1/gaia/notes", {
           method: "POST",
           body: JSON.stringify(item.payload),
+          signal,
         });
         return { outcome: "sent", serverId: res.note.id };
       }
@@ -120,7 +121,7 @@ export async function createApiReplaySender(): Promise<ReplaySender> {
       const noteId = item.entityKey;
       const res = await apiFetch<{ note: { id: string; updatedAt: string } }>(
         `/api/v1/gaia/notes/${encodeURIComponent(noteId)}`,
-        { method: "PATCH", body: JSON.stringify(item.payload) },
+        { method: "PATCH", body: JSON.stringify(item.payload), signal },
       );
       return { outcome: "sent", serverId: res.note.id };
     } catch (error) {
