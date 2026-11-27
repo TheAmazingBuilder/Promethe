@@ -94,6 +94,85 @@ describe("replay order and idempotency", () => {
   });
 });
 
+describe("session isolation and single-flight", () => {
+  it("stops after an account switch and leaves unsent operations pending", async () => {
+    const store = new MemoryStore();
+    const first = await queueTrade(store, "switch-1");
+    const second = await queueTrade(store, "switch-2");
+    let activeUser: string | null = USER;
+    const sent: string[] = [];
+    const sender: ReplaySender = async (item) => {
+      sent.push(item.idempotencyKey);
+      activeUser = "another-user";
+      return { outcome: "sent", serverId: "server-first" };
+    };
+
+    const summary = await replayQueue(store, USER, sender, () => activeUser === USER);
+
+    expect(summary.sent).toBe(1);
+    expect(sent).toEqual(["switch-1"]);
+    expect((await store.getItem(first.id))?.status).toBe("SENT");
+    expect((await store.getItem(second.id))?.status).toBe("PENDING");
+    expect((await store.getItem(second.id))?.attempts).toBe(0);
+  });
+
+  it("does not share a replay promise between different users in the same store", async () => {
+    const store = new MemoryStore();
+    await queueTrade(store, "user-one-item");
+    await enqueueOperation(store, {
+      userId: "user-two",
+      kind: "TRADE_CREATE",
+      entityKey: "user-two-item",
+      idempotencyKey: "user-two-item",
+      payload: { clientMutationId: "user-two-item" },
+    });
+
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const sent: string[] = [];
+    const sender: ReplaySender = async (item) => {
+      sent.push(item.userId);
+      if (item.userId === USER) await firstGate;
+      return { outcome: "sent", serverId: item.userId };
+    };
+
+    const firstPass = replayQueue(store, USER, sender);
+    const secondPass = replayQueue(store, "user-two", sender);
+    const secondSummary = await secondPass;
+    releaseFirst();
+    const firstSummary = await firstPass;
+
+    expect(secondSummary.sent).toBe(1);
+    expect(firstSummary.sent).toBe(1);
+    expect(sent).toContain(USER);
+    expect(sent).toContain("user-two");
+  });
+
+  it("does not share a replay promise between different store instances", async () => {
+    const firstStore = new MemoryStore();
+    const secondStore = new MemoryStore();
+    await queueTrade(firstStore, "store-one");
+    await queueTrade(secondStore, "store-two");
+    let releaseFirst!: () => void;
+    const gate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const sent: string[] = [];
+    const sender: ReplaySender = async (item) => {
+      sent.push(item.idempotencyKey);
+      if (item.idempotencyKey === "store-one") await gate;
+      return { outcome: "sent" };
+    };
+
+    const firstPass = replayQueue(firstStore, USER, sender);
+    const secondSummary = await replayQueue(secondStore, USER, sender);
+    releaseFirst();
+    const firstSummary = await firstPass;
+
+    expect(firstSummary.sent).toBe(1);
+    expect(secondSummary.sent).toBe(1);
+    expect(sent.sort()).toEqual(["store-one", "store-two"]);
+  });
+});
+
 describe("failures", () => {
   it("a 422 fails the item and never auto-retries", async () => {
     const store = new MemoryStore();
