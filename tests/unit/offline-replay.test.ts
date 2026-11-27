@@ -143,6 +143,53 @@ describe("session isolation and single-flight", () => {
     expect((await store.getItem(queued.id))?.attempts).toBe(0);
   });
 
+  it("allows only one active claim for a queue item", async () => {
+    const store = new MemoryStore();
+    const queued = await queueTrade(store, "single-claim");
+    const now = new Date().toISOString();
+    const staleBefore = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+
+    const firstClaim = await store.claimItem(queued.id, USER, now, staleBefore);
+    const secondClaim = await store.claimItem(queued.id, USER, now, staleBefore);
+
+    expect(firstClaim?.status).toBe("SENDING");
+    expect(firstClaim?.leaseToken).toBeTruthy();
+    expect(secondClaim).toBeNull();
+    expect(await store.finishClaim(queued.id, USER, firstClaim!.leaseToken!, { status: "SENT" })).toBe(true);
+  });
+
+  it("preserves a newer edit enqueued while the previous payload is sending", async () => {
+    const store = new MemoryStore();
+    const queued = await queueTrade(store, "edit-during-send");
+    let releaseSender!: () => void;
+    let senderStarted!: () => void;
+    const gate = new Promise<void>((resolve) => { releaseSender = resolve; });
+    const started = new Promise<void>((resolve) => { senderStarted = resolve; });
+
+    const pass = replayQueue(store, USER, async () => {
+      senderStarted();
+      await gate;
+      return { outcome: "sent", serverId: "server-original" };
+    });
+
+    await started;
+    await enqueueOperation(store, {
+      userId: USER,
+      kind: "TRADE_CREATE",
+      entityKey: "edit-during-send",
+      idempotencyKey: "edit-during-send",
+      payload: { clientMutationId: "edit-during-send", version: 2 },
+    });
+    releaseSender();
+    const summary = await pass;
+
+    const remaining = await store.getItem(queued.id);
+    expect(summary.sent).toBe(1);
+    expect(remaining?.status).toBe("PENDING");
+    expect(remaining?.payload.version).toBe(2);
+    expect(remaining?.leaseToken).toBeNull();
+  });
+
   it("reclaims an abandoned SENDING operation after its lease expires", async () => {
     const store = new MemoryStore();
     const queued = await queueTrade(store, "reclaim-after-crash");
