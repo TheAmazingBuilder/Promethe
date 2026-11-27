@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { ApiClientError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -57,6 +58,7 @@ import {
   useTrashGaiaNote,
   useUpdateGaiaNote,
   type GaiaBlock,
+  type GaiaNote,
   type GaiaRefHit,
   type GaiaRefKind,
   type GaiaT,
@@ -243,6 +245,7 @@ export function GaiaEditor({
 
   const [draft, setDraft] = React.useState<DraftState | null>(null);
   const [status, setStatus] = React.useState<SaveStatus>("saved");
+  const [conflictNote, setConflictNote] = React.useState<GaiaNote | null>(null);
   const [savedAt, setSavedAt] = React.useState<string | null>(null);
   const [versionsOpen, setVersionsOpen] = React.useState(false);
   const [printOpen, setPrintOpen] = React.useState(false);
@@ -331,6 +334,21 @@ export function GaiaEditor({
         needsImmediateFlush = true;
       }
     } catch (err) {
+      // A 409 is a real concurrent edit, not a transient failure. Stop the
+      // automatic retry loop and keep the complete local draft for an
+      // explicit resolution against the server snapshot.
+      if (err instanceof ApiClientError && err.status === 409 && err.code === "NOTE_CONFLICT") {
+        const body = err.body as { note?: GaiaNote } | undefined;
+        if (body?.note?.id === noteId) {
+          setConflictNote(body.note);
+          dirtyRef.current = true;
+          retryCountRef.current = 0;
+          setRetryPending(0);
+          setStatus("error");
+          toast({ variant: "destructive", title: t("gaia.editor.conflictDetected") });
+          return;
+        }
+      }
       // Offline (§25.5): a network failure mid-save queues the draft
       // instead of retrying forever. The queue owns the retry from here;
       // the local draft backup stays until the replay succeeds.
@@ -384,7 +402,7 @@ export function GaiaEditor({
         saveTimerRef.current = window.setTimeout(() => void flushSaveRef.current(), 0);
       }
     }
-  }, [noteId, toast, updateNote]);
+  }, [noteId, toast, updateNote, t]);
 
   const flushSaveRef = React.useRef(flushSave);
   React.useEffect(() => {
@@ -939,6 +957,39 @@ export function GaiaEditor({
             ? t("gaia.editor.statusQueued")
             : t("gaia.editor.statusError");
 
+  const useServerConflictVersion = () => {
+    if (!conflictNote) return;
+    draftRevisionRef.current += 1;
+    lastAdoptedUpdatedAtRef.current = conflictNote.updatedAt;
+    setDraftState({
+      title: conflictNote.title,
+      icon: conflictNote.icon,
+      folderId: conflictNote.folderId,
+      tagIds: [...conflictNote.tagIds],
+      favorite: conflictNote.favorite,
+      blocks: conflictNote.blocks.length > 0
+        ? conflictNote.blocks
+        : [{ id: newBlockId(), type: "paragraph", text: "" }],
+    });
+    dirtyRef.current = false;
+    clearLocalGaiaDraft(noteId);
+    setSavedAt(conflictNote.updatedAt);
+    setStatus("saved");
+    setConflictNote(null);
+  };
+
+  const keepLocalConflictVersion = () => {
+    if (!conflictNote) return;
+    // Rebase the local draft on the server version seen in the 409. The
+    // next PATCH still uses optimistic concurrency, so a newer remote edit
+    // will produce another conflict rather than being silently overwritten.
+    lastAdoptedUpdatedAtRef.current = conflictNote.updatedAt;
+    setConflictNote(null);
+    dirtyRef.current = true;
+    setStatus("dirty");
+    scheduleSave();
+  };
+
   const addBlock = () => {
     const block: GaiaBlock = { id: newBlockId(), type: "paragraph", text: "" };
     pendingFocusRef.current = { id: block.id, at: "start" };
@@ -952,6 +1003,24 @@ export function GaiaEditor({
       className="w-full"
     >
       <div className="rounded-xl border bg-card">
+        {conflictNote ? (
+          <section
+            data-testid="gaia-conflict-resolution"
+            role="alert"
+            className="border-b border-amber-500/30 bg-amber-500/5 px-4 py-4 sm:px-6"
+          >
+            <p className="text-sm font-semibold">{t("gaia.editor.conflictTitle")}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t("gaia.editor.conflictDescription")}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={useServerConflictVersion}>
+                {t("gaia.editor.useServerVersion")}
+              </Button>
+              <Button type="button" size="sm" onClick={keepLocalConflictVersion}>
+                {t("gaia.editor.keepMyVersion")}
+              </Button>
+            </div>
+          </section>
+        ) : null}
         <div className="flex items-start gap-2 border-b px-4 pb-3 pt-4 sm:px-6">
           <IconPicker
             icon={draft.icon}
