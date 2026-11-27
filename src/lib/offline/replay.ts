@@ -273,13 +273,17 @@ async function runReplay(
     }
     const attempts = claimed.attempts + 1;
     if (result.outcome === "sent") {
-      await store.finishClaim(item.id, userId, claimed.leaseToken, {
+      const finished = await store.finishClaim(item.id, userId, claimed.leaseToken, {
         status: "SENT",
         attempts,
         serverId: result.serverId ?? null,
         lastError: null,
         conflict: null,
       });
+      // The user may have edited or discarded this item while the request
+      // was in flight. A stale response must not count as a completed sync
+      // or remap a provisional note when its claim no longer owns the row.
+      if (!finished) continue;
       notifyQueueChange();
       summary.sent += 1;
       if (item.kind === "NOTE_CREATE" && result.serverId) {
@@ -292,21 +296,23 @@ async function runReplay(
         serverUpdatedAt: result.serverUpdatedAt ?? claimed.updatedAt,
         serverSnapshot: result.serverSnapshot ?? null,
       };
-      await store.finishClaim(item.id, userId, claimed.leaseToken, {
+      const finished = await store.finishClaim(item.id, userId, claimed.leaseToken, {
         status: "CONFLICT",
         attempts,
         lastError: result.message ?? "Edited elsewhere.",
         conflict,
       });
+      if (!finished) continue;
       notifyQueueChange();
       summary.conflicted += 1;
     } else {
-      await store.finishClaim(item.id, userId, claimed.leaseToken, {
+      const finished = await store.finishClaim(item.id, userId, claimed.leaseToken, {
         status: "FAILED",
         attempts,
         lastError: result.message ?? "Replay failed.",
         retryable: result.retryable ?? true,
       });
+      if (!finished) continue;
       notifyQueueChange();
       summary.failed += 1;
     }
