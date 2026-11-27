@@ -230,9 +230,17 @@ describe("logout and counts", () => {
       idempotencyKey: "mut-trade-1",
       payload: tradePayload(),
     });
+    await enqueueOperation(store, {
+      userId: OTHER,
+      kind: "TRADE_CREATE",
+      entityKey: "mut-trade-2",
+      idempotencyKey: "mut-trade-2",
+      payload: { ...tradePayload(), clientMutationId: "mut-trade-2" },
+    });
     await store.putReference("accounts", [{ id: "acc-1" }]);
     await clearOfflineDataForUser(store, USER);
     expect(await listQueueItems(store, USER)).toHaveLength(0);
+    expect(await listQueueItems(store, OTHER)).toHaveLength(1);
     expect(await store.getReference("accounts")).toBeNull();
   });
 
