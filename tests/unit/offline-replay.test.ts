@@ -328,6 +328,21 @@ describe("failures", () => {
     expect(calls).toBe(OFFLINE_QUEUE_MAX_ATTEMPTS);
   });
 
+  it("treats an aborted request as interrupted work, not a failed operation", async () => {
+    const store = new MemoryStore();
+    const queued = await queueTrade(store, "abort-during-logout");
+    const abortError = Object.assign(new Error("The operation was aborted."), {
+      name: "AbortError",
+    });
+    const summary = await replayQueue(store, USER, async () => {
+      throw abortError;
+    });
+    expect(summary.stoppedOnNetworkError).toBe(true);
+    expect(summary.failed).toBe(0);
+    expect((await store.getItem(queued.id))?.status).toBe("PENDING");
+    expect((await store.getItem(queued.id))?.attempts).toBe(0);
+  });
+
   it("a network error stops the pass without burning attempts", async () => {
     const store = new MemoryStore();
     await queueTrade(store, "mut-1");
