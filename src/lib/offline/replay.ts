@@ -301,7 +301,7 @@ async function runReplay(
       notifyQueueChange();
       summary.conflicted += 1;
     } else {
-      await store.finishClaim(store, item.id, claimed.leaseToken, {
+      await store.finishClaim(item.id, userId, claimed.leaseToken, {
         status: "FAILED",
         attempts,
         lastError: result.message ?? "Replay failed.",
