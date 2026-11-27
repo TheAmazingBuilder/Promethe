@@ -42,6 +42,9 @@ export const OFFLINE_QUEUE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /** A queued operation is abandoned after this many server attempts. */
 export const OFFLINE_QUEUE_MAX_ATTEMPTS = 5;
 
+/** A SENDING claim is recoverable after ten minutes without a heartbeat. */
+export const OFFLINE_QUEUE_SENDING_LEASE_MS = 10 * 60 * 1000;
+
 /** SENT items are pruned from the queue after this long. */
 export const OFFLINE_QUEUE_SENT_RETENTION_MS = 24 * 60 * 60 * 1000;
 
@@ -91,6 +94,8 @@ export interface OfflineQueueItem {
   /** updatedAt the client last saw (journal / note edits). Null for creates. */
   baseUpdatedAt: string | null;
   status: OfflineItemStatus;
+  /** Cross-tab claim token; null when the item is not actively sending. */
+  leaseToken?: string | null;
   attempts: number;
   createdAt: string;
   updatedAt: string;
