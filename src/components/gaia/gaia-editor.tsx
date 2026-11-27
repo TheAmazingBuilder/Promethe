@@ -335,23 +335,35 @@ export function GaiaEditor({
       // instead of retrying forever. The queue owns the retry from here;
       // the local draft backup stays until the replay succeeds.
       if (isNetworkError(err)) {
+        // Use the latest draft: the user may have continued typing while
+        // this request was in flight. Queueing the captured snapshot can
+        // otherwise persist only an early keystroke and lose later edits.
+        const latest = draftRef.current ?? current;
         const queued = await queueGaiaNoteUpdateOffline(
           noteId,
           {
-            title: current.title,
-            icon: current.icon,
-            folderId: current.folderId,
-            tagIds: current.tagIds,
-            favorite: current.favorite,
-            blocks: current.blocks,
+            title: latest.title,
+            icon: latest.icon,
+            folderId: latest.folderId,
+            tagIds: latest.tagIds,
+            favorite: latest.favorite,
+            blocks: latest.blocks,
           },
           lastAdoptedUpdatedAtRef.current,
         );
         if (queued) {
           retryCountRef.current = 0;
           setRetryPending(0);
-          dirtyRef.current = false;
-          setStatus("queued");
+          if (draftRevisionRef.current === savingRevision) {
+            dirtyRef.current = false;
+            setStatus("queued");
+            return;
+          }
+          // A newer edit arrived while the queue write was pending. Keep
+          // it dirty and flush again so the final revision is not lost.
+          dirtyRef.current = true;
+          setStatus("dirty");
+          needsImmediateFlush = true;
           return;
         }
       }
