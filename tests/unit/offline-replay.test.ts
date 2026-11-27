@@ -16,7 +16,7 @@ import {
   type ReplaySender,
   type ReplaySendResult,
 } from "@/lib/offline/replay";
-import { OFFLINE_QUEUE_MAX_ATTEMPTS } from "@/lib/offline/types";
+import { OFFLINE_QUEUE_MAX_ATTEMPTS, type OfflineQueueItem } from "@/lib/offline/types";
 
 const USER = "user-replay-1";
 
@@ -119,9 +119,7 @@ describe("session isolation and single-flight", () => {
   it("restores SENDING to PENDING if the session changes during the claim", async () => {
     let activeUser: string | null = USER;
     class SessionSwitchStore extends MemoryStore {
-      override async putItem(item: Awaited<ReturnType<MemoryStore["getItem"]>> extends infer T
-        ? Exclude<T, null>
-        : never): Promise<void> {
+      override async putItem(item: OfflineQueueItem): Promise<void> {
         await super.putItem(item);
         if (item.status === "SENDING") activeUser = "another-user";
       }
