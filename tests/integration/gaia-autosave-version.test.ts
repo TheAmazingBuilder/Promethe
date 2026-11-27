@@ -96,4 +96,46 @@ describe("Gaïa autosave version token", () => {
 
     expect(current.note.title).toBe("Autosave version token - updated");
   });
+  it("allows only one concurrent content save from the same version", async () => {
+    const created = await createNote(userId, {
+      title: "Concurrent autosave base",
+      blocks: blocks("Concurrent base content"),
+    });
+    const concurrentNoteId = created.note.id;
+    const base = await getNote(userId, concurrentNoteId);
+    const expectedUpdatedAt = base.note.updatedAt;
+
+    const results = await Promise.allSettled([
+      updateNote(userId, concurrentNoteId, {
+        title: "Concurrent writer A",
+        expectedUpdatedAt,
+      }),
+      updateNote(userId, concurrentNoteId, {
+        title: "Concurrent writer B",
+        expectedUpdatedAt,
+      }),
+    ]);
+
+    const fulfilled = results.filter((result) => result.status === "fulfilled");
+    const rejected = results.filter((result) => result.status === "rejected");
+
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({
+      code: "NOTE_CONFLICT",
+      status: 409,
+    });
+
+    const finalNote = await getNote(userId, concurrentNoteId);
+    expect(["Concurrent writer A", "Concurrent writer B"]).toContain(
+      finalNote.note.title,
+    );
+
+    // The losing writer must not create a second snapshot for the same base.
+    const snapshots = await db.noteVersion.count({
+      where: { userId, noteId: concurrentNoteId },
+    });
+    expect(snapshots).toBe(1);
+  });
+
 });
