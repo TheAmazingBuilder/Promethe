@@ -4980,7 +4980,12 @@
       "addBlockHint": "Click to add a block, press / for commands",
       "slashMenuLabel": "Block commands",
       "draftRecovered": "Recovered unsaved changes from this device",
-      "statusQueued": "Queued - will sync when online"
+      "statusQueued": "Queued - will sync when online",
+      "conflictDetected": "This note was changed elsewhere. Choose which version to keep.",
+      "conflictTitle": "This note has a version conflict",
+      "conflictDescription": "Your local edits are preserved. Choose the server version or keep your version and save it on top of the latest server version.",
+      "useServerVersion": "Use server version",
+      "keepMyVersion": "Keep my version"
     },
     "slash": {
       "groups": {
