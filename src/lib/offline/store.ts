@@ -225,9 +225,20 @@ export class IndexedDbStore implements OfflineStore {
 
   async clearUser(userId: string): Promise<void> {
     const db = await this.db();
-    const items = await this.listItems(userId);
-    await withStore(db, QUEUE_STORE, "readwrite", async (store) => {
-      for (const item of items) store.delete(item.id);
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(QUEUE_STORE, "readwrite");
+      const index = tx.objectStore(QUEUE_STORE).index("userId");
+      const request = index.openCursor(IDBKeyRange.only(userId));
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) return;
+        cursor.delete();
+        cursor.continue();
+      };
+      request.onerror = () => reject(request.error ?? new Error("IndexedDB user cleanup failed."));
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error("IndexedDB user cleanup transaction failed."));
+      tx.onabort = () => reject(tx.error ?? new Error("IndexedDB user cleanup transaction aborted."));
     });
   }
 
