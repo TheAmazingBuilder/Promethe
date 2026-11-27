@@ -9,7 +9,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { createUserWithDefaults } from "@/server/users";
-import { GaiaError, createNote, getNote, updateNote } from "@/server/gaia";
+import { createNote, getNote, updateNote } from "@/server/gaia";
 
 let userId: string;
 let noteId: string;
@@ -89,7 +89,7 @@ describe("Gaïa autosave version token", () => {
         title: "Stale overwrite must be rejected",
         expectedUpdatedAt: originalUpdatedAt.toISOString(),
       }),
-    ).rejects.toMatchObject<Partial<GaiaError>>({
+    ).rejects.toMatchObject({
       code: "NOTE_CONFLICT",
       status: 409,
     });
