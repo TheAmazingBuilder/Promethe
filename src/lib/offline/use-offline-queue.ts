@@ -95,6 +95,7 @@ function resyncOnline(): boolean {
 }
 
 let replayingState = false;
+let activeReplayCount = 0;
 const replayingSubscribers = new Set<(replaying: boolean) => void>();
 
 function publishReplaying(value: boolean): void {
@@ -113,28 +114,28 @@ function subscribeReplaying(cb: (replaying: boolean) => void): () => void {
   };
 }
 
-// Single-flight replay across hook instances: a replay started by
-// PwaRoot and one started from the panel are the same pass.
-let replayInFlight: Promise<ReplaySummary | null> | null = null;
-
+// The engine owns single-flight per (store, user). This counter keeps the
+// shared UI accurate when distinct user/store replays run concurrently.
 async function runReplay(userId: string): Promise<ReplaySummary | null> {
-  if (replayInFlight) return replayInFlight;
+  if (getOfflineUserId() !== userId) return null;
   if (typeof navigator !== "undefined" && !navigator.onLine) return null;
+  activeReplayCount += 1;
   publishReplaying(true);
-  replayInFlight = (async () => {
-    try {
-      const store = getBrowserStore();
-      const sender = await createApiReplaySender();
-      return await replayQueue(store, userId, sender);
-    } catch {
-      return null;
-    }
-  })();
   try {
-    return await replayInFlight;
+    const store = getBrowserStore();
+    const sender = await createApiReplaySender();
+    if (getOfflineUserId() !== userId) return null;
+    return await replayQueue(
+      store,
+      userId,
+      sender,
+      () => getOfflineUserId() === userId,
+    );
+  } catch {
+    return null;
   } finally {
-    replayInFlight = null;
-    publishReplaying(false);
+    activeReplayCount = Math.max(0, activeReplayCount - 1);
+    publishReplaying(activeReplayCount > 0);
   }
 }
 
@@ -179,14 +180,15 @@ export function useOfflineQueueState(): OfflineQueueState {
   const [isReplaying, setIsReplaying] = React.useState(() => replayingState);
 
   const load = React.useCallback(async () => {
-    if (!userId || !isOfflineQueueSupported()) {
+    if (!userId || getOfflineUserId() !== userId || !isOfflineQueueSupported()) {
       setItems([]);
       return;
     }
     try {
       const store = getBrowserStore();
       await expireStaleItems(store, userId);
-      setItems(await listQueueItems(store, userId));
+      const nextItems = await listQueueItems(store, userId);
+      if (getOfflineUserId() === userId) setItems(nextItems);
     } catch {
       setItems([]);
     }
@@ -205,7 +207,7 @@ export function useOfflineQueueState(): OfflineQueueState {
   React.useEffect(() => subscribeReplaying(setIsReplaying), []);
 
   const replayNow = React.useCallback(async (): Promise<ReplaySummary | null> => {
-    if (!userId || !isOfflineQueueSupported()) return null;
+    if (!userId || getOfflineUserId() !== userId || !isOfflineQueueSupported()) return null;
     const summary = await runReplay(userId);
     await load();
     return summary;
@@ -213,10 +215,10 @@ export function useOfflineQueueState(): OfflineQueueState {
 
   const retryItem = React.useCallback(
     async (id: string) => {
-      if (!userId || !isOfflineQueueSupported()) return;
+      if (!userId || getOfflineUserId() !== userId || !isOfflineQueueSupported()) return;
       const store = getBrowserStore();
       const item = await store.getItem(id);
-      if (!item) return;
+      if (!item || item.userId !== userId || getOfflineUserId() !== userId) return;
       await store.putItem({
         ...item,
         status: "PENDING",
@@ -232,8 +234,11 @@ export function useOfflineQueueState(): OfflineQueueState {
 
   const discard = React.useCallback(
     async (id: string) => {
-      if (!userId || !isOfflineQueueSupported()) return;
-      await discardItem(getBrowserStore(), id);
+      if (!userId || getOfflineUserId() !== userId || !isOfflineQueueSupported()) return;
+      const store = getBrowserStore();
+      const item = await store.getItem(id);
+      if (!item || item.userId !== userId || getOfflineUserId() !== userId) return;
+      await discardItem(store, id);
       await load();
     },
     [userId, load],
@@ -241,8 +246,11 @@ export function useOfflineQueueState(): OfflineQueueState {
 
   const resolve = React.useCallback(
     async (id: string, choice: "mine" | "server") => {
-      if (!userId || !isOfflineQueueSupported()) return;
-      await resolveOfflineConflict(getBrowserStore(), id, choice);
+      if (!userId || getOfflineUserId() !== userId || !isOfflineQueueSupported()) return;
+      const store = getBrowserStore();
+      const item = await store.getItem(id);
+      if (!item || item.userId !== userId || getOfflineUserId() !== userId) return;
+      await resolveOfflineConflict(store, id, choice);
       await load();
       if (choice === "mine") await replayNow();
     },
