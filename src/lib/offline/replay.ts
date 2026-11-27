@@ -25,7 +25,6 @@ import {
   discardItem,
   expireStaleItems,
   notifyQueueChange,
-  updateItemStatus,
 } from "./queue";
 import {
   OFFLINE_QUEUE_MAX_ATTEMPTS,
@@ -235,7 +234,10 @@ async function runReplay(
     if (
       !current ||
       current.userId !== userId ||
-      (current.status !== "PENDING" && current.status !== "FAILED")
+      (current.status !== "PENDING" &&
+        current.status !== "FAILED" &&
+        !(current.status === "SENDING" &&
+          new Date(current.updatedAt).getTime() <= Date.now() - OFFLINE_QUEUE_SENDING_LEASE_MS))
     ) {
       continue;
     }
@@ -286,11 +288,11 @@ async function runReplay(
     } else if (result.outcome === "conflict") {
       const conflict: OfflineConflict = {
         baseUpdatedAt:
-          result.baseUpdatedAt ?? current.baseUpdatedAt ?? current.updatedAt,
-        serverUpdatedAt: result.serverUpdatedAt ?? current.updatedAt,
+          result.baseUpdatedAt ?? claimed.baseUpdatedAt ?? claimed.updatedAt,
+        serverUpdatedAt: result.serverUpdatedAt ?? claimed.updatedAt,
         serverSnapshot: result.serverSnapshot ?? null,
       };
-      await store.finishClaim(store, item.id, claimed.leaseToken, {
+      await store.finishClaim(item.id, userId, claimed.leaseToken, {
         status: "CONFLICT",
         attempts,
         lastError: result.message ?? "Edited elsewhere.",
