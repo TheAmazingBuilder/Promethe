@@ -11,8 +11,8 @@
  *   clientMutationId) - and one queue item per idempotency key.
  * - Journal upsert: keyed by (user, day). A replay whose baseUpdatedAt no
  *   longer matches the server row is a CONFLICT: both versions are kept
- *   and the user chooses (keep mine with force, or keep the server
- *   version). The server row is never silently overwritten.
+ *   and the user chooses whether to reapply the local version or keep the
+ *   server version. The server row is never silently overwritten.
  * - Note create: no conflict possible (new rows, deduped by
  *   clientMutationId) - and one queue item per provisional note id.
  * - Note update: content edits (title, blocks) whose baseUpdatedAt no
