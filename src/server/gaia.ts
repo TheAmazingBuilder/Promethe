@@ -617,13 +617,29 @@ export async function getNote(
 ): Promise<GaiaNoteResponse> {
   const note = await findActiveNote(userId, noteId);
   if (!note) throw NOTE_NOT_FOUND();
-  const now = new Date();
-  const updated = await db.note.update({
-    where: { id: note.id },
-    data: { lastViewedAt: now },
+
+  // A read must not invalidate the editor's optimistic-concurrency token.
+  // Prisma's @updatedAt would otherwise advance updatedAt when lastViewedAt
+  // changes, making the next autosave PATCH fail with NOTE_CONFLICT.
+  // Guard the metadata write with the version we just read: if a concurrent
+  // content save wins first, skip this view timestamp update and return the
+  // latest row instead of overwriting its updatedAt with a stale value.
+  await db.note.updateMany({
+    where: {
+      userId,
+      id: note.id,
+      updatedAt: note.updatedAt,
+    },
+    data: {
+      lastViewedAt: new Date(),
+      updatedAt: note.updatedAt,
+    },
   });
+
+  const current = await findActiveNote(userId, note.id);
+  if (!current) throw NOTE_NOT_FOUND();
   const [folders, tags] = await Promise.all([loadFolders(userId), loadTags(userId)]);
-  return noteResponse(userId, updated, folders, tags);
+  return noteResponse(userId, current, folders, tags);
 }
 
 /* ── Notes : écriture ────────────────────────────────────────────────── */
