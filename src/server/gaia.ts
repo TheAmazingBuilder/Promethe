@@ -417,8 +417,12 @@ async function findNoteAnyState(userId: string, noteId: string): Promise<Note | 
 
 /* ── Versioning ──────────────────────────────────────────────────────── */
 
-async function versionsOf(userId: string, noteId: string): Promise<NoteVersion[]> {
-  const versions = await db.noteVersion.findMany({
+async function versionsOf(
+  userId: string,
+  noteId: string,
+  client: Prisma.TransactionClient = db,
+): Promise<NoteVersion[]> {
+  const versions = await client.noteVersion.findMany({
     where: { userId, noteId },
   });
   return sortVersionsNewestFirst(versions);
@@ -428,14 +432,15 @@ async function maybeSnapshotVersion(
   userId: string,
   note: Note,
   contentChanged = true,
+  client: Prisma.TransactionClient = db,
 ): Promise<void> {
   // Lot 11 (roadmap §15): metadata-only changes (favorite, folder, icon,
   // tags) never burn a version slot with an identical copy of the note.
   if (!contentChanged) return;
-  const versions = await versionsOf(userId, note.id);
+  const versions = await versionsOf(userId, note.id, client);
   const newest = versions[0] ?? null;
   if (!shouldSnapshot(newest ? newest.savedAt : null, new Date())) return;
-  await db.noteVersion.create({
+  await client.noteVersion.create({
     data: {
       userId,
       noteId: note.id,
@@ -444,10 +449,10 @@ async function maybeSnapshotVersion(
       savedAt: note.updatedAt,
     },
   });
-  const after = await versionsOf(userId, note.id);
+  const after = await versionsOf(userId, note.id, client);
   const extra = versionsBeyondCap(after);
   if (extra.length > 0) {
-    await db.noteVersion.deleteMany({
+    await client.noteVersion.deleteMany({
       where: { userId, id: { in: extra } },
     });
   }
@@ -789,8 +794,6 @@ export async function updateNote(
     (parsed.blocks !== undefined &&
       JSON.stringify(normalizeBlocks(parsed.blocks)) !== note.blocks);
 
-  await maybeSnapshotVersion(userId, note, contentChanged);
-
   const data: {
     title?: string;
     icon?: string | null;
@@ -815,6 +818,55 @@ export async function updateNote(
     data.blocks = JSON.stringify(blocks);
   }
 
+  // When the editor supplies a base version, compare-and-swap the row and
+  // create its history snapshot in one transaction. The conditional UPDATE
+  // is the concurrency boundary: only one writer can consume this version.
+  const usesVersionGuard =
+    touchesContent &&
+    parsed.expectedUpdatedAt !== undefined &&
+    parsed.force !== true;
+
+  if (usesVersionGuard) {
+    const updated = await db.$transaction(async (tx) => {
+      const write = await tx.note.updateMany({
+        where: {
+          userId,
+          id: note.id,
+          deletedAt: null,
+          updatedAt: note.updatedAt,
+        },
+        data,
+      });
+
+      if (write.count === 0) return null;
+
+      // Snapshot only after the compare-and-swap succeeds, but inside the
+      // same transaction so a snapshot failure also rolls back the note edit.
+      await maybeSnapshotVersion(userId, note, contentChanged, tx);
+      return tx.note.findFirst({
+        where: { userId, id: note.id, deletedAt: null },
+      });
+    });
+
+    if (!updated) {
+      const current = await findActiveNote(userId, note.id);
+      if (!current) throw NOTE_NOT_FOUND();
+      const [folders, tags] = await Promise.all([loadFolders(userId), loadTags(userId)]);
+      const server = await noteResponse(userId, current, folders, tags);
+      throw conflictError("NOTE_CONFLICT", "Note edited elsewhere.", {
+        note: server.note,
+        baseUpdatedAt: parsed.expectedUpdatedAt,
+        serverUpdatedAt: current.updatedAt.toISOString(),
+      });
+    }
+
+    const [folders, tags] = await Promise.all([loadFolders(userId), loadTags(userId)]);
+    return noteResponse(userId, updated, folders, tags);
+  }
+
+  // Legacy clients without a version token and explicit force replays retain
+  // their existing last-write-wins behavior.
+  await maybeSnapshotVersion(userId, note, contentChanged);
   const updated = await db.note.update({ where: { id: note.id }, data });
   const [folders, tags] = await Promise.all([loadFolders(userId), loadTags(userId)]);
   return noteResponse(userId, updated, folders, tags);

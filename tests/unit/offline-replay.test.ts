@@ -218,6 +218,32 @@ describe("conflicts", () => {
     expect(seen[0].force).toBe(true);
   });
 
+  it("resolving a Gaïa note conflict rebases without bypassing compare-and-swap", async () => {
+    const store = new MemoryStore();
+    const item = await enqueueOperation(store, {
+      userId: USER,
+      kind: "NOTE_UPDATE",
+      entityKey: "note-1",
+      idempotencyKey: "note-1",
+      payload: { title: "mine", expectedUpdatedAt: "2026-11-26T08:00:00.000Z" },
+      baseUpdatedAt: "2026-11-26T08:00:00.000Z",
+    });
+    await store.putItem({
+      ...item,
+      status: "CONFLICT",
+      conflict: {
+        baseUpdatedAt: "2026-11-26T08:00:00.000Z",
+        serverUpdatedAt: "2026-11-26T10:00:00.000Z",
+        serverSnapshot: { id: "note-1", title: "theirs" },
+      },
+    });
+
+    const resolved = await resolveOfflineConflict(store, item.id, "mine");
+    expect(resolved?.status).toBe("PENDING");
+    expect(resolved?.payload.expectedUpdatedAt).toBe("2026-11-26T10:00:00.000Z");
+    expect(resolved?.payload.force).toBeUndefined();
+  });
+
   it("resolving 'server' discards the queued change", async () => {
     const store = new MemoryStore();
     const item = await enqueueOperation(store, {

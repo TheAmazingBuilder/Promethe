@@ -14,6 +14,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@/i18n/i18n-provider";
 import { GaiaEditor } from "@/components/gaia/gaia-editor";
+import { ApiClientError } from "@/lib/api-client";
 import type { GaiaNote } from "@/components/gaia/gaia-shared";
 
 const NOTE_ID = "note-autosave-1";
@@ -126,11 +127,30 @@ function editText(value: string) {
   fireEvent.change(textarea!, { target: { value } });
 }
 
+function editTitle(value: string) {
+  const input = screen.getByTestId("gaia-title-input") as HTMLInputElement;
+  fireEvent.change(input, { target: { value } });
+}
+
+function patchTitle(callIndex: number): string {
+  const call = mutateAsync.mock.calls[callIndex]?.[0] as
+    | { patch?: { title?: string } }
+    | undefined;
+  return call?.patch?.title ?? "";
+}
+
 function patchBlocksText(callIndex: number): string {
   const call = mutateAsync.mock.calls[callIndex]?.[0] as
     | { patch?: { blocks?: Array<{ text?: string }> } }
     | undefined;
   return call?.patch?.blocks?.[0]?.text ?? "";
+}
+
+function patchExpectedUpdatedAt(callIndex: number): string | undefined {
+  const call = mutateAsync.mock.calls[callIndex]?.[0] as
+    | { patch?: { expectedUpdatedAt?: string } }
+    | undefined;
+  return call?.patch?.expectedUpdatedAt;
 }
 
 beforeEach(() => {
@@ -150,6 +170,36 @@ afterEach(() => {
 });
 
 describe("Gaia autosave race", () => {
+  it("debounces rapid title typing and sends the complete latest title", async () => {
+    renderEditor();
+
+    editTitle("F");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    editTitle("Fo");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    editTitle("Formation");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(899);
+    });
+
+    expect(mutateAsync).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect(patchTitle(0)).toBe("Formation");
+
+    await act(async () => {
+      deferred!.resolve(patchResult("2026-11-26T10:00:00.000Z"));
+    });
+    expect(saveStatus()).toBe("saved");
+  });
+
   it("marks the note saved when nothing changes during the request", async () => {
     renderEditor();
     expect(screen.getByDisplayValue("hello")).toBeTruthy();
@@ -263,6 +313,66 @@ describe("Gaia autosave race", () => {
       deferred!.resolve(patchResult("2026-11-26T10:00:00.000Z"));
     });
     expect(saveStatus()).toBe("saved");
+  });
+
+  it("stops retrying a 409, preserves local edits, and rebases when keeping them", async () => {
+    renderEditor();
+    editTitle("My local title");
+    await act(async () => { await vi.advanceTimersByTimeAsync(900); });
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+
+    const conflict = new ApiClientError(
+      { error: "NOTE_CONFLICT", message: "Note edited elsewhere." },
+      409,
+    );
+    Object.assign(conflict, {
+      body: {
+        error: "NOTE_CONFLICT",
+        message: "Note edited elsewhere.",
+        note: { ...SERVER_NOTE, title: "Server title", updatedAt: "2026-11-27T12:00:00.000Z" },
+      },
+    });
+    await act(async () => { deferred!.reject(conflict); });
+
+    expect(screen.getByTestId("gaia-conflict-resolution")).toBeTruthy();
+    expect((screen.getByTestId("gaia-title-input") as HTMLInputElement).value).toBe("My local title");
+    expect(saveStatus()).toBe("error");
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Keep my version" }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(900); });
+    expect(mutateAsync).toHaveBeenCalledTimes(2);
+    expect(patchTitle(1)).toBe("My local title");
+    expect(patchExpectedUpdatedAt(1)).toBe("2026-11-27T12:00:00.000Z");
+    await act(async () => { deferred!.resolve(patchResult("2026-11-27T12:01:00.000Z")); });
+    expect(saveStatus()).toBe("saved");
+    expect(screen.queryByTestId("gaia-conflict-resolution")).toBeNull();
+  });
+
+  it("explicitly restores the server snapshot when the user chooses it", async () => {
+    renderEditor();
+    editTitle("My local title");
+    await act(async () => { await vi.advanceTimersByTimeAsync(900); });
+    const conflict = new ApiClientError(
+      { error: "NOTE_CONFLICT", message: "Note edited elsewhere." },
+      409,
+    );
+    Object.assign(conflict, {
+      body: {
+        error: "NOTE_CONFLICT",
+        message: "Note edited elsewhere.",
+        note: { ...SERVER_NOTE, title: "Server title", updatedAt: "2026-11-27T12:00:00.000Z" },
+      },
+    });
+    await act(async () => { deferred!.reject(conflict); });
+
+    fireEvent.click(screen.getByRole("button", { name: "Use server version" }));
+    expect((screen.getByTestId("gaia-title-input") as HTMLInputElement).value).toBe("Server title");
+    expect(saveStatus()).toBe("saved");
+    expect(screen.queryByTestId("gaia-conflict-resolution")).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
   });
 
   it("flushes pending edits on unmount instead of losing them", async () => {
