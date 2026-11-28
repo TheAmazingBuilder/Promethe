@@ -100,6 +100,50 @@ async function freshConnection(): Promise<BrokerConnection> {
 describe("ingest engine — full lifecycle", () => {
   const positionId = "9001";
 
+  it("does not revive a connection revoked after the request read it", async () => {
+    const pending = await db.brokerConnection.create({
+      data: {
+        userId: user.id,
+        accountId,
+        platform: "MT5",
+        label: "Revoked during handshake",
+        tokenHash: "a".repeat(64),
+        tokenPrefix: "tj_rev",
+        status: "PENDING",
+      },
+    });
+    // Model the race: the ingest route already loaded this PENDING snapshot,
+    // then the owner revokes the connection before processing starts.
+    const staleSnapshot = await db.brokerConnection.findUniqueOrThrow({
+      where: { id: pending.id },
+    });
+    await db.brokerConnection.update({
+      where: { id: pending.id },
+      data: { status: "REVOKED", revokedAt: new Date() },
+    });
+
+    await expect(
+      processIngestPayload(staleSnapshot, envelope([
+        {
+          eventId: "MT5:TestBroker-Live:11223344:HB:revoked-handshake",
+          type: "HEARTBEAT",
+          time: serverNow(),
+          balance: "10000",
+          equity: "10000",
+          openPositions: 0,
+        },
+      ]))
+    ).rejects.toMatchObject({ code: "CONNECTION_REVOKED" });
+
+    const after = await db.brokerConnection.findUniqueOrThrow({
+      where: { id: pending.id },
+    });
+    expect(after.status).toBe("REVOKED");
+    expect(after.brokerServer).toBeNull();
+    expect(after.brokerLogin).toBeNull();
+    expect(await db.syncEventLog.count({ where: { connectionId: pending.id } })).toBe(0);
+  });
+
   it("binds the connection on the first payload (heartbeat)", async () => {
     const result = await processIngestPayload(await freshConnection(), envelope([
       {
