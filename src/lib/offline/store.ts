@@ -9,6 +9,7 @@
  * (separate object store). Everything is cleared on logout.
  */
 import type { OfflineQueueItem } from "./types";
+import { getOfflineUserId } from "./session";
 
 export interface OfflineStore {
   getItem(id: string): Promise<OfflineQueueItem | null>;
@@ -86,18 +87,19 @@ export class MemoryStore implements OfflineStore {
   }
 
   async getReference(userId: string, kind: string): Promise<unknown | null> {
+    if (getOfflineUserId() !== userId) return null;
     return this.references.get(this.referenceKey(userId, kind)) ?? null;
   }
 
   async putReference(userId: string, kind: string, value: unknown): Promise<void> {
+    if (getOfflineUserId() !== userId) return;
     this.references.set(this.referenceKey(userId, kind), value);
   }
 
   async clearReferences(userId: string): Promise<void> {
     for (const key of this.references.keys()) {
-      if (key.startsWith(JSON.stringify([userId, "" ]).slice(0, -1))) {
-        this.references.delete(key);
-      }
+      const [owner] = JSON.parse(key) as [string, string];
+      if (owner === userId) this.references.delete(key);
     }
   }
 }
@@ -263,7 +265,9 @@ export class IndexedDbStore implements OfflineStore {
   }
 
   async getReference(userId: string, kind: string): Promise<unknown | null> {
+    if (getOfflineUserId() !== userId) return null;
     const db = await this.db();
+    if (getOfflineUserId() !== userId) return null;
     const row = await withStore(db, REFERENCE_STORE, "readonly", (store) =>
       store.get([userId, kind]),
     );
@@ -272,7 +276,9 @@ export class IndexedDbStore implements OfflineStore {
   }
 
   async putReference(userId: string, kind: string, value: unknown): Promise<void> {
+    if (getOfflineUserId() !== userId) return;
     const db = await this.db();
+    if (getOfflineUserId() !== userId) return;
     await withStore(db, REFERENCE_STORE, "readwrite", (store) =>
       store.put({ userId, kind, value }),
     );
