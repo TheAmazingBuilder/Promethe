@@ -16,6 +16,7 @@ import {
   listQueueItems,
 } from "@/lib/offline/queue";
 import { OFFLINE_QUEUE_TTL_MS } from "@/lib/offline/types";
+import { setOfflineUserId } from "@/lib/offline/session";
 
 const USER = "user-queue-1";
 const OTHER = "user-queue-2";
@@ -237,11 +238,28 @@ describe("logout and counts", () => {
       idempotencyKey: "mut-trade-2",
       payload: { ...tradePayload(), clientMutationId: "mut-trade-2" },
     });
-    await store.putReference("accounts", [{ id: "acc-1" }]);
+    setOfflineUserId(USER);
+    await store.putReference(USER, "accounts", [{ id: "acc-1" }]);
+    await store.putReference(OTHER, "accounts", [{ id: "acc-2" }]);
     await clearOfflineDataForUser(store, USER);
     expect(await listQueueItems(store, USER)).toHaveLength(0);
     expect(await listQueueItems(store, OTHER)).toHaveLength(1);
-    expect(await store.getReference("accounts")).toBeNull();
+    expect(await store.getReference(USER, "accounts")).toBeNull();
+    setOfflineUserId(OTHER);
+    expect(await store.getReference(OTHER, "accounts")).toEqual([{ id: "acc-2" }]);
+  });
+
+  it("isolates reference snapshots by user and clears only the signing-out user", async () => {
+    const store = new MemoryStore();
+    setOfflineUserId(USER);
+    await store.putReference(USER, "accounts", [{ id: "acc-user" }]);
+    setOfflineUserId(OTHER);
+    await store.putReference(OTHER, "accounts", [{ id: "acc-other" }]);
+
+    await clearOfflineDataForUser(store, USER);
+
+    expect(await store.getReference(USER, "accounts")).toBeNull();
+    expect(await store.getReference(OTHER, "accounts")).toEqual([{ id: "acc-other" }]);
   });
 
   it("counts only actionable items", async () => {
