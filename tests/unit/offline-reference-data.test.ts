@@ -16,7 +16,7 @@ describe("offline reference snapshots", () => {
       store,
       USER_A,
       "accounts",
-      () => new Promise((resolve) => { resolveFetch = resolve; }),
+      () => new Promise<Array<{ id: string }>>((resolve) => { resolveFetch = resolve; }),
     );
 
     setOfflineUserId(USER_B);
