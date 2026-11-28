@@ -10,6 +10,7 @@
  */
 
 let currentUserId: string | null = null;
+let identityRevision = 0;
 const SESSION_CHANNEL = "promethe-offline-session";
 let sessionChannel: BroadcastChannel | null = null;
 
@@ -19,6 +20,9 @@ function publishUserId(userId: string | null, isRemote = false): void {
   // Remote broadcasts must always trigger session revalidation, even when
   // the offline module already has this id but React still has stale state.
   if (!changed && !isRemote) return;
+  // A revision also detects A -> B -> A transitions while a request is in
+  // flight, where comparing only the final user id would miss the switch.
+  identityRevision += 1;
   for (const listener of [...listeners]) listener(userId, isRemote);
 }
 
@@ -38,6 +42,11 @@ const listeners = new Set<(userId: string | null, isRemote: boolean) => void>();
 
 export function getOfflineUserId(): string | null {
   return currentUserId;
+}
+
+/** Monotonic in-memory fence for requests spanning an identity transition. */
+export function getOfflineIdentityRevision(): number {
+  return identityRevision;
 }
 
 export function setOfflineUserId(userId: string | null): void {
