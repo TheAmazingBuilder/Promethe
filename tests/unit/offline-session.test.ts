@@ -44,10 +44,13 @@ describe("offline session broadcasts", () => {
       const channel = FakeBroadcastChannel.instances[0];
       expect(channel).toBeDefined();
       channel.dispatch({ userId: "tab-b-user" });
+      // A duplicate remote broadcast still forces React session revalidation.
+      channel.dispatch({ userId: "tab-b-user" });
 
       expect(getOfflineUserId()).toBe("tab-b-user");
       expect(changes).toEqual([
         ["tab-a-user", false],
+        ["tab-b-user", true],
         ["tab-b-user", true],
       ]);
     } finally {
@@ -57,14 +60,7 @@ describe("offline session broadcasts", () => {
     }
   });
 
-  it("notifies listeners for a remote event even when the id is unchanged", () => {
-    FakeBroadcastChannel.instances = [];
-    vi.stubGlobal("window", {});
-    vi.stubGlobal("BroadcastChannel", FakeBroadcastChannel);
-    const changes: boolean[] = [];
-    const unsubscribe = onOfflineUserIdChange((_userId, isRemote) => {
-      changes.push(isRemote);
-    });
+
 
     try {
       setOfflineUserId("same-user");
