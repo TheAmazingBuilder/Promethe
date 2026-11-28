@@ -1,14 +1,9 @@
 /**
- * Offline reference data (§25.5) - the minimal per-user lists the offline
- * forms need (accounts, strategies, instruments, tags, Gaïa folders and
- * tags), cached in IndexedDB while online and read back when the network
- * is gone.
- *
- * Only reference data is cached: trade rows, journal content and note
- * bodies are never cached for reading. The snapshots are refreshed
- * whenever a list query succeeds online, and cleared on logout.
+ * Offline reference data (§25.5), strictly scoped to the signed-in user.
+ * Legacy unowned snapshots are discarded by the IndexedDB v2 migration.
  */
 import type { OfflineStore } from "./store";
+import { getOfflineUserId } from "./session";
 
 export type ReferenceKind =
   | "accounts"
@@ -19,75 +14,73 @@ export type ReferenceKind =
   | "gaia-tags";
 
 const KINDS: ReferenceKind[] = [
-  "accounts",
-  "strategies",
-  "instruments",
-  "tags",
-  "gaia-folders",
-  "gaia-tags",
+  "accounts", "strategies", "instruments", "tags", "gaia-folders", "gaia-tags",
 ];
 
 export async function cacheReference(
   store: OfflineStore,
+  userId: string,
   kind: ReferenceKind,
   rows: unknown,
 ): Promise<void> {
-  await store.putReference(kind, rows);
+  if (getOfflineUserId() !== userId) return;
+  await store.putReference(userId, kind, rows);
 }
 
 export async function readReference<T>(
   store: OfflineStore,
+  userId: string,
   kind: ReferenceKind,
 ): Promise<T[] | null> {
-  const value = await store.getReference(kind);
-  if (!Array.isArray(value)) return null;
+  if (getOfflineUserId() !== userId) return null;
+  const value = await store.getReference(userId, kind);
+  if (getOfflineUserId() !== userId || !Array.isArray(value)) return null;
   return value as T[];
 }
 
-/**
- * Fetch a list, cache the fresh snapshot on success, and fall back to the
- * cached snapshot when the network fails. Rethrows when there is no
- * snapshot to fall back to. A null store (no IndexedDB, e.g. Node/SSR)
- * skips caching entirely. This is the wrapper the reference data hooks
- * use so the offline forms keep working with the last known lists.
- */
 export async function fetchReferenceWithFallback<T>(
   store: OfflineStore | null,
+  userId: string | null,
   kind: ReferenceKind,
   fetcher: () => Promise<T[]>,
 ): Promise<T[]> {
   try {
     const rows = await fetcher();
-    if (store) {
-      await store.putReference(kind, rows).catch(() => {
-        // The cache is best-effort: a refused write never fails the read.
-      });
+    // A response may complete after another tab switched the shared cookie.
+    // Never persist it under an identity that is no longer active.
+    if (store && userId && getOfflineUserId() === userId) {
+      await store.putReference(userId, kind, rows).catch(() => {});
     }
     return rows;
   } catch (error) {
-    if (store) {
-      const cached = await readReference<T>(store, kind);
+    if (store && userId && getOfflineUserId() === userId) {
+      const cached = await readReference<T>(store, userId, kind);
       if (cached !== null) return cached;
     }
     throw error;
   }
 }
 
-/** Refresh every reference list (called on login and when back online). */
 export async function refreshAllReferences(
   store: OfflineStore,
+  userId: string,
   fetchers: Record<ReferenceKind, () => Promise<unknown[]>>,
 ): Promise<void> {
   for (const kind of KINDS) {
+    if (getOfflineUserId() !== userId) return;
     try {
       const rows = await fetchers[kind]();
-      await store.putReference(kind, rows);
+      if (getOfflineUserId() !== userId) return;
+      await store.putReference(userId, kind, rows);
     } catch {
-      // One failed list never blocks the others; the stale snapshot stays.
+      // A failed list never blocks the other lists; existing scoped data stays.
     }
   }
 }
 
-export async function clearAllReferences(store: OfflineStore): Promise<void> {
-  await store.clearReferences();
+export async function clearAllReferences(
+  store: OfflineStore,
+  userId: string,
+): Promise<void> {
+  await store.clearReferences(userId);
 }
