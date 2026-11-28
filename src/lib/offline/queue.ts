@@ -233,7 +233,6 @@ export async function clearOfflineDataForUser(
   userId: string,
 ): Promise<void> {
   await store.clearUser(userId);
-  await store.clearReferences();
   notify();
 }
 
