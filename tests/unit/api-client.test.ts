@@ -91,6 +91,31 @@ describe("apiFetch transport policy", () => {
     await expect(request).rejects.toBeInstanceOf(CancelledError);
   });
 
+  it("cancels a response when the identity switches away and back before it completes", async () => {
+    vi.stubGlobal("window", {});
+    let resolveFetch!: (response: Response) => void;
+    const fetchMock = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    setOfflineUserId("user-a");
+
+    const request = apiFetch<{ accountId: string }>("/api/v1/accounts");
+    setOfflineUserId("user-b");
+    setOfflineUserId("user-a");
+    resolveFetch(
+      new Response(JSON.stringify({ accountId: "account-a" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    await expect(request).rejects.toBeInstanceOf(CancelledError);
+  });
+
   it("normalizes malformed error envelopes without exposing an undefined message", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ error: "BROKEN" }), {
