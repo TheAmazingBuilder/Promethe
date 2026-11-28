@@ -304,7 +304,7 @@ export function useCreateTrade() {
       // sends the same payload (same clientMutationId) against the same
       // route, so a retried replay never creates a duplicate.
       if (typeof navigator !== "undefined" && !navigator.onLine) {
-        const userId = useOfflineIdentity();
+        const userId = getOfflineUserId();
         if (userId && isOfflineQueueSupported()) {
           const idempotencyKey = input.clientMutationId ?? newOfflineId();
           const payload = { ...input, clientMutationId: idempotencyKey };
