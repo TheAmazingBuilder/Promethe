@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { SessionPayload } from "@/lib/auth/types";
 import { apiFetch } from "@/lib/api-client";
 import { getBrowserStore, isOfflineQueueSupported } from "@/lib/offline/store";
-import { setOfflineUserId } from "@/lib/offline/session";
+import { onOfflineUserIdChange, setOfflineUserId } from "@/lib/offline/session";
 import { clearOfflineDataForUser } from "@/lib/offline/queue";
 import { refreshAllReferences } from "@/lib/offline/reference-data";
 
@@ -15,11 +15,11 @@ import { refreshAllReferences } from "@/lib/offline/reference-data";
  * tags and Gaïa folders/tags. Best-effort: a failed refresh keeps the
  * stale snapshot (or none) and never blocks the session.
  */
-async function refreshOfflineReferences(): Promise<void> {
+async function refreshOfflineReferences(userId: string): Promise<void> {
   if (!isOfflineQueueSupported()) return;
   if (typeof navigator !== "undefined" && !navigator.onLine) return;
   try {
-    await refreshAllReferences(getBrowserStore(), {
+    await refreshAllReferences(getBrowserStore(), userId, {
       accounts: async () =>
         (await apiFetch<{ accounts: unknown[] }>("/api/v1/accounts")).accounts,
       strategies: async () =>
@@ -56,6 +56,45 @@ export function SessionProvider({
     initialSession
   );
   const queryClient = useQueryClient();
+  const remoteSessionRequestRef = React.useRef(0);
+  const remoteSessionAbortRef = React.useRef<AbortController | null>(null);
+
+  // A BroadcastChannel message only signals that another tab changed the
+  // shared cookie. Re-read the server session; never trust the broadcast id.
+  React.useEffect(() => {
+    return onOfflineUserIdChange((_broadcastUserId, isRemote) => {
+      if (!isRemote) return;
+      const requestId = ++remoteSessionRequestRef.current;
+      remoteSessionAbortRef.current?.abort();
+      const controller = new AbortController();
+      remoteSessionAbortRef.current = controller;
+
+      void apiFetch<SessionPayload>("/api/v1/auth/me", {
+        method: "GET",
+        signal: controller.signal,
+      }).then((nextSession) => {
+        if (
+          controller.signal.aborted ||
+          requestId !== remoteSessionRequestRef.current
+        ) return;
+        setSession(nextSession);
+      }).catch((error: unknown) => {
+        if (
+          controller.signal.aborted ||
+          requestId !== remoteSessionRequestRef.current
+        ) return;
+        // A transient network/server failure must not sign the user out.
+        if (error instanceof Error && "status" in error && error.status === 401) {
+          setSession(null);
+        }
+      });
+    });
+  }, []);
+
+  React.useEffect(() => () => {
+    remoteSessionRequestRef.current += 1;
+    remoteSessionAbortRef.current?.abort();
+  }, []);
 
   // Whenever the signed-in identity changes (login, logout, account switch),
   // drop EVERY cached query — user-scoped caches must never leak across
@@ -71,7 +110,7 @@ export function SessionProvider({
     setOfflineUserId(identity);
     if (prev === undefined) {
       // First mount: keep the local queue, just refresh the snapshots.
-      if (identity !== null) void refreshOfflineReferences();
+      if (identity !== null) void refreshOfflineReferences(identity);
       return;
     }
     if (prev !== identity) {
@@ -82,7 +121,7 @@ export function SessionProvider({
           // Best-effort: the session is dropped regardless.
         });
       }
-      if (identity !== null) void refreshOfflineReferences();
+      if (identity !== null) void refreshOfflineReferences(identity);
     }
   }, [identity, queryClient]);
 
