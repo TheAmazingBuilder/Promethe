@@ -1,8 +1,11 @@
+import { CancelledError } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
+import { setOfflineUserId } from "@/lib/offline/session";
 
 describe("apiFetch transport policy", () => {
   afterEach(() => {
+    setOfflineUserId(null);
     vi.unstubAllGlobals();
   });
 
@@ -62,6 +65,30 @@ describe("apiFetch transport policy", () => {
 
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     expect(new Headers(init.headers).has("Content-Type")).toBe(false);
+  });
+
+  it("cancels a response that completes after the authenticated identity changes", async () => {
+    vi.stubGlobal("window", {});
+    let resolveFetch!: (response: Response) => void;
+    const fetchMock = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    setOfflineUserId("user-a");
+
+    const request = apiFetch<{ accountId: string }>("/api/v1/accounts");
+    setOfflineUserId("user-b");
+    resolveFetch(
+      new Response(JSON.stringify({ accountId: "account-a" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    await expect(request).rejects.toBeInstanceOf(CancelledError);
   });
 
   it("normalizes malformed error envelopes without exposing an undefined message", async () => {
