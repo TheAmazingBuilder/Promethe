@@ -13,10 +13,13 @@ let currentUserId: string | null = null;
 const SESSION_CHANNEL = "promethe-offline-session";
 let sessionChannel: BroadcastChannel | null = null;
 
-function publishUserId(userId: string | null): void {
-  if (currentUserId === userId) return;
+function publishUserId(userId: string | null, isRemote = false): void {
+  const changed = currentUserId !== userId;
   currentUserId = userId;
-  for (const listener of [...listeners]) listener(userId);
+  // Remote broadcasts must always trigger session revalidation, even when
+  // the offline module already has this id but React still has stale state.
+  if (!changed && !isRemote) return;
+  for (const listener of [...listeners]) listener(userId, isRemote);
 }
 
 function getSessionChannel(): BroadcastChannel | null {
@@ -25,13 +28,13 @@ function getSessionChannel(): BroadcastChannel | null {
     sessionChannel = new BroadcastChannel(SESSION_CHANNEL);
     sessionChannel.addEventListener("message", (event: MessageEvent) => {
       const value = event.data?.userId;
-      if (value === null || typeof value === "string") publishUserId(value);
+      if (value === null || typeof value === "string") publishUserId(value, true);
     });
   }
   return sessionChannel;
 }
 
-const listeners = new Set<(userId: string | null) => void>();
+const listeners = new Set<(userId: string | null, isRemote: boolean) => void>();
 
 export function getOfflineUserId(): string | null {
   return currentUserId;
@@ -44,7 +47,7 @@ export function setOfflineUserId(userId: string | null): void {
 }
 
 export function onOfflineUserIdChange(
-  listener: (userId: string | null) => void,
+  listener: (userId: string | null, isRemote: boolean) => void,
 ): () => void {
   listeners.add(listener);
   return () => {
