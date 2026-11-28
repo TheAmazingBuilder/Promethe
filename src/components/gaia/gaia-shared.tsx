@@ -22,7 +22,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiClientError } from "@/lib/api-client";
 import { parseHash, routeToPath } from "@/lib/routes";
 import { getBrowserStore, isOfflineQueueSupported } from "@/lib/offline/store";
-import { getOfflineUserId } from "@/lib/offline/session";
+import { getOfflineUserId, onOfflineUserIdChange } from "@/lib/offline/session";
 import { enqueueOperation } from "@/lib/offline/queue";
 import { fetchReferenceWithFallback } from "@/lib/offline/reference-data";
 import {
@@ -467,11 +467,17 @@ export function useGaiaNote(noteId: string | null) {
 }
 
 export function useGaiaFolders() {
+  const userId = React.useSyncExternalStore(
+    (notify) => onOfflineUserIdChange(() => notify()),
+    getOfflineUserId,
+    () => null,
+  );
   return useQuery({
-    queryKey: ["gaia", "folders"],
+    queryKey: ["gaia", "folders", userId],
     queryFn: () =>
       fetchReferenceWithFallback(
         isOfflineQueueSupported() ? getBrowserStore() : null,
+        userId,
         "gaia-folders",
         async () => (await apiFetch<{ folders: GaiaFolder[] }>(`${GAIA_BASE}/folders`)).folders,
       ),
@@ -479,11 +485,17 @@ export function useGaiaFolders() {
 }
 
 export function useGaiaTags() {
+  const userId = React.useSyncExternalStore(
+    (notify) => onOfflineUserIdChange(() => notify()),
+    getOfflineUserId,
+    () => null,
+  );
   return useQuery({
-    queryKey: ["gaia", "tags"],
+    queryKey: ["gaia", "tags", userId],
     queryFn: () =>
       fetchReferenceWithFallback(
         isOfflineQueueSupported() ? getBrowserStore() : null,
+        userId,
         "gaia-tags",
         async () => (await apiFetch<{ tags: GaiaTag[] }>(`${GAIA_BASE}/tags`)).tags,
       ),
