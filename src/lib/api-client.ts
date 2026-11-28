@@ -7,7 +7,10 @@
  */
 import { CancelledError } from "@tanstack/react-query";
 import type { ApiErrorBody } from "@/lib/auth/types";
-import { getOfflineUserId } from "@/lib/offline/session";
+import {
+  getOfflineIdentityRevision,
+  getOfflineUserId,
+} from "@/lib/offline/session";
 
 export class ApiClientError extends Error {
   readonly status: number;
@@ -28,18 +31,21 @@ export class ApiClientError extends Error {
 
 /**
  * A request authenticated as one offline identity must never resolve after
- * that identity changes. React Query clears its cache on account changes,
- * but this transport-level fence also protects callers outside that cache
- * and prevents a late response from being consumed by a stale observer.
+ * that identity changes. The revision also catches A -> B -> A transitions,
+ * where comparing only the current user id would miss the intermediate switch.
  *
  * Null is intentionally not fenced: during initial hydration the provider
  * may publish the initial session immediately after a request starts.
  */
-function assertRequestIdentity(requestUserId: string | null): void {
+function assertRequestIdentity(
+  requestUserId: string | null,
+  requestRevision: number,
+): void {
   if (
     typeof window !== "undefined" &&
     requestUserId !== null &&
-    getOfflineUserId() !== requestUserId
+    (getOfflineUserId() !== requestUserId ||
+      getOfflineIdentityRevision() !== requestRevision)
   ) {
     // TanStack Query recognizes CancelledError and will not retry this
     // request under the new cookie / identity.
@@ -48,8 +54,9 @@ function assertRequestIdentity(requestUserId: string | null): void {
 }
 
 export async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
-  const requestUserId =
-    typeof window !== "undefined" ? getOfflineUserId() : null;
+  const isBrowser = typeof window !== "undefined";
+  const requestUserId = isBrowser ? getOfflineUserId() : null;
+  const requestRevision = isBrowser ? getOfflineIdentityRevision() : 0;
   const headers = new Headers(init?.headers);
   // JSON is the normal API payload, but do not override multipart boundaries
   // or add a misleading content type to body-less GET/DELETE requests.
@@ -64,14 +71,14 @@ export async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
     headers,
   });
 
-  assertRequestIdentity(requestUserId);
+  assertRequestIdentity(requestUserId, requestRevision);
 
   if (res.status === 204) {
     return undefined as T;
   }
 
   const body: unknown = await res.json().catch(() => null);
-  assertRequestIdentity(requestUserId);
+  assertRequestIdentity(requestUserId, requestRevision);
 
   if (!res.ok) {
     const errBody: ApiErrorBody =
