@@ -5,7 +5,9 @@
  * API requests are never stored in the browser HTTP cache. Headers are merged
  * with the Headers API so plain objects, tuples and Headers instances work.
  */
+import { CancelledError } from "@tanstack/react-query";
 import type { ApiErrorBody } from "@/lib/auth/types";
+import { getOfflineUserId } from "@/lib/offline/session";
 
 export class ApiClientError extends Error {
   readonly status: number;
@@ -24,7 +26,30 @@ export class ApiClientError extends Error {
   }
 }
 
+/**
+ * A request authenticated as one offline identity must never resolve after
+ * that identity changes. React Query clears its cache on account changes,
+ * but this transport-level fence also protects callers outside that cache
+ * and prevents a late response from being consumed by a stale observer.
+ *
+ * Null is intentionally not fenced: during initial hydration the provider
+ * may publish the initial session immediately after a request starts.
+ */
+function assertRequestIdentity(requestUserId: string | null): void {
+  if (
+    typeof window !== "undefined" &&
+    requestUserId !== null &&
+    getOfflineUserId() !== requestUserId
+  ) {
+    // TanStack Query recognizes CancelledError and will not retry this
+    // request under the new cookie / identity.
+    throw new CancelledError({ silent: true });
+  }
+}
+
 export async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
+  const requestUserId =
+    typeof window !== "undefined" ? getOfflineUserId() : null;
   const headers = new Headers(init?.headers);
   // JSON is the normal API payload, but do not override multipart boundaries
   // or add a misleading content type to body-less GET/DELETE requests.
@@ -39,11 +64,15 @@ export async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
     headers,
   });
 
+  assertRequestIdentity(requestUserId);
+
   if (res.status === 204) {
     return undefined as T;
   }
 
   const body: unknown = await res.json().catch(() => null);
+  assertRequestIdentity(requestUserId);
+
   if (!res.ok) {
     const errBody: ApiErrorBody =
       body &&
