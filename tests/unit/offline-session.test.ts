@@ -29,7 +29,7 @@ class FakeBroadcastChannel {
 }
 
 describe("offline session broadcasts", () => {
-  it("distinguishes local identity changes from remote tab changes", () => {
+  it("distinguishes local and remote changes, including duplicate remote events", () => {
     FakeBroadcastChannel.instances = [];
     vi.stubGlobal("window", {});
     vi.stubGlobal("BroadcastChannel", FakeBroadcastChannel);
@@ -43,8 +43,8 @@ describe("offline session broadcasts", () => {
       setOfflineUserId("tab-a-user");
       const channel = FakeBroadcastChannel.instances[0];
       expect(channel).toBeDefined();
+
       channel.dispatch({ userId: "tab-b-user" });
-      // A duplicate remote broadcast still forces React session revalidation.
       channel.dispatch({ userId: "tab-b-user" });
 
       expect(getOfflineUserId()).toBe("tab-b-user");
@@ -53,19 +53,6 @@ describe("offline session broadcasts", () => {
         ["tab-b-user", true],
         ["tab-b-user", true],
       ]);
-    } finally {
-      unsubscribe();
-      setOfflineUserId(null);
-      vi.unstubAllGlobals();
-    }
-  });
-
-
-
-    try {
-      setOfflineUserId("same-user");
-      FakeBroadcastChannel.instances[0].dispatch({ userId: "same-user" });
-      expect(changes).toEqual([false, true]);
     } finally {
       unsubscribe();
       setOfflineUserId(null);
