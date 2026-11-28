@@ -20,13 +20,13 @@ export interface OfflineStore {
   deleteItem(id: string): Promise<void>;
   listItems(userId: string): Promise<OfflineQueueItem[]>;
   clearUser(userId: string): Promise<void>;
-  getReference(kind: string): Promise<unknown | null>;
-  putReference(kind: string, value: unknown): Promise<void>;
-  clearReferences(): Promise<void>;
+  getReference(userId: string, kind: string): Promise<unknown | null>;
+  putReference(userId: string, kind: string, value: unknown): Promise<void>;
+  clearReferences(userId: string): Promise<void>;
 }
 
 const DB_NAME = "promethe-offline";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const QUEUE_STORE = "queue";
 const REFERENCE_STORE = "reference";
 
@@ -34,6 +34,10 @@ const REFERENCE_STORE = "reference";
 export class MemoryStore implements OfflineStore {
   private items = new Map<string, OfflineQueueItem>();
   private references = new Map<string, unknown>();
+
+  private referenceKey(userId: string, kind: string): string {
+    return JSON.stringify([userId, kind]);
+  }
 
   async getItem(id: string): Promise<OfflineQueueItem | null> {
     return this.items.get(id) ?? null;
@@ -78,18 +82,23 @@ export class MemoryStore implements OfflineStore {
     for (const item of [...this.items.values()]) {
       if (item.userId === userId) this.items.delete(item.id);
     }
+    await this.clearReferences(userId);
   }
 
-  async getReference(kind: string): Promise<unknown | null> {
-    return this.references.get(kind) ?? null;
+  async getReference(userId: string, kind: string): Promise<unknown | null> {
+    return this.references.get(this.referenceKey(userId, kind)) ?? null;
   }
 
-  async putReference(kind: string, value: unknown): Promise<void> {
-    this.references.set(kind, value);
+  async putReference(userId: string, kind: string, value: unknown): Promise<void> {
+    this.references.set(this.referenceKey(userId, kind), value);
   }
 
-  async clearReferences(): Promise<void> {
-    this.references.clear();
+  async clearReferences(userId: string): Promise<void> {
+    for (const key of this.references.keys()) {
+      if (key.startsWith(JSON.stringify([userId, "" ]).slice(0, -1))) {
+        this.references.delete(key);
+      }
+    }
   }
 }
 
@@ -102,9 +111,15 @@ function openDb(): Promise<IDBDatabase> {
         const queue = db.createObjectStore(QUEUE_STORE, { keyPath: "id" });
         queue.createIndex("userId", "userId", { unique: false });
       }
-      if (!db.objectStoreNames.contains(REFERENCE_STORE)) {
-        db.createObjectStore(REFERENCE_STORE, { keyPath: "kind" });
+      if (db.objectStoreNames.contains(REFERENCE_STORE)) {
+        // Version 1 snapshots had no owner and cannot be attributed safely.
+        // Drop them instead of risking cross-account exposure.
+        db.deleteObjectStore(REFERENCE_STORE);
       }
+      const references = db.createObjectStore(REFERENCE_STORE, {
+        keyPath: ["userId", "kind"],
+      });
+      references.createIndex("userId", "userId", { unique: false });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error ?? new Error("IndexedDB open failed."));
@@ -226,41 +241,60 @@ export class IndexedDbStore implements OfflineStore {
   async clearUser(userId: string): Promise<void> {
     const db = await this.db();
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(QUEUE_STORE, "readwrite");
-      const index = tx.objectStore(QUEUE_STORE).index("userId");
-      const request = index.openCursor(IDBKeyRange.only(userId));
-      request.onsuccess = () => {
-        const cursor = request.result;
-        if (!cursor) return;
-        cursor.delete();
-        cursor.continue();
+      const tx = db.transaction([QUEUE_STORE, REFERENCE_STORE], "readwrite");
+      const queueIndex = tx.objectStore(QUEUE_STORE).index("userId");
+      const referenceIndex = tx.objectStore(REFERENCE_STORE).index("userId");
+      const deleteByUser = (index: IDBIndex) => {
+        const request = index.openCursor(IDBKeyRange.only(userId));
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (!cursor) return;
+          cursor.delete();
+          cursor.continue();
+        };
+        request.onerror = () => reject(request.error ?? new Error("IndexedDB user cleanup failed."));
       };
-      request.onerror = () => reject(request.error ?? new Error("IndexedDB user cleanup failed."));
+      deleteByUser(queueIndex);
+      deleteByUser(referenceIndex);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error ?? new Error("IndexedDB user cleanup transaction failed."));
       tx.onabort = () => reject(tx.error ?? new Error("IndexedDB user cleanup transaction aborted."));
     });
   }
 
-  async getReference(kind: string): Promise<unknown | null> {
+  async getReference(userId: string, kind: string): Promise<unknown | null> {
     const db = await this.db();
     const row = await withStore(db, REFERENCE_STORE, "readonly", (store) =>
-      store.get(kind),
+      store.get([userId, kind]),
     );
-    const typed = row as { kind: string; value: unknown } | undefined;
+    const typed = row as { userId: string; kind: string; value: unknown } | undefined;
     return typed ? typed.value : null;
   }
 
-  async putReference(kind: string, value: unknown): Promise<void> {
+  async putReference(userId: string, kind: string, value: unknown): Promise<void> {
     const db = await this.db();
     await withStore(db, REFERENCE_STORE, "readwrite", (store) =>
-      store.put({ kind, value }),
+      store.put({ userId, kind, value }),
     );
   }
 
-  async clearReferences(): Promise<void> {
+  async clearReferences(userId: string): Promise<void> {
     const db = await this.db();
-    await withStore(db, REFERENCE_STORE, "readwrite", (store) => store.clear());
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(REFERENCE_STORE, "readwrite");
+      const request = tx.objectStore(REFERENCE_STORE).index("userId")
+        .openCursor(IDBKeyRange.only(userId));
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) return;
+        cursor.delete();
+        cursor.continue();
+      };
+      request.onerror = () => reject(request.error ?? new Error("IndexedDB reference cleanup failed."));
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error("IndexedDB reference cleanup transaction failed."));
+      tx.onabort = () => reject(tx.error ?? new Error("IndexedDB reference cleanup transaction aborted."));
+    });
   }
 }
 
