@@ -74,11 +74,13 @@ export interface InstrumentApiDTO {
 }
 
 export function useInstruments() {
+  const userId = getOfflineUserId();
   return useQuery({
-    queryKey: ["instruments"],
+    queryKey: ["instruments", userId],
     queryFn: async () =>
       fetchReferenceWithFallback(
         isOfflineQueueSupported() ? getBrowserStore() : null,
+        userId,
         "instruments",
         async () =>
           (await apiFetch<{ instruments: InstrumentApiDTO[] }>("/api/v1/instruments"))
@@ -89,11 +91,13 @@ export function useInstruments() {
 }
 
 export function useAccounts() {
+  const userId = getOfflineUserId();
   return useQuery({
-    queryKey: ["accounts"],
+    queryKey: ["accounts", userId],
     queryFn: async () =>
       fetchReferenceWithFallback(
         isOfflineQueueSupported() ? getBrowserStore() : null,
+        userId,
         "accounts",
         async () =>
           (await apiFetch<{ accounts: AccountDTO[] }>("/api/v1/accounts")).accounts,
@@ -115,11 +119,13 @@ export function useAccountsHealth() {
 }
 
 export function useStrategies() {
+  const userId = getOfflineUserId();
   return useQuery({
-    queryKey: ["strategies"],
+    queryKey: ["strategies", userId],
     queryFn: async () =>
       fetchReferenceWithFallback(
         isOfflineQueueSupported() ? getBrowserStore() : null,
+        userId,
         "strategies",
         async () =>
           (await apiFetch<{ strategies: StrategyDTO[] }>("/api/v1/strategies"))
@@ -130,11 +136,13 @@ export function useStrategies() {
 }
 
 export function useTags() {
+  const userId = getOfflineUserId();
   return useQuery({
-    queryKey: ["tags"],
+    queryKey: ["tags", userId],
     queryFn: async () =>
       fetchReferenceWithFallback(
         isOfflineQueueSupported() ? getBrowserStore() : null,
+        userId,
         "tags",
         async () =>
           (await apiFetch<{ tags: TagDTO[] }>("/api/v1/tags")).tags,
