@@ -63,9 +63,10 @@ export function SessionProvider({
   // shared cookie. Re-read the server session; never trust the broadcast id.
   React.useEffect(() => {
     return onOfflineUserIdChange((_broadcastUserId, isRemote) => {
-      if (!isRemote) return;
       const requestId = ++remoteSessionRequestRef.current;
       remoteSessionAbortRef.current?.abort();
+      if (!isRemote) return;
+      queryClient.clear();
       const controller = new AbortController();
       remoteSessionAbortRef.current = controller;
 
@@ -77,6 +78,9 @@ export function SessionProvider({
           controller.signal.aborted ||
           requestId !== remoteSessionRequestRef.current
         ) return;
+        // The server is authoritative: reconcile even if the broadcast was
+        // stale and the React session already happened to match this user.
+        setOfflineUserId(nextSession.user.id);
         setSession(nextSession);
       }).catch((error: unknown) => {
         if (
@@ -85,6 +89,7 @@ export function SessionProvider({
         ) return;
         // A transient network/server failure must not sign the user out.
         if (error instanceof Error && "status" in error && error.status === 401) {
+          setOfflineUserId(null);
           setSession(null);
         }
       });
