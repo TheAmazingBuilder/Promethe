@@ -240,13 +240,10 @@ describe("logout and counts", () => {
     });
     setOfflineUserId(USER);
     await store.putReference(USER, "accounts", [{ id: "acc-1" }]);
-    await store.putReference(OTHER, "accounts", [{ id: "acc-2" }]);
     await clearOfflineDataForUser(store, USER);
     expect(await listQueueItems(store, USER)).toHaveLength(0);
     expect(await listQueueItems(store, OTHER)).toHaveLength(1);
     expect(await store.getReference(USER, "accounts")).toBeNull();
-    setOfflineUserId(OTHER);
-    expect(await store.getReference(OTHER, "accounts")).toEqual([{ id: "acc-2" }]);
   });
 
   it("isolates reference snapshots by user and clears only the signing-out user", async () => {
@@ -258,7 +255,9 @@ describe("logout and counts", () => {
 
     await clearOfflineDataForUser(store, USER);
 
+    setOfflineUserId(USER);
     expect(await store.getReference(USER, "accounts")).toBeNull();
+    setOfflineUserId(OTHER);
     expect(await store.getReference(OTHER, "accounts")).toEqual([{ id: "acc-other" }]);
   });
 
