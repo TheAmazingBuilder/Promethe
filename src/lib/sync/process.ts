@@ -1097,27 +1097,55 @@ export async function processIngestPayload(
   }
 
   // Binding: first payload binds (server, login); mismatch => MISMATCH.
-  if (connection.brokerServer === null || connection.brokerLogin === null) {
-    await db.brokerConnection.update({
-      where: { id: connection.id },
+  // Use a conditional write against the state we actually read. A concurrent
+  // owner revocation must win over a stale first-handshake request: an
+  // unconditional UPDATE here could otherwise change REVOKED back to ACTIVE.
+  const wasUnbound =
+    connection.brokerServer === null || connection.brokerLogin === null;
+  if (wasUnbound) {
+    await db.brokerConnection.updateMany({
+      where: {
+        id: connection.id,
+        status: connection.status,
+        brokerServer: null,
+        brokerLogin: null,
+      },
       data: {
         brokerServer: payload.server,
         brokerLogin: payload.login,
         ...(connection.status === "PENDING" ? { status: "ACTIVE" } : {}),
       },
     });
-    connection = await db.brokerConnection.findUniqueOrThrow({ where: { id: connection.id } });
-    // Also mirror onto the account for import matching.
-    await db.account.update({
-      where: { id: connection.accountId },
-      data: { brokerServer: payload.server, brokerLogin: payload.login },
+    // Always re-read after the compare-and-set. If the claim lost to a
+    // revocation (or another state transition), never continue with the
+    // stale connection snapshot.
+    connection = await db.brokerConnection.findUniqueOrThrow({
+      where: { id: connection.id },
     });
-  } else if (
+    if (connection.status === "REVOKED") {
+      throw new IngestError("CONNECTION_REVOKED", 403);
+    }
+    if (connection.status === "MISMATCH") {
+      throw new IngestError("CONNECTION_MISMATCH", 403);
+    }
+    // Also mirror the winning binding onto the account for import matching.
+    if (
+      connection.brokerServer === payload.server &&
+      connection.brokerLogin === payload.login
+    ) {
+      await db.account.update({
+        where: { id: connection.accountId },
+        data: { brokerServer: payload.server, brokerLogin: payload.login },
+      });
+    }
+  }
+
+  if (
     connection.brokerServer !== payload.server ||
     connection.brokerLogin !== payload.login
   ) {
-    await db.brokerConnection.update({
-      where: { id: connection.id },
+    await db.brokerConnection.updateMany({
+      where: { id: connection.id, status: { not: "REVOKED" } },
       data: { status: "MISMATCH" },
     });
     await notifyUser({
