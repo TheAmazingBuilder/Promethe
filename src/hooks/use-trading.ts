@@ -6,6 +6,7 @@
  * silent about Prisma internals. Invalidation targets: ["trades"],
  * ["dashboard"], ["templates"].
  */
+import { useSyncExternalStore } from "react";
 import {
   useMutation,
   useQuery,
@@ -47,12 +48,20 @@ import type {
   TradePatch,
 } from "@/lib/validations/trade";
 import { getBrowserStore, isOfflineQueueSupported } from "@/lib/offline/store";
-import { getOfflineUserId } from "@/lib/offline/session";
+import { getOfflineUserId, onOfflineUserIdChange } from "@/lib/offline/session";
 import { enqueueOperation } from "@/lib/offline/queue";
 import { fetchReferenceWithFallback } from "@/lib/offline/reference-data";
 import { newOfflineId } from "@/lib/offline/types";
 
 // ── Reference data ───────────────────────────────────────────────────────────
+
+function useOfflineIdentity(): string | null {
+  return useSyncExternalStore(
+    (notify) => onOfflineUserIdChange(() => notify()),
+    getOfflineUserId,
+    () => null,
+  );
+}
 
 export interface InstrumentApiDTO {
   id: string;
@@ -74,7 +83,7 @@ export interface InstrumentApiDTO {
 }
 
 export function useInstruments() {
-  const userId = getOfflineUserId();
+  const userId = useOfflineIdentity();
   return useQuery({
     queryKey: ["instruments", userId],
     queryFn: async () =>
@@ -91,7 +100,7 @@ export function useInstruments() {
 }
 
 export function useAccounts() {
-  const userId = getOfflineUserId();
+  const userId = useOfflineIdentity();
   return useQuery({
     queryKey: ["accounts", userId],
     queryFn: async () =>
@@ -119,7 +128,7 @@ export function useAccountsHealth() {
 }
 
 export function useStrategies() {
-  const userId = getOfflineUserId();
+  const userId = useOfflineIdentity();
   return useQuery({
     queryKey: ["strategies", userId],
     queryFn: async () =>
@@ -136,7 +145,7 @@ export function useStrategies() {
 }
 
 export function useTags() {
-  const userId = getOfflineUserId();
+  const userId = useOfflineIdentity();
   return useQuery({
     queryKey: ["tags", userId],
     queryFn: async () =>
@@ -295,7 +304,7 @@ export function useCreateTrade() {
       // sends the same payload (same clientMutationId) against the same
       // route, so a retried replay never creates a duplicate.
       if (typeof navigator !== "undefined" && !navigator.onLine) {
-        const userId = getOfflineUserId();
+        const userId = useOfflineIdentity();
         if (userId && isOfflineQueueSupported()) {
           const idempotencyKey = input.clientMutationId ?? newOfflineId();
           const payload = { ...input, clientMutationId: idempotencyKey };
